@@ -86,7 +86,10 @@ namespace TinyLLM
             if (grad == null)
             {
                 // Root of computation graph
-                Grad = new float[Data.Length];
+                if (Grad == null)
+                {
+                    Grad = new float[Data.Length];
+                }
                 for (int i = 0; i < Grad.Length; i++)
                 {
                     Grad[i] = 1.0f;
@@ -96,7 +99,7 @@ namespace TinyLLM
             {
                 // Accumulate gradient
                 if (Grad == null) Grad = new float[Data.Length];
-                for (int i = 0; i < Grad.Length; i++)
+                for (int i = 0; i < grad.Length && i < Grad.Length; i++)
                 {
                     Grad[i] += grad[i];
                 }

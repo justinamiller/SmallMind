@@ -178,12 +178,26 @@ This project implements everything from scratch using only C# standard library:
 
 ### Performance Notes
 
-Since this is pure C#without optimized linear algebra libraries, performance is limited:
-- Training is slow (~10-30 minutes for 2000 steps on modern CPU)
+Since this is pure C# without optimized linear algebra libraries, performance is **very limited**:
+- Training is **extremely slow** (~1-2 hours or more for 2000 steps on modern CPU)
 - No GPU acceleration available
 - Matrix operations are not vectorized/optimized
+- Batch size and model size severely impact speed
 
 **This is intentional for educational purposes!** The goal is to understand how everything works, not to train production models.
+
+**For Testing:**
+- Reduce `TRAIN_STEPS` to 100-200 for quick tests
+- Reduce `BATCH_SIZE` to 4
+- Reduce `BLOCK_SIZE` to 32
+- Reduce `N_EMBD` to 64
+- Reduce `N_LAYER` to 2
+
+**Expected Training Times (approximate):**
+- 100 steps with small model: ~2-5 minutes
+- 500 steps with small model: ~10-25 minutes
+- 2000 steps with default model: ~1-3 hours
+- Times vary significantly based on CPU
 
 For production use, consider:
 - Using TorchSharp or ML.NET with GPU support
