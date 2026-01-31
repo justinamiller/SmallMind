@@ -109,7 +109,7 @@ dotnet run -- --no-train --prompt "Knowledge is" --steps 150 --top-k 40 --temper
 
 **Default hyperparameters** (small for CPU training):
 
-- Context length (block size): 128 tokens
+- Context length (block size): 256 tokens
 - Embedding dimension: 128
 - Number of layers: 4
 - Number of attention heads: 4

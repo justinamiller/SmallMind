@@ -11,7 +11,7 @@ namespace TinyLLM
     class Program
     {
         // Model hyperparameters (defaults)
-        private const int BLOCK_SIZE = 128;
+        private const int BLOCK_SIZE = 256;
         private const int N_EMBD = 128;
         private const int N_LAYER = 4;
         private const int N_HEAD = 4;
