@@ -46,11 +46,19 @@ public static class DataLoader
 
     /// <summary>
     /// Loads training data from an XML file.
-    /// Expected format: &lt;training&gt;&lt;sentence&gt;text&lt;/sentence&gt;...&lt;/training&gt;
     /// </summary>
     /// <param name="filePath">Path to the .xml file</param>
     /// <param name="sentenceElementName">Name of the XML element containing sentences (default: "sentence")</param>
     /// <returns>Array of sentences</returns>
+    /// <example>
+    /// Expected format:
+    /// <code>
+    /// &lt;training&gt;
+    ///   &lt;sentence&gt;text&lt;/sentence&gt;
+    ///   ...
+    /// &lt;/training&gt;
+    /// </code>
+    /// </example>
     public static string[] FromXmlFile(string filePath, string sentenceElementName = "sentence")
     {
         var xml = XDocument.Load(filePath);
