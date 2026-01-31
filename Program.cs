@@ -17,7 +17,7 @@ namespace TinyLLM
         private const int N_LAYER = 4;
         private const int N_HEAD = 4;
         private const double DROPOUT = 0.1;
-        private const int BATCH_SIZE = 16;
+        private const int DEFAULT_BATCH_SIZE = 16;
         private const double LEARNING_RATE = 3e-4;
         private const int TRAIN_STEPS = 2000;
         private const int LOG_EVERY = 50;
@@ -26,8 +26,9 @@ namespace TinyLLM
         private const string CHECKPOINT_DIR = "checkpoints";
         private const string DATA_FILE = "data.txt";
         
-        // Maximum safe block size for this architecture (tested empirically)
-        private const int MAX_BLOCK_SIZE = 2048;
+        // Maximum safe block size for this architecture (increased for larger context windows)
+        // Can be overridden with --max-block-size for even larger contexts
+        private const int MAX_BLOCK_SIZE = 8192;
 
         static void Main(string[] args)
         {
@@ -46,6 +47,15 @@ namespace TinyLLM
                 double temperature = double.Parse(GetArgValue(args, "--temperature", "1.0"));
                 int topK = int.Parse(GetArgValue(args, "--top-k", "0"));
                 
+                // Get max block size override if provided
+                string maxBlockSizeArg = GetArgValue(args, "--max-block-size", "");
+                int maxBlockSize = MAX_BLOCK_SIZE;
+                if (!string.IsNullOrEmpty(maxBlockSizeArg))
+                {
+                    maxBlockSize = int.Parse(maxBlockSizeArg);
+                    Console.WriteLine($"Maximum block size override: {maxBlockSize}");
+                }
+                
                 // Determine block size (priority: command-line > auto-config > default)
                 int blockSize = DEFAULT_BLOCK_SIZE;
                 string blockSizeArg = GetArgValue(args, "--block-size", "");
@@ -54,22 +64,41 @@ namespace TinyLLM
                 {
                     // User specified block size
                     blockSize = int.Parse(blockSizeArg);
-                    if (blockSize > MAX_BLOCK_SIZE)
+                    if (blockSize > maxBlockSize)
                     {
-                        Console.WriteLine($"Warning: Requested block size {blockSize} exceeds maximum {MAX_BLOCK_SIZE}. Using {MAX_BLOCK_SIZE}.");
-                        blockSize = MAX_BLOCK_SIZE;
+                        Console.WriteLine($"Warning: Requested block size {blockSize} exceeds maximum {maxBlockSize}. Using {maxBlockSize}.");
+                        blockSize = maxBlockSize;
                     }
                     Console.WriteLine($"Using user-specified block size: {blockSize}");
                 }
                 else if (autoConfig)
                 {
                     // Auto-configure based on system resources
-                    blockSize = DetermineOptimalBlockSize();
+                    blockSize = DetermineOptimalBlockSize(maxBlockSize);
                     Console.WriteLine($"Auto-configured block size based on system resources: {blockSize}");
                 }
                 else
                 {
                     Console.WriteLine($"Using default block size: {blockSize}");
+                }
+                
+                // Determine batch size (auto-config or default)
+                int batchSize = DEFAULT_BATCH_SIZE;
+                string batchSizeArg = GetArgValue(args, "--batch-size", "");
+                
+                if (!string.IsNullOrEmpty(batchSizeArg))
+                {
+                    batchSize = int.Parse(batchSizeArg);
+                    Console.WriteLine($"Using user-specified batch size: {batchSize}");
+                }
+                else if (autoConfig)
+                {
+                    batchSize = DetermineOptimalBatchSize(blockSize);
+                    Console.WriteLine($"Auto-configured batch size: {batchSize}");
+                }
+                else
+                {
+                    Console.WriteLine($"Using default batch size: {batchSize}");
                 }
 
                 // Ensure data file exists
@@ -99,7 +128,7 @@ namespace TinyLLM
                     tokenizer: tokenizer,
                     trainingText: trainingText,
                     blockSize: blockSize,
-                    batchSize: BATCH_SIZE,
+                    batchSize: batchSize,
                     seed: SEED
                 );
 
@@ -190,7 +219,7 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
         /// <summary>
         /// Determine optimal block size based on available system resources.
         /// </summary>
-        private static int DetermineOptimalBlockSize()
+        private static int DetermineOptimalBlockSize(int maxBlockSize = MAX_BLOCK_SIZE)
         {
             var (totalMemoryGB, availableMemoryGB, cpuCores) = GetSystemInfo();
             
@@ -209,38 +238,84 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
             // Empirically determined thresholds based on testing with the current architecture
             // (batch_size=16, nEmbd=128, nLayer=4, nHead=4)
             // Memory usage scales primarily with blockSize^2 due to attention mechanism
-            // These values provide a safe margin to prevent out-of-memory errors
+            // Updated values to support larger context windows with new MAX_BLOCK_SIZE
             
-            if (availableMemoryGB >= 8.0)
+            if (availableMemoryGB >= 32.0)
             {
-                // Plenty of memory - use maximum
-                recommendedBlockSize = MAX_BLOCK_SIZE;
+                // Very high memory - use maximum (8192)
+                recommendedBlockSize = maxBlockSize;
+            }
+            else if (availableMemoryGB >= 16.0)
+            {
+                // High memory - use 6144
+                recommendedBlockSize = 6144;
+            }
+            else if (availableMemoryGB >= 8.0)
+            {
+                // Good memory - use 4096
+                recommendedBlockSize = 4096;
             }
             else if (availableMemoryGB >= 4.0)
             {
-                // Good amount of memory - use 1536
-                recommendedBlockSize = 1536;
+                // Moderate memory - use 2048
+                recommendedBlockSize = 2048;
             }
             else if (availableMemoryGB >= 2.0)
             {
-                // Moderate memory - use 1024
+                // Limited memory - use 1024
                 recommendedBlockSize = 1024;
             }
             else if (availableMemoryGB >= 1.0)
             {
-                // Limited memory - use 512
+                // Very limited memory - use 512
                 recommendedBlockSize = 512;
             }
             else
             {
-                // Very limited memory - use 256
+                // Extremely limited memory - use 256
                 recommendedBlockSize = 256;
             }
             
             // Ensure we don't exceed maximum
-            recommendedBlockSize = Math.Min(recommendedBlockSize, MAX_BLOCK_SIZE);
+            recommendedBlockSize = Math.Min(recommendedBlockSize, maxBlockSize);
             
             return recommendedBlockSize;
+        }
+        
+        /// <summary>
+        /// Determine optimal batch size based on block size and available memory.
+        /// Larger batches improve throughput but require more memory.
+        /// </summary>
+        private static int DetermineOptimalBatchSize(int blockSize)
+        {
+            var (totalMemoryGB, availableMemoryGB, cpuCores) = GetSystemInfo();
+            
+            // Scale batch size inversely with block size to maintain memory usage
+            // Larger block sizes need smaller batches to fit in memory
+            int recommendedBatchSize;
+            
+            if (blockSize >= 4096)
+            {
+                // Very large context - use smaller batches
+                recommendedBatchSize = availableMemoryGB >= 16.0 ? 8 : 4;
+            }
+            else if (blockSize >= 2048)
+            {
+                // Large context - moderate batches
+                recommendedBatchSize = availableMemoryGB >= 8.0 ? 16 : 8;
+            }
+            else if (blockSize >= 1024)
+            {
+                // Medium context - good batches
+                recommendedBatchSize = availableMemoryGB >= 4.0 ? 24 : 16;
+            }
+            else
+            {
+                // Smaller context - can use larger batches for better throughput
+                recommendedBatchSize = availableMemoryGB >= 4.0 ? 32 : 24;
+            }
+            
+            return recommendedBatchSize;
         }
         
         /// <summary>
