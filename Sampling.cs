@@ -127,7 +127,7 @@ namespace TinyLLM
             if (showPerf)
             {
                 double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
-                double tokensPerSec = maxNewTokens / totalTimeSeconds;
+                double tokensPerSec = totalTimeSeconds > 0 ? maxNewTokens / totalTimeSeconds : 0;
                 Console.WriteLine($"\nGeneration completed in {totalTimeSeconds:F2}s");
                 Console.WriteLine($"Tokens generated: {maxNewTokens}");
                 Console.WriteLine($"Generation speed: {tokensPerSec:F2} tokens/sec");
