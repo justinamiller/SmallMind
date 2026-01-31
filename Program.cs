@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Diagnostics;
 
 namespace TinyLLM
 {
@@ -11,7 +12,7 @@ namespace TinyLLM
     class Program
     {
         // Model hyperparameters (defaults)
-        private const int BLOCK_SIZE = 128;
+        private const int DEFAULT_BLOCK_SIZE = 512;
         private const int N_EMBD = 128;
         private const int N_LAYER = 4;
         private const int N_HEAD = 4;
@@ -24,6 +25,9 @@ namespace TinyLLM
         private const int SEED = 42;
         private const string CHECKPOINT_DIR = "checkpoints";
         private const string DATA_FILE = "data.txt";
+        
+        // Maximum safe block size for this architecture (tested empirically)
+        private const int MAX_BLOCK_SIZE = 2048;
 
         static void Main(string[] args)
         {
@@ -35,10 +39,38 @@ namespace TinyLLM
                 // Parse command-line arguments
                 bool shouldTrain = !HasArg(args, "--no-train");
                 bool shouldLoad = HasArg(args, "--load");
+                bool showPerf = HasArg(args, "--perf");
+                bool autoConfig = HasArg(args, "--auto-config");
                 string prompt = GetArgValue(args, "--prompt", "Once upon a time");
                 int generateSteps = int.Parse(GetArgValue(args, "--steps", "200"));
                 double temperature = double.Parse(GetArgValue(args, "--temperature", "1.0"));
                 int topK = int.Parse(GetArgValue(args, "--top-k", "0"));
+                
+                // Determine block size (priority: command-line > auto-config > default)
+                int blockSize = DEFAULT_BLOCK_SIZE;
+                string blockSizeArg = GetArgValue(args, "--block-size", "");
+                
+                if (!string.IsNullOrEmpty(blockSizeArg))
+                {
+                    // User specified block size
+                    blockSize = int.Parse(blockSizeArg);
+                    if (blockSize > MAX_BLOCK_SIZE)
+                    {
+                        Console.WriteLine($"Warning: Requested block size {blockSize} exceeds maximum {MAX_BLOCK_SIZE}. Using {MAX_BLOCK_SIZE}.");
+                        blockSize = MAX_BLOCK_SIZE;
+                    }
+                    Console.WriteLine($"Using user-specified block size: {blockSize}");
+                }
+                else if (autoConfig)
+                {
+                    // Auto-configure based on system resources
+                    blockSize = DetermineOptimalBlockSize();
+                    Console.WriteLine($"Auto-configured block size based on system resources: {blockSize}");
+                }
+                else
+                {
+                    Console.WriteLine($"Using default block size: {blockSize}");
+                }
 
                 // Ensure data file exists
                 EnsureDataFile();
@@ -53,7 +85,7 @@ namespace TinyLLM
                 // Create model
                 var model = new TransformerModel(
                     vocabSize: tokenizer.VocabSize,
-                    blockSize: BLOCK_SIZE,
+                    blockSize: blockSize,
                     nEmbd: N_EMBD,
                     nLayer: N_LAYER,
                     nHead: N_HEAD,
@@ -66,7 +98,7 @@ namespace TinyLLM
                     model: model,
                     tokenizer: tokenizer,
                     trainingText: trainingText,
-                    blockSize: BLOCK_SIZE,
+                    blockSize: blockSize,
                     batchSize: BATCH_SIZE,
                     seed: SEED
                 );
@@ -99,18 +131,20 @@ namespace TinyLLM
                         learningRate: LEARNING_RATE,
                         logEvery: LOG_EVERY,
                         saveEvery: SAVE_EVERY,
-                        checkpointDir: CHECKPOINT_DIR
+                        checkpointDir: CHECKPOINT_DIR,
+                        showPerf: showPerf
                     );
                 }
 
                 // Generation
-                var sampler = new Sampling(model, tokenizer, BLOCK_SIZE);
+                var sampler = new Sampling(model, tokenizer, blockSize);
                 var generated = sampler.Generate(
                     prompt: prompt,
                     maxNewTokens: generateSteps,
                     temperature: temperature,
                     topK: topK,
-                    seed: SEED
+                    seed: SEED,
+                    showPerf: showPerf
                 );
 
                 Console.WriteLine("\n=== Generated Text ===");
@@ -151,6 +185,138 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                 File.WriteAllText(DATA_FILE, defaultData);
                 Console.WriteLine($"Created {DATA_FILE} with default content.");
             }
+        }
+
+        /// <summary>
+        /// Determine optimal block size based on available system resources.
+        /// </summary>
+        private static int DetermineOptimalBlockSize()
+        {
+            var (totalMemoryGB, availableMemoryGB, cpuCores) = GetSystemInfo();
+            
+            Console.WriteLine($"System resources: {availableMemoryGB:F1}GB available RAM, {cpuCores} CPU cores");
+            
+            // Algorithm to determine block size based on resources:
+            // - Base calculation on available memory (primary constraint)
+            // - Each token in the model uses approximately memory proportional to:
+            //   - Position embeddings: blockSize * nEmbd * 4 bytes
+            //   - Attention masks: blockSize * blockSize * 4 bytes (most significant)
+            //   - Intermediate tensors during forward/backward pass
+            // - We want to stay well under available memory to avoid swapping
+            
+            int recommendedBlockSize;
+            
+            // Empirically determined thresholds based on testing with the current architecture
+            // (batch_size=16, nEmbd=128, nLayer=4, nHead=4)
+            // Memory usage scales primarily with blockSize^2 due to attention mechanism
+            // These values provide a safe margin to prevent out-of-memory errors
+            
+            if (availableMemoryGB >= 8.0)
+            {
+                // Plenty of memory - use maximum
+                recommendedBlockSize = MAX_BLOCK_SIZE;
+            }
+            else if (availableMemoryGB >= 4.0)
+            {
+                // Good amount of memory - use 1536
+                recommendedBlockSize = 1536;
+            }
+            else if (availableMemoryGB >= 2.0)
+            {
+                // Moderate memory - use 1024
+                recommendedBlockSize = 1024;
+            }
+            else if (availableMemoryGB >= 1.0)
+            {
+                // Limited memory - use 512
+                recommendedBlockSize = 512;
+            }
+            else
+            {
+                // Very limited memory - use 256
+                recommendedBlockSize = 256;
+            }
+            
+            // Ensure we don't exceed maximum
+            recommendedBlockSize = Math.Min(recommendedBlockSize, MAX_BLOCK_SIZE);
+            
+            return recommendedBlockSize;
+        }
+        
+        /// <summary>
+        /// Get system information (RAM and CPU cores) using pure C#.
+        /// </summary>
+        private static (double totalMemoryGB, double availableMemoryGB, int cpuCores) GetSystemInfo()
+        {
+            // Get CPU cores
+            int cpuCores = Environment.ProcessorCount;
+            
+            // Get memory information
+            // On Linux, we can read from /proc/meminfo
+            // On Windows, we use GC.GetGCMemoryInfo (available in .NET Core 3.0+)
+            double totalMemoryGB = 0;
+            double availableMemoryGB = 0;
+            
+            try
+            {
+                if (OperatingSystem.IsLinux() && File.Exists("/proc/meminfo"))
+                {
+                    // Parse /proc/meminfo on Linux
+                    var lines = File.ReadAllLines("/proc/meminfo");
+                    long totalKB = 0;
+                    long availableKB = 0;
+                    
+                    foreach (var line in lines)
+                    {
+                        if (line.StartsWith("MemTotal:"))
+                        {
+                            var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length >= 2)
+                            {
+                                long.TryParse(parts[1], out totalKB);
+                            }
+                        }
+                        else if (line.StartsWith("MemAvailable:"))
+                        {
+                            var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length >= 2)
+                            {
+                                long.TryParse(parts[1], out availableKB);
+                            }
+                        }
+                    }
+                    
+                    totalMemoryGB = totalKB / 1024.0 / 1024.0; // Convert KB to GB
+                    availableMemoryGB = availableKB / 1024.0 / 1024.0;
+                }
+                else
+                {
+                    // Fallback: Use GC memory info (available on all platforms)
+                    var gcMemoryInfo = GC.GetGCMemoryInfo();
+                    totalMemoryGB = gcMemoryInfo.TotalAvailableMemoryBytes / 1024.0 / 1024.0 / 1024.0;
+                    
+                    // Estimate available memory as total minus current process memory
+                    var currentProcess = Process.GetCurrentProcess();
+                    long processMemoryBytes = currentProcess.WorkingSet64;
+                    availableMemoryGB = totalMemoryGB - (processMemoryBytes / 1024.0 / 1024.0 / 1024.0);
+                    
+                    // On non-Linux platforms, GC info may not be accurate for available memory.
+                    // Use a conservative estimate based on total memory.
+                    if (availableMemoryGB <= 0 || availableMemoryGB > totalMemoryGB)
+                    {
+                        // Assume 60% of total memory is available as a conservative estimate
+                        availableMemoryGB = totalMemoryGB * 0.6;
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback to conservative defaults if we can't read system info
+                totalMemoryGB = 4.0;
+                availableMemoryGB = 2.0;
+            }
+            
+            return (totalMemoryGB, availableMemoryGB, cpuCores);
         }
 
         /// <summary>

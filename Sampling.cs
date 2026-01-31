@@ -24,7 +24,7 @@ namespace TinyLLM
         /// <summary>
         /// Generate text from a prompt.
         /// </summary>
-        public string Generate(string prompt, int maxNewTokens, double temperature = 1.0, int topK = 0, int? seed = null)
+        public string Generate(string prompt, int maxNewTokens, double temperature = 1.0, int topK = 0, int? seed = null, bool showPerf = false)
         {
             _model.Eval();
 
@@ -49,7 +49,13 @@ namespace TinyLLM
             Console.WriteLine($"\nGenerating {maxNewTokens} tokens...");
             Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}");
             Console.WriteLine($"Prompt: \"{prompt}\"");
+            if (showPerf)
+            {
+                Console.WriteLine("Performance tracking enabled");
+            }
             Console.WriteLine("---");
+
+            var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
 
             for (int i = 0; i < maxNewTokens; i++)
             {
@@ -105,15 +111,26 @@ namespace TinyLLM
                 context.Add(nextToken);
 
                 // Optional: print progress
-                if ((i + 1) % 50 == 0)
+                if (!showPerf && (i + 1) % 50 == 0)
                 {
                     Console.Write(".");
                 }
             }
 
-            if (maxNewTokens >= 50)
+            totalStopwatch.Stop();
+
+            if (!showPerf && maxNewTokens >= 50)
             {
                 Console.WriteLine(); // New line after progress dots
+            }
+
+            if (showPerf)
+            {
+                double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
+                double tokensPerSec = totalTimeSeconds > 0 ? maxNewTokens / totalTimeSeconds : 0;
+                Console.WriteLine($"\nGeneration completed in {totalTimeSeconds:F2}s");
+                Console.WriteLine($"Tokens generated: {maxNewTokens}");
+                Console.WriteLine($"Generation speed: {tokensPerSec:F2} tokens/sec");
             }
 
             // Decode and return
