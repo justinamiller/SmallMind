@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Text;
+using SmallMind.Validation;
 
 namespace SmallMind.Core
 {
@@ -36,6 +37,12 @@ namespace SmallMind.Core
         public Training(TransformerModel model, Tokenizer tokenizer, string trainingText, 
                        int blockSize, int batchSize, int seed)
         {
+            Guard.NotNull(model);
+            Guard.NotNull(tokenizer);
+            Guard.NotNullOrEmpty(trainingText);
+            Guard.GreaterThan(blockSize, 0);
+            Guard.GreaterThan(batchSize, 0);
+            
             _model = model;
             _tokenizer = tokenizer;
             _blockSize = blockSize;
@@ -48,7 +55,7 @@ namespace SmallMind.Core
 
             if (_data.Count < blockSize + 1)
             {
-                throw new ArgumentException($"Training data too short. Need at least {blockSize + 1} tokens.");
+                throw new Exceptions.TrainingException($"Training data too short. Need at least {blockSize + 1} tokens, but got {_data.Count}.");
             }
         }
 
@@ -98,11 +105,34 @@ namespace SmallMind.Core
         /// <summary>
         /// Enhanced training loop with gradient accumulation, learning rate scheduling, and validation.
         /// </summary>
+        /// <param name="steps">Number of training steps to perform.</param>
+        /// <param name="learningRate">Base learning rate for optimization.</param>
+        /// <param name="logEvery">Log progress every N steps.</param>
+        /// <param name="saveEvery">Save checkpoint every N steps.</param>
+        /// <param name="checkpointDir">Directory to save checkpoints.</param>
+        /// <param name="showPerf">Whether to show performance metrics.</param>
+        /// <param name="gradAccumSteps">Number of gradient accumulation steps.</param>
+        /// <param name="warmupSteps">Number of learning rate warmup steps.</param>
+        /// <param name="valEvery">Perform validation every N steps (0 to disable).</param>
+        /// <param name="valBatches">Number of batches to use for validation.</param>
+        /// <param name="minLr">Minimum learning rate for cosine annealing.</param>
+        /// <param name="cancellationToken">Cancellation token to stop training gracefully.</param>
+        /// <exception cref="Exceptions.ValidationException">Thrown when parameters are invalid.</exception>
+        /// <exception cref="Exceptions.TrainingException">Thrown when training fails.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when training is cancelled.</exception>
         public void TrainEnhanced(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir, 
                                   bool showPerf = false, int gradAccumSteps = 1, int warmupSteps = 100, 
                                   int valEvery = 500, int valBatches = 10, float minLr = 0.0f,
                                   CancellationToken cancellationToken = default)
         {
+            Guard.GreaterThan(steps, 0);
+            Guard.GreaterThan(learningRate, 0.0);
+            Guard.GreaterThan(logEvery, 0);
+            Guard.GreaterThan(saveEvery, 0);
+            Guard.NotNullOrWhiteSpace(checkpointDir);
+            Guard.GreaterThan(gradAccumSteps, 0);
+            Guard.GreaterThanOrEqualTo(warmupSteps, 0);
+            
             // Create checkpoint directory if it doesn't exist
             if (!Directory.Exists(checkpointDir))
             {

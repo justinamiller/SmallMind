@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using SmallMind.Embeddings;
+using SmallMind.Validation;
 
 namespace SmallMind.Indexing
 {
@@ -34,7 +35,7 @@ namespace SmallMind.Indexing
     /// Supports kNN search with cosine similarity.
     /// Stores vectors on disk in JSONL format.
     /// </summary>
-    public class VectorIndex
+    public class VectorIndex : IDisposable
     {
         private const string DEFAULT_INDEX_FILENAME = "vectors.jsonl";
         
@@ -43,18 +44,24 @@ namespace SmallMind.Indexing
         private readonly List<VectorEntry> _entries;
         private readonly IEmbeddingProvider _embeddingProvider;
         private int _nextId;
+        private bool _disposed;
 
         public int Count => _entries.Count;
 
         /// <summary>
         /// Create a new VectorIndex.
         /// </summary>
-        /// <param name="indexDirectory">Directory to store the index (default: ./index)</param>
         /// <param name="embeddingProvider">Embedding provider to use</param>
+        /// <param name="indexDirectory">Directory to store the index (default: ./index)</param>
         /// <param name="indexFileName">Name of the index file (default: vectors.jsonl)</param>
+        /// <exception cref="Exceptions.ValidationException">Thrown when parameters are invalid.</exception>
         public VectorIndex(IEmbeddingProvider embeddingProvider, string indexDirectory = "./index", string indexFileName = DEFAULT_INDEX_FILENAME)
         {
-            _embeddingProvider = embeddingProvider ?? throw new ArgumentNullException(nameof(embeddingProvider));
+            Guard.NotNull(embeddingProvider);
+            Guard.NotNullOrWhiteSpace(indexDirectory);
+            Guard.NotNullOrWhiteSpace(indexFileName);
+            
+            _embeddingProvider = embeddingProvider;
             _indexDirectory = indexDirectory;
             _indexFilePath = Path.Combine(_indexDirectory, indexFileName);
             _entries = new List<VectorEntry>();
@@ -73,8 +80,13 @@ namespace SmallMind.Indexing
         /// <param name="text">Text to index</param>
         /// <param name="metadata">Optional metadata</param>
         /// <returns>ID of the added entry</returns>
+        /// <exception cref="Exceptions.SmallMindObjectDisposedException">Thrown when index has been disposed.</exception>
+        /// <exception cref="Exceptions.ValidationException">Thrown when text is null or empty.</exception>
         public string Add(string text, Dictionary<string, string>? metadata = null)
         {
+            Guard.NotDisposed(_disposed, nameof(VectorIndex));
+            Guard.NotNullOrEmpty(text);
+            
             var vector = _embeddingProvider.Embed(text);
             var id = (_nextId++).ToString();
             
@@ -126,8 +138,14 @@ namespace SmallMind.Indexing
         /// <param name="queryText">Query text</param>
         /// <param name="k">Number of results to return</param>
         /// <returns>List of search results ordered by similarity (descending)</returns>
+        /// <exception cref="Exceptions.SmallMindObjectDisposedException">Thrown when index has been disposed.</exception>
+        /// <exception cref="Exceptions.ValidationException">Thrown when parameters are invalid.</exception>
         public List<SearchResult> Search(string queryText, int k = 5)
         {
+            Guard.NotDisposed(_disposed, nameof(VectorIndex));
+            Guard.NotNullOrEmpty(queryText);
+            Guard.GreaterThan(k, 0);
+            
             if (_entries.Count == 0)
             {
                 return new List<SearchResult>();
@@ -141,8 +159,17 @@ namespace SmallMind.Indexing
         /// Search using a pre-computed query vector.
         /// Optimized with partial sort for top-k retrieval.
         /// </summary>
+        /// <param name="queryVector">Pre-computed query vector</param>
+        /// <param name="k">Number of results to return</param>
+        /// <returns>List of search results ordered by similarity (descending)</returns>
+        /// <exception cref="Exceptions.SmallMindObjectDisposedException">Thrown when index has been disposed.</exception>
+        /// <exception cref="Exceptions.ValidationException">Thrown when parameters are invalid.</exception>
         public List<SearchResult> SearchByVector(float[] queryVector, int k = 5)
         {
+            Guard.NotDisposed(_disposed, nameof(VectorIndex));
+            Guard.NotNull(queryVector);
+            Guard.GreaterThan(k, 0);
+            
             if (_entries.Count == 0)
             {
                 return new List<SearchResult>();
@@ -367,8 +394,13 @@ namespace SmallMind.Indexing
         /// <summary>
         /// Get an entry by ID.
         /// </summary>
+        /// <param name="id">Entry ID to retrieve.</param>
+        /// <returns>The vector entry if found; otherwise, null.</returns>
+        /// <exception cref="Exceptions.SmallMindObjectDisposedException">Thrown when index has been disposed.</exception>
         public VectorEntry? GetById(string id)
         {
+            Guard.NotDisposed(_disposed, nameof(VectorIndex));
+            
             for (int i = 0; i < _entries.Count; i++)
             {
                 if (_entries[i].Id == id)
@@ -377,6 +409,17 @@ namespace SmallMind.Indexing
                 }
             }
             return null;
+        }
+        
+        /// <summary>
+        /// Disposes the vector index, clearing all entries.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            
+            _entries.Clear();
+            _disposed = true;
         }
     }
 }
