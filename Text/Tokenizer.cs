@@ -71,7 +71,8 @@ namespace TinyLLM.Text
         /// </summary>
         public string Decode(List<int> tokens)
         {
-            var sb = new StringBuilder();
+            // Pre-size StringBuilder to avoid reallocations
+            var sb = new StringBuilder(tokens.Count);
             foreach (var idx in tokens)
             {
                 if (_idxToChar.TryGetValue(idx, out char ch))

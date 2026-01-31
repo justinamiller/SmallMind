@@ -136,7 +136,14 @@ namespace TinyLLM.RAG
         /// </summary>
         public string FormatAnswerWithCitations(AnswerWithCitations result)
         {
-            var sb = new StringBuilder();
+            // Pre-size StringBuilder: question + answer + citations (est 150 chars each)
+            int estimatedCapacity = result.Question.Length + result.Answer.Length + 200;
+            if (result.Citations != null && result.Citations.Count > 0)
+            {
+                estimatedCapacity += result.Citations.Count * 150;
+            }
+            
+            var sb = new StringBuilder(estimatedCapacity);
             
             sb.AppendLine("Question:");
             sb.AppendLine(result.Question);

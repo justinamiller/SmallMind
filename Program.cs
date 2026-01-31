@@ -705,18 +705,42 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                     {
                         if (line.StartsWith("MemTotal:"))
                         {
-                            var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (parts.Length >= 2)
+                            // Use Span-based parsing to avoid allocation from Split
+                            ReadOnlySpan<char> lineSpan = line.AsSpan();
+                            int colonIndex = lineSpan.IndexOf(':');
+                            if (colonIndex >= 0 && colonIndex + 1 < lineSpan.Length)
                             {
-                                long.TryParse(parts[1], out totalKB);
+                                ReadOnlySpan<char> valuePart = lineSpan.Slice(colonIndex + 1).Trim();
+                                // Find first whitespace to extract the number
+                                int spaceIndex = valuePart.IndexOfAny(' ', '\t');
+                                if (spaceIndex > 0)
+                                {
+                                    long.TryParse(valuePart.Slice(0, spaceIndex), out totalKB);
+                                }
+                                else if (valuePart.Length > 0)
+                                {
+                                    long.TryParse(valuePart, out totalKB);
+                                }
                             }
                         }
                         else if (line.StartsWith("MemAvailable:"))
                         {
-                            var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                            if (parts.Length >= 2)
+                            // Use Span-based parsing to avoid allocation from Split
+                            ReadOnlySpan<char> lineSpan = line.AsSpan();
+                            int colonIndex = lineSpan.IndexOf(':');
+                            if (colonIndex >= 0 && colonIndex + 1 < lineSpan.Length)
                             {
-                                long.TryParse(parts[1], out availableKB);
+                                ReadOnlySpan<char> valuePart = lineSpan.Slice(colonIndex + 1).Trim();
+                                // Find first whitespace to extract the number
+                                int spaceIndex = valuePart.IndexOfAny(' ', '\t');
+                                if (spaceIndex > 0)
+                                {
+                                    long.TryParse(valuePart.Slice(0, spaceIndex), out availableKB);
+                                }
+                                else if (valuePart.Length > 0)
+                                {
+                                    long.TryParse(valuePart, out availableKB);
+                                }
                             }
                         }
                     }

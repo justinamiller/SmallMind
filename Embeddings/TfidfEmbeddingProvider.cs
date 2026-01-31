@@ -184,29 +184,66 @@ namespace TinyLLM.Embeddings
             ReadOnlySpan<char> textSpan = text.AsSpan();
             int wordStart = -1;
             
-            for (int i = 0; i <= textSpan.Length; i++)
+            // Rent buffer for lowercase conversion to avoid allocations
+            int maxWordLength = 256; // reasonable max for most words
+            char[]? rentedBuffer = null;
+            
+            try
             {
-                bool isLetterOrDigit = i < textSpan.Length && char.IsLetterOrDigit(textSpan[i]);
+                rentedBuffer = System.Buffers.ArrayPool<char>.Shared.Rent(maxWordLength);
                 
-                if (!isLetterOrDigit && wordStart >= 0)
+                for (int i = 0; i <= textSpan.Length; i++)
                 {
-                    // End of word
-                    int wordLength = i - wordStart;
-                    if (wordLength >= 2)
+                    bool isLetterOrDigit = i < textSpan.Length && char.IsLetterOrDigit(textSpan[i]);
+                    
+                    if (!isLetterOrDigit && wordStart >= 0)
                     {
-                        // Extract word and convert to lowercase
-                        string word = text.Substring(wordStart, wordLength).ToLowerInvariant();
-                        if (!_stopWords.Contains(word))
+                        // End of word
+                        int wordLength = i - wordStart;
+                        if (wordLength >= 2)
                         {
-                            terms.Add(word);
+                            // Convert to lowercase using rented buffer
+                            ReadOnlySpan<char> wordSpan = textSpan.Slice(wordStart, wordLength);
+                            
+                            // If word is too long, fall back to direct conversion
+                            if (wordLength > maxWordLength)
+                            {
+                                string word = text.Substring(wordStart, wordLength).ToLowerInvariant();
+                                if (!_stopWords.Contains(word))
+                                {
+                                    terms.Add(word);
+                                }
+                            }
+                            else
+                            {
+                                // Convert to lowercase in rented buffer
+                                for (int j = 0; j < wordLength; j++)
+                                {
+                                    rentedBuffer[j] = char.ToLowerInvariant(wordSpan[j]);
+                                }
+                                
+                                // Create string from buffer and check stopwords
+                                string word = new string(rentedBuffer, 0, wordLength);
+                                if (!_stopWords.Contains(word))
+                                {
+                                    terms.Add(word);
+                                }
+                            }
                         }
+                        wordStart = -1;
                     }
-                    wordStart = -1;
+                    else if (isLetterOrDigit && wordStart < 0)
+                    {
+                        // Start of word
+                        wordStart = i;
+                    }
                 }
-                else if (isLetterOrDigit && wordStart < 0)
+            }
+            finally
+            {
+                if (rentedBuffer != null)
                 {
-                    // Start of word
-                    wordStart = i;
+                    System.Buffers.ArrayPool<char>.Shared.Return(rentedBuffer);
                 }
             }
 
