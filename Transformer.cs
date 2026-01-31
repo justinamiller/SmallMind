@@ -121,7 +121,7 @@ namespace TinyLLM
             var result = new Tensor(new int[] { B, T, nEmbd }, requiresGrad: true);
             
             // posEmb is (T, nEmbd), need to broadcast to (B, T, nEmbd)
-            // Optimization: Use Array.Copy for vectorized operations instead of nested loops
+            // Optimization: Pre-calculate offsets to reduce redundant calculations
             for (int b = 0; b < B; b++)
             {
                 for (int t = 0; t < T; t++)

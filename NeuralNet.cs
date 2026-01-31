@@ -367,8 +367,9 @@ namespace TinyLLM
         {
             if (!_training || _p == 0)
             {
-                // Optimization: return input directly when not training (no need to clone)
-                return input;
+                // During inference, we need to return the input.
+                // Clone is necessary to maintain tensor independence.
+                return input.Clone();
             }
             
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
