@@ -92,7 +92,7 @@ namespace TinyLLM
                     }
 
                     // Convert to probabilities
-                    var probs = functional.softmax(logitsLast, dim: -1);
+                    var probs = torch.nn.functional.softmax(logitsLast, dim: -1);
 
                     // Sample from the distribution
                     var nextToken = SampleFromProbs(probs, random);

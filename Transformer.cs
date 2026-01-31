@@ -27,18 +27,19 @@ namespace TinyLLM
         private readonly double _dropout;
 
         // Embedding layers
-        private readonly Embedding _tokenEmbedding;
-        private readonly Embedding _positionEmbedding;
-        private readonly Dropout _embDropout;
+        private readonly TorchSharp.Modules.Embedding _tokenEmbedding;
+        private readonly TorchSharp.Modules.Embedding _positionEmbedding;
+        private readonly TorchSharp.Modules.Dropout _embDropout;
 
         // Transformer blocks
-        private readonly ModuleList<TransformerBlock> _blocks;
+        private readonly List<TransformerBlock> _blocks;
 
         // Final layer norm and linear head
-        private readonly LayerNorm _lnFinal;
-        private readonly Linear _lmHead;
+        private readonly TorchSharp.Modules.LayerNorm _lnFinal;
+        private readonly TorchSharp.Modules.Linear _lmHead;
 
         public TransformerModel(int vocabSize, int blockSize, int nEmbd, int nLayer, int nHead, double dropout)
+            : base("TransformerModel")
         {
             _vocabSize = vocabSize;
             _blockSize = blockSize;
@@ -53,7 +54,7 @@ namespace TinyLLM
             _embDropout = Dropout(dropout);
 
             // Stack of transformer blocks
-            _blocks = new ModuleList<TransformerBlock>();
+            _blocks = new List<TransformerBlock>();
             for (int i = 0; i < _nLayer; i++)
             {
                 _blocks.Add(new TransformerBlock(_nEmbd, _nHead, _blockSize, dropout));
@@ -105,19 +106,21 @@ namespace TinyLLM
             return logits;
         }
 
-        protected override void RegisterComponents()
+        protected override void Dispose(bool disposing)
         {
-            RegisterModule("token_embedding", _tokenEmbedding);
-            RegisterModule("position_embedding", _positionEmbedding);
-            RegisterModule("emb_dropout", _embDropout);
-            
-            for (int i = 0; i < _blocks.Count; i++)
+            if (disposing)
             {
-                RegisterModule($"block_{i}", _blocks[i]);
+                _tokenEmbedding?.Dispose();
+                _positionEmbedding?.Dispose();
+                _embDropout?.Dispose();
+                foreach (var block in _blocks)
+                {
+                    block?.Dispose();
+                }
+                _lnFinal?.Dispose();
+                _lmHead?.Dispose();
             }
-
-            RegisterModule("ln_final", _lnFinal);
-            RegisterModule("lm_head", _lmHead);
+            base.Dispose(disposing);
         }
     }
 
@@ -126,12 +129,13 @@ namespace TinyLLM
     /// </summary>
     public class TransformerBlock : Module<Tensor, Tensor>
     {
-        private readonly LayerNorm _ln1;
+        private readonly TorchSharp.Modules.LayerNorm _ln1;
         private readonly MultiHeadAttention _attn;
-        private readonly LayerNorm _ln2;
+        private readonly TorchSharp.Modules.LayerNorm _ln2;
         private readonly MLP _mlp;
 
         public TransformerBlock(int nEmbd, int nHead, int blockSize, double dropout)
+            : base("TransformerBlock")
         {
             _ln1 = LayerNorm(new long[] { nEmbd });
             _attn = new MultiHeadAttention(nEmbd, nHead, blockSize, dropout);
@@ -150,12 +154,16 @@ namespace TinyLLM
             return x;
         }
 
-        protected override void RegisterComponents()
+        protected override void Dispose(bool disposing)
         {
-            RegisterModule("ln1", _ln1);
-            RegisterModule("attn", _attn);
-            RegisterModule("ln2", _ln2);
-            RegisterModule("mlp", _mlp);
+            if (disposing)
+            {
+                _ln1?.Dispose();
+                _attn?.Dispose();
+                _ln2?.Dispose();
+                _mlp?.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 
@@ -168,13 +176,14 @@ namespace TinyLLM
         private readonly int _nEmbd;
         private readonly int _nHead;
         private readonly int _headSize;
-        private readonly Linear _qkv;
-        private readonly Linear _proj;
-        private readonly Dropout _attnDropout;
-        private readonly Dropout _projDropout;
+        private readonly TorchSharp.Modules.Linear _qkv;
+        private readonly TorchSharp.Modules.Linear _proj;
+        private readonly TorchSharp.Modules.Dropout _attnDropout;
+        private readonly TorchSharp.Modules.Dropout _projDropout;
         private readonly Tensor _causalMask;
 
         public MultiHeadAttention(int nEmbd, int nHead, int blockSize, double dropout)
+            : base("MultiHeadAttention")
         {
             _nEmbd = nEmbd;
             _nHead = nHead;
@@ -221,7 +230,7 @@ namespace TinyLLM
             att = att.masked_fill(mask.to(x.device) == 0, float.NegativeInfinity);
 
             // Softmax and dropout
-            att = functional.softmax(att, dim: -1);
+            att = torch.nn.functional.softmax(att, dim: -1);
             att = _attnDropout.forward(att);
 
             // Apply attention to values: (B, nHead, T, T) @ (B, nHead, T, headSize) -> (B, nHead, T, headSize)
@@ -236,12 +245,17 @@ namespace TinyLLM
             return y;
         }
 
-        protected override void RegisterComponents()
+        protected override void Dispose(bool disposing)
         {
-            RegisterModule("qkv", _qkv);
-            RegisterModule("proj", _proj);
-            RegisterModule("attn_dropout", _attnDropout);
-            RegisterModule("proj_dropout", _projDropout);
+            if (disposing)
+            {
+                _qkv?.Dispose();
+                _proj?.Dispose();
+                _attnDropout?.Dispose();
+                _projDropout?.Dispose();
+                _causalMask?.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 
@@ -251,11 +265,12 @@ namespace TinyLLM
     /// </summary>
     public class MLP : Module<Tensor, Tensor>
     {
-        private readonly Linear _fc1;
-        private readonly Linear _fc2;
-        private readonly Dropout _dropout;
+        private readonly TorchSharp.Modules.Linear _fc1;
+        private readonly TorchSharp.Modules.Linear _fc2;
+        private readonly TorchSharp.Modules.Dropout _dropout;
 
         public MLP(int nEmbd, double dropout)
+            : base("MLP")
         {
             // Standard Transformer uses 4x expansion
             _fc1 = Linear(nEmbd, 4 * nEmbd);
@@ -269,17 +284,21 @@ namespace TinyLLM
         {
             // x: (B, T, n_embd)
             x = _fc1.forward(x);
-            x = functional.gelu(x);
+            x = torch.nn.functional.gelu(x);
             x = _fc2.forward(x);
             x = _dropout.forward(x);
             return x;
         }
 
-        protected override void RegisterComponents()
+        protected override void Dispose(bool disposing)
         {
-            RegisterModule("fc1", _fc1);
-            RegisterModule("fc2", _fc2);
-            RegisterModule("dropout", _dropout);
+            if (disposing)
+            {
+                _fc1?.Dispose();
+                _fc2?.Dispose();
+                _dropout?.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 }

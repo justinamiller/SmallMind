@@ -108,7 +108,7 @@ namespace TinyLLM
                 var logitsFlat = logits.view(B * T, V);
                 var yFlat = y.view(B * T);
 
-                var loss = functional.cross_entropy(logitsFlat, yFlat);
+                var loss = torch.nn.functional.cross_entropy(logitsFlat, yFlat);
 
                 // Backward pass
                 optimizer.zero_grad();
