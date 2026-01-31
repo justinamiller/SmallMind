@@ -212,24 +212,34 @@ namespace TinyLLM.Text
                 return logits;
             }
 
-            // Find k-th largest value using partial sort (QuickSelect-like approach)
-            // Copy to avoid modifying original
-            var values = new float[logits.Length];
-            Array.Copy(logits, values, logits.Length);
-            
-            // Partial sort - only need to find k-th largest
-            Array.Sort(values);
-            Array.Reverse(values); // Now in descending order
-            float kthValue = values[Math.Min(k - 1, values.Length - 1)];
-
-            // Set all values below k-th to -inf
-            var filtered = new float[logits.Length];
-            for (int i = 0; i < logits.Length; i++)
+            // Rent buffer for sorting to reduce allocations
+            float[]? rentedBuffer = null;
+            try
             {
-                filtered[i] = logits[i] >= kthValue ? logits[i] : float.NegativeInfinity;
-            }
+                rentedBuffer = System.Buffers.ArrayPool<float>.Shared.Rent(logits.Length);
+                Array.Copy(logits, rentedBuffer, logits.Length);
+                
+                // Partial sort - only need to find k-th largest
+                Array.Sort(rentedBuffer, 0, logits.Length);
+                Array.Reverse(rentedBuffer, 0, logits.Length); // Now in descending order
+                float kthValue = rentedBuffer[Math.Min(k - 1, logits.Length - 1)];
 
-            return filtered;
+                // Set all values below k-th to -inf
+                var filtered = new float[logits.Length];
+                for (int i = 0; i < logits.Length; i++)
+                {
+                    filtered[i] = logits[i] >= kthValue ? logits[i] : float.NegativeInfinity;
+                }
+
+                return filtered;
+            }
+            finally
+            {
+                if (rentedBuffer != null)
+                {
+                    System.Buffers.ArrayPool<float>.Shared.Return(rentedBuffer);
+                }
+            }
         }
 
         /// <summary>

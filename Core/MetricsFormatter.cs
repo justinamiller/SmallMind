@@ -15,7 +15,8 @@ namespace TinyLLM.Core
         /// </summary>
         public static string FormatText(MetricsSummary summary)
         {
-            var sb = new StringBuilder();
+            // Pre-size StringBuilder to reduce allocations
+            var sb = new StringBuilder(512);
             sb.AppendLine();
             sb.AppendLine("=== Performance Summary ===");
             sb.AppendLine($"Concurrency: {summary.Concurrency}");
@@ -115,7 +116,8 @@ namespace TinyLLM.Core
                 return "No benchmark results available.";
             }
 
-            var sb = new StringBuilder();
+            // Pre-size StringBuilder: header (~170 chars) + ~135 chars per result
+            var sb = new StringBuilder(170 + (results.Length * 135));
             sb.AppendLine();
             sb.AppendLine("=== Detailed Results (sorted by throughput) ===");
             sb.AppendLine();

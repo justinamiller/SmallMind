@@ -36,7 +36,15 @@ namespace TinyLLM.RAG
         /// <returns>Complete prompt for the LLM</returns>
         public string BuildPrompt(string question, List<RetrievedChunk> chunks)
         {
-            var sb = new StringBuilder();
+            // Estimate capacity: system message + chunks (avg 200 chars each) + question + formatting
+            int estimatedCapacity = _systemMessage.Length + question.Length + 200;
+            if (chunks != null && chunks.Count > 0)
+            {
+                // Add estimate for chunks and formatting
+                estimatedCapacity += chunks.Count * 250; // avg chunk size + formatting
+            }
+            
+            var sb = new StringBuilder(estimatedCapacity);
 
             // System message
             sb.AppendLine(_systemMessage);
@@ -73,7 +81,9 @@ namespace TinyLLM.RAG
         /// </summary>
         public string BuildPromptWithContext(string question, string context)
         {
-            var sb = new StringBuilder();
+            // Pre-size StringBuilder to avoid reallocations
+            int estimatedCapacity = _systemMessage.Length + context.Length + question.Length + 100;
+            var sb = new StringBuilder(estimatedCapacity);
 
             sb.AppendLine(_systemMessage);
             sb.AppendLine();

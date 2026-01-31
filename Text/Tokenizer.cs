@@ -71,7 +71,9 @@ namespace TinyLLM.Text
         /// </summary>
         public string Decode(List<int> tokens)
         {
-            var sb = new StringBuilder();
+            // Pre-size StringBuilder to tokens.Count (1:1 ratio for character-level tokenization)
+            // For character-level tokenizer, each token maps to exactly one character
+            var sb = new StringBuilder(tokens.Count);
             foreach (var idx in tokens)
             {
                 if (_idxToChar.TryGetValue(idx, out char ch))
