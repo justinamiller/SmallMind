@@ -167,7 +167,7 @@ namespace TinyLLM.Embeddings
         }
 
         /// <summary>
-        /// Tokenize text into terms (simple word-based tokenization).
+        /// Tokenize text into terms (optimized word-based tokenization using Span).
         /// </summary>
         private List<string> Tokenize(string text)
         {
@@ -177,34 +177,33 @@ namespace TinyLLM.Embeddings
                 return terms;
             }
 
-            var sb = new StringBuilder();
-            var lowerText = text.ToLowerInvariant();
+            // Use Span-based parsing to reduce allocations
+            ReadOnlySpan<char> textSpan = text.AsSpan();
+            int wordStart = -1;
             
-            for (int i = 0; i < lowerText.Length; i++)
+            for (int i = 0; i <= textSpan.Length; i++)
             {
-                char c = lowerText[i];
-                if (char.IsLetterOrDigit(c))
+                bool isLetterOrDigit = i < textSpan.Length && char.IsLetterOrDigit(textSpan[i]);
+                
+                if (!isLetterOrDigit && wordStart >= 0)
                 {
-                    sb.Append(c);
-                }
-                else if (sb.Length > 0)
-                {
-                    string word = sb.ToString();
-                    if (word.Length >= 2 && !_stopWords.Contains(word))
+                    // End of word
+                    int wordLength = i - wordStart;
+                    if (wordLength >= 2)
                     {
-                        terms.Add(word);
+                        // Extract word and convert to lowercase
+                        string word = text.Substring(wordStart, wordLength).ToLowerInvariant();
+                        if (!_stopWords.Contains(word))
+                        {
+                            terms.Add(word);
+                        }
                     }
-                    sb.Clear();
+                    wordStart = -1;
                 }
-            }
-
-            // Add last word if any
-            if (sb.Length > 0)
-            {
-                string word = sb.ToString();
-                if (word.Length >= 2 && !_stopWords.Contains(word))
+                else if (isLetterOrDigit && wordStart < 0)
                 {
-                    terms.Add(word);
+                    // Start of word
+                    wordStart = i;
                 }
             }
 

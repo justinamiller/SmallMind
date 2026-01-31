@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 
 namespace TinyLLM.Core
@@ -135,13 +134,28 @@ namespace TinyLLM.Core
 
         /// <summary>
         /// Get a summary of all collected metrics.
+        /// Optimized to avoid LINQ allocations.
         /// </summary>
         public MetricsSummary GetSummary(int maxTokensRequested = 0, int concurrencyLevel = 1)
         {
             lock (_lock)
             {
-                var completedRequests = _requests.Where(r => r.Success && r.EndTime.HasValue).ToList();
-                var failedRequests = _requests.Where(r => !r.Success).ToList();
+                // Manual filtering instead of LINQ to avoid allocations
+                var completedRequests = new List<RequestMetrics>();
+                var failedRequests = new List<RequestMetrics>();
+                
+                for (int i = 0; i < _requests.Count; i++)
+                {
+                    var r = _requests[i];
+                    if (r.Success && r.EndTime.HasValue)
+                    {
+                        completedRequests.Add(r);
+                    }
+                    else if (!r.Success)
+                    {
+                        failedRequests.Add(r);
+                    }
+                }
 
                 var summary = new MetricsSummary
                 {
@@ -158,9 +172,16 @@ namespace TinyLLM.Core
                     return summary;
                 }
 
-                // Token statistics
-                summary.TotalInputTokens = completedRequests.Sum(r => r.InputTokens);
-                summary.TotalOutputTokens = completedRequests.Sum(r => r.OutputTokens);
+                // Token statistics - manual sum instead of LINQ
+                long totalInputTokens = 0;
+                long totalOutputTokens = 0;
+                for (int i = 0; i < completedRequests.Count; i++)
+                {
+                    totalInputTokens += completedRequests[i].InputTokens;
+                    totalOutputTokens += completedRequests[i].OutputTokens;
+                }
+                summary.TotalInputTokens = totalInputTokens;
+                summary.TotalOutputTokens = totalOutputTokens;
 
                 // Throughput
                 if (summary.DurationSeconds > 0)
@@ -170,7 +191,7 @@ namespace TinyLLM.Core
                 }
 
                 // TTFT statistics (Time To First Token) - in milliseconds
-                var ttftValues = new List<double>();
+                var ttftValues = new List<double>(completedRequests.Count);
                 foreach (var req in completedRequests)
                 {
                     if (req.FirstTokenTime.HasValue)
@@ -185,7 +206,7 @@ namespace TinyLLM.Core
                 }
 
                 // End-to-end latency statistics - in milliseconds
-                var e2eValues = new List<double>();
+                var e2eValues = new List<double>(completedRequests.Count);
                 foreach (var req in completedRequests)
                 {
                     if (req.EndTime.HasValue)
@@ -199,8 +220,12 @@ namespace TinyLLM.Core
                     summary.E2eLatencyStats = PercentileCalculator.CalculateStats(e2eValues);
                 }
 
-                // Tokens per request statistics
-                var tokensPerReq = completedRequests.Select(r => (double)r.OutputTokens).ToList();
+                // Tokens per request statistics - manual conversion
+                var tokensPerReq = new List<double>(completedRequests.Count);
+                for (int i = 0; i < completedRequests.Count; i++)
+                {
+                    tokensPerReq.Add((double)completedRequests[i].OutputTokens);
+                }
                 if (tokensPerReq.Count > 0)
                 {
                     summary.TokensPerRequestStats = PercentileCalculator.CalculateStats(tokensPerReq);

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -19,6 +18,7 @@ namespace TinyLLM.Text
         /// <summary>
         /// Load data from a plain text file, one sentence per line.
         /// Each line is treated as a separate sentence.
+        /// Optimized to use StreamReader instead of File.ReadAllLines.
         /// </summary>
         /// <param name="filePath">Path to the text file</param>
         /// <param name="separator">Separator to join sentences (default: newline)</param>
@@ -30,14 +30,17 @@ namespace TinyLLM.Text
                 throw new FileNotFoundException($"Text file not found: {filePath}");
             }
 
-            var lines = File.ReadAllLines(filePath);
             var sentences = new List<string>();
             
-            for (int i = 0; i < lines.Length; i++)
+            using (var reader = new StreamReader(filePath, Encoding.UTF8))
             {
-                if (!string.IsNullOrWhiteSpace(lines[i]))
+                string? line;
+                while ((line = reader.ReadLine()) != null)
                 {
-                    sentences.Add(lines[i]);
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        sentences.Add(line);
+                    }
                 }
             }
             
@@ -115,6 +118,7 @@ namespace TinyLLM.Text
         /// <summary>
         /// Load data from a CSV file.
         /// Supports column-based extraction with header handling.
+        /// Optimized with StreamReader instead of File.ReadAllLines.
         /// </summary>
         /// <param name="filePath">Path to the CSV file</param>
         /// <param name="columnIndex">Index of the column to extract (0-based)</param>
@@ -130,19 +134,29 @@ namespace TinyLLM.Text
                 throw new FileNotFoundException($"CSV file not found: {filePath}");
             }
 
-            var lines = File.ReadAllLines(filePath);
-            var startIndex = hasHeader ? 1 : 0;
             var sentences = new List<string>();
+            bool isFirstLine = true;
 
-            for (int i = startIndex; i < lines.Length; i++)
+            using (var reader = new StreamReader(filePath, Encoding.UTF8))
             {
-                var fields = ParseCsvLine(lines[i], delimiter);
-                if (fields.Count > columnIndex)
+                string? line;
+                while ((line = reader.ReadLine()) != null)
                 {
-                    var text = fields[columnIndex].Trim();
-                    if (!string.IsNullOrWhiteSpace(text))
+                    if (isFirstLine && hasHeader)
                     {
-                        sentences.Add(text);
+                        isFirstLine = false;
+                        continue;
+                    }
+                    isFirstLine = false;
+                    
+                    var fields = ParseCsvLine(line, delimiter);
+                    if (fields.Count > columnIndex)
+                    {
+                        var text = fields[columnIndex].Trim();
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            sentences.Add(text);
+                        }
                     }
                 }
             }
@@ -173,15 +187,29 @@ namespace TinyLLM.Text
             {
                 try
                 {
-                    var extension = Path.GetExtension(file).ToLowerInvariant();
-                    string text = extension switch
+                    var extension = Path.GetExtension(file);
+                    // Use Ordinal comparison instead of ToLowerInvariant for performance
+                    string text;
+                    if (extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
                     {
-                        ".txt" => FromTextFile(file),
-                        ".json" => FromJsonFile(file),
-                        ".xml" => FromXmlFile(file),
-                        ".csv" => FromCsvFile(file),
-                        _ => File.ReadAllText(file) // Try to read as plain text
-                    };
+                        text = FromTextFile(file);
+                    }
+                    else if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        text = FromJsonFile(file);
+                    }
+                    else if (extension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+                    {
+                        text = FromXmlFile(file);
+                    }
+                    else if (extension.Equals(".csv", StringComparison.OrdinalIgnoreCase))
+                    {
+                        text = FromCsvFile(file);
+                    }
+                    else
+                    {
+                        text = File.ReadAllText(file); // Try to read as plain text
+                    }
 
                     if (!string.IsNullOrWhiteSpace(text))
                     {
@@ -201,6 +229,7 @@ namespace TinyLLM.Text
         /// <summary>
         /// Load text and split by custom delimiters.
         /// Supports multiple delimiters for sentence splitting.
+        /// Optimized manual parsing to avoid string.Split allocation.
         /// </summary>
         /// <param name="text">Input text to split</param>
         /// <param name="delimiters">Array of delimiters to split on (default: period, exclamation, question mark)</param>
@@ -216,11 +245,42 @@ namespace TinyLLM.Text
             delimiters ??= new[] { ".", "!", "?" };
             
             var sentences = new List<string>();
-            var parts = text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var part in parts)
+            
+            // Manual parsing to avoid string.Split allocation
+            int sentenceStart = 0;
+            ReadOnlySpan<char> textSpan = text.AsSpan();
+            
+            for (int i = 0; i < textSpan.Length; i++)
             {
-                var sentence = part.Trim();
+                bool isDelimiter = false;
+                for (int d = 0; d < delimiters.Length; d++)
+                {
+                    if (delimiters[d].Length == 1 && textSpan[i] == delimiters[d][0])
+                    {
+                        isDelimiter = true;
+                        break;
+                    }
+                }
+                
+                if (isDelimiter)
+                {
+                    int sentenceLength = i - sentenceStart;
+                    if (sentenceLength > 0)
+                    {
+                        string sentence = text.Substring(sentenceStart, sentenceLength).Trim();
+                        if (!string.IsNullOrWhiteSpace(sentence))
+                        {
+                            sentences.Add(sentence);
+                        }
+                    }
+                    sentenceStart = i + 1;
+                }
+            }
+            
+            // Add remaining text
+            if (sentenceStart < text.Length)
+            {
+                string sentence = text.Substring(sentenceStart).Trim();
                 if (!string.IsNullOrWhiteSpace(sentence))
                 {
                     sentences.Add(sentence);
