@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SmallMind.csproj" />
+  <Project Path="SmallMind.Tests/SmallMind.Tests.csproj" />
+</Solution>
