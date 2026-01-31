@@ -35,6 +35,8 @@ namespace TinyLLM
     /// </summary>
     public class VectorIndex
     {
+        private const string DEFAULT_INDEX_FILENAME = "vectors.jsonl";
+        
         private readonly string _indexDirectory;
         private readonly string _indexFilePath;
         private readonly List<VectorEntry> _entries;
@@ -48,11 +50,12 @@ namespace TinyLLM
         /// </summary>
         /// <param name="indexDirectory">Directory to store the index (default: ./index)</param>
         /// <param name="embeddingProvider">Embedding provider to use</param>
-        public VectorIndex(IEmbeddingProvider embeddingProvider, string indexDirectory = "./index")
+        /// <param name="indexFileName">Name of the index file (default: vectors.jsonl)</param>
+        public VectorIndex(IEmbeddingProvider embeddingProvider, string indexDirectory = "./index", string indexFileName = DEFAULT_INDEX_FILENAME)
         {
             _embeddingProvider = embeddingProvider ?? throw new ArgumentNullException(nameof(embeddingProvider));
             _indexDirectory = indexDirectory;
-            _indexFilePath = Path.Combine(_indexDirectory, "vectors.jsonl");
+            _indexFilePath = Path.Combine(_indexDirectory, indexFileName);
             _entries = new List<VectorEntry>();
             _nextId = 0;
 

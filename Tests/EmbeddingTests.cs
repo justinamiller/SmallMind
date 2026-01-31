@@ -51,7 +51,8 @@ namespace TinyLLM.Tests
             var embedder = new TfidfEmbeddingProvider(maxFeatures: 128);
             embedder.Fit(documents);
 
-            var index = new VectorIndex(embedder, indexDirectory: "/tmp/test_index");
+            var testDir = Path.Combine(Path.GetTempPath(), "test_index_" + Guid.NewGuid().ToString("N"));
+            var index = new VectorIndex(embedder, indexDirectory: testDir);
 
             // Act
             index.AddBatch(documents);
@@ -76,7 +77,7 @@ namespace TinyLLM.Tests
             var embedder = new TfidfEmbeddingProvider(maxFeatures: 64);
             embedder.Fit(documents);
 
-            var indexPath = "/tmp/test_index_save_load";
+            var indexPath = Path.Combine(Path.GetTempPath(), "test_index_save_load_" + Guid.NewGuid().ToString("N"));
             var index = new VectorIndex(embedder, indexDirectory: indexPath);
 
             // Act
@@ -106,7 +107,8 @@ namespace TinyLLM.Tests
             var embedder = new TfidfEmbeddingProvider(maxFeatures: 128);
             embedder.Fit(documents);
 
-            var index = new VectorIndex(embedder, indexDirectory: "/tmp/test_retriever");
+            var testDir = Path.Combine(Path.GetTempPath(), "test_retriever_" + Guid.NewGuid().ToString("N"));
+            var index = new VectorIndex(embedder, indexDirectory: testDir);
             index.AddBatch(documents);
 
             var retriever = new Retriever(index, defaultK: 3);

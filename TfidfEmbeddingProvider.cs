@@ -87,13 +87,13 @@ namespace TinyLLM
                 _vocabulary[termFreqList[i].term] = i;
             }
 
-            // Step 3: Calculate IDF scores
+            // Step 3: Calculate IDF scores (with smoothing to prevent division by zero)
             int totalDocs = documents.Count;
             foreach (var kvp in documentFrequency)
             {
                 if (_vocabulary.ContainsKey(kvp.Key))
                 {
-                    double idf = Math.Log((double)totalDocs / kvp.Value);
+                    double idf = Math.Log((totalDocs + 1.0) / (kvp.Value + 1.0));
                     _idfScores[kvp.Key] = idf;
                 }
             }
