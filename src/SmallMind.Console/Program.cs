@@ -6,6 +6,7 @@ using SmallMind.Text;
 using SmallMind.RAG;
 using SmallMind.Embeddings;
 using SmallMind.Indexing;
+using SmallMind.Simd;
 
 namespace SmallMind.ConsoleApp
 {
@@ -125,6 +126,10 @@ namespace SmallMind.ConsoleApp
             {
                 Console.WriteLine("=== Tiny LLM - Educational Transformer in Pure C# ===");
                 Console.WriteLine("No 3rd party dependencies - everything from scratch!\n");
+
+                // Display SIMD capabilities at startup
+                SimdCapabilities.PrintCapabilities();
+                Console.WriteLine();
 
                 // Parse command-line arguments
                 bool shouldTrain = !HasArg(args, "--no-train");
