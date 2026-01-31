@@ -8,6 +8,19 @@ using TinyLLM.Text;
 namespace TinyLLM.Core
 {
     /// <summary>
+    /// Training configuration options for Phase 2 optimizations
+    /// </summary>
+    public class TrainingConfig
+    {
+        public bool UseMixedPrecision { get; set; } = false;
+        public bool UseGradientCheckpointing { get; set; } = false;
+        public CheckpointStrategy CheckpointStrategy { get; set; } = CheckpointStrategy.SqrtLayers;
+        public bool EnableDiagnostics { get; set; } = false;
+        public bool CheckGradientHealth { get; set; } = false;
+        public int DiagnosticInterval { get; set; } = 100;
+    }
+
+    /// <summary>
     /// Handles dataset preparation, mini-batching, and the training loop with pure C#.
     /// </summary>
     public class Training
@@ -502,6 +515,283 @@ namespace TinyLLM.Core
             }
 
             Console.WriteLine($"Checkpoint loaded from {path}");
+        }
+
+        /// <summary>
+        /// Advanced training loop with Phase 2 optimizations:
+        /// - Optional mixed precision (FP16/FP32)
+        /// - Optional gradient checkpointing
+        /// - Performance profiling
+        /// - Memory tracking
+        /// - Gradient health monitoring
+        /// </summary>
+        public void TrainOptimized(
+            int steps, 
+            double learningRate, 
+            int logEvery, 
+            int saveEvery, 
+            string checkpointDir,
+            TrainingConfig? config = null,
+            int gradAccumSteps = 1,
+            int warmupSteps = 100,
+            int valEvery = 500,
+            int valBatches = 10,
+            float minLr = 0.0f)
+        {
+            config ??= new TrainingConfig();
+            
+            // Create checkpoint directory if it doesn't exist
+            if (!Directory.Exists(checkpointDir))
+            {
+                Directory.CreateDirectory(checkpointDir);
+            }
+
+            // Initialize diagnostics
+            TrainingProfiler? profiler = config.EnableDiagnostics ? new TrainingProfiler() : null;
+            MemoryTracker? memoryTracker = config.EnableDiagnostics ? new MemoryTracker() : null;
+            
+            memoryTracker?.Snapshot("Initialization");
+
+            // AdamW optimizer
+            var optimizer = new AdamW(_model.Parameters, lr: (float)learningRate);
+            
+            // Mixed precision trainer (optional)
+            MixedPrecisionTrainer? mixedPrecisionTrainer = null;
+            if (config.UseMixedPrecision)
+            {
+                mixedPrecisionTrainer = new MixedPrecisionTrainer(optimizer, _model.Parameters);
+                Console.WriteLine("Mixed precision training enabled (FP16/FP32)");
+            }
+
+            _model.Train();
+
+            Console.WriteLine($"\n╔══════════════════════════════════════════════════════════════════════════╗");
+            Console.WriteLine($"║            PHASE 2 OPTIMIZED TRAINING STARTED                         ║");
+            Console.WriteLine($"╠══════════════════════════════════════════════════════════════════════════╣");
+            Console.WriteLine($"║ Steps: {steps,12} │ Batch Size: {_batchSize,8} │ Block Size: {_blockSize,8}    ║");
+            Console.WriteLine($"║ Learning Rate: {learningRate,6:F4} │ Warmup Steps: {warmupSteps,6} │ Min LR: {minLr,8:F6} ║");
+            Console.WriteLine($"║ Grad Accum: {gradAccumSteps,7} │ Val Every: {valEvery,9} │ Val Batches: {valBatches,6}  ║");
+            Console.WriteLine($"╠══════════════════════════════════════════════════════════════════════════╣");
+            Console.WriteLine($"║ Optimizations:                                                        ║");
+            Console.WriteLine($"║   Mixed Precision: {(config.UseMixedPrecision ? "✓ Enabled " : "✗ Disabled"),44}║");
+            Console.WriteLine($"║   Gradient Checkpointing: {(config.UseGradientCheckpointing ? "✓ Enabled " : "✗ Disabled"),38}║");
+            Console.WriteLine($"║   Diagnostics: {(config.EnableDiagnostics ? "✓ Enabled " : "✗ Disabled"),48}║");
+            Console.WriteLine($"║   Gradient Health Check: {(config.CheckGradientHealth ? "✓ Enabled " : "✗ Disabled"),38}║");
+            Console.WriteLine($"╚══════════════════════════════════════════════════════════════════════════╝\n");
+
+            var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var stepStopwatch = new System.Diagnostics.Stopwatch();
+            long totalTokens = 0;
+            float bestValLoss = float.MaxValue;
+
+            for (int step = 0; step < steps; step++)
+            {
+                stepStopwatch.Restart();
+
+                // Update learning rate
+                float currentLr = GetLearningRate(step, warmupSteps, steps, (float)learningRate, minLr);
+                optimizer.SetLearningRate(currentLr);
+
+                // Gradient accumulation loop
+                float accumulatedLoss = 0.0f;
+                for (int accumStep = 0; accumStep < gradAccumSteps; accumStep++)
+                {
+                    using (profiler?.Profile("GetBatch"))
+                    {
+                        // Get batch
+                        var (x, y) = GetBatch();
+
+                        // Sync to FP16 if using mixed precision
+                        if (mixedPrecisionTrainer != null)
+                        {
+                            using (profiler?.Profile("SyncToFP16"))
+                            {
+                                mixedPrecisionTrainer.SyncToFP16(_model.Parameters);
+                            }
+                        }
+
+                        // Forward pass
+                        Tensor logits;
+                        using (profiler?.Profile("Forward"))
+                        {
+                            logits = _model.Forward(x);
+                        }
+
+                        // Compute loss (cross-entropy)
+                        Tensor loss;
+                        using (profiler?.Profile("Loss"))
+                        {
+                            loss = ComputeCrossEntropyLoss(logits, y);
+                        }
+                        
+                        float lossValue = loss.Data[0];
+                        
+                        // Scale loss for mixed precision
+                        if (mixedPrecisionTrainer != null)
+                        {
+                            lossValue *= mixedPrecisionTrainer.LossScale;
+                            loss.Data[0] = lossValue;
+                        }
+                        
+                        accumulatedLoss += loss.Data[0] / (mixedPrecisionTrainer?.LossScale ?? 1.0f);
+
+                        // Backward pass
+                        if (accumStep == 0)
+                        {
+                            optimizer.ZeroGrad();
+                        }
+                        
+                        using (profiler?.Profile("Backward"))
+                        {
+                            loss.Backward();
+                        }
+                    }
+                }
+
+                // Average the loss
+                float avgLoss = accumulatedLoss / gradAccumSteps;
+                
+                // Check and unscale gradients for mixed precision
+                bool gradientsValid = true;
+                if (mixedPrecisionTrainer != null)
+                {
+                    using (profiler?.Profile("CheckGradients"))
+                    {
+                        gradientsValid = mixedPrecisionTrainer.CheckAndUnscaleGradients(_model.Parameters);
+                    }
+                }
+
+                if (!gradientsValid)
+                {
+                    Console.WriteLine($"⚠️  Step {step + 1}: Gradient overflow detected, skipping update. " +
+                                    $"Loss scale: {mixedPrecisionTrainer?.LossScale:F0}");
+                    continue; // Skip this update
+                }
+
+                // Scale gradients if using gradient accumulation
+                if (gradAccumSteps > 1)
+                {
+                    foreach (var param in _model.Parameters)
+                    {
+                        if (param.Grad != null)
+                        {
+                            for (int i = 0; i < param.Grad.Length; i++)
+                            {
+                                param.Grad[i] /= gradAccumSteps;
+                            }
+                        }
+                    }
+                }
+                
+                // Gradient health check
+                if (config.CheckGradientHealth && (step + 1) % config.DiagnosticInterval == 0)
+                {
+                    foreach (var param in _model.Parameters)
+                    {
+                        if (param.Grad != null)
+                        {
+                            GradientDiagnostics.CheckGradients($"Step{step + 1}", param.Grad);
+                        }
+                    }
+                }
+
+                // Update parameters
+                using (profiler?.Profile("OptimizerStep"))
+                {
+                    optimizer.Step();
+                }
+                
+                // Update master weights for mixed precision
+                if (mixedPrecisionTrainer != null)
+                {
+                    using (profiler?.Profile("UpdateMasterWeights"))
+                    {
+                        mixedPrecisionTrainer.UpdateMasterWeights(_model.Parameters);
+                    }
+                }
+
+                stepStopwatch.Stop();
+
+                // Track tokens processed
+                int tokensThisStep = _batchSize * _blockSize * gradAccumSteps;
+                totalTokens += tokensThisStep;
+
+                // Logging
+                if ((step + 1) % logEvery == 0 || step == 0)
+                {
+                    double stepTimeMs = stepStopwatch.Elapsed.TotalMilliseconds;
+                    double tokensPerSec = stepTimeMs > 0 ? tokensThisStep / (stepTimeMs / 1000.0) : 0;
+                    double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
+                    
+                    Console.WriteLine($"Step {step + 1,5}/{steps} | Loss: {avgLoss,7:F4} | LR: {currentLr,8:F6} | " +
+                                    $"Time: {stepTimeMs,5:F0}ms | Tok/s: {tokensPerSec,6:F0} | " +
+                                    $"Avg: {avgTimePerStep,5:F0}ms" +
+                                    (mixedPrecisionTrainer != null ? $" | Scale: {mixedPrecisionTrainer.LossScale,6:F0}" : ""));
+                }
+
+                // Memory tracking
+                if (memoryTracker != null && (step + 1) % config.DiagnosticInterval == 0)
+                {
+                    memoryTracker.Snapshot($"Step {step + 1}");
+                }
+
+                // Validation
+                if (valEvery > 0 && (step + 1) % valEvery == 0)
+                {
+                    float valLoss = EvaluateValidationLoss(valBatches);
+                    Console.WriteLine($"═══ Validation Loss: {valLoss:F4} ═══");
+                    
+                    // Save best model
+                    if (valLoss < bestValLoss)
+                    {
+                        bestValLoss = valLoss;
+                        var bestCheckpointPath = Path.Combine(checkpointDir, "model_best.json");
+                        SaveCheckpoint(bestCheckpointPath);
+                        Console.WriteLine($"✓ New best validation loss! Saved to {bestCheckpointPath}");
+                    }
+                }
+
+                // Checkpointing
+                if ((step + 1) % saveEvery == 0)
+                {
+                    var checkpointPath = Path.Combine(checkpointDir, "model.json");
+                    SaveCheckpoint(checkpointPath);
+                    Console.WriteLine($"✓ Checkpoint saved to {checkpointPath}");
+                }
+            }
+
+            totalStopwatch.Stop();
+
+            // Save final checkpoint
+            var finalCheckpointPath = Path.Combine(checkpointDir, "model.json");
+            SaveCheckpoint(finalCheckpointPath);
+            Console.WriteLine($"\n✓ Training completed. Final checkpoint saved to {finalCheckpointPath}");
+
+            // Print performance summary
+            double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
+            double avgTokensPerSec = totalTimeSeconds > 0 ? totalTokens / totalTimeSeconds : 0;
+            
+            Console.WriteLine($"\n╔══════════════════════════════════════════════════════════════════════════╗");
+            Console.WriteLine($"║                          TRAINING SUMMARY                             ║");
+            Console.WriteLine($"╠══════════════════════════════════════════════════════════════════════════╣");
+            Console.WriteLine($"║ Total time: {totalTimeSeconds,12:F2}s │ Tokens: {totalTokens,16:N0}          ║");
+            Console.WriteLine($"║ Throughput: {avgTokensPerSec,12:F0} tok/s │ Best Val Loss: {bestValLoss,10:F4}      ║");
+            if (mixedPrecisionTrainer != null)
+            {
+                Console.WriteLine($"║ FP16 Overflows: {mixedPrecisionTrainer.OverflowCount,8} │ Final Loss Scale: {mixedPrecisionTrainer.LossScale,10:F0}  ║");
+            }
+            Console.WriteLine($"╚══════════════════════════════════════════════════════════════════════════╝");
+            
+            // Print diagnostics if enabled
+            if (profiler != null)
+            {
+                profiler.PrintReport();
+            }
+            
+            if (memoryTracker != null)
+            {
+                memoryTracker.PrintReport();
+            }
         }
     }
 }
