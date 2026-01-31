@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using TinyLLM.Text;
 
-namespace TinyLLM
+namespace TinyLLM.Core
 {
     /// <summary>
     /// Handles dataset preparation, mini-batching, and the training loop with pure C#.

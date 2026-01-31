@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TinyLLM.Core;
+using TinyLLM.Text;
+using TinyLLM.Embeddings;
+using TinyLLM.Indexing;
 
-namespace TinyLLM
+namespace TinyLLM.RAG
 {
     /// <summary>
     /// Question-answering engine that uses the trained LLM to answer questions
@@ -107,10 +111,17 @@ A:";
 
             // Extract keywords from question (simple approach: remove common words)
             var stopWords = new HashSet<string> { "the", "a", "an", "is", "are", "was", "were", "what", "when", "where", "who", "why", "how", "do", "does", "did" };
-            var questionWords = question.ToLower()
-                .Split(new[] { ' ', '?', '!', '.', ',', ';', ':' }, StringSplitOptions.RemoveEmptyEntries)
-                .Where(w => !stopWords.Contains(w) && w.Length > 2)
-                .ToList();
+            var questionWords = new List<string>();
+            var words = question.ToLower().Split(new[] { ' ', '?', '!', '.', ',', ';', ':' }, StringSplitOptions.RemoveEmptyEntries);
+            
+            for (int i = 0; i < words.Length; i++)
+            {
+                var word = words[i];
+                if (!stopWords.Contains(word) && word.Length > 2)
+                {
+                    questionWords.Add(word);
+                }
+            }
 
             if (questionWords.Count == 0)
             {
@@ -121,29 +132,48 @@ A:";
             }
 
             // Split corpus into sentences
-            var sentences = _trainingCorpus.Split(new[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => s.Length > 0)
-                .ToList();
+            var sentenceDelimiters = new[] { '.', '!', '?' };
+            var sentencesList = new List<string>();
+            var parts = _trainingCorpus.Split(sentenceDelimiters, StringSplitOptions.RemoveEmptyEntries);
+            
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var sentence = parts[i].Trim();
+                if (sentence.Length > 0)
+                {
+                    sentencesList.Add(sentence);
+                }
+            }
+            var sentences = sentencesList;
 
             // Score sentences by keyword matches
             var scoredSentences = new List<(string sentence, int score)>();
             foreach (var sentence in sentences)
             {
                 string lowerSentence = sentence.ToLower();
-                int score = questionWords.Count(keyword => lowerSentence.Contains(keyword));
+                int score = 0;
+                for (int i = 0; i < questionWords.Count; i++)
+                {
+                    if (lowerSentence.Contains(questionWords[i]))
+                    {
+                        score++;
+                    }
+                }
                 if (score > 0)
                 {
                     scoredSentences.Add((sentence, score));
                 }
             }
 
-            // Sort by score and take top sentences
-            var relevantSentences = scoredSentences
-                .OrderByDescending(s => s.score)
-                .Take(5)
-                .Select(s => s.sentence)
-                .ToList();
+            // Sort by score and take top sentences (manual sort to avoid LINQ OrderBy)
+            scoredSentences.Sort((a, b) => b.score.CompareTo(a.score));
+            
+            var relevantSentences = new List<string>();
+            int numToTake = Math.Min(5, scoredSentences.Count);
+            for (int i = 0; i < numToTake; i++)
+            {
+                relevantSentences.Add(scoredSentences[i].sentence);
+            }
 
             if (relevantSentences.Count == 0)
             {
@@ -219,9 +249,19 @@ A:";
                 answers.Add(answer);
             }
 
-            // Select the most common or longest answer (simple heuristic)
-            // In practice, you might want to use a scoring function
-            return answers.OrderByDescending(a => a.Length).First();
+            // Select the longest answer (simple heuristic - avoid LINQ OrderBy)
+            string longestAnswer = "";
+            int maxLength = 0;
+            for (int i = 0; i < answers.Count; i++)
+            {
+                if (answers[i].Length > maxLength)
+                {
+                    maxLength = answers[i].Length;
+                    longestAnswer = answers[i];
+                }
+            }
+            
+            return longestAnswer;
         }
     }
 }

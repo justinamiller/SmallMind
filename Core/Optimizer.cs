@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace TinyLLM
+namespace TinyLLM.Core
 {
     /// <summary>
     /// AdamW optimizer for training neural networks

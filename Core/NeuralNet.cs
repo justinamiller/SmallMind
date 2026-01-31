@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace TinyLLM
+namespace TinyLLM.Core
 {
     /// <summary>
     /// Base class for neural network layers/modules

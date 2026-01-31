@@ -3,13 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace TinyLLM
+namespace TinyLLM.Text
 {
     /// <summary>
     /// Character-level tokenizer. Builds a vocabulary from the training text
     /// and provides encode/decode methods to convert between strings and token IDs.
     /// </summary>
-    public class Tokenizer
+    public class Tokenizer : ITokenizer
     {
         private readonly Dictionary<char, int> _charToIdx;
         private readonly Dictionary<int, char> _idxToChar;
@@ -19,7 +19,16 @@ namespace TinyLLM
         public Tokenizer(string text)
         {
             // Build vocabulary from unique characters in the text
-            var chars = text.Distinct().OrderBy(c => c).ToArray();
+            var charSet = new HashSet<char>();
+            for (int i = 0; i < text.Length; i++)
+            {
+                charSet.Add(text[i]);
+            }
+            
+            // Convert to sorted array
+            var chars = new char[charSet.Count];
+            charSet.CopyTo(chars);
+            Array.Sort(chars);
             
             _charToIdx = new Dictionary<char, int>();
             _idxToChar = new Dictionary<int, char>();

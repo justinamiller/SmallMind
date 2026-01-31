@@ -5,8 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using TinyLLM.Core;
 
-namespace TinyLLM
+namespace TinyLLM.Text
 {
     /// <summary>
     /// Provides static methods for loading training data from various sources.
@@ -30,7 +31,15 @@ namespace TinyLLM
             }
 
             var lines = File.ReadAllLines(filePath);
-            var sentences = lines.Where(line => !string.IsNullOrWhiteSpace(line)).ToList();
+            var sentences = new List<string>();
+            
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(lines[i]))
+                {
+                    sentences.Add(lines[i]);
+                }
+            }
             
             Console.WriteLine($"Loaded {sentences.Count} sentences from {filePath}");
             return string.Join(separator, sentences);
@@ -88,10 +97,16 @@ namespace TinyLLM
             }
 
             var doc = XDocument.Load(filePath);
-            var sentences = doc.Descendants(elementName)
-                .Select(e => e.Value)
-                .Where(v => !string.IsNullOrWhiteSpace(v))
-                .ToList();
+            var sentences = new List<string>();
+            
+            foreach (var element in doc.Descendants(elementName))
+            {
+                var value = element.Value;
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    sentences.Add(value);
+                }
+            }
 
             Console.WriteLine($"Loaded {sentences.Count} sentences from XML file {filePath}");
             return string.Join(separator, sentences);

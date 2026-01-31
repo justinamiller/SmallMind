@@ -2,8 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using TinyLLM.Core;
 
-namespace TinyLLM
+namespace TinyLLM.Text
 {
     /// <summary>
     /// Manages conversation sessions with context history for multi-turn interactions.

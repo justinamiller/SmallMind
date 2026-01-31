@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using Xunit;
-using TinyLLM;
+using TinyLLM.Text;
 
 namespace TinyLLM.Tests
 {
