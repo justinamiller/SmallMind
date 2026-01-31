@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Xunit;
 using TinyLLM.Embeddings;
 using TinyLLM.Indexing;
+using TinyLLM.RAG;
 
 namespace TinyLLM.Tests
 {
