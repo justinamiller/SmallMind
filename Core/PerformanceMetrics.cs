@@ -12,7 +12,8 @@ namespace TinyLLM.Core
     public class PerformanceMetrics
     {
         private readonly object _lock = new object();
-        private readonly List<RequestMetrics> _requests = new List<RequestMetrics>();
+        // Pre-size for typical benchmark scenarios (hundreds of requests)
+        private readonly List<RequestMetrics> _requests = new List<RequestMetrics>(capacity: 512);
         private readonly Stopwatch _overallTimer = new Stopwatch();
         private int _maxConcurrency = 0;
         private int _currentConcurrency = 0;
@@ -141,8 +142,9 @@ namespace TinyLLM.Core
             lock (_lock)
             {
                 // Manual filtering instead of LINQ to avoid allocations
-                var completedRequests = new List<RequestMetrics>();
-                var failedRequests = new List<RequestMetrics>();
+                // Pre-size based on total requests (most will be completed)
+                var completedRequests = new List<RequestMetrics>(capacity: _requests.Count);
+                var failedRequests = new List<RequestMetrics>(capacity: Math.Max(8, _requests.Count / 10));
                 
                 for (int i = 0; i < _requests.Count; i++)
                 {
