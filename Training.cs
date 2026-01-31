@@ -122,7 +122,7 @@ namespace TinyLLM
                     if (showPerf)
                     {
                         double stepTimeMs = stepStopwatch.Elapsed.TotalMilliseconds;
-                        double tokensPerSec = tokensThisStep / (stepTimeMs / 1000.0);
+                        double tokensPerSec = stepTimeMs > 0 ? tokensThisStep / (stepTimeMs / 1000.0) : 0;
                         double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
                         Console.WriteLine($"Step {step + 1}/{steps}, Loss: {lossValue:F4}, " +
                                         $"Time: {stepTimeMs:F0}ms, Tokens/sec: {tokensPerSec:F0}, " +
@@ -153,7 +153,7 @@ namespace TinyLLM
             if (showPerf)
             {
                 double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
-                double avgTokensPerSec = totalTokens / totalTimeSeconds;
+                double avgTokensPerSec = totalTimeSeconds > 0 ? totalTokens / totalTimeSeconds : 0;
                 Console.WriteLine($"Total training time: {totalTimeSeconds:F2}s");
                 Console.WriteLine($"Total tokens processed: {totalTokens:N0}");
                 Console.WriteLine($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
