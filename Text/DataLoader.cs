@@ -135,19 +135,18 @@ namespace TinyLLM.Text
             }
 
             var sentences = new List<string>();
-            bool isFirstLine = true;
+            bool skipHeader = hasHeader;
 
             using (var reader = new StreamReader(filePath, Encoding.UTF8))
             {
                 string? line;
                 while ((line = reader.ReadLine()) != null)
                 {
-                    if (isFirstLine && hasHeader)
+                    if (skipHeader)
                     {
-                        isFirstLine = false;
+                        skipHeader = false;
                         continue;
                     }
-                    isFirstLine = false;
                     
                     var fields = ParseCsvLine(line, delimiter);
                     if (fields.Count > columnIndex)
@@ -228,11 +227,12 @@ namespace TinyLLM.Text
 
         /// <summary>
         /// Load text and split by custom delimiters.
-        /// Supports multiple delimiters for sentence splitting.
-        /// Optimized manual parsing to avoid string.Split allocation.
+        /// Supports single-character delimiters for sentence splitting.
+        /// Note: Multi-character delimiters are not supported in this optimized version.
+        /// Use single characters like ".", "!", "?" as delimiters.
         /// </summary>
         /// <param name="text">Input text to split</param>
-        /// <param name="delimiters">Array of delimiters to split on (default: period, exclamation, question mark)</param>
+        /// <param name="delimiters">Array of single-character delimiters to split on (default: period, exclamation, question mark)</param>
         /// <param name="separator">Separator to join sentences (default: newline)</param>
         /// <returns>Concatenated text with sentences separated</returns>
         public static string FromTextWithDelimiters(string text, string[]? delimiters = null, string separator = "\n")
@@ -244,6 +244,17 @@ namespace TinyLLM.Text
 
             delimiters ??= new[] { ".", "!", "?" };
             
+            // Validate that all delimiters are single characters for optimized parsing
+            var delimiterChars = new HashSet<char>();
+            for (int i = 0; i < delimiters.Length; i++)
+            {
+                if (delimiters[i].Length != 1)
+                {
+                    throw new ArgumentException($"Delimiter '{delimiters[i]}' must be a single character", nameof(delimiters));
+                }
+                delimiterChars.Add(delimiters[i][0]);
+            }
+            
             var sentences = new List<string>();
             
             // Manual parsing to avoid string.Split allocation
@@ -252,17 +263,7 @@ namespace TinyLLM.Text
             
             for (int i = 0; i < textSpan.Length; i++)
             {
-                bool isDelimiter = false;
-                for (int d = 0; d < delimiters.Length; d++)
-                {
-                    if (delimiters[d].Length == 1 && textSpan[i] == delimiters[d][0])
-                    {
-                        isDelimiter = true;
-                        break;
-                    }
-                }
-                
-                if (isDelimiter)
+                if (delimiterChars.Contains(textSpan[i]))
                 {
                     int sentenceLength = i - sentenceStart;
                     if (sentenceLength > 0)

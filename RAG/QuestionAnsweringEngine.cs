@@ -109,6 +109,7 @@ A:";
             }
 
             // Extract keywords from question (simple approach: remove common words)
+            // Use OrdinalIgnoreCase for case-insensitive matching
             var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) 
             { 
                 "the", "a", "an", "is", "are", "was", "were", 
@@ -136,6 +137,7 @@ A:";
                         int wordLength = i - wordStart;
                         if (wordLength > 2)
                         {
+                            // Extract word - stopWords comparer handles case-insensitive matching
                             string word = question.Substring(wordStart, wordLength);
                             if (!stopWords.Contains(word))
                             {

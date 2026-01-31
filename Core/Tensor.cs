@@ -143,8 +143,9 @@ namespace TinyLLM.Core
             var result = new Tensor(new int[] { M, N }, requiresGrad);
 
             // Compute forward pass with parallel processing for large matrices
-            // Use parallel processing when M >= 32 to amortize thread overhead
-            // (increased from 4 to reduce context switching on small matrices)
+            // Use parallel processing when M >= 32 to amortize thread overhead.
+            // For M < 32, the overhead of thread creation and context switching
+            // outweighs the benefits of parallelization on most systems.
             if (M >= 32)
             {
                 Parallel.For(0, M, i =>
