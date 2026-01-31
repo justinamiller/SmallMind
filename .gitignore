@@ -7,3 +7,6 @@ sessions/
 *.cache
 .vs/
 *.old
+*.vsidx
+.vs/
+TestResults/

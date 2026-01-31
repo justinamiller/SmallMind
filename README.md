@@ -42,7 +42,7 @@ SmallMind now supports loading training data from multiple sources using the `Da
 ### Quick Example
 
 ```csharp
-using TinyLLM;
+using SmallMind;
 
 // Load from JSON file
 var trainingText = DataLoader.FromJsonFile("data.json");
@@ -72,31 +72,119 @@ All files contain identical content to demonstrate format equivalence.
 - **No other dependencies!**
 - No GPU required (CPU-only, training will be slow)
 
+## Project Structure
+
+SmallMind follows best practices for .NET library projects:
+
+```
+SmallMind/
+├── src/                          # Source code
+│   ├── SmallMind/               # Main library project (reusable)
+│   │   ├── Core/                # Core neural network components
+│   │   │   ├── Tensor.cs        # Custom tensor with autograd
+│   │   │   ├── NeuralNet.cs     # Neural network layers
+│   │   │   ├── Transformer.cs   # Transformer model
+│   │   │   ├── Training.cs      # Training loop and optimizer
+│   │   │   └── ...
+│   │   ├── Text/                # Text processing utilities
+│   │   │   ├── Tokenizer.cs     # Character-level tokenizer
+│   │   │   ├── DataLoader.cs    # Multi-format data loading
+│   │   │   └── Sampling.cs      # Text generation sampling
+│   │   ├── RAG/                 # Retrieval-Augmented Generation
+│   │   ├── Embeddings/          # Embedding providers (TF-IDF)
+│   │   └── Indexing/            # Vector indexing
+│   └── SmallMind.Console/       # Demo console application
+│       └── Program.cs           # CLI entry point
+├── tests/                       # Unit and integration tests
+│   └── SmallMind.Tests/        # Test project
+├── samples/                     # Example code and usage demos
+│   ├── DataLoaderExample.cs    # Data loading examples
+│   ├── Phase2OptimizationsExample.cs
+│   └── sample_data/            # Sample data files
+├── docs/                        # Documentation
+│   ├── FEATURES.md             # Feature documentation
+│   ├── LIBRARY_USAGE.md        # Library usage guide
+│   └── ...
+├── benchmarks/                  # Performance benchmarks (future)
+├── SmallMind.sln               # Solution file
+└── README.md                    # This file
+```
+
+### Using SmallMind as a Library
+
+SmallMind is designed to be used as a library in your own .NET projects:
+
+```bash
+# Reference the library in your project
+dotnet add reference /path/to/SmallMind/src/SmallMind/SmallMind.csproj
+
+# Or use as a NuGet package (when published)
+dotnet add package SmallMind
+```
+
+Example usage:
+```csharp
+using SmallMind.Core;
+using SmallMind.Text;
+
+// Create and train a model
+var tokenizer = new Tokenizer(trainingText);
+var model = new TransformerModel(
+    vocabSize: tokenizer.VocabSize,
+    blockSize: 512,
+    nEmbd: 128,
+    nLayer: 4,
+    nHead: 4,
+    dropout: 0.1
+);
+
+// Train the model
+var trainer = new Training(model, tokenizer, trainingText, learningRate: 3e-4);
+trainer.Train(steps: 2000);
+
+// Generate text
+var generator = new Sampling(model, tokenizer);
+string result = generator.Generate("Once upon a time", maxTokens: 200);
+```
+
+See [LIBRARY_USAGE.md](docs/LIBRARY_USAGE.md) for more details.
+
 ## Quick Start
 
 ### 1. Build the Project
 
 ```bash
-# Clone the repository (or create a new directory)
+# Clone the repository
 git clone https://github.com/justinamiller/SmallMind.git
 cd SmallMind
 
-# Build the project
+# Build the entire solution (library + console app + tests)
 dotnet build
 
 # OR build in release mode for better performance
 dotnet build -c Release
 ```
 
-### 2. Train the Model
+### 2. Run Tests
+
+```bash
+# Run all tests
+dotnet test
+
+# Run tests with detailed output
+dotnet test --verbosity normal
+```
+
+### 3. Train the Model
 
 Train on the default `data.txt` file (created automatically if missing):
 
 ```bash
-dotnet run
+# Run the console application
+dotnet run --project src/SmallMind.Console --project src/SmallMind.Console
 
 # OR for better performance
-dotnet run -c Release
+dotnet run --project src/SmallMind.Console --project src/SmallMind.Console -c Release
 ```
 
 This will:
@@ -106,18 +194,18 @@ This will:
 - Save checkpoints to `checkpoints/model.json` every 500 steps
 - Generate sample text after training
 
-### 3. Generate Text from a Checkpoint
+### 4. Generate Text from a Checkpoint
 
 Skip training and generate text from an existing checkpoint:
 
 ```bash
-dotnet run -- --no-train --load --prompt "Once upon a time" --steps 200
+dotnet run --project src/SmallMind.Console --project src/SmallMind.Console -- --no-train --load --prompt "Once upon a time" --steps 200
 
 # OR with release build
-dotnet run -c Release -- --no-train --load --prompt "Once upon a time" --steps 200
+dotnet run --project src/SmallMind.Console --project src/SmallMind.Console -c Release -- --no-train --load --prompt "Once upon a time" --steps 200
 ```
 
-### 4. Custom Training Data
+### 5. Custom Training Data
 
 Replace `data.txt` with your own text file (at least 1000 characters recommended):
 
@@ -126,7 +214,7 @@ Replace `data.txt` with your own text file (at least 1000 characters recommended
 echo "Your custom training text here..." > data.txt
 
 # Train on your data
-dotnet run
+dotnet run --project src/SmallMind.Console --project src/SmallMind.Console
 ```
 
 ## Command-Line Arguments
@@ -158,70 +246,70 @@ dotnet run
 
 ```bash
 # List all available model presets
-dotnet run -- --list-presets
+dotnet run --project src/SmallMind.Console -- --list-presets
 
 # Train with a specific model preset
-dotnet run -- --model-preset mistral-medium
+dotnet run --project src/SmallMind.Console -- --model-preset mistral-medium
 
 # Train with Mistral 7B inspired architecture
-dotnet run -- --model-preset mistral-7b --enhanced-training
+dotnet run --project src/SmallMind.Console -- --model-preset mistral-7b --enhanced-training
 
 # Train with DeepSeek inspired architecture (larger model)
-dotnet run -- --model-preset deepseek --enhanced-training --perf
+dotnet run --project src/SmallMind.Console -- --model-preset deepseek --enhanced-training --perf
 
 # Use tiny preset for fast testing
-dotnet run -- --model-preset tiny
+dotnet run --project src/SmallMind.Console -- --model-preset tiny
 
 # Generate with a specific preset without training
-dotnet run -- --model-preset mistral-medium --no-train --prompt "Knowledge is" --steps 150
+dotnet run --project src/SmallMind.Console -- --model-preset mistral-medium --no-train --prompt "Knowledge is" --steps 150
 
 # Train and generate with default settings
 dotnet run
 
 # Generate with custom prompt and temperature
-dotnet run -- --no-train --prompt "The wise owl" --steps 300 --temperature 0.8
+dotnet run --project src/SmallMind.Console -- --no-train --prompt "The wise owl" --steps 300 --temperature 0.8
 
 # Generate with top-k sampling for more focused output
-dotnet run -- --no-train --prompt "Knowledge is" --steps 150 --top-k 40 --temperature 1.2
+dotnet run --project src/SmallMind.Console -- --no-train --prompt "Knowledge is" --steps 150 --top-k 40 --temperature 1.2
 
 # Train with real-time performance metrics
-dotnet run -- --perf
+dotnet run --project src/SmallMind.Console -- --perf
 
 # Generate with performance tracking
-dotnet run -- --no-train --prompt "Once upon a time" --steps 200 --perf
+dotnet run --project src/SmallMind.Console -- --no-train --prompt "Once upon a time" --steps 200 --perf
 
 # Use auto-configuration to determine optimal block size based on system resources
-dotnet run -- --auto-config
+dotnet run --project src/SmallMind.Console -- --auto-config
 
 # Use a custom block size (larger context window)
-dotnet run -- --block-size 1024
+dotnet run --project src/SmallMind.Console -- --block-size 1024
 
 # Use maximum block size with performance tracking
-dotnet run -- --block-size 32768 --perf --no-train --prompt "Test" --steps 50
+dotnet run --project src/SmallMind.Console -- --block-size 32768 --perf --no-train --prompt "Test" --steps 50
 
 # Use extremely large block size with override (requires significant RAM, 128GB+)
-dotnet run -- --block-size 65536 --max-block-size 65536 --batch-size 2 --perf
+dotnet run --project src/SmallMind.Console -- --block-size 65536 --max-block-size 65536 --batch-size 2 --perf
 
 # Use custom batch size for better throughput (requires more memory)
-dotnet run -- --batch-size 32 --block-size 512
+dotnet run --project src/SmallMind.Console -- --batch-size 32 --block-size 512
 
 # Enhanced training with gradient accumulation and learning rate scheduling
-dotnet run -- --enhanced-training --grad-accum 4 --warmup 200 --perf
+dotnet run --project src/SmallMind.Console -- --enhanced-training --grad-accum 4 --warmup 200 --perf
 
 # Question-answering mode - ask a question based on training data
-dotnet run -- --no-train --qa --prompt "What is knowledge?"
+dotnet run --project src/SmallMind.Console -- --no-train --qa --prompt "What is knowledge?"
 
 # Interactive conversation mode with session context
-dotnet run -- --no-train --interactive
+dotnet run --project src/SmallMind.Console -- --no-train --interactive
 
 # Performance tracking with detailed metrics
-dotnet run -- --no-train --prompt "Once upon a time" --steps 200 --perf
+dotnet run --project src/SmallMind.Console -- --no-train --prompt "Once upon a time" --steps 200 --perf
 
 # JSON performance output for automated testing
-dotnet run -- --no-train --prompt "Test" --steps 100 --perf-json
+dotnet run --project src/SmallMind.Console -- --no-train --prompt "Test" --steps 100 --perf-json
 
 # Benchmark mode to test different configurations
-dotnet run -- --no-train --bench --prompt "Knowledge is"
+dotnet run --project src/SmallMind.Console -- --no-train --bench --prompt "Knowledge is"
 ```
 
 ## Model Presets
@@ -259,13 +347,13 @@ SmallMind now supports multiple model architecture presets inspired by popular L
 
 ```bash
 # List all available presets with detailed information
-dotnet run -- --list-presets
+dotnet run --project src/SmallMind.Console -- --list-presets
 
 # Train with a specific preset
-dotnet run -- --model-preset mistral-medium
+dotnet run --project src/SmallMind.Console -- --model-preset mistral-medium
 
 # Override preset settings with custom values
-dotnet run -- --model-preset tiny --block-size 512 --batch-size 16
+dotnet run --project src/SmallMind.Console -- --model-preset tiny --block-size 512 --batch-size 16
 ```
 
 **Note:** Larger presets (mistral-7b, deepseek) require more memory and train significantly slower on CPU. Start with smaller presets (tiny, default) for testing, then scale up as needed.
@@ -279,7 +367,7 @@ SmallMind now includes comprehensive performance tracking and benchmarking capab
 Use the `--perf` flag to get detailed performance metrics after generation:
 
 ```bash
-dotnet run -- --no-train --prompt "Once upon a time" --steps 200 --perf
+dotnet run --project src/SmallMind.Console -- --no-train --prompt "Once upon a time" --steps 200 --perf
 ```
 
 Example output:
@@ -304,7 +392,7 @@ Tokens/Request: p50=200.0, p95=200.0, p99=200.0, mean=200.0
 For machine-readable metrics, use `--perf-json`:
 
 ```bash
-dotnet run -- --no-train --prompt "Test" --steps 100 --perf-json
+dotnet run --project src/SmallMind.Console -- --no-train --prompt "Test" --steps 100 --perf-json
 ```
 
 Example output:
@@ -352,7 +440,7 @@ Example output:
 Run sweeps over different `max_tokens` configurations to find optimal settings:
 
 ```bash
-dotnet run -- --no-train --bench --prompt "Knowledge is"
+dotnet run --project src/SmallMind.Console -- --no-train --bench --prompt "Knowledge is"
 ```
 
 Example output:
@@ -419,14 +507,14 @@ SmallMind now supports enhanced training with:
 
 Use `--enhanced-training` to enable these features:
 ```bash
-dotnet run -- --enhanced-training --grad-accum 4 --warmup 200 --perf
+dotnet run --project src/SmallMind.Console -- --enhanced-training --grad-accum 4 --warmup 200 --perf
 ```
 
 ### Question-Answering Mode
 
 Ask questions based on the model's training data using the `--qa` flag:
 ```bash
-dotnet run -- --no-train --qa --prompt "What is the quick brown fox?"
+dotnet run --project src/SmallMind.Console -- --no-train --qa --prompt "What is the quick brown fox?"
 ```
 
 The Q&A engine:
@@ -439,7 +527,7 @@ The Q&A engine:
 
 Have multi-turn conversations with session context using `--interactive`:
 ```bash
-dotnet run -- --no-train --interactive
+dotnet run --project src/SmallMind.Console -- --no-train --interactive
 ```
 
 Features:
