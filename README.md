@@ -832,6 +832,68 @@ Try:
 - Check that the model architecture hasn't changed
 - If needed, delete old checkpoints and retrain
 
+
+## Production Usage Guide
+
+SmallMind has been enhanced with production-ready features for deployment in real-world applications.
+
+### Dependency Injection Setup
+
+For production services, use .NET's dependency injection. See [docs/configuration.md](docs/configuration.md) for complete examples.
+
+### Training with Cancellation
+
+Production training supports graceful cancellation:
+
+```csharp
+var cts = new CancellationTokenSource();
+training.Train(..., cancellationToken: cts.Token);
+```
+
+### Observability
+
+- **Logging**: Structured logging via Microsoft.Extensions.Logging
+- **Metrics**: Prometheus/OpenTelemetry compatible via System.Diagnostics.Metrics
+- **Health Checks**: Kubernetes-ready readiness/liveness probes
+
+See [docs/observability.md](docs/observability.md) for details.
+
+### Thread Safety
+
+| Component | Thread Safety | Usage |
+|-----------|--------------|--------|
+| `Tokenizer` | ✅ Thread-safe | Singleton |
+| `TransformerModel` (inference) | ✅ Thread-safe | Singleton with `model.Eval()` |
+| `Training` | ❌ Not thread-safe | Single thread only |
+| `Sampling` | ❌ Not thread-safe | Per-request scope |
+
+See [docs/threading-and-disposal.md](docs/threading-and-disposal.md) for concurrency patterns.
+
+### Exception Handling
+
+SmallMind uses a custom exception hierarchy with error codes:
+
+- `ValidationException` - Input validation failures
+- `TrainingException` - Training operation failures
+- `CheckpointException` - Checkpoint I/O failures
+- `ShapeMismatchException` - Tensor shape incompatibilities
+
+### Performance Tips
+
+1. **Always use Release builds** (5-10x faster than Debug)
+2. **SIMD is automatic** - uses best available CPU instructions
+3. **Tune batch size** based on available memory
+4. **Use checkpoints** frequently during long training
+
+### Documentation
+
+- [Configuration Guide](docs/configuration.md)
+- [Observability Guide](docs/observability.md)
+- [Threading & Disposal Guide](docs/threading-and-disposal.md)
+- [Troubleshooting Guide](docs/troubleshooting.md)
+- [Versioning Policy](docs/VERSIONING.md)
+- [CHANGELOG.md](CHANGELOG.md)
+
 ## Educational Notes
 
 ### Why Pure C#?
