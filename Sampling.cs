@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using TorchSharp;
-using static TorchSharp.torch;
 
 namespace TinyLLM
 {
     /// <summary>
     /// Implements text generation with greedy decoding, temperature sampling, and top-k filtering.
+    /// Pure C# implementation.
     /// </summary>
     public class Sampling
     {
@@ -25,20 +24,14 @@ namespace TinyLLM
         /// <summary>
         /// Generate text from a prompt.
         /// </summary>
-        /// <param name="prompt">Starting text</param>
-        /// <param name="maxNewTokens">Number of tokens to generate</param>
-        /// <param name="temperature">Sampling temperature (1.0 = unchanged, lower = more conservative, higher = more random)</param>
-        /// <param name="topK">If > 0, only sample from top-k most likely tokens</param>
-        /// <param name="seed">Random seed for reproducibility</param>
         public string Generate(string prompt, int maxNewTokens, double temperature = 1.0, int topK = 0, int? seed = null)
         {
-            _model.eval();
+            _model.Eval();
 
             Random random;
             if (seed.HasValue)
             {
                 random = new Random(seed.Value);
-                torch.manual_seed(seed.Value);
             }
             else
             {
@@ -58,54 +51,67 @@ namespace TinyLLM
             Console.WriteLine($"Prompt: \"{prompt}\"");
             Console.WriteLine("---");
 
-            using (var _ = torch.no_grad())
+            for (int i = 0; i < maxNewTokens; i++)
             {
-                for (int i = 0; i < maxNewTokens; i++)
+                // Crop context to last blockSize tokens
+                var contextCropped = context.Count <= _blockSize 
+                    ? context 
+                    : context.Skip(context.Count - _blockSize).ToList();
+
+                // Convert to tensor: (1, T)
+                var contextData = new float[contextCropped.Count];
+                for (int j = 0; j < contextCropped.Count; j++)
                 {
-                    // Crop context to last blockSize tokens
-                    var contextCropped = context.Count <= _blockSize 
-                        ? context 
-                        : context.Skip(context.Count - _blockSize).ToList();
-
-                    // Convert to tensor: (1, T)
-                    var contextTensor = torch.tensor(
-                        contextCropped.Select(x => (long)x).ToArray(), 
-                        dtype: ScalarType.Int64
-                    ).unsqueeze(0);
-
-                    // Forward pass: (1, T, vocab_size)
-                    var logits = _model.forward(contextTensor);
-
-                    // Get logits for the last position: (1, vocab_size)
-                    var logitsLast = logits.index(TensorIndex.Colon, TensorIndex.Single(-1), TensorIndex.Colon).squeeze(0);
-
-                    // Apply temperature
-                    if (temperature != 1.0)
-                    {
-                        logitsLast = logitsLast / temperature;
-                    }
-
-                    // Apply top-k filtering
-                    if (topK > 0)
-                    {
-                        logitsLast = ApplyTopK(logitsLast, topK);
-                    }
-
-                    // Convert to probabilities
-                    var probs = torch.nn.functional.softmax(logitsLast, dim: -1);
-
-                    // Sample from the distribution
-                    var nextToken = SampleFromProbs(probs, random);
-
-                    // Add to context
-                    context.Add((int)nextToken);
-
-                    // Dispose tensors
-                    contextTensor.Dispose();
-                    logits.Dispose();
-                    logitsLast.Dispose();
-                    probs.Dispose();
+                    contextData[j] = contextCropped[j];
                 }
+                var contextTensor = new Tensor(contextData, new int[] { 1, contextCropped.Count });
+
+                // Forward pass: (1, T, vocab_size)
+                var logits = _model.Forward(contextTensor);
+
+                // Get logits for the last position: (vocab_size,)
+                int T = contextCropped.Count;
+                int vocabSize = logits.Shape[2];
+                var logitsLast = new float[vocabSize];
+                for (int v = 0; v < vocabSize; v++)
+                {
+                    logitsLast[v] = logits.Data[(T - 1) * vocabSize + v];
+                }
+
+                // Apply temperature
+                if (temperature != 1.0)
+                {
+                    for (int v = 0; v < vocabSize; v++)
+                    {
+                        logitsLast[v] /= (float)temperature;
+                    }
+                }
+
+                // Apply top-k filtering
+                if (topK > 0)
+                {
+                    logitsLast = ApplyTopK(logitsLast, topK);
+                }
+
+                // Convert to probabilities (softmax)
+                var probs = Softmax(logitsLast);
+
+                // Sample from the distribution
+                var nextToken = SampleFromProbs(probs, random);
+
+                // Add to context
+                context.Add(nextToken);
+
+                // Optional: print progress
+                if ((i + 1) % 50 == 0)
+                {
+                    Console.Write(".");
+                }
+            }
+
+            if (maxNewTokens >= 50)
+            {
+                Console.WriteLine(); // New line after progress dots
             }
 
             // Decode and return
@@ -114,56 +120,87 @@ namespace TinyLLM
         }
 
         /// <summary>
-        /// Apply top-k filtering to logits.
-        /// Sets all logits outside the top-k to negative infinity.
+        /// Apply top-k filtering to logits
         /// </summary>
-        private Tensor ApplyTopK(Tensor logits, int k)
+        private float[] ApplyTopK(float[] logits, int k)
         {
-            var vocabSize = logits.shape[0];
-            if (k >= vocabSize)
+            if (k >= logits.Length)
             {
                 return logits;
             }
 
-            // Get top-k values and indices
-            var (topkValues, topkIndices) = logits.topk(k);
-
-            // Get the k-th largest value
-            var kthValue = topkValues.index(TensorIndex.Single(-1));
+            // Find k-th largest value
+            var sorted = logits.OrderByDescending(x => x).ToArray();
+            float kthValue = sorted[Math.Min(k, sorted.Length - 1)];
 
             // Set all values below k-th to -inf
-            var filtered = logits.masked_fill(logits < kthValue, float.NegativeInfinity);
-
-            topkValues.Dispose();
-            topkIndices.Dispose();
-            kthValue.Dispose();
+            var filtered = new float[logits.Length];
+            for (int i = 0; i < logits.Length; i++)
+            {
+                filtered[i] = logits[i] >= kthValue ? logits[i] : float.NegativeInfinity;
+            }
 
             return filtered;
         }
 
         /// <summary>
-        /// Sample a token index from a probability distribution.
+        /// Compute softmax over an array
         /// </summary>
-        private long SampleFromProbs(Tensor probs, Random random)
+        private float[] Softmax(float[] logits)
         {
-            // Convert to CPU and get array
-            var probsArray = probs.cpu().data<float>().ToArray();
-
-            // Sample using cumulative distribution
-            var cumSum = 0.0;
-            var target = random.NextDouble();
-
-            for (int i = 0; i < probsArray.Length; i++)
+            // Find max for numerical stability
+            float max = float.NegativeInfinity;
+            foreach (var val in logits)
             {
-                cumSum += probsArray[i];
+                if (val != float.NegativeInfinity)
+                {
+                    max = Math.Max(max, val);
+                }
+            }
+
+            // Compute exp and sum
+            float sum = 0;
+            var probs = new float[logits.Length];
+            for (int i = 0; i < logits.Length; i++)
+            {
+                if (logits[i] != float.NegativeInfinity)
+                {
+                    probs[i] = MathF.Exp(logits[i] - max);
+                    sum += probs[i];
+                }
+            }
+
+            // Normalize
+            if (sum > 0)
+            {
+                for (int i = 0; i < probs.Length; i++)
+                {
+                    probs[i] /= sum;
+                }
+            }
+
+            return probs;
+        }
+
+        /// <summary>
+        /// Sample a token index from a probability distribution
+        /// </summary>
+        private int SampleFromProbs(float[] probs, Random random)
+        {
+            double target = random.NextDouble();
+            double cumSum = 0.0;
+
+            for (int i = 0; i < probs.Length; i++)
+            {
+                cumSum += probs[i];
                 if (cumSum >= target)
                 {
                     return i;
                 }
             }
 
-            // Fallback (shouldn't happen with proper normalization)
-            return probsArray.Length - 1;
+            // Fallback
+            return probs.Length - 1;
         }
     }
 }

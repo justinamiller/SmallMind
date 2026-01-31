@@ -5,3 +5,4 @@ checkpoints/
 *.suo
 *.cache
 .vs/
+*.old

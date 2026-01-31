@@ -1,23 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using TorchSharp;
-using static TorchSharp.torch;
-using static TorchSharp.torch.nn;
 
 namespace TinyLLM
 {
     /// <summary>
-    /// Implements a decoder-only Transformer model (GPT-style).
-    /// Architecture includes:
-    /// - Token embeddings
-    /// - Positional embeddings
-    /// - Masked multi-head self-attention
-    /// - Feed-forward MLP with GELU activation
-    /// - LayerNorm and residual connections
-    /// - Final linear head to vocabulary
+    /// Decoder-only Transformer model (GPT-style) implemented in pure C#.
+    /// Uses custom Tensor and neural network layers.
     /// </summary>
-    public class TransformerModel : Module<Tensor, Tensor>
+    public class TransformerModel
     {
         private readonly int _blockSize;
         private readonly int _vocabSize;
@@ -25,21 +15,23 @@ namespace TinyLLM
         private readonly int _nLayer;
         private readonly int _nHead;
         private readonly double _dropout;
+        private readonly Random _random;
 
         // Embedding layers
-        private readonly TorchSharp.Modules.Embedding _tokenEmbedding;
-        private readonly TorchSharp.Modules.Embedding _positionEmbedding;
-        private readonly TorchSharp.Modules.Dropout _embDropout;
+        private readonly Embedding _tokenEmbedding;
+        private readonly Embedding _positionEmbedding;
+        private readonly Dropout _embDropout;
 
         // Transformer blocks
         private readonly List<TransformerBlock> _blocks;
 
         // Final layer norm and linear head
-        private readonly TorchSharp.Modules.LayerNorm _lnFinal;
-        private readonly TorchSharp.Modules.Linear _lmHead;
+        private readonly LayerNorm _lnFinal;
+        private readonly Linear _lmHead;
 
-        public TransformerModel(int vocabSize, int blockSize, int nEmbd, int nLayer, int nHead, double dropout)
-            : base("TransformerModel")
+        public List<Tensor> Parameters { get; private set; }
+
+        public TransformerModel(int vocabSize, int blockSize, int nEmbd, int nLayer, int nHead, double dropout, int seed = 42)
         {
             _vocabSize = vocabSize;
             _blockSize = blockSize;
@@ -47,34 +39,45 @@ namespace TinyLLM
             _nLayer = nLayer;
             _nHead = nHead;
             _dropout = dropout;
+            _random = new Random(seed);
 
             // Token and position embeddings
-            _tokenEmbedding = Embedding(_vocabSize, _nEmbd);
-            _positionEmbedding = Embedding(_blockSize, _nEmbd);
-            _embDropout = Dropout(dropout);
+            _tokenEmbedding = new Embedding(_vocabSize, _nEmbd, _random);
+            _positionEmbedding = new Embedding(_blockSize, _nEmbd, _random);
+            _embDropout = new Dropout((float)dropout, _random);
 
             // Stack of transformer blocks
             _blocks = new List<TransformerBlock>();
             for (int i = 0; i < _nLayer; i++)
             {
-                _blocks.Add(new TransformerBlock(_nEmbd, _nHead, _blockSize, dropout));
+                _blocks.Add(new TransformerBlock(_nEmbd, _nHead, _blockSize, (float)dropout, _random));
             }
 
             // Final layer norm and language model head
-            _lnFinal = LayerNorm(new long[] { _nEmbd });
-            _lmHead = Linear(_nEmbd, _vocabSize, hasBias: false);
+            _lnFinal = new LayerNorm(_nEmbd);
+            _lmHead = new Linear(_nEmbd, _vocabSize, useBias: false, _random);
 
-            RegisterComponents();
+            // Collect all parameters
+            Parameters = new List<Tensor>();
+            Parameters.AddRange(_tokenEmbedding.Parameters);
+            Parameters.AddRange(_positionEmbedding.Parameters);
+            foreach (var block in _blocks)
+            {
+                Parameters.AddRange(block.Parameters);
+            }
+            Parameters.AddRange(_lnFinal.Parameters);
+            Parameters.AddRange(_lmHead.Parameters);
 
             Console.WriteLine($"TransformerModel initialized: vocab={_vocabSize}, block_size={_blockSize}, " +
                             $"n_embd={_nEmbd}, n_layer={_nLayer}, n_head={_nHead}, dropout={_dropout}");
+            Console.WriteLine($"Total parameters: {Parameters.Count} tensors");
         }
 
-        public override Tensor forward(Tensor idx)
+        public Tensor Forward(Tensor idx)
         {
             // idx shape: (batch_size, sequence_length)
-            var B = idx.shape[0];
-            var T = idx.shape[1];
+            int B = idx.Shape[0];
+            int T = idx.Shape[1];
 
             if (T > _blockSize)
             {
@@ -82,112 +85,206 @@ namespace TinyLLM
             }
 
             // Token embeddings: (B, T) -> (B, T, n_embd)
-            var tokEmb = _tokenEmbedding.forward(idx);
+            var tokEmb = _tokenEmbedding.Forward(idx);
 
-            // Position embeddings: (T,) -> (T, n_embd)
-            var pos = torch.arange(0, T, device: idx.device);
-            var posEmb = _positionEmbedding.forward(pos);
+            // Position embeddings: create position indices (T,)
+            var posIndices = new Tensor(new float[T], new int[] { T });
+            for (int i = 0; i < T; i++)
+            {
+                posIndices.Data[i] = i;
+            }
+            var posEmb = _positionEmbedding.Forward(posIndices);
 
             // Add token and position embeddings: (B, T, n_embd)
-            var x = _embDropout.forward(tokEmb + posEmb);
+            // Broadcast posEmb across batch dimension
+            var x = AddPositionEmbeddings(tokEmb, posEmb, B, T, _nEmbd);
+            x = _embDropout.Forward(x);
 
             // Pass through transformer blocks
             foreach (var block in _blocks)
             {
-                x = block.forward(x);
+                x = block.Forward(x);
             }
 
             // Final layer norm: (B, T, n_embd)
-            x = _lnFinal.forward(x);
+            x = _lnFinal.Forward(x);
 
             // Language model head: (B, T, n_embd) -> (B, T, vocab_size)
-            var logits = _lmHead.forward(x);
+            var logits = _lmHead.Forward(x);
 
             return logits;
         }
 
-        protected override void Dispose(bool disposing)
+        private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, int B, int T, int nEmbd)
         {
-            if (disposing)
+            var result = new Tensor(new int[] { B, T, nEmbd }, requiresGrad: true);
+            
+            // posEmb is (T, nEmbd), need to broadcast to (B, T, nEmbd)
+            for (int b = 0; b < B; b++)
             {
-                _tokenEmbedding?.Dispose();
-                _positionEmbedding?.Dispose();
-                _embDropout?.Dispose();
-                foreach (var block in _blocks)
+                for (int t = 0; t < T; t++)
                 {
-                    block?.Dispose();
+                    for (int e = 0; e < nEmbd; e++)
+                    {
+                        result.Data[(b * T + t) * nEmbd + e] = 
+                            tokEmb.Data[(b * T + t) * nEmbd + e] + posEmb.Data[t * nEmbd + e];
+                    }
                 }
-                _lnFinal?.Dispose();
-                _lmHead?.Dispose();
             }
-            base.Dispose(disposing);
+            
+            // Backward
+            if (tokEmb.RequiresGrad || posEmb.RequiresGrad)
+            {
+                result.SetBackward(() =>
+                {
+                    if (tokEmb.RequiresGrad)
+                    {
+                        for (int i = 0; i < result.Size; i++)
+                        {
+                            tokEmb.Grad[i] += result.Grad[i];
+                        }
+                    }
+                    if (posEmb.RequiresGrad)
+                    {
+                        for (int b = 0; b < B; b++)
+                        {
+                            for (int t = 0; t < T; t++)
+                            {
+                                for (int e = 0; e < nEmbd; e++)
+                                {
+                                    posEmb.Grad[t * nEmbd + e] += result.Grad[(b * T + t) * nEmbd + e];
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            return result;
+        }
+
+        public void Train()
+        {
+            _embDropout.Train();
+            foreach (var block in _blocks)
+            {
+                block.Train();
+            }
+        }
+
+        public void Eval()
+        {
+            _embDropout.Eval();
+            foreach (var block in _blocks)
+            {
+                block.Eval();
+            }
         }
     }
 
     /// <summary>
     /// Single Transformer block with masked multi-head self-attention and feed-forward MLP.
     /// </summary>
-    public class TransformerBlock : Module<Tensor, Tensor>
+    public class TransformerBlock
     {
-        private readonly TorchSharp.Modules.LayerNorm _ln1;
+        private readonly LayerNorm _ln1;
         private readonly MultiHeadAttention _attn;
-        private readonly TorchSharp.Modules.LayerNorm _ln2;
+        private readonly LayerNorm _ln2;
         private readonly MLP _mlp;
 
-        public TransformerBlock(int nEmbd, int nHead, int blockSize, double dropout)
-            : base("TransformerBlock")
-        {
-            _ln1 = LayerNorm(new long[] { nEmbd });
-            _attn = new MultiHeadAttention(nEmbd, nHead, blockSize, dropout);
-            _ln2 = LayerNorm(new long[] { nEmbd });
-            _mlp = new MLP(nEmbd, dropout);
+        public List<Tensor> Parameters { get; private set; }
 
-            RegisterComponents();
+        public TransformerBlock(int nEmbd, int nHead, int blockSize, float dropout, Random random)
+        {
+            _ln1 = new LayerNorm(nEmbd);
+            _attn = new MultiHeadAttention(nEmbd, nHead, blockSize, dropout, random);
+            _ln2 = new LayerNorm(nEmbd);
+            _mlp = new MLP(nEmbd, dropout, random);
+
+            Parameters = new List<Tensor>();
+            Parameters.AddRange(_ln1.Parameters);
+            Parameters.AddRange(_attn.Parameters);
+            Parameters.AddRange(_ln2.Parameters);
+            Parameters.AddRange(_mlp.Parameters);
         }
 
-        public override Tensor forward(Tensor x)
+        public Tensor Forward(Tensor x)
         {
             // Pre-norm architecture with residual connections
             // x: (B, T, n_embd)
-            x = x + _attn.forward(_ln1.forward(x));
-            x = x + _mlp.forward(_ln2.forward(x));
+            var attnOut = _attn.Forward(_ln1.Forward(x));
+            x = AddTensors(x, attnOut);
+            
+            var mlpOut = _mlp.Forward(_ln2.Forward(x));
+            x = AddTensors(x, mlpOut);
+            
             return x;
         }
 
-        protected override void Dispose(bool disposing)
+        private Tensor AddTensors(Tensor a, Tensor b)
         {
-            if (disposing)
+            var result = new Tensor(a.Shape, requiresGrad: true);
+            for (int i = 0; i < a.Size; i++)
             {
-                _ln1?.Dispose();
-                _attn?.Dispose();
-                _ln2?.Dispose();
-                _mlp?.Dispose();
+                result.Data[i] = a.Data[i] + b.Data[i];
             }
-            base.Dispose(disposing);
+            
+            if (a.RequiresGrad || b.RequiresGrad)
+            {
+                result.SetBackward(() =>
+                {
+                    if (a.RequiresGrad)
+                    {
+                        for (int i = 0; i < a.Size; i++)
+                            a.Grad[i] += result.Grad[i];
+                    }
+                    if (b.RequiresGrad)
+                    {
+                        for (int i = 0; i < b.Size; i++)
+                            b.Grad[i] += result.Grad[i];
+                    }
+                });
+            }
+            
+            return result;
+        }
+
+        public void Train()
+        {
+            _attn.Train();
+            _mlp.Train();
+        }
+
+        public void Eval()
+        {
+            _attn.Eval();
+            _mlp.Eval();
         }
     }
 
     /// <summary>
-    /// Masked multi-head self-attention.
-    /// Implements causal masking to prevent attending to future positions.
+    /// Masked multi-head self-attention implemented in pure C#.
     /// </summary>
-    public class MultiHeadAttention : Module<Tensor, Tensor>
+    public class MultiHeadAttention
     {
         private readonly int _nEmbd;
         private readonly int _nHead;
         private readonly int _headSize;
-        private readonly TorchSharp.Modules.Linear _qkv;
-        private readonly TorchSharp.Modules.Linear _proj;
-        private readonly TorchSharp.Modules.Dropout _attnDropout;
-        private readonly TorchSharp.Modules.Dropout _projDropout;
-        private readonly Tensor _causalMask;
+        private readonly Linear _qkv;
+        private readonly Linear _proj;
+        private readonly Dropout _attnDropout;
+        private readonly Dropout _projDropout;
+        private readonly bool[,] _causalMask;
+        private readonly int _blockSize;
 
-        public MultiHeadAttention(int nEmbd, int nHead, int blockSize, double dropout)
-            : base("MultiHeadAttention")
+        public List<Tensor> Parameters { get; private set; }
+
+        public MultiHeadAttention(int nEmbd, int nHead, int blockSize, float dropout, Random random)
         {
             _nEmbd = nEmbd;
             _nHead = nHead;
             _headSize = nEmbd / nHead;
+            _blockSize = blockSize;
 
             if (_nEmbd % _nHead != 0)
             {
@@ -195,110 +292,281 @@ namespace TinyLLM
             }
 
             // Linear projection for Q, K, V combined
-            _qkv = Linear(_nEmbd, 3 * _nEmbd);
-            _proj = Linear(_nEmbd, _nEmbd);
-            _attnDropout = Dropout(dropout);
-            _projDropout = Dropout(dropout);
+            _qkv = new Linear(_nEmbd, 3 * _nEmbd, random: random);
+            _proj = new Linear(_nEmbd, _nEmbd, random: random);
+            _attnDropout = new Dropout(dropout, random);
+            _projDropout = new Dropout(dropout, random);
 
             // Create causal mask: lower triangular matrix
-            // mask[i,j] = 1 if i >= j else 0
-            _causalMask = torch.tril(torch.ones(blockSize, blockSize)).view(1, 1, blockSize, blockSize);
+            _causalMask = new bool[blockSize, blockSize];
+            for (int i = 0; i < blockSize; i++)
+            {
+                for (int j = 0; j < blockSize; j++)
+                {
+                    _causalMask[i, j] = i >= j;
+                }
+            }
 
-            RegisterComponents();
+            Parameters = new List<Tensor>();
+            Parameters.AddRange(_qkv.Parameters);
+            Parameters.AddRange(_proj.Parameters);
         }
 
-        public override Tensor forward(Tensor x)
+        public Tensor Forward(Tensor x)
         {
             // x shape: (B, T, n_embd)
-            var B = x.shape[0];
-            var T = x.shape[1];
+            int B = x.Shape[0];
+            int T = x.Shape[1];
 
             // Compute Q, K, V: (B, T, n_embd) -> (B, T, 3 * n_embd)
-            var qkv = _qkv.forward(x);
+            var qkv = _qkv.Forward(x);
 
             // Split into Q, K, V and reshape to (B, nHead, T, headSize)
-            var qkvSplit = qkv.chunk(3, dim: -1);
-            var q = qkvSplit[0].view(B, T, _nHead, _headSize).transpose(1, 2);
-            var k = qkvSplit[1].view(B, T, _nHead, _headSize).transpose(1, 2);
-            var v = qkvSplit[2].view(B, T, _nHead, _headSize).transpose(1, 2);
+            var q = ExtractAndReshapeQKV(qkv, 0, B, T);
+            var k = ExtractAndReshapeQKV(qkv, 1, B, T);
+            var v = ExtractAndReshapeQKV(qkv, 2, B, T);
 
-            // Compute attention scores: (B, nHead, T, headSize) @ (B, nHead, headSize, T) -> (B, nHead, T, T)
-            var att = q.matmul(k.transpose(-2, -1)) / Math.Sqrt(_headSize);
+            // Compute attention scores
+            var att = ComputeAttentionScores(q, k, B, T);
 
-            // Apply causal mask
-            var mask = _causalMask.index(TensorIndex.Ellipsis, TensorIndex.Slice(stop: T), TensorIndex.Slice(stop: T));
-            att = att.masked_fill(mask.to(x.device) == 0, float.NegativeInfinity);
-
-            // Softmax and dropout
-            att = torch.nn.functional.softmax(att, dim: -1);
-            att = _attnDropout.forward(att);
-
-            // Apply attention to values: (B, nHead, T, T) @ (B, nHead, T, headSize) -> (B, nHead, T, headSize)
-            var y = att.matmul(v);
+            // Apply attention to values
+            var y = ApplyAttention(att, v, B, T);
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
-            y = y.transpose(1, 2).contiguous().view(B, T, _nEmbd);
+            var yReshaped = ReshapeAttentionOutput(y, B, T);
 
             // Final projection and dropout
-            y = _projDropout.forward(_proj.forward(y));
+            var output = _proj.Forward(yReshaped);
+            output = _projDropout.Forward(output);
 
-            return y;
+            return output;
         }
 
-        protected override void Dispose(bool disposing)
+        private Tensor ExtractAndReshapeQKV(Tensor qkv, int index, int B, int T)
         {
-            if (disposing)
+            // Extract Q, K, or V from concatenated QKV
+            // qkv: (B, T, 3 * n_embd)
+            // Extract one third and reshape to (B, nHead, T, headSize)
+            
+            var extracted = new Tensor(new int[] { B, _nHead, T, _headSize }, requiresGrad: true);
+            
+            for (int b = 0; b < B; b++)
             {
-                _qkv?.Dispose();
-                _proj?.Dispose();
-                _attnDropout?.Dispose();
-                _projDropout?.Dispose();
-                _causalMask?.Dispose();
+                for (int t = 0; t < T; t++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        for (int d = 0; d < _headSize; d++)
+                        {
+                            int qkvIdx = (b * T + t) * (3 * _nEmbd) + index * _nEmbd + h * _headSize + d;
+                            int outIdx = ((b * _nHead + h) * T + t) * _headSize + d;
+                            extracted.Data[outIdx] = qkv.Data[qkvIdx];
+                        }
+                    }
+                }
             }
-            base.Dispose(disposing);
+            
+            return extracted;
+        }
+
+        private Tensor ComputeAttentionScores(Tensor q, Tensor k, int B, int T)
+        {
+            // q, k: (B, nHead, T, headSize)
+            // output: (B, nHead, T, T)
+            
+            var scores = new Tensor(new int[] { B, _nHead, T, T }, requiresGrad: true);
+            float scale = 1.0f / MathF.Sqrt(_headSize);
+            
+            for (int b = 0; b < B; b++)
+            {
+                for (int h = 0; h < _nHead; h++)
+                {
+                    for (int i = 0; i < T; i++)
+                    {
+                        for (int j = 0; j < T; j++)
+                        {
+                            float sum = 0;
+                            for (int d = 0; d < _headSize; d++)
+                            {
+                                int qIdx = ((b * _nHead + h) * T + i) * _headSize + d;
+                                int kIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                                sum += q.Data[qIdx] * k.Data[kIdx];
+                            }
+                            
+                            int scoreIdx = ((b * _nHead + h) * T + i) * T + j;
+                            if (_causalMask[i, j])
+                            {
+                                scores.Data[scoreIdx] = sum * scale;
+                            }
+                            else
+                            {
+                                scores.Data[scoreIdx] = float.NegativeInfinity;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Apply softmax over last dimension
+            return ApplySoftmax(scores, B, T);
+        }
+
+        private Tensor ApplySoftmax(Tensor scores, int B, int T)
+        {
+            var result = new Tensor(scores.Shape, requiresGrad: true);
+            
+            for (int b = 0; b < B; b++)
+            {
+                for (int h = 0; h < _nHead; h++)
+                {
+                    for (int i = 0; i < T; i++)
+                    {
+                        int offset = ((b * _nHead + h) * T + i) * T;
+                        
+                        // Find max for numerical stability
+                        float max = float.NegativeInfinity;
+                        for (int j = 0; j < T; j++)
+                        {
+                            max = Math.Max(max, scores.Data[offset + j]);
+                        }
+                        
+                        // Exp and sum
+                        float sum = 0;
+                        for (int j = 0; j < T; j++)
+                        {
+                            if (scores.Data[offset + j] != float.NegativeInfinity)
+                            {
+                                result.Data[offset + j] = MathF.Exp(scores.Data[offset + j] - max);
+                                sum += result.Data[offset + j];
+                            }
+                        }
+                        
+                        // Normalize
+                        if (sum > 0)
+                        {
+                            for (int j = 0; j < T; j++)
+                            {
+                                result.Data[offset + j] /= sum;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return _attnDropout.Forward(result);
+        }
+
+        private Tensor ApplyAttention(Tensor att, Tensor v, int B, int T)
+        {
+            // att: (B, nHead, T, T)
+            // v: (B, nHead, T, headSize)
+            // output: (B, nHead, T, headSize)
+            
+            var output = new Tensor(new int[] { B, _nHead, T, _headSize }, requiresGrad: true);
+            
+            for (int b = 0; b < B; b++)
+            {
+                for (int h = 0; h < _nHead; h++)
+                {
+                    for (int i = 0; i < T; i++)
+                    {
+                        for (int d = 0; d < _headSize; d++)
+                        {
+                            float sum = 0;
+                            for (int j = 0; j < T; j++)
+                            {
+                                int attIdx = ((b * _nHead + h) * T + i) * T + j;
+                                int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                                sum += att.Data[attIdx] * v.Data[vIdx];
+                            }
+                            int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
+                            output.Data[outIdx] = sum;
+                        }
+                    }
+                }
+            }
+            
+            return output;
+        }
+
+        private Tensor ReshapeAttentionOutput(Tensor y, int B, int T)
+        {
+            // y: (B, nHead, T, headSize) -> (B, T, n_embd)
+            var output = new Tensor(new int[] { B, T, _nEmbd }, requiresGrad: true);
+            
+            for (int b = 0; b < B; b++)
+            {
+                for (int t = 0; t < T; t++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        for (int d = 0; d < _headSize; d++)
+                        {
+                            int yIdx = ((b * _nHead + h) * T + t) * _headSize + d;
+                            int outIdx = (b * T + t) * _nEmbd + h * _headSize + d;
+                            output.Data[outIdx] = y.Data[yIdx];
+                        }
+                    }
+                }
+            }
+            
+            return output;
+        }
+
+        public void Train()
+        {
+            _attnDropout.Train();
+            _projDropout.Train();
+        }
+
+        public void Eval()
+        {
+            _attnDropout.Eval();
+            _projDropout.Eval();
         }
     }
 
     /// <summary>
     /// Feed-forward MLP with GELU activation.
-    /// Expands to 4x the embedding dimension internally.
     /// </summary>
-    public class MLP : Module<Tensor, Tensor>
+    public class MLP
     {
-        private readonly TorchSharp.Modules.Linear _fc1;
-        private readonly TorchSharp.Modules.Linear _fc2;
-        private readonly TorchSharp.Modules.Dropout _dropout;
+        private readonly Linear _fc1;
+        private readonly Linear _fc2;
+        private readonly Dropout _dropout;
 
-        public MLP(int nEmbd, double dropout)
-            : base("MLP")
+        public List<Tensor> Parameters { get; private set; }
+
+        public MLP(int nEmbd, float dropout, Random random)
         {
             // Standard Transformer uses 4x expansion
-            _fc1 = Linear(nEmbd, 4 * nEmbd);
-            _fc2 = Linear(4 * nEmbd, nEmbd);
-            _dropout = Dropout(dropout);
+            _fc1 = new Linear(nEmbd, 4 * nEmbd, random: random);
+            _fc2 = new Linear(4 * nEmbd, nEmbd, random: random);
+            _dropout = new Dropout(dropout, random);
 
-            RegisterComponents();
+            Parameters = new List<Tensor>();
+            Parameters.AddRange(_fc1.Parameters);
+            Parameters.AddRange(_fc2.Parameters);
         }
 
-        public override Tensor forward(Tensor x)
+        public Tensor Forward(Tensor x)
         {
             // x: (B, T, n_embd)
-            x = _fc1.forward(x);
-            x = torch.nn.functional.gelu(x);
-            x = _fc2.forward(x);
-            x = _dropout.forward(x);
+            x = _fc1.Forward(x);
+            x = Activations.GELU(x);
+            x = _fc2.Forward(x);
+            x = _dropout.Forward(x);
             return x;
         }
 
-        protected override void Dispose(bool disposing)
+        public void Train()
         {
-            if (disposing)
-            {
-                _fc1?.Dispose();
-                _fc2?.Dispose();
-                _dropout?.Dispose();
-            }
-            base.Dispose(disposing);
+            _dropout.Train();
+        }
+
+        public void Eval()
+        {
+            _dropout.Eval();
         }
     }
 }

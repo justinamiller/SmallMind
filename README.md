@@ -1,9 +1,11 @@
-# SmallMind - Tiny Educational LLM in C#
+# SmallMind - Tiny Educational LLM in Pure C#
 
-SmallMind is a deliberately tiny, educational language model built in C# (.NET 8) from scratch. It demonstrates the core concepts of decoder-only Transformers (GPT-style) without any LLM runtime libraries.
+SmallMind is a deliberately tiny, educational language model built entirely in C# (.NET 8) from scratch **with NO 3rd party dependencies**. It demonstrates the core concepts of decoder-only Transformers (GPT-style) using only native C# classes.
 
 ## Features
 
+- **Pure C# implementation** - No TorchSharp, no ONNX, no external ML libraries
+- **Custom automatic differentiation** - Tensor class with backpropagation
 - **Decoder-only Transformer architecture** with:
   - Token and positional embeddings
   - Masked multi-head self-attention
@@ -13,29 +15,29 @@ SmallMind is a deliberately tiny, educational language model built in C# (.NET 8
 - **Character-level tokenizer** for simplicity
 - **Training from scratch** on CPU with next-token prediction
 - **Text generation** with temperature sampling and top-k filtering
-- **Checkpointing** to save and load model weights
-- **Fully self-contained** - only requires TorchSharp NuGet package
+- **Checkpointing** to save and load model weights (JSON format)
+- **Fully self-contained** - only uses System.* namespaces
 
 ## Requirements
 
 - .NET 8 SDK
-- TorchSharp (CPU version) - installed via NuGet
+- **No other dependencies!**
 - No GPU required (CPU-only, training will be slow)
 
 ## Quick Start
 
-### 1. Create Project and Install Dependencies
+### 1. Build the Project
 
 ```bash
 # Clone the repository (or create a new directory)
 git clone https://github.com/justinamiller/SmallMind.git
 cd SmallMind
 
-# Restore NuGet packages
-dotnet restore
-
 # Build the project
 dotnet build
+
+# OR build in release mode for better performance
+dotnet build -c Release
 ```
 
 ### 2. Train the Model
@@ -44,13 +46,16 @@ Train on the default `data.txt` file (created automatically if missing):
 
 ```bash
 dotnet run
+
+# OR for better performance
+dotnet run -c Release
 ```
 
 This will:
 - Load or create `data.txt` with sample text
 - Build a character-level vocabulary
-- Train a tiny Transformer for 2000 steps (takes ~5-15 minutes on CPU)
-- Save checkpoints to `checkpoints/model.pt` every 500 steps
+- Train a tiny Transformer for 2000 steps (takes ~10-30 minutes on CPU)
+- Save checkpoints to `checkpoints/model.json` every 500 steps
 - Generate sample text after training
 
 ### 3. Generate Text from a Checkpoint
@@ -59,6 +64,9 @@ Skip training and generate text from an existing checkpoint:
 
 ```bash
 dotnet run -- --no-train --load --prompt "Once upon a time" --steps 200
+
+# OR with release build
+dotnet run -c Release -- --no-train --load --prompt "Once upon a time" --steps 200
 ```
 
 ### 4. Custom Training Data
@@ -95,10 +103,6 @@ dotnet run -- --no-train --prompt "The wise owl" --steps 300 --temperature 0.8
 
 # Generate with top-k sampling for more focused output
 dotnet run -- --no-train --prompt "Knowledge is" --steps 150 --top-k 40 --temperature 1.2
-
-# Train for longer (modify TRAIN_STEPS in Program.cs)
-# Then generate
-dotnet run
 ```
 
 ## Model Architecture
@@ -119,43 +123,83 @@ dotnet run
 
 ```
 SmallMind/
-├── TinyLLM.csproj         # .NET 8 project file
+├── TinyLLM.csproj         # .NET 8 project file (NO dependencies!)
 ├── Program.cs             # CLI entry point and argument parsing
 ├── Tokenizer.cs           # Character-level tokenization
+├── Tensor.cs              # Custom tensor with automatic differentiation
+├── NeuralNet.cs           # Neural network layers (Linear, Embedding, LayerNorm, etc.)
 ├── Transformer.cs         # Transformer model (attention, MLP, blocks)
 ├── Training.cs            # Dataset batching and training loop
 ├── Sampling.cs            # Text generation with temperature and top-k
+├── Optimizer.cs           # AdamW optimizer
 ├── data.txt               # Training corpus (auto-generated if missing)
 ├── checkpoints/           # Model checkpoints (created during training)
-│   └── model.pt
+│   └── model.json         # Saved model weights
 └── README.md              # This file
 ```
 
+## Implementation Details
+
+### Pure C# - No Dependencies
+
+This project implements everything from scratch using only C# standard library:
+
+- **Tensor.cs**: Custom tensor class with:
+  - N-dimensional array storage
+  - Automatic differentiation (gradients)
+  - Matrix multiplication
+  - Element-wise operations
+  - Broadcasting support
+  
+- **NeuralNet.cs**: Neural network building blocks:
+  - Linear (fully connected) layers
+  - Embedding layers
+  - LayerNorm (layer normalization)
+  - Dropout (regularization)
+  - Activation functions (GELU, ReLU, Tanh)
+  
+- **Transformer.cs**: Complete Transformer implementation:
+  - Multi-head attention with causal masking
+  - Feed-forward MLP
+  - Transformer blocks
+  - Model forward pass
+  
+- **Optimizer.cs**: AdamW optimizer with:
+  - First moment estimation
+  - Second moment estimation
+  - Bias correction
+  - Weight decay
+
+- **Training.cs**: Training infrastructure:
+  - Mini-batch generation
+  - Cross-entropy loss computation
+  - Gradient computation
+  - Checkpoint save/load (JSON format)
+
+### Performance Notes
+
+Since this is pure C#without optimized linear algebra libraries, performance is limited:
+- Training is slow (~10-30 minutes for 2000 steps on modern CPU)
+- No GPU acceleration available
+- Matrix operations are not vectorized/optimized
+
+**This is intentional for educational purposes!** The goal is to understand how everything works, not to train production models.
+
+For production use, consider:
+- Using TorchSharp or ML.NET with GPU support
+- Optimizing matrix operations with SIMD
+- Using native libraries like MKL or OpenBLAS
+
 ## Troubleshooting
 
-### TorchSharp Native Library Issues
+### Training is Too Slow
 
-If you see errors about missing native libraries:
-
-**Windows:**
-```
-Install Visual C++ Redistributable:
-https://aka.ms/vs/17/release/vc_redist.x64.exe
-```
-
-**Linux:**
-```bash
-# Install required dependencies
-sudo apt-get update
-sudo apt-get install -y libomp5
-```
-
-**macOS:**
-```bash
-# TorchSharp CPU should work out of the box on macOS
-# If you encounter issues, ensure you have the latest .NET SDK
-brew install libomp
-```
+Training on CPU with pure C# is inherently slow. To speed up:
+- Build in Release mode: `dotnet run -c Release`
+- Reduce `TRAIN_STEPS` in Program.cs (try 500-1000)
+- Reduce `BATCH_SIZE` (try 8 or 4)
+- Reduce `BLOCK_SIZE` (try 64)
+- Reduce `N_EMBD` (try 64)
 
 ### Out of Memory
 
@@ -163,14 +207,7 @@ If training runs out of memory:
 - Reduce `BATCH_SIZE` in Program.cs (try 8 or 4)
 - Reduce `BLOCK_SIZE` (try 64)
 - Reduce `N_EMBD` (try 64)
-
-### Training is Too Slow
-
-Training on CPU is inherently slow. To speed up:
-- Reduce `TRAIN_STEPS` (try 500-1000)
-- Reduce `BATCH_SIZE` if you want faster iterations (but slower convergence)
-- Use smaller `data.txt` (but results will be worse)
-- For production use, consider using GPU version of TorchSharp (`TorchSharp-cuda-windows` or similar)
+- Use smaller training data
 
 ### Generated Text is Gibberish
 
@@ -183,13 +220,33 @@ Try:
 - Training for more steps (5000+)
 - Using more training data (10KB+ text)
 - Lowering temperature for more conservative generation
+- Waiting longer - the model learns slowly without GPU
+
+### Checkpoint Loading Fails
+
+- Checkpoints are saved as JSON in `checkpoints/model.json`
+- Make sure the checkpoint was created successfully
+- Check that the model architecture hasn't changed
+- If needed, delete old checkpoints and retrain
 
 ## Educational Notes
 
+### Why Pure C#?
+
+This implementation deliberately avoids external libraries to demonstrate:
+1. How automatic differentiation works
+2. How backpropagation flows through neural networks
+3. How matrix operations compose to form complex models
+4. The mathematical foundations of Transformers
+
+It's a learning tool, not a production framework!
+
 ### Causal Masking
+
 The attention mechanism uses a causal mask (lower triangular) to prevent tokens from attending to future positions. This ensures the model learns to predict the next token based only on previous context.
 
 ### Character-Level Tokenization
+
 Unlike modern LLMs that use subword tokenization (BPE, WordPiece), this implementation uses character-level tokens for simplicity. This means:
 - Vocabulary size is very small (~50-100 characters)
 - Model must learn to compose characters into words
@@ -197,19 +254,23 @@ Unlike modern LLMs that use subword tokenization (BPE, WordPiece), this implemen
 - Good for educational purposes and small datasets
 
 ### Mini-Batching
+
 Training uses random batches of sequences sampled from the training data. Each sequence is `BLOCK_SIZE` tokens long, and the model learns to predict the next token at each position.
 
 ### Temperature Sampling
+
 - Temperature = 1.0: Use raw model probabilities
 - Temperature < 1.0: More conservative (sharpen distribution)
 - Temperature > 1.0: More random (flatten distribution)
 
 ### Top-K Filtering
+
 Only sample from the K most likely tokens. Helps prevent the model from generating very unlikely tokens.
 
 ## Extending the Project
 
 ### Increase Model Size
+
 Edit `Program.cs` constants:
 ```csharp
 private const int N_EMBD = 256;      // Increase embedding dimension
@@ -218,17 +279,35 @@ private const int N_HEAD = 8;        // More attention heads
 private const int BLOCK_SIZE = 256;  // Longer context
 ```
 
-### Add Validation Loss
-Track loss on a held-out validation set to monitor overfitting.
+Note: Larger models train much slower without GPU!
 
-### Implement BPE Tokenization
-Replace character-level tokenizer with byte-pair encoding for better efficiency.
+### Optimize Performance
 
-### Add Gradient Clipping
-Prevent exploding gradients during training.
+- Use `Span<T>` and `Memory<T>` for better memory efficiency
+- Implement SIMD vectorization for matrix operations
+- Add parallel processing for batch operations
+- Consider using `System.Numerics.Tensors` in .NET 9+
 
-### Multi-GPU Training
-Switch to `TorchSharp-cuda` package and implement data parallelism.
+### Add Features
+
+- Validation loss tracking
+- Learning rate scheduling
+- Gradient clipping
+- Early stopping
+- BPE tokenization
+- Model architecture search
+
+## Comparison: TorchSharp vs Pure C#
+
+| Feature | TorchSharp Version | Pure C# Version |
+|---------|-------------------|-----------------|
+| Dependencies | TorchSharp NuGet | None |
+| Training Speed | Fast (optimized) | Slow (unoptimized) |
+| GPU Support | Yes | No |
+| Code Complexity | Lower (uses library) | Higher (implements everything) |
+| Educational Value | Medium | Very High |
+| Production Ready | Yes | No |
+| Binary Size | Large (~500MB+) | Small (~200KB) |
 
 ## License
 
@@ -238,4 +317,5 @@ This is an educational project. Feel free to use and modify for learning purpose
 
 - Attention Is All You Need (Vaswani et al., 2017)
 - Language Models are Unsupervised Multitask Learners (Radford et al., 2019)
-- TorchSharp: https://github.com/dotnet/TorchSharp
+- The Annotated Transformer: http://nlp.seas.harvard.edu/annotated-transformer/
+- Understanding Automatic Differentiation in 30 lines of Python

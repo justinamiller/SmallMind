@@ -1,12 +1,12 @@
 using System;
 using System.IO;
-using TorchSharp;
 
 namespace TinyLLM
 {
     /// <summary>
-    /// CLI entry point for the Tiny LLM.
+    /// CLI entry point for the Tiny LLM - Pure C# implementation.
     /// Supports training and generation modes with command-line arguments.
+    /// No 3rd party dependencies - everything implemented in pure C#.
     /// </summary>
     class Program
     {
@@ -29,26 +29,8 @@ namespace TinyLLM
         {
             try
             {
-                Console.WriteLine("=== Tiny LLM - Educational Transformer in C# ===\n");
-
-                // Check TorchSharp is available
-                try
-                {
-                    var testTensor = torch.tensor(new float[] { 1, 2, 3 });
-                    testTensor.Dispose();
-                    Console.WriteLine("TorchSharp loaded successfully.");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("ERROR: TorchSharp failed to load native libraries.");
-                    Console.WriteLine("This can happen if the native dependencies are missing.");
-                    Console.WriteLine("\nTroubleshooting:");
-                    Console.WriteLine("- On Windows: Install Visual C++ Redistributable");
-                    Console.WriteLine("- On Linux: Ensure libtorch dependencies are installed");
-                    Console.WriteLine("- On macOS: May need to install additional libraries");
-                    Console.WriteLine($"\nError details: {ex.Message}");
-                    return;
-                }
+                Console.WriteLine("=== Tiny LLM - Educational Transformer in Pure C# ===");
+                Console.WriteLine("No 3rd party dependencies - everything from scratch!\n");
 
                 // Parse command-line arguments
                 bool shouldTrain = !HasArg(args, "--no-train");
@@ -75,7 +57,8 @@ namespace TinyLLM
                     nEmbd: N_EMBD,
                     nLayer: N_LAYER,
                     nHead: N_HEAD,
-                    dropout: DROPOUT
+                    dropout: DROPOUT,
+                    seed: SEED
                 );
 
                 // Training
@@ -88,7 +71,7 @@ namespace TinyLLM
                     seed: SEED
                 );
 
-                var checkpointPath = Path.Combine(CHECKPOINT_DIR, "model.pt");
+                var checkpointPath = Path.Combine(CHECKPOINT_DIR, "model.json");
 
                 // Load checkpoint if requested or if it exists
                 if (shouldLoad || (!shouldTrain && File.Exists(checkpointPath)))
@@ -158,6 +141,12 @@ The pen is mightier than the sword. Fortune favors the bold. Necessity is the mo
 Two heads are better than one. The grass is always greener on the other side. You can't judge a book by its cover.
 Easy come, easy go. When the going gets tough, the tough get going. No pain, no gain. The best things in life are free.
 Honesty is the best policy. Patience is a virtue. There is no place like home. Laughter is the best medicine.
+Once upon a time in a land far away, there lived a wise old owl who knew many secrets of the forest.
+The owl would share stories with the young animals, teaching them valuable lessons about life and survival.
+In the depths of winter, when snow covered the ground, the animals would gather around to hear tales of bravery.
+Spring brought new life and hope, as flowers bloomed and birds sang their cheerful songs throughout the day.
+Summer was a time of abundance, with fruits ripening on trees and plenty of food for all creatures great and small.
+Autumn arrived with golden leaves falling gently to the earth, reminding everyone that change is constant.
 ";
                 File.WriteAllText(DATA_FILE, defaultData);
                 Console.WriteLine($"Created {DATA_FILE} with default content.");
