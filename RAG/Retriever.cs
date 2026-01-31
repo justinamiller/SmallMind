@@ -68,7 +68,8 @@ namespace TinyLLM.RAG
         public List<RetrievedChunk> RetrieveWithThreshold(string query, float minScore, int maxResults = 10)
         {
             var searchResults = _vectorIndex.Search(query, maxResults);
-            var chunks = new List<RetrievedChunk>();
+            // Pre-size based on maxResults (upper bound)
+            var chunks = new List<RetrievedChunk>(capacity: Math.Min(maxResults, searchResults.Count));
 
             for (int i = 0; i < searchResults.Count; i++)
             {

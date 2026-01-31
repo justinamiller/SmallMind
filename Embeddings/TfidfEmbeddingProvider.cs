@@ -43,14 +43,16 @@ namespace TinyLLM.Embeddings
             }
 
             // Step 1: Build term frequency across all documents
-            // Pre-size dictionary to avoid rehashing during build
-            var documentFrequency = new Dictionary<string, int>(capacity: 1024);
-            var allTerms = new HashSet<string>();
+            // Better pre-sizing: estimate based on document count and typical vocabulary
+            int estimatedVocabSize = Math.Min(_maxFeatures * 2, Math.Max(1024, documents.Count * 10));
+            var documentFrequency = new Dictionary<string, int>(capacity: estimatedVocabSize);
+            var allTerms = new HashSet<string>(capacity: estimatedVocabSize);
 
             for (int i = 0; i < documents.Count; i++)
             {
                 var terms = Tokenize(documents[i]);
-                var uniqueTerms = new HashSet<string>();
+                // Pre-size based on term count
+                var uniqueTerms = new HashSet<string>(capacity: Math.Min(terms.Count, 256));
                 
                 for (int j = 0; j < terms.Count; j++)
                 {
@@ -58,12 +60,12 @@ namespace TinyLLM.Embeddings
                     uniqueTerms.Add(terms[j]);
                 }
 
-                // Count document frequency
+                // Count document frequency - use TryGetValue to avoid double lookup
                 foreach (var term in uniqueTerms)
                 {
-                    if (documentFrequency.ContainsKey(term))
+                    if (documentFrequency.TryGetValue(term, out int count))
                     {
-                        documentFrequency[term]++;
+                        documentFrequency[term] = count + 1;
                     }
                     else
                     {
@@ -73,7 +75,7 @@ namespace TinyLLM.Embeddings
             }
 
             // Step 2: Select top terms by document frequency (up to maxFeatures)
-            var termFreqList = new List<(string term, int freq)>();
+            var termFreqList = new List<(string term, int freq)>(documentFrequency.Count);
             foreach (var kvp in documentFrequency)
             {
                 termFreqList.Add((kvp.Key, kvp.Value));

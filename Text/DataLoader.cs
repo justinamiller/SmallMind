@@ -30,7 +30,8 @@ namespace TinyLLM.Text
                 throw new FileNotFoundException($"Text file not found: {filePath}");
             }
 
-            var sentences = new List<string>();
+            // Pre-size list based on estimated average line count
+            var sentences = new List<string>(capacity: 1024);
             
             using (var reader = new StreamReader(filePath, Encoding.UTF8))
             {
@@ -70,7 +71,10 @@ namespace TinyLLM.Text
                 throw new InvalidDataException("JSON file must contain a 'sentences' array");
             }
 
-            var sentences = new List<string>();
+            // Pre-size based on array length if available
+            int arrayLength = sentencesElement.GetArrayLength();
+            var sentences = new List<string>(capacity: arrayLength);
+            
             foreach (var element in sentencesElement.EnumerateArray())
             {
                 var sentence = element.GetString();
@@ -100,7 +104,8 @@ namespace TinyLLM.Text
             }
 
             var doc = XDocument.Load(filePath);
-            var sentences = new List<string>();
+            // Pre-size list with estimated capacity
+            var sentences = new List<string>(capacity: 512);
             
             foreach (var element in doc.Descendants(elementName))
             {
@@ -134,7 +139,8 @@ namespace TinyLLM.Text
                 throw new FileNotFoundException($"CSV file not found: {filePath}");
             }
 
-            var sentences = new List<string>();
+            // Pre-size list with estimated row count
+            var sentences = new List<string>(capacity: 1024);
             bool skipHeader = hasHeader;
 
             using (var reader = new StreamReader(filePath, Encoding.UTF8))
@@ -180,7 +186,8 @@ namespace TinyLLM.Text
             }
 
             var files = Directory.GetFiles(directoryPath, searchPattern);
-            var allTexts = new List<string>();
+            // Pre-size based on file count
+            var allTexts = new List<string>(capacity: files.Length);
 
             foreach (var file in files)
             {
@@ -255,7 +262,9 @@ namespace TinyLLM.Text
                 delimiterChars.Add(delimiters[i][0]);
             }
             
-            var sentences = new List<string>();
+            // Pre-size list based on estimated sentence count (rough heuristic: 1 sentence per 80 chars)
+            int estimatedSentences = Math.Max(16, text.Length / 80);
+            var sentences = new List<string>(capacity: estimatedSentences);
             
             // Manual parsing to avoid string.Split allocation
             int sentenceStart = 0;
@@ -297,8 +306,9 @@ namespace TinyLLM.Text
         /// </summary>
         private static List<string> ParseCsvLine(string line, char delimiter)
         {
-            var fields = new List<string>();
-            var currentField = new StringBuilder();
+            // Pre-size based on estimated field count (e.g., 10 fields on average)
+            var fields = new List<string>(capacity: 10);
+            var currentField = new StringBuilder(capacity: 128);
             bool inQuotes = false;
 
             for (int i = 0; i < line.Length; i++)
