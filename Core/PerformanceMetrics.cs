@@ -25,8 +25,20 @@ namespace TinyLLM.Core
         /// </summary>
         public bool IsEnabled
         {
-            get { lock (_lock) { return _isEnabled; } }
-            set { lock (_lock) { _isEnabled = value; } }
+            get 
+            { 
+                lock (_lock) 
+                { 
+                    return _isEnabled; 
+                } 
+            }
+            set 
+            { 
+                lock (_lock) 
+                { 
+                    _isEnabled = value; 
+                } 
+            }
         }
 
         /// <summary>

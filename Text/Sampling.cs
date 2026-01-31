@@ -28,7 +28,7 @@ namespace TinyLLM.Text
         /// <summary>
         /// Generate text from a prompt.
         /// </summary>
-        public string Generate(string prompt, int maxNewTokens, double temperature = 1.0, int topK = 0, int? seed = null, bool showPerf = false, bool perfJson = false, PerformanceMetrics? metrics = null)
+        public string Generate(string prompt, int maxNewTokens, double temperature = 1.0, int topK = 0, int? seed = null, bool showPerf = false, bool isPerfJsonMode = false, PerformanceMetrics? metrics = null)
         {
             _model.Eval();
 
@@ -54,13 +54,13 @@ namespace TinyLLM.Text
 
             // Use provided metrics or create new one if perf tracking is enabled
             bool ownMetrics = false;
-            if (metrics == null && (showPerf || perfJson))
+            if (metrics == null && (showPerf || isPerfJsonMode))
             {
                 metrics = new PerformanceMetrics();
                 ownMetrics = true;
             }
 
-            if (!perfJson)
+            if (!isPerfJsonMode)
             {
                 Console.WriteLine($"\nGenerating {maxNewTokens} tokens...");
                 Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}");
@@ -161,7 +161,7 @@ namespace TinyLLM.Text
                 }
 
                 // Optional: print progress
-                if (!showPerf && !perfJson && (i + 1) % 50 == 0)
+                if (!showPerf && !isPerfJsonMode && (i + 1) % 50 == 0)
                 {
                     Console.Write(".");
                 }
@@ -175,7 +175,7 @@ namespace TinyLLM.Text
                 metrics.RecordRequestComplete(requestId, inputTokens, maxNewTokens, success: true);
             }
 
-            if (!showPerf && !perfJson && maxNewTokens >= 50)
+            if (!showPerf && !isPerfJsonMode && maxNewTokens >= 50)
             {
                 Console.WriteLine(); // New line after progress dots
             }
@@ -186,7 +186,7 @@ namespace TinyLLM.Text
                 metrics.Stop();
                 var summary = metrics.GetSummary(maxTokensRequested: maxNewTokens, concurrencyLevel: 1);
                 
-                if (perfJson)
+                if (isPerfJsonMode)
                 {
                     // JSON output only
                     Console.WriteLine(MetricsFormatter.FormatJson(summary));

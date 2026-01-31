@@ -130,7 +130,7 @@ namespace TinyLLM
                 bool shouldTrain = !HasArg(args, "--no-train");
                 bool shouldLoad = HasArg(args, "--load");
                 bool showPerf = HasArg(args, "--perf");
-                bool perfJson = HasArg(args, "--perf-json");
+                bool isPerfJsonMode = HasArg(args, "--perf-json");
                 bool benchMode = HasArg(args, "--bench");
                 bool autoConfig = HasArg(args, "--auto-config");
                 bool enhancedTraining = HasArg(args, "--enhanced-training");
@@ -342,10 +342,10 @@ namespace TinyLLM
                         topK: topK,
                         seed: SEED,
                         showPerf: showPerf,
-                        perfJson: perfJson
+                        isPerfJsonMode: isPerfJsonMode
                     );
 
-                    if (!perfJson)
+                    if (!isPerfJsonMode)
                     {
                         Console.WriteLine("\n=== Generated Text ===");
                         Console.WriteLine(generated);
@@ -502,7 +502,7 @@ namespace TinyLLM
                             topK: topK,
                             seed: SEED + i,
                             showPerf: false,
-                            perfJson: false,
+                            isPerfJsonMode: false,
                             metrics: metrics
                         );
                     }

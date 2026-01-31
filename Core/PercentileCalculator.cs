@@ -13,6 +13,7 @@ namespace TinyLLM.Core
         /// <summary>
         /// Calculate percentile value from a list of values.
         /// Returns the value at the specified percentile (0-100).
+        /// Note: This method does NOT modify the input list, but creates a sorted copy.
         /// </summary>
         public static double Percentile(List<double> values, double percentile)
         {
@@ -26,27 +27,47 @@ namespace TinyLLM.Core
                 return values[0];
             }
 
-            // Sort the values
+            // Sort the values (creates a copy to avoid modifying the original)
             var sorted = new List<double>(values);
             sorted.Sort();
 
+            return PercentileFromSorted(sorted, percentile);
+        }
+
+        /// <summary>
+        /// Calculate percentile value from an already-sorted list.
+        /// This is more efficient when calculating multiple percentiles from the same data.
+        /// </summary>
+        private static double PercentileFromSorted(List<double> sortedValues, double percentile)
+        {
+            if (sortedValues.Count == 0)
+            {
+                return 0.0;
+            }
+
+            if (sortedValues.Count == 1)
+            {
+                return sortedValues[0];
+            }
+
             // Calculate the index (using linear interpolation between ranks)
-            double index = (percentile / 100.0) * (sorted.Count - 1);
+            double index = (percentile / 100.0) * (sortedValues.Count - 1);
             int lowerIndex = (int)Math.Floor(index);
             int upperIndex = (int)Math.Ceiling(index);
 
             if (lowerIndex == upperIndex)
             {
-                return sorted[lowerIndex];
+                return sortedValues[lowerIndex];
             }
 
             // Linear interpolation between two adjacent values
             double weight = index - lowerIndex;
-            return sorted[lowerIndex] * (1 - weight) + sorted[upperIndex] * weight;
+            return sortedValues[lowerIndex] * (1 - weight) + sortedValues[upperIndex] * weight;
         }
 
         /// <summary>
         /// Calculate common percentile statistics (min, mean, p50, p95, p99, max).
+        /// This method sorts the list once and reuses it for all percentile calculations.
         /// </summary>
         public static PercentileStats CalculateStats(List<double> values)
         {
@@ -55,15 +76,18 @@ namespace TinyLLM.Core
                 return new PercentileStats(0, 0, 0, 0, 0, 0);
             }
 
+            // Sort once for all percentile calculations
             var sorted = new List<double>(values);
             sorted.Sort();
 
             double min = sorted[0];
             double max = sorted[sorted.Count - 1];
             double mean = values.Average();
-            double p50 = Percentile(sorted, 50);
-            double p95 = Percentile(sorted, 95);
-            double p99 = Percentile(sorted, 99);
+            
+            // Use the already-sorted list for efficient percentile calculations
+            double p50 = PercentileFromSorted(sorted, 50);
+            double p95 = PercentileFromSorted(sorted, 95);
+            double p99 = PercentileFromSorted(sorted, 99);
 
             return new PercentileStats(min, mean, p50, p95, p99, max);
         }
