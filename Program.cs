@@ -206,9 +206,10 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
             
             int recommendedBlockSize;
             
-            // Conservative estimates for memory usage per token
-            // With batch_size=16, nEmbd=128, nLayer=4, nHead=4
-            // Approximate memory usage (MB) ≈ blockSize^2 * 0.001 + blockSize * 0.1
+            // Empirically determined thresholds based on testing with the current architecture
+            // (batch_size=16, nEmbd=128, nLayer=4, nHead=4)
+            // Memory usage scales primarily with blockSize^2 due to attention mechanism
+            // These values provide a safe margin to prevent out-of-memory errors
             
             if (availableMemoryGB >= 8.0)
             {
@@ -294,15 +295,17 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                     var gcMemoryInfo = GC.GetGCMemoryInfo();
                     totalMemoryGB = gcMemoryInfo.TotalAvailableMemoryBytes / 1024.0 / 1024.0 / 1024.0;
                     
-                    // Estimate available memory as total - current process memory
+                    // Estimate available memory as total minus current process memory
                     var currentProcess = Process.GetCurrentProcess();
                     long processMemoryBytes = currentProcess.WorkingSet64;
                     availableMemoryGB = totalMemoryGB - (processMemoryBytes / 1024.0 / 1024.0 / 1024.0);
                     
-                    // Assume at least 50% is available if we can't determine precisely
-                    if (availableMemoryGB < totalMemoryGB * 0.5)
+                    // On non-Linux platforms, GC info may not be accurate for available memory.
+                    // Use a conservative estimate based on total memory.
+                    if (availableMemoryGB <= 0 || availableMemoryGB > totalMemoryGB)
                     {
-                        availableMemoryGB = totalMemoryGB * 0.7;
+                        // Assume 60% of total memory is available as a conservative estimate
+                        availableMemoryGB = totalMemoryGB * 0.6;
                     }
                 }
             }
