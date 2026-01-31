@@ -91,18 +91,22 @@ namespace TinyLLM
                 {
                     Grad = new float[Data.Length];
                 }
+                Span<float> gradSpan = Grad;
                 for (int i = 0; i < Grad.Length; i++)
                 {
-                    Grad[i] = 1.0f;
+                    gradSpan[i] = 1.0f;
                 }
             }
             else
             {
-                // Accumulate gradient
+                // Accumulate gradient (use Span for better performance)
                 if (Grad == null) Grad = new float[Data.Length];
-                for (int i = 0; i < grad.Length && i < Grad.Length; i++)
+                Span<float> gradSpan = Grad;
+                ReadOnlySpan<float> inputGradSpan = grad;
+                int length = Math.Min(grad.Length, Grad.Length);
+                for (int i = 0; i < length; i++)
                 {
-                    Grad[i] += grad[i];
+                    gradSpan[i] += inputGradSpan[i];
                 }
             }
 
@@ -240,12 +244,16 @@ namespace TinyLLM
 
             var result = new Tensor(a.Shape, requiresGrad);
 
-            // Simple case: same shape
+            // Simple case: same shape - use Span<T> for better performance
             if (ShapesEqual(a.Shape, b.Shape))
             {
+                Span<float> resultSpan = result.Data;
+                ReadOnlySpan<float> aSpan = a.Data;
+                ReadOnlySpan<float> bSpan = b.Data;
+                
                 for (int i = 0; i < a.Size; i++)
                 {
-                    result.Data[i] = a.Data[i] + b.Data[i];
+                    resultSpan[i] = aSpan[i] + bSpan[i];
                 }
 
                 if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))
@@ -254,13 +262,17 @@ namespace TinyLLM
                     {
                         if (a.RequiresGrad)
                         {
+                            Span<float> aGradSpan = a.Grad;
+                            ReadOnlySpan<float> resultGradSpan = result.Grad;
                             for (int i = 0; i < a.Size; i++)
-                                a.Grad[i] += result.Grad[i];
+                                aGradSpan[i] += resultGradSpan[i];
                         }
                         if (b.RequiresGrad)
                         {
+                            Span<float> bGradSpan = b.Grad;
+                            ReadOnlySpan<float> resultGradSpan = result.Grad;
                             for (int i = 0; i < b.Size; i++)
-                                b.Grad[i] += result.Grad[i];
+                                bGradSpan[i] += resultGradSpan[i];
                         }
                     });
                 }
@@ -363,28 +375,33 @@ namespace TinyLLM
                 int rows = Shape[0];
                 int cols = Shape[1];
                 
+                ReadOnlySpan<float> dataSpan = Data;
+                Span<float> resultSpan = result.Data;
+                
                 for (int i = 0; i < rows; i++)
                 {
+                    int offset = i * cols;
+                    
                     // Find max for numerical stability
                     float max = float.NegativeInfinity;
                     for (int j = 0; j < cols; j++)
                     {
-                        max = Math.Max(max, Data[i * cols + j]);
+                        max = Math.Max(max, dataSpan[offset + j]);
                     }
                     
                     // Exp and sum
                     float sum = 0;
                     for (int j = 0; j < cols; j++)
                     {
-                        float exp = MathF.Exp(Data[i * cols + j] - max);
-                        result.Data[i * cols + j] = exp;
+                        float exp = MathF.Exp(dataSpan[offset + j] - max);
+                        resultSpan[offset + j] = exp;
                         sum += exp;
                     }
                     
                     // Normalize
                     for (int j = 0; j < cols; j++)
                     {
-                        result.Data[i * cols + j] /= sum;
+                        resultSpan[offset + j] /= sum;
                     }
                 }
             }
@@ -395,9 +412,11 @@ namespace TinyLLM
                 result.SetBackward(() =>
                 {
                     // Simplified: just pass gradient through
+                    Span<float> gradSpan = Grad;
+                    ReadOnlySpan<float> resultGradSpan = result.Grad;
                     for (int i = 0; i < Size; i++)
                     {
-                        Grad[i] += result.Grad[i];
+                        gradSpan[i] += resultGradSpan[i];
                     }
                 });
             }
@@ -427,8 +446,10 @@ namespace TinyLLM
             {
                 result.SetBackward(() =>
                 {
+                    Span<float> gradSpan = Grad;
+                    ReadOnlySpan<float> resultGradSpan = result.Grad;
                     for (int i = 0; i < Size; i++)
-                        Grad[i] += result.Grad[i];
+                        gradSpan[i] += resultGradSpan[i];
                 });
             }
             return result;
@@ -446,11 +467,14 @@ namespace TinyLLM
             int cols = Shape[1];
             var result = new Tensor(new int[] { cols, rows }, RequiresGrad);
             
+            ReadOnlySpan<float> dataSpan = Data;
+            Span<float> resultSpan = result.Data;
+            
             for (int i = 0; i < rows; i++)
             {
                 for (int j = 0; j < cols; j++)
                 {
-                    result.Data[j * rows + i] = Data[i * cols + j];
+                    resultSpan[j * rows + i] = dataSpan[i * cols + j];
                 }
             }
             
