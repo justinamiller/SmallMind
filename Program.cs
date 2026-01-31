@@ -11,7 +11,7 @@ namespace TinyLLM
     class Program
     {
         // Model hyperparameters (defaults)
-        private const int BLOCK_SIZE = 256;
+        private const int BLOCK_SIZE = 512;
         private const int N_EMBD = 128;
         private const int N_LAYER = 4;
         private const int N_HEAD = 4;
@@ -35,6 +35,7 @@ namespace TinyLLM
                 // Parse command-line arguments
                 bool shouldTrain = !HasArg(args, "--no-train");
                 bool shouldLoad = HasArg(args, "--load");
+                bool showPerf = HasArg(args, "--perf");
                 string prompt = GetArgValue(args, "--prompt", "Once upon a time");
                 int generateSteps = int.Parse(GetArgValue(args, "--steps", "200"));
                 double temperature = double.Parse(GetArgValue(args, "--temperature", "1.0"));
@@ -99,7 +100,8 @@ namespace TinyLLM
                         learningRate: LEARNING_RATE,
                         logEvery: LOG_EVERY,
                         saveEvery: SAVE_EVERY,
-                        checkpointDir: CHECKPOINT_DIR
+                        checkpointDir: CHECKPOINT_DIR,
+                        showPerf: showPerf
                     );
                 }
 
@@ -110,7 +112,8 @@ namespace TinyLLM
                     maxNewTokens: generateSteps,
                     temperature: temperature,
                     topK: topK,
-                    seed: SEED
+                    seed: SEED,
+                    showPerf: showPerf
                 );
 
                 Console.WriteLine("\n=== Generated Text ===");

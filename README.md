@@ -91,6 +91,7 @@ dotnet run
 | `--steps N` | 200 | Number of tokens to generate |
 | `--temperature T` | 1.0 | Sampling temperature (0.1-2.0, lower=more conservative) |
 | `--top-k K` | 0 | Top-k filtering (0=disabled, 40 is typical) |
+| `--perf` | (disabled) | Show real-time performance metrics (tokens/sec, timing) |
 
 ## Examples
 
@@ -103,13 +104,19 @@ dotnet run -- --no-train --prompt "The wise owl" --steps 300 --temperature 0.8
 
 # Generate with top-k sampling for more focused output
 dotnet run -- --no-train --prompt "Knowledge is" --steps 150 --top-k 40 --temperature 1.2
+
+# Train with real-time performance metrics
+dotnet run -- --perf
+
+# Generate with performance tracking
+dotnet run -- --no-train --prompt "Once upon a time" --steps 200 --perf
 ```
 
 ## Model Architecture
 
 **Default hyperparameters** (small for CPU training):
 
-- Context length (block size): 256 tokens
+- Context length (block size): 512 tokens
 - Embedding dimension: 128
 - Number of layers: 4
 - Number of attention heads: 4

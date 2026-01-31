@@ -64,7 +64,7 @@ namespace TinyLLM
         /// <summary>
         /// Main training loop with periodic loss logging and checkpointing.
         /// </summary>
-        public void Train(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir)
+        public void Train(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir, bool showPerf = false)
         {
             // Create checkpoint directory if it doesn't exist
             if (!Directory.Exists(checkpointDir))
@@ -80,9 +80,19 @@ namespace TinyLLM
             Console.WriteLine($"\nStarting training for {steps} steps...");
             Console.WriteLine($"Batch size: {_batchSize}, Block size: {_blockSize}, Learning rate: {learningRate}");
             Console.WriteLine($"Model parameters: {_model.Parameters.Count} tensors");
+            if (showPerf)
+            {
+                Console.WriteLine("Performance tracking enabled");
+            }
+
+            var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var stepStopwatch = new System.Diagnostics.Stopwatch();
+            long totalTokens = 0;
 
             for (int step = 0; step < steps; step++)
             {
+                stepStopwatch.Restart();
+
                 // Get batch
                 var (x, y) = GetBatch();
 
@@ -100,10 +110,28 @@ namespace TinyLLM
                 // Update parameters
                 optimizer.Step();
 
+                stepStopwatch.Stop();
+
+                // Track tokens processed
+                int tokensThisStep = _batchSize * _blockSize;
+                totalTokens += tokensThisStep;
+
                 // Logging
                 if ((step + 1) % logEvery == 0 || step == 0)
                 {
-                    Console.WriteLine($"Step {step + 1}/{steps}, Loss: {lossValue:F4}");
+                    if (showPerf)
+                    {
+                        double stepTimeMs = stepStopwatch.Elapsed.TotalMilliseconds;
+                        double tokensPerSec = tokensThisStep / (stepTimeMs / 1000.0);
+                        double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
+                        Console.WriteLine($"Step {step + 1}/{steps}, Loss: {lossValue:F4}, " +
+                                        $"Time: {stepTimeMs:F0}ms, Tokens/sec: {tokensPerSec:F0}, " +
+                                        $"Avg step: {avgTimePerStep:F0}ms");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Step {step + 1}/{steps}, Loss: {lossValue:F4}");
+                    }
                 }
 
                 // Checkpointing
@@ -115,10 +143,21 @@ namespace TinyLLM
                 }
             }
 
+            totalStopwatch.Stop();
+
             // Save final checkpoint
             var finalCheckpointPath = Path.Combine(checkpointDir, "model.json");
             SaveCheckpoint(finalCheckpointPath);
             Console.WriteLine($"\nTraining completed. Final checkpoint saved to {finalCheckpointPath}");
+
+            if (showPerf)
+            {
+                double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
+                double avgTokensPerSec = totalTokens / totalTimeSeconds;
+                Console.WriteLine($"Total training time: {totalTimeSeconds:F2}s");
+                Console.WriteLine($"Total tokens processed: {totalTokens:N0}");
+                Console.WriteLine($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
+            }
         }
 
         /// <summary>
