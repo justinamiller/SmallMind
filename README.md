@@ -92,6 +92,8 @@ dotnet run
 | `--temperature T` | 1.0 | Sampling temperature (0.1-2.0, lower=more conservative) |
 | `--top-k K` | 0 | Top-k filtering (0=disabled, 40 is typical) |
 | `--perf` | (disabled) | Show real-time performance metrics (tokens/sec, timing) |
+| `--block-size N` | 512 | Context window size (max: 2048) |
+| `--auto-config` | (disabled) | Auto-configure block size based on system RAM and CPU |
 
 ## Examples
 
@@ -110,13 +112,22 @@ dotnet run -- --perf
 
 # Generate with performance tracking
 dotnet run -- --no-train --prompt "Once upon a time" --steps 200 --perf
+
+# Use auto-configuration to determine optimal block size based on system resources
+dotnet run -- --auto-config
+
+# Use a custom block size (larger context window)
+dotnet run -- --block-size 1024
+
+# Use maximum block size with performance tracking
+dotnet run -- --block-size 2048 --perf --no-train --prompt "Test" --steps 50
 ```
 
 ## Model Architecture
 
 **Default hyperparameters** (small for CPU training):
 
-- Context length (block size): 512 tokens
+- Context length (block size): 512 tokens (configurable, max: 2048)
 - Embedding dimension: 128
 - Number of layers: 4
 - Number of attention heads: 4
@@ -125,6 +136,23 @@ dotnet run -- --no-train --prompt "Once upon a time" --steps 200 --perf
 - Learning rate: 3e-4 (AdamW optimizer)
 - Training steps: 2000
 - Vocabulary: Character-level (built from data.txt)
+
+**Block Size Configuration:**
+
+The context window (block size) can be configured in three ways:
+1. **Default**: 512 tokens - good balance for CPU training
+2. **Manual**: Use `--block-size N` to specify any size up to 2048
+3. **Auto-configured**: Use `--auto-config` to automatically determine optimal size based on:
+   - Available system RAM (primary factor)
+   - CPU cores
+   - Memory usage estimates for the model architecture
+
+Auto-configuration algorithm:
+- 8GB+ available RAM → 2048 tokens (maximum)
+- 4-8GB available RAM → 1536 tokens
+- 2-4GB available RAM → 1024 tokens
+- 1-2GB available RAM → 512 tokens (default)
+- <1GB available RAM → 256 tokens
 
 ## Project Structure
 
