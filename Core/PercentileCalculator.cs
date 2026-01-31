@@ -82,6 +82,7 @@ namespace TinyLLM.Core
 
             double min = sorted[0];
             double max = sorted[sorted.Count - 1];
+            // Calculate mean from original list (order doesn't affect average)
             double mean = values.Average();
             
             // Use the already-sorted list for efficient percentile calculations

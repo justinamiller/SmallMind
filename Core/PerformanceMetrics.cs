@@ -17,7 +17,7 @@ namespace TinyLLM.Core
         private readonly Stopwatch _overallTimer = new Stopwatch();
         private int _maxConcurrency = 0;
         private int _currentConcurrency = 0;
-        private bool _isEnabled = false;
+        private volatile bool _isEnabled = false;
 
         /// <summary>
         /// Enable or disable metrics collection.
@@ -25,20 +25,8 @@ namespace TinyLLM.Core
         /// </summary>
         public bool IsEnabled
         {
-            get 
-            { 
-                lock (_lock) 
-                { 
-                    return _isEnabled; 
-                } 
-            }
-            set 
-            { 
-                lock (_lock) 
-                { 
-                    _isEnabled = value; 
-                } 
-            }
+            get { return _isEnabled; }
+            set { _isEnabled = value; }
         }
 
         /// <summary>

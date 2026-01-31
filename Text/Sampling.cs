@@ -53,11 +53,11 @@ namespace TinyLLM.Text
             int inputTokens = context.Count;
 
             // Use provided metrics or create new one if perf tracking is enabled
-            bool ownMetrics = false;
+            bool isMetricsOwner = false;
             if (metrics == null && (showPerf || isPerfJsonMode))
             {
                 metrics = new PerformanceMetrics();
-                ownMetrics = true;
+                isMetricsOwner = true;
             }
 
             if (!isPerfJsonMode)
@@ -181,7 +181,7 @@ namespace TinyLLM.Text
             }
 
             // Output performance metrics
-            if (ownMetrics && metrics != null)
+            if (isMetricsOwner && metrics != null)
             {
                 metrics.Stop();
                 var summary = metrics.GetSummary(maxTokensRequested: maxNewTokens, concurrencyLevel: 1);
