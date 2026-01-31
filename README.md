@@ -141,7 +141,9 @@ dotnet run
 | `--steps N` | 200 | Number of tokens to generate |
 | `--temperature T` | 1.0 | Sampling temperature (0.1-2.0, lower=more conservative) |
 | `--top-k K` | 0 | Top-k filtering (0=disabled, 40 is typical) |
-| `--perf` | (disabled) | Show real-time performance metrics (tokens/sec, timing) |
+| `--perf` | (disabled) | Show performance metrics with detailed timing and throughput statistics |
+| `--perf-json` | (disabled) | Output performance metrics as JSON (machine-readable format) |
+| `--bench` | (disabled) | Run benchmark mode with sweeps over different max_tokens configurations |
 | `--block-size N` | (preset default) | Context window size (max: 32768, overrides preset) |
 | `--max-block-size N` | 32768 | Override maximum block size limit for extremely large contexts |
 | `--batch-size N` | (preset default) | Batch size for training (overrides preset, higher = better throughput, more memory) |
@@ -211,6 +213,15 @@ dotnet run -- --no-train --qa --prompt "What is knowledge?"
 
 # Interactive conversation mode with session context
 dotnet run -- --no-train --interactive
+
+# Performance tracking with detailed metrics
+dotnet run -- --no-train --prompt "Once upon a time" --steps 200 --perf
+
+# JSON performance output for automated testing
+dotnet run -- --no-train --prompt "Test" --steps 100 --perf-json
+
+# Benchmark mode to test different configurations
+dotnet run -- --no-train --bench --prompt "Knowledge is"
 ```
 
 ## Model Presets
@@ -258,6 +269,143 @@ dotnet run -- --model-preset tiny --block-size 512 --batch-size 16
 ```
 
 **Note:** Larger presets (mistral-7b, deepseek) require more memory and train significantly slower on CPU. Start with smaller presets (tiny, default) for testing, then scale up as needed.
+
+## Performance Feedback Mode
+
+SmallMind now includes comprehensive performance tracking and benchmarking capabilities inspired by llama.cpp. These features help analyze both capacity (throughput) and user experience (latency) metrics.
+
+### Basic Performance Tracking
+
+Use the `--perf` flag to get detailed performance metrics after generation:
+
+```bash
+dotnet run -- --no-train --prompt "Once upon a time" --steps 200 --perf
+```
+
+Example output:
+```
+=== Performance Summary ===
+Concurrency: 1
+Max tokens: 200
+Duration: 45.32s
+Requests: total=1 completed=1 failed=0
+Throughput: 4.41 tok/s, 0.02 req/s
+Tokens: input=4 output=200
+
+Latency (ms):
+  TTFT:  p50=892.3, p95=892.3, p99=892.3, mean=892.3
+  E2E:   p50=45324.1, p95=45324.1, p99=45324.1, mean=45324.1
+
+Tokens/Request: p50=200.0, p95=200.0, p99=200.0, mean=200.0
+```
+
+### JSON Output
+
+For machine-readable metrics, use `--perf-json`:
+
+```bash
+dotnet run -- --no-train --prompt "Test" --steps 100 --perf-json
+```
+
+Example output:
+```json
+{
+  "concurrency": 1,
+  "maxTokensRequested": 100,
+  "totalRequests": 1,
+  "completedRequests": 1,
+  "failedRequests": 0,
+  "durationSeconds": 22.45,
+  "totalInputTokens": 1,
+  "totalOutputTokens": 100,
+  "tokensPerSecond": 4.45,
+  "requestsPerSecond": 0.045,
+  "ttft": {
+    "min": 445.2,
+    "mean": 445.2,
+    "p50": 445.2,
+    "p95": 445.2,
+    "p99": 445.2,
+    "max": 445.2
+  },
+  "e2eLatency": {
+    "min": 22451.3,
+    "mean": 22451.3,
+    "p50": 22451.3,
+    "p95": 22451.3,
+    "p99": 22451.3,
+    "max": 22451.3
+  },
+  "tokensPerRequest": {
+    "min": 100.0,
+    "mean": 100.0,
+    "p50": 100.0,
+    "p95": 100.0,
+    "p99": 100.0,
+    "max": 100.0
+  }
+}
+```
+
+### Benchmark Mode
+
+Run sweeps over different `max_tokens` configurations to find optimal settings:
+
+```bash
+dotnet run -- --no-train --bench --prompt "Knowledge is"
+```
+
+Example output:
+```
+=== Benchmark Mode ===
+Running performance sweeps over different configurations...
+
+Running: concurrency=1, max_tokens=64
+  Completed: 4.52 tok/s
+
+Running: concurrency=1, max_tokens=128
+  Completed: 4.48 tok/s
+
+Running: concurrency=1, max_tokens=256
+  Completed: 4.41 tok/s
+
+Best throughput: 4.52 tok/s (concurrency=1, max_tokens=64)
+
+=== Detailed Results (sorted by throughput) ===
+
+Rank   | Concurrency  | Max Tokens  | Tok/s      | Req/s      | Duration   | Requests   | TTFT p95   | E2E p95   
+--------------------------------------------------------------------------------------------------------------------------
+1      | 1            | 64          | 4.52       | 0.02       | 14.16s     | 1          | 892.3ms    | 14159.2ms 
+2      | 1            | 128         | 4.48       | 0.01       | 28.57s     | 1          | 889.1ms    | 28571.4ms 
+3      | 1            | 256         | 4.41       | 0.00       | 58.05s     | 1          | 895.7ms    | 58046.8ms 
+```
+
+### Metrics Explained
+
+**Throughput/Capacity Metrics:**
+- `concurrency`: Number of in-flight requests (max and average)
+- `max_tokens`: Requested maximum output tokens
+- `total_requests`: Total requests started
+- `completed_requests`: Successfully completed requests
+- `failed_requests`: Requests that failed or timed out
+- `duration_seconds`: Wall clock time for the run
+- `total_output_tokens`: Sum of all generated tokens
+- `total_input_tokens`: Sum of all prompt tokens
+- `tok_per_sec`: Aggregate throughput (output tokens / duration)
+- `req_per_sec`: Request throughput (completed requests / duration)
+
+**Latency/UX Metrics:**
+- `TTFT` (Time To First Token): Time from request start to first token emission
+- `E2E` (End-to-End): Total time from request start to completion
+- `Tokens/Request`: Distribution of output tokens per request
+- All latency metrics include: min, mean, p50, p95, p99, max
+
+### Notes
+
+- Performance tracking has minimal overhead when `--perf` is not enabled
+- CPU-only execution means true concurrency testing isn't applicable
+- Benchmark mode tests different token lengths to find sweet spots
+- JSON output is suitable for automated performance testing pipelines
 
 ## New Features
 
