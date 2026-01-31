@@ -297,8 +297,14 @@ This project implements everything from scratch using only C# standard library:
 Since this is pure C# without optimized linear algebra libraries, performance is **very limited**:
 - Training is **extremely slow** (~1-2 hours or more for 2000 steps on modern CPU)
 - No GPU acceleration available
-- Matrix operations are not vectorized/optimized
+- Matrix operations are not vectorized/optimized (but use parallel processing where beneficial)
 - Batch size and model size severely impact speed
+
+**Performance Optimizations Added:**
+- Parallel processing for matrix multiplication in Tensor operations (for matrices with M >= 4)
+- Parallel processing for attention score computation (for batch * heads >= 4)
+- Parallel processing for softmax and attention application
+- Auto-scaling batch size based on block size and available memory
 
 **This is intentional for educational purposes!** The goal is to understand how everything works, not to train production models.
 
@@ -313,7 +319,7 @@ Since this is pure C# without optimized linear algebra libraries, performance is
 - 100 steps with small model: ~2-5 minutes
 - 500 steps with small model: ~10-25 minutes
 - 2000 steps with default model: ~1-3 hours
-- Times vary significantly based on CPU
+- Times vary significantly based on CPU and number of cores
 
 For production use, consider:
 - Using TorchSharp or ML.NET with GPU support

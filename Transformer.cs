@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace TinyLLM
 {
@@ -377,10 +378,16 @@ namespace TinyLLM
             var scores = new Tensor(new int[] { B, _nHead, T, T }, requiresGrad: true);
             float scale = 1.0f / MathF.Sqrt(_headSize);
             
-            for (int b = 0; b < B; b++)
+            // Parallelize over batch and head dimensions for better performance
+            // Use parallel processing when B * nHead >= 4
+            int totalParallelWork = B * _nHead;
+            if (totalParallelWork >= 4)
             {
-                for (int h = 0; h < _nHead; h++)
+                Parallel.For(0, totalParallelWork, bh =>
                 {
+                    int b = bh / _nHead;
+                    int h = bh % _nHead;
+                    
                     for (int i = 0; i < T; i++)
                     {
                         for (int j = 0; j < T; j++)
@@ -404,6 +411,39 @@ namespace TinyLLM
                             }
                         }
                     }
+                });
+            }
+            else
+            {
+                // Sequential for small batches
+                for (int b = 0; b < B; b++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        for (int i = 0; i < T; i++)
+                        {
+                            for (int j = 0; j < T; j++)
+                            {
+                                float sum = 0;
+                                for (int d = 0; d < _headSize; d++)
+                                {
+                                    int qIdx = ((b * _nHead + h) * T + i) * _headSize + d;
+                                    int kIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                                    sum += q.Data[qIdx] * k.Data[kIdx];
+                                }
+                                
+                                int scoreIdx = ((b * _nHead + h) * T + i) * T + j;
+                                if (_causalMask[i, j])
+                                {
+                                    scores.Data[scoreIdx] = sum * scale;
+                                }
+                                else
+                                {
+                                    scores.Data[scoreIdx] = float.NegativeInfinity;
+                                }
+                            }
+                        }
+                    }
                 }
             }
             
@@ -415,10 +455,15 @@ namespace TinyLLM
         {
             var result = new Tensor(scores.Shape, requiresGrad: true);
             
-            for (int b = 0; b < B; b++)
+            // Parallelize softmax computation over batch and head dimensions
+            int totalParallelWork = B * _nHead;
+            if (totalParallelWork >= 4)
             {
-                for (int h = 0; h < _nHead; h++)
+                Parallel.For(0, totalParallelWork, bh =>
                 {
+                    int b = bh / _nHead;
+                    int h = bh % _nHead;
+                    
                     for (int i = 0; i < T; i++)
                     {
                         int offset = ((b * _nHead + h) * T + i) * T;
@@ -450,6 +495,47 @@ namespace TinyLLM
                             }
                         }
                     }
+                });
+            }
+            else
+            {
+                // Sequential for small batches
+                for (int b = 0; b < B; b++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        for (int i = 0; i < T; i++)
+                        {
+                            int offset = ((b * _nHead + h) * T + i) * T;
+                            
+                            // Find max for numerical stability
+                            float max = float.NegativeInfinity;
+                            for (int j = 0; j < T; j++)
+                            {
+                                max = Math.Max(max, scores.Data[offset + j]);
+                            }
+                            
+                            // Exp and sum
+                            float sum = 0;
+                            for (int j = 0; j < T; j++)
+                            {
+                                if (scores.Data[offset + j] != float.NegativeInfinity)
+                                {
+                                    result.Data[offset + j] = MathF.Exp(scores.Data[offset + j] - max);
+                                    sum += result.Data[offset + j];
+                                }
+                            }
+                            
+                            // Normalize
+                            if (sum > 0)
+                            {
+                                for (int j = 0; j < T; j++)
+                                {
+                                    result.Data[offset + j] /= sum;
+                                }
+                            }
+                        }
+                    }
                 }
             }
             
@@ -464,10 +550,15 @@ namespace TinyLLM
             
             var output = new Tensor(new int[] { B, _nHead, T, _headSize }, requiresGrad: true);
             
-            for (int b = 0; b < B; b++)
+            // Parallelize attention application over batch and head dimensions
+            int totalParallelWork = B * _nHead;
+            if (totalParallelWork >= 4)
             {
-                for (int h = 0; h < _nHead; h++)
+                Parallel.For(0, totalParallelWork, bh =>
                 {
+                    int b = bh / _nHead;
+                    int h = bh % _nHead;
+                    
                     for (int i = 0; i < T; i++)
                     {
                         for (int d = 0; d < _headSize; d++)
@@ -481,6 +572,31 @@ namespace TinyLLM
                             }
                             int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
                             output.Data[outIdx] = sum;
+                        }
+                    }
+                });
+            }
+            else
+            {
+                // Sequential for small batches
+                for (int b = 0; b < B; b++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        for (int i = 0; i < T; i++)
+                        {
+                            for (int d = 0; d < _headSize; d++)
+                            {
+                                float sum = 0;
+                                for (int j = 0; j < T; j++)
+                                {
+                                    int attIdx = ((b * _nHead + h) * T + i) * T + j;
+                                    int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                                    sum += att.Data[attIdx] * v.Data[vIdx];
+                                }
+                                int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
+                                output.Data[outIdx] = sum;
+                            }
                         }
                     }
                 }
