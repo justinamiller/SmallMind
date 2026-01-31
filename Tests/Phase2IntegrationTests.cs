@@ -86,7 +86,7 @@ Knowledge is power.";
         }
 
         [Fact]
-        public void TrainOptimized_WithDiagnostics_TrainsAndPrintsReports()
+        public void TrainOptimized_WithDiagnostics_TrainsSuccessfully()
         {
             // Arrange
             var tokenizer = new Tokenizer(SampleData);

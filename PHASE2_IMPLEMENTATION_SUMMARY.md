@@ -85,7 +85,12 @@ This document summarizes the Phase 2 advanced training optimizations implemented
 - Profiler tracking
 - Gradient diagnostics
 
-**Total Test Coverage**: 71 tests (40 new + 31 existing), 100% passing
+#### Phase2IntegrationTests.cs (9 tests)
+- End-to-end training workflows
+- All optimization combinations
+- Configuration validation
+
+**Total Test Coverage**: 80 tests (49 new + 31 existing), 100% passing
 
 ### 4. Documentation & Examples
 
@@ -212,13 +217,14 @@ Based on the problem statement and implementation:
 ```bash
 $ dotnet test Tests/TinyLLM.Tests.csproj
 ...
-Passed!  - Failed: 0, Passed: 71, Skipped: 0, Total: 71
+Passed!  - Failed: 0, Passed: 80, Skipped: 0, Total: 80
 ```
 
 All tests passing, including:
 - 9 mixed precision tests
 - 11 gradient checkpointing tests  
 - 12 training optimization tests
+- 9 integration tests
 - 39 existing tests (unchanged)
 
 ## Security Considerations
