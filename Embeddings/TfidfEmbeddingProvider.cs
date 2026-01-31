@@ -25,8 +25,9 @@ namespace TinyLLM.Embeddings
         public TfidfEmbeddingProvider(int maxFeatures = 512)
         {
             _maxFeatures = maxFeatures;
-            _vocabulary = new Dictionary<string, int>();
-            _idfScores = new Dictionary<string, double>();
+            // Pre-size dictionaries to avoid rehashing
+            _vocabulary = new Dictionary<string, int>(maxFeatures);
+            _idfScores = new Dictionary<string, double>(maxFeatures);
             _stopWords = CreateStopWords();
         }
 
@@ -42,7 +43,8 @@ namespace TinyLLM.Embeddings
             }
 
             // Step 1: Build term frequency across all documents
-            var documentFrequency = new Dictionary<string, int>();
+            // Pre-size dictionary to avoid rehashing during build
+            var documentFrequency = new Dictionary<string, int>(capacity: 1024);
             var allTerms = new HashSet<string>();
 
             for (int i = 0; i < documents.Count; i++)
@@ -115,7 +117,8 @@ namespace TinyLLM.Embeddings
             
             // Tokenize and count term frequencies
             var terms = Tokenize(text);
-            var termCounts = new Dictionary<string, int>();
+            // Pre-size dictionary for term counts
+            var termCounts = new Dictionary<string, int>(capacity: Math.Min(terms.Count, 128));
             
             for (int i = 0; i < terms.Count; i++)
             {
@@ -167,7 +170,7 @@ namespace TinyLLM.Embeddings
         }
 
         /// <summary>
-        /// Tokenize text into terms (simple word-based tokenization).
+        /// Tokenize text into terms (optimized word-based tokenization using Span).
         /// </summary>
         private List<string> Tokenize(string text)
         {
@@ -177,34 +180,33 @@ namespace TinyLLM.Embeddings
                 return terms;
             }
 
-            var sb = new StringBuilder();
-            var lowerText = text.ToLowerInvariant();
+            // Use Span-based parsing to reduce allocations
+            ReadOnlySpan<char> textSpan = text.AsSpan();
+            int wordStart = -1;
             
-            for (int i = 0; i < lowerText.Length; i++)
+            for (int i = 0; i <= textSpan.Length; i++)
             {
-                char c = lowerText[i];
-                if (char.IsLetterOrDigit(c))
+                bool isLetterOrDigit = i < textSpan.Length && char.IsLetterOrDigit(textSpan[i]);
+                
+                if (!isLetterOrDigit && wordStart >= 0)
                 {
-                    sb.Append(c);
-                }
-                else if (sb.Length > 0)
-                {
-                    string word = sb.ToString();
-                    if (word.Length >= 2 && !_stopWords.Contains(word))
+                    // End of word
+                    int wordLength = i - wordStart;
+                    if (wordLength >= 2)
                     {
-                        terms.Add(word);
+                        // Extract word and convert to lowercase
+                        string word = text.Substring(wordStart, wordLength).ToLowerInvariant();
+                        if (!_stopWords.Contains(word))
+                        {
+                            terms.Add(word);
+                        }
                     }
-                    sb.Clear();
+                    wordStart = -1;
                 }
-            }
-
-            // Add last word if any
-            if (sb.Length > 0)
-            {
-                string word = sb.ToString();
-                if (word.Length >= 2 && !_stopWords.Contains(word))
+                else if (isLetterOrDigit && wordStart < 0)
                 {
-                    terms.Add(word);
+                    // Start of word
+                    wordStart = i;
                 }
             }
 

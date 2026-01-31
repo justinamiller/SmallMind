@@ -47,8 +47,8 @@ namespace TinyLLM.Core
             _positionEmbedding = new Embedding(_blockSize, _nEmbd, _random);
             _embDropout = new Dropout((float)dropout, _random);
 
-            // Stack of transformer blocks
-            _blocks = new List<TransformerBlock>();
+            // Stack of transformer blocks - pre-size to layer count
+            _blocks = new List<TransformerBlock>(_nLayer);
             for (int i = 0; i < _nLayer; i++)
             {
                 _blocks.Add(new TransformerBlock(_nEmbd, _nHead, _blockSize, (float)dropout, _random));

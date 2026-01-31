@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using TinyLLM.Core;
 using TinyLLM.Text;
 using TinyLLM.Embeddings;
@@ -110,16 +109,47 @@ A:";
             }
 
             // Extract keywords from question (simple approach: remove common words)
-            var stopWords = new HashSet<string> { "the", "a", "an", "is", "are", "was", "were", "what", "when", "where", "who", "why", "how", "do", "does", "did" };
+            // Use OrdinalIgnoreCase for case-insensitive matching
+            var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) 
+            { 
+                "the", "a", "an", "is", "are", "was", "were", 
+                "what", "when", "where", "who", "why", "how", 
+                "do", "does", "did" 
+            };
             var questionWords = new List<string>();
-            var words = question.ToLower().Split(new[] { ' ', '?', '!', '.', ',', ';', ':' }, StringSplitOptions.RemoveEmptyEntries);
             
-            for (int i = 0; i < words.Length; i++)
+            // Manual parsing to avoid string.Split allocation
+            int wordStart = -1;
+            ReadOnlySpan<char> questionSpan = question.AsSpan();
+            
+            for (int i = 0; i <= questionSpan.Length; i++)
             {
-                var word = words[i];
-                if (!stopWords.Contains(word) && word.Length > 2)
+                bool isDelimiter = i == questionSpan.Length || 
+                    questionSpan[i] == ' ' || questionSpan[i] == '?' || 
+                    questionSpan[i] == '!' || questionSpan[i] == '.' || 
+                    questionSpan[i] == ',' || questionSpan[i] == ';' || 
+                    questionSpan[i] == ':';
+                
+                if (isDelimiter)
                 {
-                    questionWords.Add(word);
+                    if (wordStart >= 0)
+                    {
+                        int wordLength = i - wordStart;
+                        if (wordLength > 2)
+                        {
+                            // Extract word - stopWords comparer handles case-insensitive matching
+                            string word = question.Substring(wordStart, wordLength);
+                            if (!stopWords.Contains(word))
+                            {
+                                questionWords.Add(word);
+                            }
+                        }
+                        wordStart = -1;
+                    }
+                }
+                else if (wordStart < 0)
+                {
+                    wordStart = i;
                 }
             }
 
@@ -131,34 +161,55 @@ A:";
                     : _trainingCorpus;
             }
 
-            // Split corpus into sentences
-            var sentenceDelimiters = new[] { '.', '!', '?' };
-            var sentencesList = new List<string>();
-            var parts = _trainingCorpus.Split(sentenceDelimiters, StringSplitOptions.RemoveEmptyEntries);
+            // Split corpus into sentences - manual parsing to avoid string.Split allocation
+            var sentences = new List<string>();
+            int sentenceStart = 0;
+            ReadOnlySpan<char> corpusSpan = _trainingCorpus.AsSpan();
             
-            for (int i = 0; i < parts.Length; i++)
+            for (int i = 0; i < corpusSpan.Length; i++)
             {
-                var sentence = parts[i].Trim();
-                if (sentence.Length > 0)
+                if (corpusSpan[i] == '.' || corpusSpan[i] == '!' || corpusSpan[i] == '?')
                 {
-                    sentencesList.Add(sentence);
+                    int sentenceLength = i - sentenceStart;
+                    if (sentenceLength > 0)
+                    {
+                        string sentence = _trainingCorpus.Substring(sentenceStart, sentenceLength).Trim();
+                        if (sentence.Length > 0)
+                        {
+                            sentences.Add(sentence);
+                        }
+                    }
+                    sentenceStart = i + 1;
                 }
             }
-            var sentences = sentencesList;
-
-            // Score sentences by keyword matches
-            var scoredSentences = new List<(string sentence, int score)>();
-            foreach (var sentence in sentences)
+            
+            // Add remaining text as last sentence if any
+            if (sentenceStart < _trainingCorpus.Length)
             {
-                string lowerSentence = sentence.ToLower();
+                string sentence = _trainingCorpus.Substring(sentenceStart).Trim();
+                if (sentence.Length > 0)
+                {
+                    sentences.Add(sentence);
+                }
+            }
+
+            // Score sentences by keyword matches (using case-insensitive comparison)
+            var scoredSentences = new List<(string sentence, int score)>(sentences.Count);
+            
+            for (int s = 0; s < sentences.Count; s++)
+            {
+                string sentence = sentences[s];
                 int score = 0;
+                
+                // Count keyword matches using ordinal ignore case to avoid ToLower() allocation
                 for (int i = 0; i < questionWords.Count; i++)
                 {
-                    if (lowerSentence.Contains(questionWords[i]))
+                    if (sentence.IndexOf(questionWords[i], StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         score++;
                     }
                 }
+                
                 if (score > 0)
                 {
                     scoredSentences.Add((sentence, score));

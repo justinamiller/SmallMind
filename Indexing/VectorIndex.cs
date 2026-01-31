@@ -139,6 +139,7 @@ namespace TinyLLM.Indexing
 
         /// <summary>
         /// Search using a pre-computed query vector.
+        /// Optimized with partial sort for top-k retrieval.
         /// </summary>
         public List<SearchResult> SearchByVector(float[] queryVector, int k = 5)
         {
@@ -147,34 +148,91 @@ namespace TinyLLM.Indexing
                 return new List<SearchResult>();
             }
 
-            // Calculate cosine similarity for all entries
-            var scores = new List<(int index, float score)>(_entries.Count);
-            
-            for (int i = 0; i < _entries.Count; i++)
-            {
-                float similarity = CosineSimilarity(queryVector, _entries[i].Vector);
-                scores.Add((i, similarity));
-            }
-
-            // Sort by score descending (manual sort to avoid LINQ)
-            scores.Sort((a, b) => b.score.CompareTo(a.score));
-
-            // Take top k results
-            int numResults = Math.Min(k, scores.Count);
+            // Pre-allocate results list
+            int numResults = Math.Min(k, _entries.Count);
             var results = new List<SearchResult>(numResults);
             
-            for (int i = 0; i < numResults; i++)
+            // For small k, use a min-heap approach (top-k selection)
+            // For large k (>= half the entries), just do full sort
+            if (k < _entries.Count / 2)
             {
-                int entryIndex = scores[i].index;
-                var entry = _entries[entryIndex];
+                // Top-K selection using partial sort
+                var topK = new List<(int index, float score)>(k);
                 
-                results.Add(new SearchResult
+                for (int i = 0; i < _entries.Count; i++)
                 {
-                    Id = entry.Id,
-                    Text = entry.Text,
-                    Score = scores[i].score,
-                    Metadata = entry.Metadata
-                });
+                    float similarity = CosineSimilarity(queryVector, _entries[i].Vector);
+                    
+                    if (topK.Count < k)
+                    {
+                        // Still building up to k items
+                        topK.Add((i, similarity));
+                        if (topK.Count == k)
+                        {
+                            // Sort once when we reach k items
+                            topK.Sort((a, b) => a.score.CompareTo(b.score));
+                        }
+                    }
+                    else if (similarity > topK[0].score)
+                    {
+                        // Replace minimum and re-sort (binary insertion would be better but this is simpler)
+                        topK[0] = (i, similarity);
+                        
+                        // Bubble the new item to its correct position
+                        int pos = 0;
+                        while (pos < k - 1 && topK[pos].score > topK[pos + 1].score)
+                        {
+                            var temp = topK[pos];
+                            topK[pos] = topK[pos + 1];
+                            topK[pos + 1] = temp;
+                            pos++;
+                        }
+                    }
+                }
+                
+                // Convert to results (reverse order for descending scores)
+                for (int i = topK.Count - 1; i >= 0; i--)
+                {
+                    int entryIndex = topK[i].index;
+                    var entry = _entries[entryIndex];
+                    
+                    results.Add(new SearchResult
+                    {
+                        Id = entry.Id,
+                        Text = entry.Text,
+                        Score = topK[i].score,
+                        Metadata = entry.Metadata
+                    });
+                }
+            }
+            else
+            {
+                // For large k, full sort is more efficient
+                var scores = new List<(int index, float score)>(_entries.Count);
+                
+                for (int i = 0; i < _entries.Count; i++)
+                {
+                    float similarity = CosineSimilarity(queryVector, _entries[i].Vector);
+                    scores.Add((i, similarity));
+                }
+
+                // Sort by score descending
+                scores.Sort((a, b) => b.score.CompareTo(a.score));
+
+                // Take top k results
+                for (int i = 0; i < numResults; i++)
+                {
+                    int entryIndex = scores[i].index;
+                    var entry = _entries[entryIndex];
+                    
+                    results.Add(new SearchResult
+                    {
+                        Id = entry.Id,
+                        Text = entry.Text,
+                        Score = scores[i].score,
+                        Metadata = entry.Metadata
+                    });
+                }
             }
 
             return results;

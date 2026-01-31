@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace TinyLLM.Core
 {
@@ -82,8 +81,14 @@ namespace TinyLLM.Core
 
             double min = sorted[0];
             double max = sorted[sorted.Count - 1];
-            // Calculate mean from original list (order doesn't affect average)
-            double mean = values.Average();
+            
+            // Calculate mean manually to avoid LINQ
+            double sum = 0;
+            for (int i = 0; i < values.Count; i++)
+            {
+                sum += values[i];
+            }
+            double mean = sum / values.Count;
             
             // Use the already-sorted list for efficient percentile calculations
             double p50 = PercentileFromSorted(sorted, 50);
