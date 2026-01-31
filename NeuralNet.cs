@@ -367,6 +367,8 @@ namespace TinyLLM
         {
             if (!_training || _p == 0)
             {
+                // During inference, we need to return the input.
+                // Clone is necessary to maintain tensor independence.
                 return input.Clone();
             }
             

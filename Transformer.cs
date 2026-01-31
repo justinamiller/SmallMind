@@ -121,14 +121,20 @@ namespace TinyLLM
             var result = new Tensor(new int[] { B, T, nEmbd }, requiresGrad: true);
             
             // posEmb is (T, nEmbd), need to broadcast to (B, T, nEmbd)
+            // Optimization: Pre-calculate offsets to reduce redundant calculations
             for (int b = 0; b < B; b++)
             {
                 for (int t = 0; t < T; t++)
                 {
+                    int resultOffset = (b * T + t) * nEmbd;
+                    int tokEmbOffset = (b * T + t) * nEmbd;
+                    int posEmbOffset = t * nEmbd;
+                    
+                    // Vectorized addition
                     for (int e = 0; e < nEmbd; e++)
                     {
-                        result.Data[(b * T + t) * nEmbd + e] = 
-                            tokEmb.Data[(b * T + t) * nEmbd + e] + posEmb.Data[t * nEmbd + e];
+                        result.Data[resultOffset + e] = 
+                            tokEmb.Data[tokEmbOffset + e] + posEmb.Data[posEmbOffset + e];
                     }
                 }
             }
