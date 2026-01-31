@@ -11,14 +11,97 @@ namespace TinyLLM
     /// </summary>
     class Program
     {
-        // Model hyperparameters (defaults)
-        private const int DEFAULT_BLOCK_SIZE = 512;
-        private const int N_EMBD = 128;
-        private const int N_LAYER = 4;
-        private const int N_HEAD = 4;
-        private const double DROPOUT = 0.1;
-        private const int DEFAULT_BATCH_SIZE = 16;
-        private const double LEARNING_RATE = 3e-4;
+        /// <summary>
+        /// Model configuration preset inspired by popular LLM architectures.
+        /// Allows users to choose different model sizes and configurations.
+        /// </summary>
+        public class ModelConfig
+        {
+            public string Name { get; set; }
+            public string Description { get; set; }
+            public int BlockSize { get; set; }
+            public int NEmbedding { get; set; }
+            public int NLayers { get; set; }
+            public int NHeads { get; set; }
+            public double Dropout { get; set; }
+            public int BatchSize { get; set; }
+            public double LearningRate { get; set; }
+
+            public ModelConfig(string name, string description, int blockSize, int nEmbedding, int nLayers, int nHeads, double dropout, int batchSize, double learningRate)
+            {
+                Name = name;
+                Description = description;
+                BlockSize = blockSize;
+                NEmbedding = nEmbedding;
+                NLayers = nLayers;
+                NHeads = nHeads;
+                Dropout = dropout;
+                BatchSize = batchSize;
+                LearningRate = learningRate;
+            }
+        }
+
+        // Predefined model configurations inspired by popular LLM architectures
+        private static readonly Dictionary<string, ModelConfig> MODEL_PRESETS = new Dictionary<string, ModelConfig>
+        {
+            ["default"] = new ModelConfig(
+                name: "Default (Tiny Educational)",
+                description: "Original tiny model for educational purposes - fast training on CPU",
+                blockSize: 512,
+                nEmbedding: 128,
+                nLayers: 4,
+                nHeads: 4,
+                dropout: 0.1,
+                batchSize: 16,
+                learningRate: 3e-4
+            ),
+            ["mistral-7b"] = new ModelConfig(
+                name: "Mistral 7B (Scaled)",
+                description: "Configuration inspired by Mistral 7B architecture - larger model with more layers",
+                blockSize: 2048,
+                nEmbedding: 256,
+                nLayers: 8,
+                nHeads: 8,
+                dropout: 0.1,
+                batchSize: 8,
+                learningRate: 2e-4
+            ),
+            ["mistral-medium"] = new ModelConfig(
+                name: "Mistral Medium",
+                description: "Medium-sized configuration with balanced performance and training time",
+                blockSize: 1024,
+                nEmbedding: 192,
+                nLayers: 6,
+                nHeads: 6,
+                dropout: 0.1,
+                batchSize: 12,
+                learningRate: 2.5e-4
+            ),
+            ["deepseek"] = new ModelConfig(
+                name: "DeepSeek (Scaled)",
+                description: "Configuration inspired by DeepSeek architecture - optimized for reasoning tasks",
+                blockSize: 4096,
+                nEmbedding: 320,
+                nLayers: 10,
+                nHeads: 8,
+                dropout: 0.05,
+                batchSize: 4,
+                learningRate: 1.5e-4
+            ),
+            ["tiny"] = new ModelConfig(
+                name: "Tiny (Fastest)",
+                description: "Very small model for quick testing and prototyping",
+                blockSize: 256,
+                nEmbedding: 64,
+                nLayers: 2,
+                nHeads: 2,
+                dropout: 0.1,
+                batchSize: 32,
+                learningRate: 4e-4
+            )
+        };
+
+        // Training parameters (shared across all presets)
         private const int TRAIN_STEPS = 2000;
         private const int LOG_EVERY = 50;
         private const int SAVE_EVERY = 500;
@@ -46,10 +129,44 @@ namespace TinyLLM
                 bool enhancedTraining = HasArg(args, "--enhanced-training");
                 bool qaMode = HasArg(args, "--qa");
                 bool interactiveMode = HasArg(args, "--interactive");
+                bool listPresets = HasArg(args, "--list-presets");
                 string prompt = GetArgValue(args, "--prompt", "Once upon a time");
                 int generateSteps = int.Parse(GetArgValue(args, "--steps", "200"));
                 double temperature = double.Parse(GetArgValue(args, "--temperature", "1.0"));
                 int topK = int.Parse(GetArgValue(args, "--top-k", "0"));
+                
+                // List available model presets and exit if requested
+                if (listPresets)
+                {
+                    Console.WriteLine("\n=== Available Model Presets ===\n");
+                    foreach (var preset in MODEL_PRESETS)
+                    {
+                        var config = preset.Value;
+                        Console.WriteLine($"Preset: {preset.Key}");
+                        Console.WriteLine($"  Name: {config.Name}");
+                        Console.WriteLine($"  Description: {config.Description}");
+                        Console.WriteLine($"  Parameters: {config.NEmbedding} embedding dim, {config.NLayers} layers, {config.NHeads} heads");
+                        Console.WriteLine($"  Context: {config.BlockSize} tokens, Batch: {config.BatchSize}");
+                        Console.WriteLine($"  Learning Rate: {config.LearningRate}, Dropout: {config.Dropout}");
+                        Console.WriteLine();
+                    }
+                    return;
+                }
+                
+                // Select model preset (default to "default")
+                string presetName = GetArgValue(args, "--model-preset", "default").ToLower();
+                if (!MODEL_PRESETS.ContainsKey(presetName))
+                {
+                    Console.WriteLine($"Error: Unknown model preset '{presetName}'");
+                    Console.WriteLine("Available presets: " + string.Join(", ", MODEL_PRESETS.Keys));
+                    Console.WriteLine("Use --list-presets to see detailed information about each preset");
+                    Environment.Exit(1);
+                }
+                
+                ModelConfig selectedPreset = MODEL_PRESETS[presetName];
+                Console.WriteLine($"\n=== Using Model Preset: {selectedPreset.Name} ===");
+                Console.WriteLine($"Description: {selectedPreset.Description}");
+                Console.WriteLine($"Configuration: {selectedPreset.NEmbedding} embedding dim, {selectedPreset.NLayers} layers, {selectedPreset.NHeads} heads\n");
                 
                 // Enhanced training parameters
                 int gradAccumSteps = int.Parse(GetArgValue(args, "--grad-accum", "1"));
@@ -64,8 +181,8 @@ namespace TinyLLM
                     Console.WriteLine($"Maximum block size override: {maxBlockSize}");
                 }
                 
-                // Determine block size (priority: command-line > auto-config > default)
-                int blockSize = DEFAULT_BLOCK_SIZE;
+                // Determine block size (priority: command-line > auto-config > preset default)
+                int blockSize = selectedPreset.BlockSize;
                 string blockSizeArg = GetArgValue(args, "--block-size", "");
                 
                 if (!string.IsNullOrEmpty(blockSizeArg))
@@ -87,11 +204,11 @@ namespace TinyLLM
                 }
                 else
                 {
-                    Console.WriteLine($"Using default block size: {blockSize}");
+                    Console.WriteLine($"Using preset block size: {blockSize}");
                 }
                 
-                // Determine batch size (auto-config or default)
-                int batchSize = DEFAULT_BATCH_SIZE;
+                // Determine batch size (priority: command-line > auto-config > preset default)
+                int batchSize = selectedPreset.BatchSize;
                 string batchSizeArg = GetArgValue(args, "--batch-size", "");
                 
                 if (!string.IsNullOrEmpty(batchSizeArg))
@@ -106,7 +223,7 @@ namespace TinyLLM
                 }
                 else
                 {
-                    Console.WriteLine($"Using default batch size: {batchSize}");
+                    Console.WriteLine($"Using preset batch size: {batchSize}");
                 }
 
                 // Ensure data file exists
@@ -119,14 +236,14 @@ namespace TinyLLM
                 // Build tokenizer
                 var tokenizer = new Tokenizer(trainingText);
 
-                // Create model
+                // Create model with selected preset configuration
                 var model = new TransformerModel(
                     vocabSize: tokenizer.VocabSize,
                     blockSize: blockSize,
-                    nEmbd: N_EMBD,
-                    nLayer: N_LAYER,
-                    nHead: N_HEAD,
-                    dropout: DROPOUT,
+                    nEmbd: selectedPreset.NEmbedding,
+                    nLayer: selectedPreset.NLayers,
+                    nHead: selectedPreset.NHeads,
+                    dropout: selectedPreset.Dropout,
                     seed: SEED
                 );
 
@@ -168,7 +285,7 @@ namespace TinyLLM
                         Console.WriteLine("\nUsing enhanced training with gradient accumulation and learning rate scheduling");
                         trainer.TrainEnhanced(
                             steps: TRAIN_STEPS,
-                            learningRate: LEARNING_RATE,
+                            learningRate: selectedPreset.LearningRate,
                             logEvery: LOG_EVERY,
                             saveEvery: SAVE_EVERY,
                             checkpointDir: CHECKPOINT_DIR,
@@ -183,7 +300,7 @@ namespace TinyLLM
                     {
                         trainer.Train(
                             steps: TRAIN_STEPS,
-                            learningRate: LEARNING_RATE,
+                            learningRate: selectedPreset.LearningRate,
                             logEvery: LOG_EVERY,
                             saveEvery: SAVE_EVERY,
                             checkpointDir: CHECKPOINT_DIR,
