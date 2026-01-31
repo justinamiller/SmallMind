@@ -176,6 +176,9 @@ namespace TinyLLM
             float totalLoss = 0;
             int count = B * T;
 
+            // Cache softmax results to avoid recomputation during backward pass
+            var softmaxCache = new float[B * T * V];
+
             // Compute loss for each position
             for (int b = 0; b < B; b++)
             {
@@ -196,7 +199,15 @@ namespace TinyLLM
                     float sum = 0;
                     for (int v = 0; v < V; v++)
                     {
-                        sum += MathF.Exp(logits.Data[offset + v] - max);
+                        float expVal = MathF.Exp(logits.Data[offset + v] - max);
+                        softmaxCache[offset + v] = expVal;
+                        sum += expVal;
+                    }
+
+                    // Normalize softmax and cache results
+                    for (int v = 0; v < V; v++)
+                    {
+                        softmaxCache[offset + v] /= sum;
                     }
 
                     float logProb = logits.Data[offset + targetClass] - max - MathF.Log(sum);
@@ -206,7 +217,7 @@ namespace TinyLLM
 
             var loss = new Tensor(new float[] { totalLoss / count }, new int[] { 1 }, requiresGrad: true);
 
-            // Backward pass for cross-entropy
+            // Backward pass for cross-entropy - reuse cached softmax
             loss.SetBackward(() =>
             {
                 if (logits.RequiresGrad)
@@ -227,25 +238,10 @@ namespace TinyLLM
 
                             int offset = (b * T + t) * V;
 
-                            // Softmax
-                            float max = float.NegativeInfinity;
+                            // Use cached softmax values instead of recomputing
                             for (int v = 0; v < V; v++)
                             {
-                                max = Math.Max(max, logits.Data[offset + v]);
-                            }
-
-                            float sum = 0;
-                            var softmax = new float[V];
-                            for (int v = 0; v < V; v++)
-                            {
-                                softmax[v] = MathF.Exp(logits.Data[offset + v] - max);
-                                sum += softmax[v];
-                            }
-
-                            for (int v = 0; v < V; v++)
-                            {
-                                softmax[v] /= sum;
-                                float grad = softmax[v];
+                                float grad = softmaxCache[offset + v];
                                 if (v == targetClass)
                                 {
                                     grad -= 1.0f;

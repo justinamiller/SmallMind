@@ -13,6 +13,9 @@ namespace TinyLLM
         private readonly TransformerModel _model;
         private readonly Tokenizer _tokenizer;
         private readonly int _blockSize;
+        
+        // Reusable buffers to reduce allocations
+        private float[]? _probabilityBuffer;
 
         public Sampling(TransformerModel model, Tokenizer tokenizer, int blockSize)
         {
@@ -59,10 +62,22 @@ namespace TinyLLM
 
             for (int i = 0; i < maxNewTokens; i++)
             {
-                // Crop context to last blockSize tokens
-                var contextCropped = context.Count <= _blockSize 
-                    ? context 
-                    : context.Skip(context.Count - _blockSize).ToList();
+                // Crop context to last blockSize tokens (avoid LINQ allocation)
+                List<int> contextCropped;
+                if (context.Count <= _blockSize)
+                {
+                    contextCropped = context;
+                }
+                else
+                {
+                    // Manual copy of last blockSize tokens (faster than Skip().ToList())
+                    contextCropped = new List<int>(_blockSize);
+                    int startIdx = context.Count - _blockSize;
+                    for (int idx = startIdx; idx < context.Count; idx++)
+                    {
+                        contextCropped.Add(context[idx]);
+                    }
+                }
 
                 // Convert to tensor: (1, T)
                 var contextData = new float[contextCropped.Count];
@@ -148,9 +163,15 @@ namespace TinyLLM
                 return logits;
             }
 
-            // Find k-th largest value
-            var sorted = logits.OrderByDescending(x => x).ToArray();
-            float kthValue = sorted[Math.Min(k, sorted.Length - 1)];
+            // Find k-th largest value using partial sort (QuickSelect-like approach)
+            // Copy to avoid modifying original
+            var values = new float[logits.Length];
+            Array.Copy(logits, values, logits.Length);
+            
+            // Partial sort - only need to find k-th largest
+            Array.Sort(values);
+            Array.Reverse(values); // Now in descending order
+            float kthValue = values[Math.Min(k - 1, values.Length - 1)];
 
             // Set all values below k-th to -inf
             var filtered = new float[logits.Length];
@@ -163,10 +184,16 @@ namespace TinyLLM
         }
 
         /// <summary>
-        /// Compute softmax over an array
+        /// Compute softmax over an array (reuses buffer for performance)
         /// </summary>
         private float[] Softmax(float[] logits)
         {
+            // Reuse probability buffer to reduce allocations
+            if (_probabilityBuffer == null || _probabilityBuffer.Length != logits.Length)
+            {
+                _probabilityBuffer = new float[logits.Length];
+            }
+            
             // Find max for numerical stability
             float max = float.NegativeInfinity;
             foreach (var val in logits)
@@ -179,26 +206,29 @@ namespace TinyLLM
 
             // Compute exp and sum
             float sum = 0;
-            var probs = new float[logits.Length];
             for (int i = 0; i < logits.Length; i++)
             {
                 if (logits[i] != float.NegativeInfinity)
                 {
-                    probs[i] = MathF.Exp(logits[i] - max);
-                    sum += probs[i];
+                    _probabilityBuffer[i] = MathF.Exp(logits[i] - max);
+                    sum += _probabilityBuffer[i];
+                }
+                else
+                {
+                    _probabilityBuffer[i] = 0;
                 }
             }
 
             // Normalize
             if (sum > 0)
             {
-                for (int i = 0; i < probs.Length; i++)
+                for (int i = 0; i < _probabilityBuffer.Length; i++)
                 {
-                    probs[i] /= sum;
+                    _probabilityBuffer[i] /= sum;
                 }
             }
 
-            return probs;
+            return _probabilityBuffer;
         }
 
         /// <summary>

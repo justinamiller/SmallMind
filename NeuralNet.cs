@@ -367,7 +367,8 @@ namespace TinyLLM
         {
             if (!_training || _p == 0)
             {
-                return input.Clone();
+                // Optimization: return input directly when not training (no need to clone)
+                return input;
             }
             
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
