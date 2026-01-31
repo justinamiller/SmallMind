@@ -28,7 +28,7 @@ namespace TinyLLM.Text
         /// <summary>
         /// Generate text from a prompt.
         /// </summary>
-        public string Generate(string prompt, int maxNewTokens, double temperature = 1.0, int topK = 0, int? seed = null, bool showPerf = false)
+        public string Generate(string prompt, int maxNewTokens, double temperature = 1.0, int topK = 0, int? seed = null, bool showPerf = false, bool perfJson = false, PerformanceMetrics? metrics = null)
         {
             _model.Eval();
 
@@ -50,16 +50,43 @@ namespace TinyLLM.Text
                 context = new List<int> { 0 }; // Start with first token in vocab
             }
 
-            Console.WriteLine($"\nGenerating {maxNewTokens} tokens...");
-            Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}");
-            Console.WriteLine($"Prompt: \"{prompt}\"");
-            if (showPerf)
+            int inputTokens = context.Count;
+
+            // Use provided metrics or create new one if perf tracking is enabled
+            bool ownMetrics = false;
+            if (metrics == null && (showPerf || perfJson))
             {
-                Console.WriteLine("Performance tracking enabled");
+                metrics = new PerformanceMetrics();
+                ownMetrics = true;
             }
-            Console.WriteLine("---");
+
+            if (!perfJson)
+            {
+                Console.WriteLine($"\nGenerating {maxNewTokens} tokens...");
+                Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}");
+                Console.WriteLine($"Prompt: \"{prompt}\"");
+                if (showPerf)
+                {
+                    Console.WriteLine("Performance tracking enabled");
+                }
+                Console.WriteLine("---");
+            }
 
             var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
+            
+            // Start metrics tracking
+            int requestId = -1;
+            if (metrics != null)
+            {
+                if (!metrics.IsEnabled)
+                {
+                    metrics.Start();
+                }
+                requestId = metrics.RecordRequestStart();
+                metrics.RecordInferenceStart(requestId);
+            }
+
+            bool firstTokenRecorded = false;
 
             for (int i = 0; i < maxNewTokens; i++)
             {
@@ -125,28 +152,50 @@ namespace TinyLLM.Text
 
                 // Add to context
                 context.Add(nextToken);
+                
+                // Record first token for TTFT metric
+                if (metrics != null && !firstTokenRecorded)
+                {
+                    metrics.RecordFirstToken(requestId);
+                    firstTokenRecorded = true;
+                }
 
                 // Optional: print progress
-                if (!showPerf && (i + 1) % 50 == 0)
+                if (!showPerf && !perfJson && (i + 1) % 50 == 0)
                 {
                     Console.Write(".");
                 }
             }
 
             totalStopwatch.Stop();
+            
+            // Record completion
+            if (metrics != null)
+            {
+                metrics.RecordRequestComplete(requestId, inputTokens, maxNewTokens, success: true);
+            }
 
-            if (!showPerf && maxNewTokens >= 50)
+            if (!showPerf && !perfJson && maxNewTokens >= 50)
             {
                 Console.WriteLine(); // New line after progress dots
             }
 
-            if (showPerf)
+            // Output performance metrics
+            if (ownMetrics && metrics != null)
             {
-                double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
-                double tokensPerSec = totalTimeSeconds > 0 ? maxNewTokens / totalTimeSeconds : 0;
-                Console.WriteLine($"\nGeneration completed in {totalTimeSeconds:F2}s");
-                Console.WriteLine($"Tokens generated: {maxNewTokens}");
-                Console.WriteLine($"Generation speed: {tokensPerSec:F2} tokens/sec");
+                metrics.Stop();
+                var summary = metrics.GetSummary(maxTokensRequested: maxNewTokens, concurrencyLevel: 1);
+                
+                if (perfJson)
+                {
+                    // JSON output only
+                    Console.WriteLine(MetricsFormatter.FormatJson(summary));
+                }
+                else if (showPerf)
+                {
+                    // Text output
+                    Console.WriteLine(MetricsFormatter.FormatText(summary));
+                }
             }
 
             // Decode and return

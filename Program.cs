@@ -130,6 +130,8 @@ namespace TinyLLM
                 bool shouldTrain = !HasArg(args, "--no-train");
                 bool shouldLoad = HasArg(args, "--load");
                 bool showPerf = HasArg(args, "--perf");
+                bool perfJson = HasArg(args, "--perf-json");
+                bool benchMode = HasArg(args, "--bench");
                 bool autoConfig = HasArg(args, "--auto-config");
                 bool enhancedTraining = HasArg(args, "--enhanced-training");
                 bool qaMode = HasArg(args, "--qa");
@@ -314,8 +316,13 @@ namespace TinyLLM
                     }
                 }
 
+                // Benchmark mode - run sweeps over concurrency and max_tokens
+                if (benchMode)
+                {
+                    RunBenchmarkMode(model, tokenizer, blockSize, prompt, temperature, topK);
+                }
                 // Interactive mode - conversation session
-                if (interactiveMode)
+                else if (interactiveMode)
                 {
                     RunInteractiveMode(model, tokenizer, blockSize, trainingText);
                 }
@@ -334,12 +341,16 @@ namespace TinyLLM
                         temperature: temperature,
                         topK: topK,
                         seed: SEED,
-                        showPerf: showPerf
+                        showPerf: showPerf,
+                        perfJson: perfJson
                     );
 
-                    Console.WriteLine("\n=== Generated Text ===");
-                    Console.WriteLine(generated);
-                    Console.WriteLine("\n=== End ===");
+                    if (!perfJson)
+                    {
+                        Console.WriteLine("\n=== Generated Text ===");
+                        Console.WriteLine(generated);
+                        Console.WriteLine("\n=== End ===");
+                    }
                 }
             }
             catch (Exception ex)
@@ -454,6 +465,67 @@ namespace TinyLLM
             
             Console.WriteLine($"\n\nAnswer: {answer}");
             Console.WriteLine("\n=== End ===");
+        }
+
+        /// <summary>
+        /// Run benchmark mode - sweep over concurrency and max_tokens configurations.
+        /// </summary>
+        private static void RunBenchmarkMode(TransformerModel model, Tokenizer tokenizer, int blockSize, string prompt, double temperature, int topK)
+        {
+            Console.WriteLine("\n=== Benchmark Mode ===");
+            Console.WriteLine("Running performance sweeps over different configurations...\n");
+
+            // Benchmark configurations (simplified for single-threaded CPU execution)
+            // Note: True concurrency would require async/parallel execution which isn't in scope for this educational LLM
+            var concurrencyLevels = new[] { 1 }; // Single request at a time
+            var maxTokensValues = new[] { 64, 128, 256 };
+            var results = new List<BenchmarkResult>();
+
+            foreach (var concurrency in concurrencyLevels)
+            {
+                foreach (var maxTokens in maxTokensValues)
+                {
+                    Console.WriteLine($"Running: concurrency={concurrency}, max_tokens={maxTokens}");
+
+                    var metrics = new PerformanceMetrics();
+                    metrics.Start();
+
+                    var sampler = new Sampling(model, tokenizer, blockSize);
+                    
+                    // Run a single request (or multiple in true concurrent scenario)
+                    for (int i = 0; i < concurrency; i++)
+                    {
+                        var generated = sampler.Generate(
+                            prompt: prompt,
+                            maxNewTokens: maxTokens,
+                            temperature: temperature,
+                            topK: topK,
+                            seed: SEED + i,
+                            showPerf: false,
+                            perfJson: false,
+                            metrics: metrics
+                        );
+                    }
+
+                    metrics.Stop();
+                    var summary = metrics.GetSummary(maxTokensRequested: maxTokens, concurrencyLevel: concurrency);
+                    results.Add(BenchmarkResult.FromSummary(summary));
+
+                    Console.WriteLine($"  Completed: {summary.TokensPerSecond:F2} tok/s\n");
+                }
+            }
+
+            // Sort by throughput (descending)
+            var sortedResults = results.OrderByDescending(r => r.TokensPerSecond).ToArray();
+
+            // Print best throughput
+            if (sortedResults.Length > 0)
+            {
+                Console.WriteLine(MetricsFormatter.FormatBestThroughput(sortedResults[0]));
+            }
+
+            // Print detailed results table
+            Console.WriteLine(MetricsFormatter.FormatBenchmarkTable(sortedResults));
         }
 
         /// <summary>
