@@ -43,10 +43,17 @@ namespace TinyLLM
                 bool shouldLoad = HasArg(args, "--load");
                 bool showPerf = HasArg(args, "--perf");
                 bool autoConfig = HasArg(args, "--auto-config");
+                bool enhancedTraining = HasArg(args, "--enhanced-training");
+                bool qaMode = HasArg(args, "--qa");
+                bool interactiveMode = HasArg(args, "--interactive");
                 string prompt = GetArgValue(args, "--prompt", "Once upon a time");
                 int generateSteps = int.Parse(GetArgValue(args, "--steps", "200"));
                 double temperature = double.Parse(GetArgValue(args, "--temperature", "1.0"));
                 int topK = int.Parse(GetArgValue(args, "--top-k", "0"));
+                
+                // Enhanced training parameters
+                int gradAccumSteps = int.Parse(GetArgValue(args, "--grad-accum", "1"));
+                int warmupSteps = int.Parse(GetArgValue(args, "--warmup", "100"));
                 
                 // Get max block size override if provided
                 string maxBlockSizeArg = GetArgValue(args, "--max-block-size", "");
@@ -156,30 +163,62 @@ namespace TinyLLM
                 // Train if requested
                 if (shouldTrain)
                 {
-                    trainer.Train(
-                        steps: TRAIN_STEPS,
-                        learningRate: LEARNING_RATE,
-                        logEvery: LOG_EVERY,
-                        saveEvery: SAVE_EVERY,
-                        checkpointDir: CHECKPOINT_DIR,
-                        showPerf: showPerf
-                    );
+                    if (enhancedTraining)
+                    {
+                        Console.WriteLine("\nUsing enhanced training with gradient accumulation and learning rate scheduling");
+                        trainer.TrainEnhanced(
+                            steps: TRAIN_STEPS,
+                            learningRate: LEARNING_RATE,
+                            logEvery: LOG_EVERY,
+                            saveEvery: SAVE_EVERY,
+                            checkpointDir: CHECKPOINT_DIR,
+                            showPerf: showPerf,
+                            gradAccumSteps: gradAccumSteps,
+                            warmupSteps: warmupSteps,
+                            valEvery: 500,
+                            valBatches: 10
+                        );
+                    }
+                    else
+                    {
+                        trainer.Train(
+                            steps: TRAIN_STEPS,
+                            learningRate: LEARNING_RATE,
+                            logEvery: LOG_EVERY,
+                            saveEvery: SAVE_EVERY,
+                            checkpointDir: CHECKPOINT_DIR,
+                            showPerf: showPerf
+                        );
+                    }
                 }
 
-                // Generation
-                var sampler = new Sampling(model, tokenizer, blockSize);
-                var generated = sampler.Generate(
-                    prompt: prompt,
-                    maxNewTokens: generateSteps,
-                    temperature: temperature,
-                    topK: topK,
-                    seed: SEED,
-                    showPerf: showPerf
-                );
+                // Interactive mode - conversation session
+                if (interactiveMode)
+                {
+                    RunInteractiveMode(model, tokenizer, blockSize, trainingText);
+                }
+                // Q&A mode
+                else if (qaMode)
+                {
+                    RunQAMode(model, tokenizer, blockSize, trainingText, prompt, generateSteps, temperature, topK);
+                }
+                // Standard generation mode
+                else
+                {
+                    var sampler = new Sampling(model, tokenizer, blockSize);
+                    var generated = sampler.Generate(
+                        prompt: prompt,
+                        maxNewTokens: generateSteps,
+                        temperature: temperature,
+                        topK: topK,
+                        seed: SEED,
+                        showPerf: showPerf
+                    );
 
-                Console.WriteLine("\n=== Generated Text ===");
-                Console.WriteLine(generated);
-                Console.WriteLine("\n=== End ===");
+                    Console.WriteLine("\n=== Generated Text ===");
+                    Console.WriteLine(generated);
+                    Console.WriteLine("\n=== End ===");
+                }
             }
             catch (Exception ex)
             {
@@ -187,6 +226,112 @@ namespace TinyLLM
                 Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 Environment.Exit(1);
             }
+        }
+
+        /// <summary>
+        /// Run interactive conversation mode with session context
+        /// </summary>
+        private static void RunInteractiveMode(TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText)
+        {
+            Console.WriteLine("\n=== Interactive Conversation Mode ===");
+            Console.WriteLine("Type your questions or messages. Type 'exit' to quit, 'clear' to clear history, 'save' to save session.");
+            Console.WriteLine("The model will maintain conversation context across turns.\n");
+
+            var session = new ConversationSession("interactive-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"), tokenizer, blockSize);
+            var qaEngine = new QuestionAnsweringEngine(model, tokenizer, blockSize, trainingText);
+
+            while (true)
+            {
+                Console.Write("You: ");
+                string? input = Console.ReadLine();
+                
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    continue;
+                }
+
+                if (input.Trim().ToLower() == "exit")
+                {
+                    Console.WriteLine("Goodbye!");
+                    break;
+                }
+
+                if (input.Trim().ToLower() == "clear")
+                {
+                    session.Clear();
+                    Console.WriteLine("Conversation history cleared.");
+                    continue;
+                }
+
+                if (input.Trim().ToLower() == "save")
+                {
+                    string sessionPath = $"sessions/session_{session.SessionId}.json";
+                    Directory.CreateDirectory("sessions");
+                    session.SaveToFile(sessionPath);
+                    Console.WriteLine($"Session saved to {sessionPath}");
+                    continue;
+                }
+
+                if (input.Trim().ToLower() == "history")
+                {
+                    Console.WriteLine("\nConversation History:");
+                    var history = session.GetHistory();
+                    foreach (var turn in history)
+                    {
+                        string prefix = turn.Role == "user" ? "You" : "Assistant";
+                        Console.WriteLine($"{prefix}: {turn.Content}");
+                    }
+                    Console.WriteLine();
+                    continue;
+                }
+
+                // Add user input to session
+                session.AddUserInput(input);
+
+                // Get conversation context
+                string context = session.GetContextString();
+
+                // Generate response using Q&A engine with context
+                Console.Write("Assistant: ");
+                string response = qaEngine.AnswerQuestionWithContext(
+                    question: input,
+                    conversationContext: context,
+                    maxTokens: 150,
+                    temperature: 0.7,
+                    topK: 40
+                );
+                Console.WriteLine(response);
+
+                // Add assistant response to session
+                session.AddAssistantResponse(response);
+                Console.WriteLine();
+            }
+        }
+
+        /// <summary>
+        /// Run Q&A mode for answering single questions
+        /// </summary>
+        private static void RunQAMode(TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText, 
+                                      string question, int maxTokens, double temperature, int topK)
+        {
+            Console.WriteLine("\n=== Question-Answering Mode ===");
+            
+            var qaEngine = new QuestionAnsweringEngine(model, tokenizer, blockSize, trainingText);
+            
+            Console.WriteLine($"\nQuestion: {question}");
+            Console.Write("Thinking...");
+            
+            string answer = qaEngine.AnswerQuestion(
+                question: question,
+                maxTokens: maxTokens,
+                temperature: temperature,
+                topK: topK,
+                seed: SEED,
+                useContext: true
+            );
+            
+            Console.WriteLine($"\n\nAnswer: {answer}");
+            Console.WriteLine("\n=== End ===");
         }
 
         /// <summary>

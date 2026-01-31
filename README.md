@@ -14,7 +14,14 @@ SmallMind is a deliberately tiny, educational language model built entirely in C
   - Final linear head to vocabulary
 - **Character-level tokenizer** for simplicity
 - **Training from scratch** on CPU with next-token prediction
+- **Enhanced training mode** with:
+  - Gradient accumulation for larger effective batch sizes
+  - Learning rate warmup and cosine annealing
+  - Validation loss tracking with best model saving
 - **Text generation** with temperature sampling and top-k filtering
+- **Question-answering capability** - Answer questions based on training data
+- **Interactive conversation mode** - Multi-turn conversations with session context
+- **Session context management** - Maintain conversation history across turns
 - **Checkpointing** to save and load model weights (JSON format)
 - **Multiple data loading formats** - Load training data from JSON, XML, CSV, text files, or directories
 - **Fully self-contained** - only uses System.* namespaces
@@ -137,6 +144,11 @@ dotnet run
 | `--max-block-size N` | 32768 | Override maximum block size limit for extremely large contexts |
 | `--batch-size N` | 16 | Batch size for training (higher = better throughput, more memory) |
 | `--auto-config` | (disabled) | Auto-configure block size and batch size based on system RAM and CPU |
+| `--enhanced-training` | (disabled) | Use enhanced training with gradient accumulation and LR scheduling |
+| `--grad-accum N` | 1 | Gradient accumulation steps (effective batch = batch-size × grad-accum) |
+| `--warmup N` | 100 | Learning rate warmup steps |
+| `--qa` | (disabled) | Question-answering mode - answer a question based on training data |
+| `--interactive` | (disabled) | Interactive conversation mode with session context |
 
 ## Examples
 
@@ -170,6 +182,68 @@ dotnet run -- --block-size 65536 --max-block-size 65536 --batch-size 2 --perf
 
 # Use custom batch size for better throughput (requires more memory)
 dotnet run -- --batch-size 32 --block-size 512
+
+# Enhanced training with gradient accumulation and learning rate scheduling
+dotnet run -- --enhanced-training --grad-accum 4 --warmup 200 --perf
+
+# Question-answering mode - ask a question based on training data
+dotnet run -- --no-train --qa --prompt "What is knowledge?"
+
+# Interactive conversation mode with session context
+dotnet run -- --no-train --interactive
+```
+
+## New Features
+
+### Enhanced Training
+
+SmallMind now supports enhanced training with:
+- **Gradient Accumulation**: Simulate larger batch sizes without additional memory
+- **Learning Rate Scheduling**: Cosine annealing with warmup for better convergence
+- **Validation Loss Tracking**: Monitor overfitting and save best model
+- **Best Model Saving**: Automatically save the model with lowest validation loss
+
+Use `--enhanced-training` to enable these features:
+```bash
+dotnet run -- --enhanced-training --grad-accum 4 --warmup 200 --perf
+```
+
+### Question-Answering Mode
+
+Ask questions based on the model's training data using the `--qa` flag:
+```bash
+dotnet run -- --no-train --qa --prompt "What is the quick brown fox?"
+```
+
+The Q&A engine:
+- Extracts relevant context from training corpus using keyword matching
+- Formats the question with context in a Q&A template
+- Generates focused answers using lower temperature sampling
+- Cleans up the response to extract just the answer
+
+### Interactive Conversation Mode
+
+Have multi-turn conversations with session context using `--interactive`:
+```bash
+dotnet run -- --no-train --interactive
+```
+
+Features:
+- **Persistent Context**: Maintains conversation history across turns
+- **Intelligent Truncation**: Automatically manages context window limits
+- **Session Commands**:
+  - `exit` - Exit the conversation
+  - `clear` - Clear conversation history
+  - `save` - Save session to JSON file
+  - `history` - Show full conversation history
+- **Session Persistence**: Save and load conversations for later
+
+Example interaction:
+```
+You: What is the quick brown fox?
+Assistant: The quick brown fox jumps over the lazy dog.
+You: What else do you know?
+Assistant: [Continues conversation with full context...]
 ```
 
 ## Model Architecture
@@ -236,9 +310,11 @@ SmallMind/
 ├── Tensor.cs              # Custom tensor with automatic differentiation
 ├── NeuralNet.cs           # Neural network layers (Linear, Embedding, LayerNorm, etc.)
 ├── Transformer.cs         # Transformer model (attention, MLP, blocks)
-├── Training.cs            # Dataset batching and training loop
+├── Training.cs            # Dataset batching and training loop (with enhanced training)
 ├── Sampling.cs            # Text generation with temperature and top-k
-├── Optimizer.cs           # AdamW optimizer
+├── Optimizer.cs           # AdamW optimizer with learning rate scheduling
+├── QuestionAnsweringEngine.cs  # Q&A engine for answering questions
+├── ConversationSession.cs # Session context management for conversations
 ├── data.txt               # Training corpus (auto-generated if missing)
 ├── sample_data/           # Sample data files in multiple formats
 │   ├── sample.txt         # Plain text format
@@ -252,7 +328,9 @@ SmallMind/
 │   ├── TinyLLM.Tests.csproj  # Test project file
 │   └── DataLoaderTests.cs    # DataLoader unit tests
 ├── checkpoints/           # Model checkpoints (created during training)
-│   └── model.json         # Saved model weights
+│   ├── model.json         # Saved model weights
+│   └── model_best.json    # Best model (lowest validation loss)
+├── sessions/              # Conversation sessions (created when using --interactive)
 └── README.md              # This file
 ```
 
@@ -287,12 +365,28 @@ This project implements everything from scratch using only C# standard library:
   - Second moment estimation
   - Bias correction
   - Weight decay
+  - Learning rate scheduling support
 
 - **Training.cs**: Training infrastructure:
   - Mini-batch generation
   - Cross-entropy loss computation
   - Gradient computation
+  - Enhanced training with gradient accumulation
+  - Learning rate warmup and cosine annealing
+  - Validation loss tracking
   - Checkpoint save/load (JSON format)
+
+- **QuestionAnsweringEngine.cs**: Q&A capabilities:
+  - Question answering based on training data
+  - Keyword-based context retrieval
+  - Q&A prompt templates
+  - Answer extraction and cleaning
+
+- **ConversationSession.cs**: Session management:
+  - Conversation history tracking
+  - Context window management
+  - Intelligent truncation
+  - Session persistence (save/load)
 
 ### Performance Notes
 
