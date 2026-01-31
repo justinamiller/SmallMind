@@ -388,11 +388,6 @@ This project implements everything from scratch using only C# standard library:
   - Intelligent truncation
   - Session persistence (save/load)
 
-  - Mini-batch generation
-  - Cross-entropy loss computation
-  - Gradient computation
-  - Checkpoint save/load (JSON format)
-
 ### Performance Notes
 
 Since this is pure C# without optimized linear algebra libraries, performance is **very limited**:
