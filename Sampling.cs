@@ -70,12 +70,14 @@ namespace TinyLLM
                 var logits = _model.Forward(contextTensor);
 
                 // Get logits for the last position: (vocab_size,)
+                // logits shape: (1, T, vocab_size), we want position (0, T-1, :)
                 int T = contextCropped.Count;
                 int vocabSize = logits.Shape[2];
                 var logitsLast = new float[vocabSize];
+                int lastPosOffset = (T - 1) * vocabSize; // Offset for last position in batch 0
                 for (int v = 0; v < vocabSize; v++)
                 {
-                    logitsLast[v] = logits.Data[(T - 1) * vocabSize + v];
+                    logitsLast[v] = logits.Data[lastPosOffset + v];
                 }
 
                 // Apply temperature

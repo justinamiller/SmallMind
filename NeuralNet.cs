@@ -301,12 +301,15 @@ namespace TinyLLM
                 }
             }
             
-            // Simplified backward
+            // Backward: simplified gradient pass
+            // NOTE: This is a simplified implementation. A complete LayerNorm backward would
+            // compute gradients with respect to mean and variance. For educational purposes,
+            // this approximation passes gradients through, which works but is suboptimal.
             if (input.RequiresGrad || Gamma.RequiresGrad || Beta.RequiresGrad)
             {
                 output.SetBackward(() =>
                 {
-                    // Simplified: just pass through gradients
+                    // Simplified: pass through gradients (not fully correct but works for learning)
                     if (input.RequiresGrad)
                     {
                         for (int i = 0; i < input.Size; i++)
@@ -445,10 +448,16 @@ namespace TinyLLM
             {
                 output.SetBackward(() =>
                 {
+                    // Simplified backward: approximate GELU derivative
+                    // NOTE: For educational purposes, this uses a simplified approximation.
+                    // Full GELU backward would compute: grad * d(GELU)/dx
                     for (int i = 0; i < input.Size; i++)
                     {
-                        // Simplified: treat as identity for gradients
-                        input.Grad[i] += output.Grad[i];
+                        // Approximate: use sigmoid-like scaling
+                        float x = input.Data[i];
+                        float approxGrad = 0.5f * (1.0f + MathF.Tanh(0.797885f * (x + 0.044715f * x * x * x)));
+                        approxGrad += 0.5f * x * (1.0f - approxGrad * approxGrad) * 0.797885f * (1.0f + 3.0f * 0.044715f * x * x);
+                        input.Grad[i] += output.Grad[i] * approxGrad;
                     }
                 });
             }

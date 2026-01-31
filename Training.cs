@@ -97,9 +97,6 @@ namespace TinyLLM
                 optimizer.ZeroGrad();
                 loss.Backward();
 
-                // Backpropagate through the model
-                logits.Backward(loss.Grad);
-
                 // Update parameters
                 optimizer.Step();
 
