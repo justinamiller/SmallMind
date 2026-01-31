@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using TinyLLM.Embeddings;
 
-namespace TinyLLM
+namespace TinyLLM.Indexing
 {
     /// <summary>
     /// Represents a stored vector with its metadata.

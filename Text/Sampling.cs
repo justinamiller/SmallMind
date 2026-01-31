@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TinyLLM.Core;
 
-namespace TinyLLM
+namespace TinyLLM.Text
 {
     /// <summary>
     /// Implements text generation with greedy decoding, temperature sampling, and top-k filtering.

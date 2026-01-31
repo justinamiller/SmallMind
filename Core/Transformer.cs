@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace TinyLLM
+namespace TinyLLM.Core
 {
     /// <summary>
     /// Decoder-only Transformer model (GPT-style) implemented in pure C#.

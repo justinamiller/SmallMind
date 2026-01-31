@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using TinyLLM.Core;
+using TinyLLM.Text;
+using TinyLLM.Embeddings;
+using TinyLLM.Indexing;
 
-namespace TinyLLM
+namespace TinyLLM.RAG
 {
     /// <summary>
     /// Question-answering engine that uses the trained LLM to answer questions

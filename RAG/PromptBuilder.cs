@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace TinyLLM
+namespace TinyLLM.RAG
 {
     /// <summary>
     /// Builds prompts for RAG (Retrieval-Augmented Generation).

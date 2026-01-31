@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace TinyLLM
+namespace TinyLLM.Embeddings
 {
     /// <summary>
     /// Abstraction for embedding providers.

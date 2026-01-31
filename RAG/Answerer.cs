@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using TinyLLM.Core;
+using TinyLLM.Text;
 
-namespace TinyLLM
+namespace TinyLLM.RAG
 {
     /// <summary>
     /// Answer with citations from source chunks.

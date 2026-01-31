@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace TinyLLM
+namespace TinyLLM.Core
 {
     /// <summary>
     /// A simple tensor class with automatic differentiation support.

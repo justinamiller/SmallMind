@@ -5,8 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using TinyLLM.Core;
 
-namespace TinyLLM
+namespace TinyLLM.Text
 {
     /// <summary>
     /// Provides static methods for loading training data from various sources.

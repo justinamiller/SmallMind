@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace TinyLLM
+namespace TinyLLM.Text
 {
     /// <summary>
     /// Character-level tokenizer. Builds a vocabulary from the training text

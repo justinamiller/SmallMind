@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
-using TinyLLM;
+using TinyLLM.Embeddings;
+using TinyLLM.Indexing;
 
 namespace TinyLLM.Tests
 {

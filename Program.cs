@@ -1,6 +1,11 @@
 using System;
 using System.IO;
 using System.Diagnostics;
+using TinyLLM.Core;
+using TinyLLM.Text;
+using TinyLLM.RAG;
+using TinyLLM.Embeddings;
+using TinyLLM.Indexing;
 
 namespace TinyLLM
 {

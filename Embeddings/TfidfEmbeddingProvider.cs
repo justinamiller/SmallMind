@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace TinyLLM
+namespace TinyLLM.Embeddings
 {
     /// <summary>
     /// TF-IDF based embedding provider.

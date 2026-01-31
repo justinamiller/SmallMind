@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using TinyLLM.Embeddings;
+using TinyLLM.Indexing;
 
-namespace TinyLLM
+namespace TinyLLM.RAG
 {
     /// <summary>
     /// Chunk of text with relevance score for retrieval.
