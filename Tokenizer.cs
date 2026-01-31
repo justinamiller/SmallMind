@@ -19,7 +19,16 @@ namespace TinyLLM
         public Tokenizer(string text)
         {
             // Build vocabulary from unique characters in the text
-            var chars = text.Distinct().OrderBy(c => c).ToArray();
+            var charSet = new HashSet<char>();
+            for (int i = 0; i < text.Length; i++)
+            {
+                charSet.Add(text[i]);
+            }
+            
+            // Convert to sorted array
+            var chars = new char[charSet.Count];
+            charSet.CopyTo(chars);
+            Array.Sort(chars);
             
             _charToIdx = new Dictionary<char, int>();
             _idxToChar = new Dictionary<int, char>();

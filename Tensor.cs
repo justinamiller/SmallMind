@@ -39,7 +39,15 @@ namespace TinyLLM
             }
         }
 
-        public static int ShapeToSize(int[] shape) => shape.Aggregate(1, (a, b) => a * b);
+        public static int ShapeToSize(int[] shape)
+        {
+            int size = 1;
+            for (int i = 0; i < shape.Length; i++)
+            {
+                size *= shape[i];
+            }
+            return size;
+        }
 
         public int Size => Data.Length;
 
