@@ -270,6 +270,13 @@ public sealed class TensorPool
     private readonly ConcurrentBag<float[]>[] _pools;
     private static readonly int[] _sizes = { 64, 128, 256, 512, 1024, 2048, 4096 };
     
+    public TensorPool()
+    {
+        _pools = new ConcurrentBag<float[]>[_sizes.Length];
+        for (int i = 0; i < _pools.Length; i++)
+            _pools[i] = new ConcurrentBag<float[]>();
+    }
+    
     public float[] Rent(int minSize)
     {
         int bucketIndex = GetBucketIndex(minSize);
@@ -288,6 +295,17 @@ public sealed class TensorPool
             Array.Clear(array); // Optional: clear for security
             _pools[bucketIndex].Add(array);
         }
+    }
+    
+    private int GetBucketIndex(int size)
+    {
+        // Find the smallest bucket that fits the requested size
+        for (int i = 0; i < _sizes.Length; i++)
+        {
+            if (size <= _sizes[i])
+                return i;
+        }
+        return -1; // Size too large for pooling
     }
 }
 ```
@@ -531,10 +549,14 @@ public sealed class KVCache
     private readonly float[][] _valueCache;
     private int _currentLength;
     private readonly int _maxLength;
+    private readonly int _numHeads;
+    private readonly int _headDim;
     
     public KVCache(int numLayers, int maxSeqLen, int numHeads, int headDim)
     {
         _maxLength = maxSeqLen;
+        _numHeads = numHeads;
+        _headDim = headDim;
         int cacheSize = maxSeqLen * numHeads * headDim;
         
         _keyCache = new float[numLayers][];
@@ -549,16 +571,23 @@ public sealed class KVCache
     
     public void AppendKV(int layer, ReadOnlySpan<float> key, ReadOnlySpan<float> value)
     {
-        int offset = _currentLength * key.Length;
+        int stride = _numHeads * _headDim;
+        int offset = _currentLength * stride;
         key.CopyTo(_keyCache[layer].AsSpan(offset));
         value.CopyTo(_valueCache[layer].AsSpan(offset));
     }
     
-    public ReadOnlySpan<float> GetKeys(int layer) => 
-        _keyCache[layer].AsSpan(0, (_currentLength + 1) * /* stride */);
+    public ReadOnlySpan<float> GetKeys(int layer)
+    {
+        int stride = _numHeads * _headDim;
+        return _keyCache[layer].AsSpan(0, (_currentLength + 1) * stride);
+    }
     
-    public ReadOnlySpan<float> GetValues(int layer) => 
-        _valueCache[layer].AsSpan(0, (_currentLength + 1) * /* stride */);
+    public ReadOnlySpan<float> GetValues(int layer)
+    {
+        int stride = _numHeads * _headDim;
+        return _valueCache[layer].AsSpan(0, (_currentLength + 1) * stride);
+    }
 }
 ```
 
