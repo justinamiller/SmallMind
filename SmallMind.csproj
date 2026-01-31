@@ -10,6 +10,11 @@
 
   <ItemGroup>
     <Compile Remove="SmallMind.Tests/**" />
+    <Compile Remove="examples/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="examples/**" />
   </ItemGroup>
 
 </Project>

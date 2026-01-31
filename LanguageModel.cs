@@ -70,6 +70,30 @@ public class LanguageModel
         }
     }
 
+    /// <summary>
+    /// Trains the language model on an array of plain text sentences.
+    /// </summary>
+    /// <param name="sentences">
+    /// Array of plain text strings to train on. Each string should be a sentence or text snippet.
+    /// The model learns to predict the next word given previous words in each sentence.
+    /// 
+    /// Example:
+    /// <code>
+    /// string[] trainingData = {
+    ///     "The cat sat on the mat",
+    ///     "The dog sat on the log",
+    ///     "Birds can fly high"
+    /// };
+    /// float loss = model.Train(trainingData);
+    /// </code>
+    /// 
+    /// Data can be loaded from any source (JSON, XML, text files, databases) and converted to string[].
+    /// See DATA_FORMATS.md for examples of loading data from different formats.
+    /// </param>
+    /// <returns>
+    /// The average cross-entropy loss across all training examples. Lower values indicate better fit.
+    /// Returns 0 if no valid training pairs are found.
+    /// </returns>
     public float Train(string[] sentences)
     {
         float totalLoss = 0;
@@ -330,6 +354,25 @@ public class LanguageModel
         }
     }
 
+    /// <summary>
+    /// Generates text predictions by continuing from the given input prompt.
+    /// </summary>
+    /// <param name="input">
+    /// A plain text string to use as the starting prompt. The model will predict what comes next.
+    /// 
+    /// Example:
+    /// <code>
+    /// string prediction = model.Predict("The cat", maxTokens: 3);
+    /// // Result might be: "The cat sat on the"
+    /// </code>
+    /// </param>
+    /// <param name="maxTokens">
+    /// Maximum number of tokens (words) to generate. Default is 5.
+    /// </param>
+    /// <returns>
+    /// A string containing the input followed by the predicted continuation.
+    /// Returns empty string if input is empty or invalid.
+    /// </returns>
     public string Predict(string input, int maxTokens = 5)
     {
         var tokens = _tokenizer.Tokenize(input);

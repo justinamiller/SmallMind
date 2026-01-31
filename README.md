@@ -60,6 +60,37 @@ dotnet run --configuration Release
 - **Loss Function**: Cross-entropy loss
 - **Optimizer**: Stochastic Gradient Descent (SGD)
 
+## Input Data Format
+
+The model accepts **plain text string arrays** (`string[]`) as input:
+
+```csharp
+string[] trainingData = {
+    "The cat sat on the mat",
+    "The dog sat on the log",
+    "Birds can fly high"
+};
+
+model.Train(trainingData);
+```
+
+You can load data from any source (JSON, XML, CSV, databases, web APIs) by converting it to a string array.
+
+**📖 See [DATA_FORMATS.md](DATA_FORMATS.md) for comprehensive examples** of loading data from:
+- Plain text files
+- JSON files
+- XML files
+- CSV files
+- Databases
+- Web APIs
+
+**Why plain text strings?**
+- ✅ Simple and flexible
+- ✅ Easy to load from any data source
+- ✅ No forced dependency on specific file formats
+- ✅ Works with streaming, batching, and real-time data
+- ✅ Minimal memory overhead
+
 ## Key Features
 
 ✅ **Zero External Dependencies**: Uses only C# core libraries  

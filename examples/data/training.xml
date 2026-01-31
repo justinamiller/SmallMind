@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<training>
+  <sentence>The cat sat on the mat</sentence>
+  <sentence>The dog sat on the log</sentence>
+  <sentence>The bird flew in the sky</sentence>
+  <sentence>The fish swam in the sea</sentence>
+  <sentence>Cats and dogs are pets</sentence>
+  <sentence>Birds can fly high</sentence>
+  <sentence>Fish live in water</sentence>
+  <sentence>The sun is bright</sentence>
+  <sentence>The moon is white</sentence>
+  <sentence>Stars shine at night</sentence>
+  <sentence>Trees grow tall in the forest</sentence>
+  <sentence>Flowers bloom in spring</sentence>
+  <sentence>Rain falls from the clouds</sentence>
+  <sentence>Snow covers the ground in winter</sentence>
+  <sentence>Children play in the park</sentence>
+  <sentence>People walk on the street</sentence>
+  <sentence>Cars drive on the road</sentence>
+  <sentence>Boats sail on the ocean</sentence>
+  <sentence>Planes fly in the air</sentence>
+  <sentence>Trains run on tracks</sentence>
+</training>
