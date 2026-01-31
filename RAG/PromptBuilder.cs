@@ -8,7 +8,7 @@ namespace TinyLLM.RAG
     /// Builds prompts for RAG (Retrieval-Augmented Generation).
     /// Formats the system message and context in a structured way.
     /// </summary>
-    public class PromptBuilder
+    public class PromptBuilder : IPromptBuilder
     {
         private readonly string _systemMessage;
 

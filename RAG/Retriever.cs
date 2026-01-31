@@ -19,7 +19,7 @@ namespace TinyLLM.RAG
     /// <summary>
     /// Retriever for finding relevant chunks from the vector index.
     /// </summary>
-    public class Retriever
+    public class Retriever : IRetriever
     {
         private readonly VectorIndex _vectorIndex;
         private readonly int _defaultK;

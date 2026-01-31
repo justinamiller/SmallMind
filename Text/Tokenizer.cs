@@ -9,7 +9,7 @@ namespace TinyLLM.Text
     /// Character-level tokenizer. Builds a vocabulary from the training text
     /// and provides encode/decode methods to convert between strings and token IDs.
     /// </summary>
-    public class Tokenizer
+    public class Tokenizer : ITokenizer
     {
         private readonly Dictionary<char, int> _charToIdx;
         private readonly Dictionary<int, char> _idxToChar;
