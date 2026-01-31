@@ -758,7 +758,7 @@ When writing or reviewing code for SmallMind:
 
 ## 📚 Additional Resources
 
-- [.NET Performance Best Practices](https://docs.microsoft.com/en-us/dotnet/standard/performance/)
+- [.NET Performance Best Practices](https://learn.microsoft.com/en-us/dotnet/standard/performance/)
 - [High-Performance .NET Code](https://adamsitnik.com/Hardware-Counters-Diagnoser/)
 - [SIMD in .NET](https://devblogs.microsoft.com/dotnet/hardware-intrinsics-in-net-core/)
-- [ArrayPool Documentation](https://docs.microsoft.com/en-us/dotnet/api/system.buffers.arraypool-1)
+- [ArrayPool Documentation](https://learn.microsoft.com/en-us/dotnet/api/system.buffers.arraypool-1)
