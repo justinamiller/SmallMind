@@ -218,11 +218,8 @@ namespace TinyLLM.Embeddings
                             }
                             else
                             {
-                                // Convert to lowercase in rented buffer
-                                for (int j = 0; j < wordLength; j++)
-                                {
-                                    rentedBuffer[j] = char.ToLowerInvariant(wordSpan[j]);
-                                }
+                                // Use vectorized ToLowerInvariant for better performance
+                                wordSpan.ToLowerInvariant(rentedBuffer.AsSpan(0, wordLength));
                                 
                                 // Create string from buffer and check stopwords
                                 string word = new string(rentedBuffer, 0, wordLength);
