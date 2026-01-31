@@ -133,6 +133,8 @@ dotnet run
 
 | Argument | Default | Description |
 |----------|---------|-------------|
+| `--model-preset NAME` | "default" | Choose a model architecture preset (default, tiny, mistral-medium, mistral-7b, deepseek) |
+| `--list-presets` | - | List all available model presets with their configurations |
 | `--no-train` | (train enabled) | Skip training, only generate |
 | `--load` | (auto-detect) | Force load checkpoint before generation |
 | `--prompt "text"` | "Once upon a time" | Starting text for generation |
@@ -140,9 +142,9 @@ dotnet run
 | `--temperature T` | 1.0 | Sampling temperature (0.1-2.0, lower=more conservative) |
 | `--top-k K` | 0 | Top-k filtering (0=disabled, 40 is typical) |
 | `--perf` | (disabled) | Show real-time performance metrics (tokens/sec, timing) |
-| `--block-size N` | 512 | Context window size (max: 32768) |
+| `--block-size N` | (preset default) | Context window size (max: 32768, overrides preset) |
 | `--max-block-size N` | 32768 | Override maximum block size limit for extremely large contexts |
-| `--batch-size N` | 16 | Batch size for training (higher = better throughput, more memory) |
+| `--batch-size N` | (preset default) | Batch size for training (overrides preset, higher = better throughput, more memory) |
 | `--auto-config` | (disabled) | Auto-configure block size and batch size based on system RAM and CPU |
 | `--enhanced-training` | (disabled) | Use enhanced training with gradient accumulation and LR scheduling |
 | `--grad-accum N` | 1 | Gradient accumulation steps (effective batch = batch-size × grad-accum) |
@@ -153,6 +155,24 @@ dotnet run
 ## Examples
 
 ```bash
+# List all available model presets
+dotnet run -- --list-presets
+
+# Train with a specific model preset
+dotnet run -- --model-preset mistral-medium
+
+# Train with Mistral 7B inspired architecture
+dotnet run -- --model-preset mistral-7b --enhanced-training
+
+# Train with DeepSeek inspired architecture (larger model)
+dotnet run -- --model-preset deepseek --enhanced-training --perf
+
+# Use tiny preset for fast testing
+dotnet run -- --model-preset tiny
+
+# Generate with a specific preset without training
+dotnet run -- --model-preset mistral-medium --no-train --prompt "Knowledge is" --steps 150
+
 # Train and generate with default settings
 dotnet run
 
@@ -192,6 +212,52 @@ dotnet run -- --no-train --qa --prompt "What is knowledge?"
 # Interactive conversation mode with session context
 dotnet run -- --no-train --interactive
 ```
+
+## Model Presets
+
+SmallMind now supports multiple model architecture presets inspired by popular LLM approaches. Choose different presets to experiment with various model sizes and configurations:
+
+### Available Presets
+
+1. **default** - Original tiny model for educational purposes
+   - 128 embedding dimensions, 4 layers, 4 attention heads
+   - 512 token context window, batch size 16
+   - Fast training on CPU, good for learning
+
+2. **tiny** - Very small model for quick testing
+   - 64 embedding dimensions, 2 layers, 2 attention heads
+   - 256 token context window, batch size 32
+   - Fastest training, ideal for prototyping
+
+3. **mistral-medium** - Medium-sized balanced configuration
+   - 192 embedding dimensions, 6 layers, 6 attention heads
+   - 1024 token context window, batch size 12
+   - Inspired by Mistral architecture, balanced performance
+
+4. **mistral-7b** - Larger model with more capacity
+   - 256 embedding dimensions, 8 layers, 8 attention heads
+   - 2048 token context window, batch size 8
+   - Inspired by Mistral 7B architecture, better quality but slower
+
+5. **deepseek** - Large model optimized for reasoning
+   - 320 embedding dimensions, 10 layers, 8 attention heads
+   - 4096 token context window, batch size 4
+   - Inspired by DeepSeek architecture, best for complex tasks
+
+### Using Model Presets
+
+```bash
+# List all available presets with detailed information
+dotnet run -- --list-presets
+
+# Train with a specific preset
+dotnet run -- --model-preset mistral-medium
+
+# Override preset settings with custom values
+dotnet run -- --model-preset tiny --block-size 512 --batch-size 16
+```
+
+**Note:** Larger presets (mistral-7b, deepseek) require more memory and train significantly slower on CPU. Start with smaller presets (tiny, default) for testing, then scale up as needed.
 
 ## New Features
 
@@ -247,6 +313,8 @@ Assistant: [Continues conversation with full context...]
 ```
 
 ## Model Architecture
+
+**SmallMind supports multiple model architectures through presets.** Use `--model-preset` to choose between different configurations inspired by popular LLM approaches (default, tiny, mistral-medium, mistral-7b, deepseek). See the "Model Presets" section above for details.
 
 **Default hyperparameters** (small for CPU training):
 
