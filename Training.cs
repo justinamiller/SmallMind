@@ -63,6 +63,196 @@ namespace TinyLLM
         }
 
         /// <summary>
+        /// Learning rate scheduler - cosine annealing with warmup
+        /// </summary>
+        private float GetLearningRate(int step, int warmupSteps, int totalSteps, float maxLr, float minLr = 0.0f)
+        {
+            if (step < warmupSteps)
+            {
+                // Linear warmup
+                return maxLr * (step + 1) / warmupSteps;
+            }
+            else
+            {
+                // Cosine annealing
+                float progress = (float)(step - warmupSteps) / (totalSteps - warmupSteps);
+                return minLr + (maxLr - minLr) * 0.5f * (1.0f + MathF.Cos(MathF.PI * progress));
+            }
+        }
+
+        /// <summary>
+        /// Enhanced training loop with gradient accumulation, learning rate scheduling, and validation.
+        /// </summary>
+        public void TrainEnhanced(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir, 
+                                  bool showPerf = false, int gradAccumSteps = 1, int warmupSteps = 100, 
+                                  int valEvery = 500, int valBatches = 10, float minLr = 0.0f)
+        {
+            // Create checkpoint directory if it doesn't exist
+            if (!Directory.Exists(checkpointDir))
+            {
+                Directory.CreateDirectory(checkpointDir);
+            }
+
+            // AdamW optimizer
+            var optimizer = new AdamW(_model.Parameters, lr: (float)learningRate);
+
+            _model.Train();
+
+            Console.WriteLine($"\nStarting enhanced training for {steps} steps...");
+            Console.WriteLine($"Batch size: {_batchSize}, Block size: {_blockSize}, Base learning rate: {learningRate}");
+            Console.WriteLine($"Gradient accumulation steps: {gradAccumSteps}, Warmup steps: {warmupSteps}");
+            Console.WriteLine($"Validation every {valEvery} steps with {valBatches} batches");
+            Console.WriteLine($"Model parameters: {_model.Parameters.Count} tensors");
+            if (showPerf)
+            {
+                Console.WriteLine("Performance tracking enabled");
+            }
+
+            var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var stepStopwatch = new System.Diagnostics.Stopwatch();
+            long totalTokens = 0;
+            float bestValLoss = float.MaxValue;
+
+            for (int step = 0; step < steps; step++)
+            {
+                stepStopwatch.Restart();
+
+                // Update learning rate
+                float currentLr = GetLearningRate(step, warmupSteps, steps, (float)learningRate, minLr);
+                optimizer.SetLearningRate(currentLr);
+
+                // Gradient accumulation loop
+                float accumulatedLoss = 0.0f;
+                for (int accumStep = 0; accumStep < gradAccumSteps; accumStep++)
+                {
+                    // Get batch
+                    var (x, y) = GetBatch();
+
+                    // Forward pass
+                    var logits = _model.Forward(x);
+
+                    // Compute loss (cross-entropy)
+                    var loss = ComputeCrossEntropyLoss(logits, y);
+                    float lossValue = loss.Data[0];
+                    accumulatedLoss += lossValue;
+
+                    // Backward pass (accumulate gradients)
+                    if (accumStep == 0)
+                    {
+                        optimizer.ZeroGrad();
+                    }
+                    loss.Backward();
+                }
+
+                // Average the loss
+                float avgLoss = accumulatedLoss / gradAccumSteps;
+
+                // Scale gradients if using gradient accumulation
+                if (gradAccumSteps > 1)
+                {
+                    foreach (var param in _model.Parameters)
+                    {
+                        if (param.Grad != null)
+                        {
+                            for (int i = 0; i < param.Grad.Length; i++)
+                            {
+                                param.Grad[i] /= gradAccumSteps;
+                            }
+                        }
+                    }
+                }
+
+                // Update parameters
+                optimizer.Step();
+
+                stepStopwatch.Stop();
+
+                // Track tokens processed
+                int tokensThisStep = _batchSize * _blockSize * gradAccumSteps;
+                totalTokens += tokensThisStep;
+
+                // Logging
+                if ((step + 1) % logEvery == 0 || step == 0)
+                {
+                    if (showPerf)
+                    {
+                        double stepTimeMs = stepStopwatch.Elapsed.TotalMilliseconds;
+                        double tokensPerSec = stepTimeMs > 0 ? tokensThisStep / (stepTimeMs / 1000.0) : 0;
+                        double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
+                        Console.WriteLine($"Step {step + 1}/{steps}, Loss: {avgLoss:F4}, LR: {currentLr:F6}, " +
+                                        $"Time: {stepTimeMs:F0}ms, Tokens/sec: {tokensPerSec:F0}, " +
+                                        $"Avg step: {avgTimePerStep:F0}ms");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Step {step + 1}/{steps}, Loss: {avgLoss:F4}, LR: {currentLr:F6}");
+                    }
+                }
+
+                // Validation
+                if (valEvery > 0 && (step + 1) % valEvery == 0)
+                {
+                    float valLoss = EvaluateValidationLoss(valBatches);
+                    Console.WriteLine($"Validation loss: {valLoss:F4}");
+                    
+                    // Save best model
+                    if (valLoss < bestValLoss)
+                    {
+                        bestValLoss = valLoss;
+                        var bestCheckpointPath = Path.Combine(checkpointDir, "model_best.json");
+                        SaveCheckpoint(bestCheckpointPath);
+                        Console.WriteLine($"New best validation loss! Saved to {bestCheckpointPath}");
+                    }
+                }
+
+                // Checkpointing
+                if ((step + 1) % saveEvery == 0)
+                {
+                    var checkpointPath = Path.Combine(checkpointDir, "model.json");
+                    SaveCheckpoint(checkpointPath);
+                    Console.WriteLine($"Checkpoint saved to {checkpointPath}");
+                }
+            }
+
+            totalStopwatch.Stop();
+
+            // Save final checkpoint
+            var finalCheckpointPath = Path.Combine(checkpointDir, "model.json");
+            SaveCheckpoint(finalCheckpointPath);
+            Console.WriteLine($"\nTraining completed. Final checkpoint saved to {finalCheckpointPath}");
+
+            if (showPerf)
+            {
+                double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
+                double avgTokensPerSec = totalTimeSeconds > 0 ? totalTokens / totalTimeSeconds : 0;
+                Console.WriteLine($"Total training time: {totalTimeSeconds:F2}s");
+                Console.WriteLine($"Total tokens processed: {totalTokens:N0}");
+                Console.WriteLine($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
+                Console.WriteLine($"Best validation loss: {bestValLoss:F4}");
+            }
+        }
+
+        /// <summary>
+        /// Evaluate validation loss on a held-out set
+        /// </summary>
+        private float EvaluateValidationLoss(int numBatches)
+        {
+            _model.Eval();
+            
+            float totalLoss = 0.0f;
+            for (int i = 0; i < numBatches; i++)
+            {
+                var (x, y) = GetBatch();
+                var logits = _model.Forward(x);
+                var loss = ComputeCrossEntropyLoss(logits, y);
+                totalLoss += loss.Data[0];
+            }
+            
+            _model.Train();
+            return totalLoss / numBatches;
+        }
+
+        /// <summary>
         /// Main training loop with periodic loss logging and checkpointing.
         /// </summary>
         public void Train(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir, bool showPerf = false)

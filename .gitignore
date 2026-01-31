@@ -1,6 +1,7 @@
 bin/
 obj/
 checkpoints/
+sessions/
 *.user
 *.suo
 *.cache

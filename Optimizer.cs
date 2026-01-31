@@ -80,5 +80,21 @@ namespace TinyLLM
                 param.ZeroGrad();
             }
         }
+
+        /// <summary>
+        /// Set the learning rate (useful for learning rate scheduling)
+        /// </summary>
+        public void SetLearningRate(float lr)
+        {
+            _lr = lr;
+        }
+
+        /// <summary>
+        /// Get the current learning rate
+        /// </summary>
+        public float GetLearningRate()
+        {
+            return _lr;
+        }
     }
 }
