@@ -133,8 +133,8 @@ dotnet run
 | `--temperature T` | 1.0 | Sampling temperature (0.1-2.0, lower=more conservative) |
 | `--top-k K` | 0 | Top-k filtering (0=disabled, 40 is typical) |
 | `--perf` | (disabled) | Show real-time performance metrics (tokens/sec, timing) |
-| `--block-size N` | 512 | Context window size (max: 8192) |
-| `--max-block-size N` | 8192 | Override maximum block size limit for extremely large contexts |
+| `--block-size N` | 512 | Context window size (max: 32768) |
+| `--max-block-size N` | 32768 | Override maximum block size limit for extremely large contexts |
 | `--batch-size N` | 16 | Batch size for training (higher = better throughput, more memory) |
 | `--auto-config` | (disabled) | Auto-configure block size and batch size based on system RAM and CPU |
 
@@ -163,10 +163,10 @@ dotnet run -- --auto-config
 dotnet run -- --block-size 1024
 
 # Use maximum block size with performance tracking
-dotnet run -- --block-size 8192 --perf --no-train --prompt "Test" --steps 50
+dotnet run -- --block-size 32768 --perf --no-train --prompt "Test" --steps 50
 
-# Use extremely large block size with override (requires significant RAM)
-dotnet run -- --block-size 16384 --max-block-size 16384 --batch-size 4 --perf
+# Use extremely large block size with override (requires significant RAM, 128GB+)
+dotnet run -- --block-size 65536 --max-block-size 65536 --batch-size 2 --perf
 
 # Use custom batch size for better throughput (requires more memory)
 dotnet run -- --batch-size 32 --block-size 512
@@ -176,7 +176,7 @@ dotnet run -- --batch-size 32 --block-size 512
 
 **Default hyperparameters** (small for CPU training):
 
-- Context length (block size): 512 tokens (configurable, max: 8192, can be overridden further)
+- Context length (block size): 512 tokens (configurable, max: 32768, can be overridden further)
 - Embedding dimension: 128
 - Number of layers: 4
 - Number of attention heads: 4
@@ -190,14 +190,16 @@ dotnet run -- --batch-size 32 --block-size 512
 
 The context window (block size) can be configured in three ways:
 1. **Default**: 512 tokens - good balance for CPU training
-2. **Manual**: Use `--block-size N` to specify any size up to 8192
+2. **Manual**: Use `--block-size N` to specify any size up to 32768
 3. **Auto-configured**: Use `--auto-config` to automatically determine optimal size based on:
    - Available system RAM (primary factor)
    - CPU cores
    - Memory usage estimates for the model architecture
 
 Auto-configuration algorithm:
-- 32GB+ available RAM → 8192 tokens (maximum)
+- 128GB+ available RAM → 32768 tokens (maximum)
+- 64GB+ available RAM → 16384 tokens
+- 32GB+ available RAM → 8192 tokens
 - 16GB+ available RAM → 6144 tokens
 - 8GB+ available RAM → 4096 tokens
 - 4-8GB available RAM → 2048 tokens
@@ -207,8 +209,8 @@ Auto-configuration algorithm:
 
 **Maximum Block Size Override:**
 
-For users with very high RAM (64GB+), you can override the maximum block size limit:
-- Use `--max-block-size N` to set a higher limit (e.g., 16384, 32768)
+For users with very high RAM (128GB+), you can override the maximum block size limit:
+- Use `--max-block-size N` to set a higher limit (e.g., 32768, 65536)
 - Note: Extremely large block sizes require proportionally more memory
 - Memory usage grows with O(blockSize²) due to attention mechanism
 
