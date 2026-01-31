@@ -1,0 +1,7 @@
+bin/
+obj/
+checkpoints/
+*.user
+*.suo
+*.cache
+.vs/
