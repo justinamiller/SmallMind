@@ -16,7 +16,48 @@ SmallMind is a deliberately tiny, educational language model built entirely in C
 - **Training from scratch** on CPU with next-token prediction
 - **Text generation** with temperature sampling and top-k filtering
 - **Checkpointing** to save and load model weights (JSON format)
+- **Multiple data loading formats** - Load training data from JSON, XML, CSV, text files, or directories
 - **Fully self-contained** - only uses System.* namespaces
+
+## Data Loading
+
+SmallMind now supports loading training data from multiple sources using the `DataLoader` class:
+
+### Supported Formats
+
+1. **Text Files** - `FromTextFile()` - Plain text, one sentence per line
+2. **JSON Files** - `FromJsonFile()` - Expected format: `{ "sentences": [...] }`
+3. **XML Files** - `FromXmlFile()` - Extracts text from specified XML elements
+4. **CSV Files** - `FromCsvFile()` - Column-based extraction with header handling
+5. **Directories** - `FromDirectory()` - Batch load from multiple files
+6. **Custom Delimiters** - `FromTextWithDelimiters()` - Split text by custom delimiters
+
+### Quick Example
+
+```csharp
+using TinyLLM;
+
+// Load from JSON file
+var trainingText = DataLoader.FromJsonFile("data.json");
+
+// Load from multiple files in a directory
+var trainingText = DataLoader.FromDirectory("training_data/");
+
+// Load from XML with custom element
+var trainingText = DataLoader.FromXmlFile("data.xml", elementName: "sentence");
+```
+
+See the `examples/` directory for comprehensive usage examples and the `sample_data/` directory for sample files in all supported formats.
+
+### Sample Data
+
+The repository includes sample data files in the `sample_data/` directory:
+- `sample.txt` - Plain text format
+- `sample.json` - JSON format
+- `sample.xml` - XML format  
+- `sample.csv` - CSV format
+
+All files contain identical content to demonstrate format equivalence.
 
 ## Requirements
 
@@ -161,6 +202,7 @@ SmallMind/
 ├── TinyLLM.csproj         # .NET 8 project file (NO dependencies!)
 ├── Program.cs             # CLI entry point and argument parsing
 ├── Tokenizer.cs           # Character-level tokenization
+├── DataLoader.cs          # Load training data from JSON, XML, CSV, text files
 ├── Tensor.cs              # Custom tensor with automatic differentiation
 ├── NeuralNet.cs           # Neural network layers (Linear, Embedding, LayerNorm, etc.)
 ├── Transformer.cs         # Transformer model (attention, MLP, blocks)
@@ -168,6 +210,17 @@ SmallMind/
 ├── Sampling.cs            # Text generation with temperature and top-k
 ├── Optimizer.cs           # AdamW optimizer
 ├── data.txt               # Training corpus (auto-generated if missing)
+├── sample_data/           # Sample data files in multiple formats
+│   ├── sample.txt         # Plain text format
+│   ├── sample.json        # JSON format
+│   ├── sample.xml         # XML format
+│   └── sample.csv         # CSV format
+├── examples/              # Example code and documentation
+│   ├── DataLoaderExample.cs  # Comprehensive data loading examples
+│   └── README.md          # Examples documentation
+├── Tests/                 # Unit tests
+│   ├── TinyLLM.Tests.csproj  # Test project file
+│   └── DataLoaderTests.cs    # DataLoader unit tests
 ├── checkpoints/           # Model checkpoints (created during training)
 │   └── model.json         # Saved model weights
 └── README.md              # This file
