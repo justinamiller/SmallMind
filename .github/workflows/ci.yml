@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+    
+    - name: Run Unit Tests
+      run: dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=unit-tests.trx"
+    
+    - name: Run Integration Tests
+      run: dotnet test tests/SmallMind.IntegrationTests/SmallMind.IntegrationTests.csproj --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=integration-tests.trx"
+    
+    - name: Run Performance Tests
+      if: github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'performance')
+      env:
+        RUN_PERF_TESTS: 'true'
+      run: dotnet test tests/SmallMind.PerfTests/SmallMind.PerfTests.csproj --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=perf-tests.trx"
+    
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: |
+          **/*.trx
+        check_name: Test Results
+        comment_mode: off
