@@ -133,8 +133,10 @@ dotnet run
 | `--temperature T` | 1.0 | Sampling temperature (0.1-2.0, lower=more conservative) |
 | `--top-k K` | 0 | Top-k filtering (0=disabled, 40 is typical) |
 | `--perf` | (disabled) | Show real-time performance metrics (tokens/sec, timing) |
-| `--block-size N` | 512 | Context window size (max: 2048) |
-| `--auto-config` | (disabled) | Auto-configure block size based on system RAM and CPU |
+| `--block-size N` | 512 | Context window size (max: 8192) |
+| `--max-block-size N` | 8192 | Override maximum block size limit for extremely large contexts |
+| `--batch-size N` | 16 | Batch size for training (higher = better throughput, more memory) |
+| `--auto-config` | (disabled) | Auto-configure block size and batch size based on system RAM and CPU |
 
 ## Examples
 
@@ -161,19 +163,25 @@ dotnet run -- --auto-config
 dotnet run -- --block-size 1024
 
 # Use maximum block size with performance tracking
-dotnet run -- --block-size 2048 --perf --no-train --prompt "Test" --steps 50
+dotnet run -- --block-size 8192 --perf --no-train --prompt "Test" --steps 50
+
+# Use extremely large block size with override (requires significant RAM)
+dotnet run -- --block-size 16384 --max-block-size 16384 --batch-size 4 --perf
+
+# Use custom batch size for better throughput (requires more memory)
+dotnet run -- --batch-size 32 --block-size 512
 ```
 
 ## Model Architecture
 
 **Default hyperparameters** (small for CPU training):
 
-- Context length (block size): 512 tokens (configurable, max: 2048)
+- Context length (block size): 512 tokens (configurable, max: 8192, can be overridden further)
 - Embedding dimension: 128
 - Number of layers: 4
 - Number of attention heads: 4
 - Dropout: 0.1 (training only)
-- Batch size: 16
+- Batch size: 16 (configurable, auto-scales with block size)
 - Learning rate: 3e-4 (AdamW optimizer)
 - Training steps: 2000
 - Vocabulary: Character-level (built from data.txt)
@@ -182,18 +190,38 @@ dotnet run -- --block-size 2048 --perf --no-train --prompt "Test" --steps 50
 
 The context window (block size) can be configured in three ways:
 1. **Default**: 512 tokens - good balance for CPU training
-2. **Manual**: Use `--block-size N` to specify any size up to 2048
+2. **Manual**: Use `--block-size N` to specify any size up to 8192
 3. **Auto-configured**: Use `--auto-config` to automatically determine optimal size based on:
    - Available system RAM (primary factor)
    - CPU cores
    - Memory usage estimates for the model architecture
 
 Auto-configuration algorithm:
-- 8GB+ available RAM → 2048 tokens (maximum)
-- 4-8GB available RAM → 1536 tokens
+- 32GB+ available RAM → 8192 tokens (maximum)
+- 16GB+ available RAM → 6144 tokens
+- 8GB+ available RAM → 4096 tokens
+- 4-8GB available RAM → 2048 tokens
 - 2-4GB available RAM → 1024 tokens
 - 1-2GB available RAM → 512 tokens (default)
 - <1GB available RAM → 256 tokens
+
+**Maximum Block Size Override:**
+
+For users with very high RAM (64GB+), you can override the maximum block size limit:
+- Use `--max-block-size N` to set a higher limit (e.g., 16384, 32768)
+- Note: Extremely large block sizes require proportionally more memory
+- Memory usage grows with O(blockSize²) due to attention mechanism
+
+**Batch Size Configuration:**
+
+The batch size controls how many sequences are processed in parallel:
+1. **Default**: 16 - good balance for most systems
+2. **Manual**: Use `--batch-size N` to specify custom batch size
+3. **Auto-configured**: Use `--auto-config` to automatically scale batch size inversely with block size
+
+Auto-configuration scales batch size based on block size and available memory:
+- Larger block sizes → smaller batches (to fit in memory)
+- Smaller block sizes → larger batches (for better throughput)
 
 ## Project Structure
 
@@ -269,8 +297,14 @@ This project implements everything from scratch using only C# standard library:
 Since this is pure C# without optimized linear algebra libraries, performance is **very limited**:
 - Training is **extremely slow** (~1-2 hours or more for 2000 steps on modern CPU)
 - No GPU acceleration available
-- Matrix operations are not vectorized/optimized
+- Matrix operations are not vectorized/optimized (but use parallel processing where beneficial)
 - Batch size and model size severely impact speed
+
+**Performance Optimizations Added:**
+- Parallel processing for matrix multiplication in Tensor operations (for matrices with M >= 4)
+- Parallel processing for attention score computation (for batch * heads >= 4)
+- Parallel processing for softmax and attention application
+- Auto-scaling batch size based on block size and available memory
 
 **This is intentional for educational purposes!** The goal is to understand how everything works, not to train production models.
 
@@ -285,7 +319,7 @@ Since this is pure C# without optimized linear algebra libraries, performance is
 - 100 steps with small model: ~2-5 minutes
 - 500 steps with small model: ~10-25 minutes
 - 2000 steps with default model: ~1-3 hours
-- Times vary significantly based on CPU
+- Times vary significantly based on CPU and number of cores
 
 For production use, consider:
 - Using TorchSharp or ML.NET with GPU support
