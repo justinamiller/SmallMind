@@ -155,15 +155,15 @@ namespace SmallMind.Health
             data["memory.gen1_collections"] = GC.CollectionCount(1);
             data["memory.gen2_collections"] = GC.CollectionCount(2);
             
-            // Check if memory pressure is high
-            if (totalMemory > 2L * 1024 * 1024 * 1024) // > 2 GB
-            {
-                return HealthStatus.Degraded;
-            }
-            
+            // Check if memory pressure is high (check higher thresholds first)
             if (totalMemory > 4L * 1024 * 1024 * 1024) // > 4 GB
             {
                 return HealthStatus.Unhealthy;
+            }
+            
+            if (totalMemory > 2L * 1024 * 1024 * 1024) // > 2 GB
+            {
+                return HealthStatus.Degraded;
             }
             
             return HealthStatus.Healthy;
