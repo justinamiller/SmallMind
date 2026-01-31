@@ -25,8 +25,9 @@ namespace TinyLLM.Embeddings
         public TfidfEmbeddingProvider(int maxFeatures = 512)
         {
             _maxFeatures = maxFeatures;
-            _vocabulary = new Dictionary<string, int>();
-            _idfScores = new Dictionary<string, double>();
+            // Pre-size dictionaries to avoid rehashing
+            _vocabulary = new Dictionary<string, int>(maxFeatures);
+            _idfScores = new Dictionary<string, double>(maxFeatures);
             _stopWords = CreateStopWords();
         }
 
@@ -42,7 +43,8 @@ namespace TinyLLM.Embeddings
             }
 
             // Step 1: Build term frequency across all documents
-            var documentFrequency = new Dictionary<string, int>();
+            // Pre-size dictionary to avoid rehashing during build
+            var documentFrequency = new Dictionary<string, int>(capacity: 1024);
             var allTerms = new HashSet<string>();
 
             for (int i = 0; i < documents.Count; i++)
@@ -115,7 +117,8 @@ namespace TinyLLM.Embeddings
             
             // Tokenize and count term frequencies
             var terms = Tokenize(text);
-            var termCounts = new Dictionary<string, int>();
+            // Pre-size dictionary for term counts
+            var termCounts = new Dictionary<string, int>(capacity: Math.Min(terms.Count, 128));
             
             for (int i = 0; i < terms.Count; i++)
             {

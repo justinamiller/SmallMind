@@ -29,8 +29,9 @@ namespace TinyLLM.Text
             charSet.CopyTo(chars);
             Array.Sort(chars);
             
-            _charToIdx = new Dictionary<char, int>();
-            _idxToChar = new Dictionary<int, char>();
+            // Pre-size dictionaries with exact capacity to avoid rehashing
+            _charToIdx = new Dictionary<char, int>(chars.Length);
+            _idxToChar = new Dictionary<int, char>(chars.Length);
 
             for (int i = 0; i < chars.Length; i++)
             {
@@ -44,10 +45,12 @@ namespace TinyLLM.Text
 
         /// <summary>
         /// Encode a string into a list of token IDs.
+        /// Pre-sized list to reduce allocations.
         /// </summary>
         public List<int> Encode(string text)
         {
-            var result = new List<int>();
+            // Pre-size to text length (upper bound)
+            var result = new List<int>(text.Length);
             foreach (var ch in text)
             {
                 if (_charToIdx.TryGetValue(ch, out int idx))

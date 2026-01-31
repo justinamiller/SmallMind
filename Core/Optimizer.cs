@@ -30,9 +30,9 @@ namespace TinyLLM.Core
             _weightDecay = weightDecay;
             _t = 0;
 
-            // Initialize moment estimates
-            _m = new List<float[]>();
-            _v = new List<float[]>();
+            // Initialize moment estimates - pre-size to parameter count
+            _m = new List<float[]>(_parameters.Count);
+            _v = new List<float[]>(_parameters.Count);
             
             foreach (var param in _parameters)
             {
