@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using SmallMind.Validation;
 
 namespace SmallMind.Core
 {
@@ -34,6 +35,20 @@ namespace SmallMind.Core
 
         public TransformerModel(int vocabSize, int blockSize, int nEmbd, int nLayer, int nHead, double dropout, int seed = 42)
         {
+            Guard.GreaterThan(vocabSize, 0);
+            Guard.GreaterThan(blockSize, 0);
+            Guard.GreaterThan(nEmbd, 0);
+            Guard.GreaterThan(nLayer, 0);
+            Guard.GreaterThan(nHead, 0);
+            Guard.InRange(dropout, 0.0, 1.0);
+            
+            if (nEmbd % nHead != 0)
+            {
+                throw new Exceptions.ValidationException(
+                    $"Embedding dimension {nEmbd} must be divisible by number of heads {nHead}",
+                    nameof(nEmbd));
+            }
+            
             _vocabSize = vocabSize;
             _blockSize = blockSize;
             _nEmbd = nEmbd;
@@ -76,6 +91,8 @@ namespace SmallMind.Core
 
         public Tensor Forward(Tensor idx)
         {
+            Guard.NotNull(idx);
+            
             // idx shape: (batch_size, sequence_length)
             int B = idx.Shape[0];
             int T = idx.Shape[1];

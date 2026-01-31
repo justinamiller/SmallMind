@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Text;
 
@@ -99,7 +100,8 @@ namespace SmallMind.Core
         /// </summary>
         public void TrainEnhanced(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir, 
                                   bool showPerf = false, int gradAccumSteps = 1, int warmupSteps = 100, 
-                                  int valEvery = 500, int valBatches = 10, float minLr = 0.0f)
+                                  int valEvery = 500, int valBatches = 10, float minLr = 0.0f,
+                                  CancellationToken cancellationToken = default)
         {
             // Create checkpoint directory if it doesn't exist
             if (!Directory.Exists(checkpointDir))
@@ -129,6 +131,15 @@ namespace SmallMind.Core
 
             for (int step = 0; step < steps; step++)
             {
+                // Check for cancellation
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    var cancelledCheckpoint = Path.Combine(checkpointDir, "model_cancelled.json");
+                    SaveCheckpoint(cancelledCheckpoint);
+                    Console.WriteLine($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 stepStopwatch.Restart();
 
                 // Update learning rate
@@ -269,7 +280,7 @@ namespace SmallMind.Core
         /// <summary>
         /// Main training loop with periodic loss logging and checkpointing.
         /// </summary>
-        public void Train(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir, bool showPerf = false)
+        public void Train(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir, bool showPerf = false, CancellationToken cancellationToken = default)
         {
             // Create checkpoint directory if it doesn't exist
             if (!Directory.Exists(checkpointDir))
@@ -296,6 +307,15 @@ namespace SmallMind.Core
 
             for (int step = 0; step < steps; step++)
             {
+                // Check for cancellation
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    var cancelledCheckpoint = Path.Combine(checkpointDir, "model_cancelled.json");
+                    SaveCheckpoint(cancelledCheckpoint);
+                    Console.WriteLine($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 stepStopwatch.Restart();
 
                 // Get batch
@@ -536,7 +556,8 @@ namespace SmallMind.Core
             int warmupSteps = 100,
             int valEvery = 500,
             int valBatches = 10,
-            float minLr = 0.0f)
+            float minLr = 0.0f,
+            CancellationToken cancellationToken = default)
         {
             config ??= new TrainingConfig();
             
@@ -586,6 +607,15 @@ namespace SmallMind.Core
 
             for (int step = 0; step < steps; step++)
             {
+                // Check for cancellation
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    var cancelledCheckpoint = Path.Combine(checkpointDir, "model_cancelled.json");
+                    SaveCheckpoint(cancelledCheckpoint);
+                    Console.WriteLine($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 stepStopwatch.Restart();
 
                 // Update learning rate

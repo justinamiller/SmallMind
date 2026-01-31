@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using SmallMind.Validation;
 
 namespace SmallMind.Core
 {
@@ -18,6 +19,18 @@ namespace SmallMind.Core
 
         public Tensor(float[] data, int[] shape, bool requiresGrad = false)
         {
+            Guard.NotNull(data);
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+            
+            int expectedSize = ShapeToSize(shape);
+            if (data.Length != expectedSize)
+            {
+                throw new Exceptions.ValidationException(
+                    $"Data length {data.Length} does not match shape size {expectedSize}",
+                    nameof(data));
+            }
+            
             Data = data;
             Shape = shape;
             RequiresGrad = requiresGrad;
@@ -29,6 +42,9 @@ namespace SmallMind.Core
 
         public Tensor(int[] shape, bool requiresGrad = false)
         {
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+            
             Data = new float[ShapeToSize(shape)];
             Shape = shape;
             RequiresGrad = requiresGrad;
@@ -40,9 +56,12 @@ namespace SmallMind.Core
 
         public static int ShapeToSize(int[] shape)
         {
+            Guard.NotNull(shape);
+            
             int size = 1;
             for (int i = 0; i < shape.Length; i++)
             {
+                Guard.GreaterThan(shape[i], 0);
                 size *= shape[i];
             }
             return size;
