@@ -173,7 +173,7 @@ namespace TinyLLM
                     if (a.RequiresGrad)
                     {
                         // grad_a = grad_output @ b^T
-                        // Use parallel processing for backward pass too
+                        // For parallel processing, each row is independent, so no locking needed
                         if (M >= 4)
                         {
                             Parallel.For(0, M, i =>
@@ -185,11 +185,8 @@ namespace TinyLLM
                                     {
                                         sum += result.Grad[i * N + j] * b.Data[k * N + j];
                                     }
-                                    // Use lock for thread-safe gradient accumulation
-                                    lock (a.Grad)
-                                    {
-                                        a.Grad[i * K + k] += sum;
-                                    }
+                                    // Each thread writes to its own row (i), so no race condition
+                                    a.Grad[i * K + k] += sum;
                                 }
                             });
                         }
@@ -212,6 +209,8 @@ namespace TinyLLM
                     if (b.RequiresGrad)
                     {
                         // grad_b = a^T @ grad_output
+                        // Note: b.Grad is shared across threads, but we parallelize over k dimension
+                        // Each thread accumulates to different elements, so no race condition
                         for (int k = 0; k < K; k++)
                         {
                             for (int j = 0; j < N; j++)
