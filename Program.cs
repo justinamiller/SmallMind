@@ -28,7 +28,8 @@ namespace TinyLLM
         
         // Maximum safe block size for this architecture (increased for larger context windows)
         // Can be overridden with --max-block-size for even larger contexts
-        private const int MAX_BLOCK_SIZE = 8192;
+        // Supports up to 128GB RAM with 32768 tokens
+        private const int MAX_BLOCK_SIZE = 32768;
 
         static void Main(string[] args)
         {
@@ -238,41 +239,51 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
             // Empirically determined thresholds based on testing with the current architecture
             // (batch_size=16, nEmbd=128, nLayer=4, nHead=4)
             // Memory usage scales primarily with blockSize^2 due to attention mechanism
-            // Updated values to support larger context windows with new MAX_BLOCK_SIZE
+            // Updated values to support larger context windows up to 128GB RAM
             
-            if (availableMemoryGB >= 32.0)
+            if (availableMemoryGB >= 128.0)
             {
-                // Very high memory - use maximum (8192)
-                recommendedBlockSize = maxBlockSize;
+                // Extreme memory (128GB+) - use maximum (32768)
+                recommendedBlockSize = Math.Min(32768, maxBlockSize);
+            }
+            else if (availableMemoryGB >= 64.0)
+            {
+                // Very high memory (64GB+) - use 16384
+                recommendedBlockSize = Math.Min(16384, maxBlockSize);
+            }
+            else if (availableMemoryGB >= 32.0)
+            {
+                // High memory (32GB+) - use 8192
+                recommendedBlockSize = Math.Min(8192, maxBlockSize);
             }
             else if (availableMemoryGB >= 16.0)
             {
-                // High memory - use 6144
+                // Good memory (16GB+) - use 6144
                 recommendedBlockSize = 6144;
             }
             else if (availableMemoryGB >= 8.0)
             {
-                // Good memory - use 4096
+                // Moderate memory (8GB+) - use 4096
                 recommendedBlockSize = 4096;
             }
             else if (availableMemoryGB >= 4.0)
             {
-                // Moderate memory - use 2048
+                // Limited memory (4GB+) - use 2048
                 recommendedBlockSize = 2048;
             }
             else if (availableMemoryGB >= 2.0)
             {
-                // Limited memory - use 1024
+                // Low memory (2GB+) - use 1024
                 recommendedBlockSize = 1024;
             }
             else if (availableMemoryGB >= 1.0)
             {
-                // Very limited memory - use 512
+                // Very low memory (1GB+) - use 512
                 recommendedBlockSize = 512;
             }
             else
             {
-                // Extremely limited memory - use 256
+                // Extremely limited memory (<1GB) - use 256
                 recommendedBlockSize = 256;
             }
             
@@ -294,24 +305,34 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
             // Larger block sizes need smaller batches to fit in memory
             int recommendedBatchSize;
             
-            if (blockSize >= 4096)
+            if (blockSize >= 16384)
             {
-                // Very large context - use smaller batches
+                // Extreme context (16K+ tokens) - use very small batches
+                recommendedBatchSize = availableMemoryGB >= 64.0 ? 4 : 2;
+            }
+            else if (blockSize >= 8192)
+            {
+                // Very large context (8K+ tokens) - use small batches
+                recommendedBatchSize = availableMemoryGB >= 32.0 ? 8 : 4;
+            }
+            else if (blockSize >= 4096)
+            {
+                // Large context (4K+ tokens) - use smaller batches
                 recommendedBatchSize = availableMemoryGB >= 16.0 ? 8 : 4;
             }
             else if (blockSize >= 2048)
             {
-                // Large context - moderate batches
+                // Medium-large context (2K+ tokens) - moderate batches
                 recommendedBatchSize = availableMemoryGB >= 8.0 ? 16 : 8;
             }
             else if (blockSize >= 1024)
             {
-                // Medium context - good batches
+                // Medium context (1K+ tokens) - good batches
                 recommendedBatchSize = availableMemoryGB >= 4.0 ? 24 : 16;
             }
             else
             {
-                // Smaller context - can use larger batches for better throughput
+                // Smaller context (<1K tokens) - can use larger batches for better throughput
                 recommendedBatchSize = availableMemoryGB >= 4.0 ? 32 : 24;
             }
             

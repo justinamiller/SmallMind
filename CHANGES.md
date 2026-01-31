@@ -6,17 +6,19 @@ This PR implements significant improvements to maximize token limits, improve pe
 ## Key Changes
 
 ### 1. Token Limit Improvements
-- **Increased MAX_BLOCK_SIZE**: From 2048 to 8192 tokens (4x increase)
-  - Supports much larger context windows
-  - Memory-aware auto-configuration scales up to 8192 tokens on high-memory systems
+- **Increased MAX_BLOCK_SIZE**: From 8192 to 32768 tokens (4x increase)
+  - Supports much larger context windows for systems with up to 128GB RAM
+  - Memory-aware auto-configuration scales up to 32768 tokens on extreme-memory systems
   
 - **Added `--max-block-size` parameter**: 
-  - Allows users to override the maximum limit for extremely large contexts (e.g., 16384, 32768)
-  - Useful for users with very high RAM (64GB+)
-  - Example: `--max-block-size 16384 --block-size 8192`
+  - Allows users to override the maximum limit for extremely large contexts (e.g., 65536)
+  - Useful for users with very high RAM (128GB+)
+  - Example: `--max-block-size 65536 --block-size 32768`
 
 - **Updated auto-configuration algorithm**:
-  - 32GB+ available RAM → 8192 tokens (maximum)
+  - 128GB+ available RAM → 32768 tokens (maximum)
+  - 64GB+ available RAM → 16384 tokens
+  - 32GB+ available RAM → 8192 tokens
   - 16GB+ available RAM → 6144 tokens
   - 8GB+ available RAM → 4096 tokens
   - 4-8GB available RAM → 2048 tokens
@@ -57,6 +59,8 @@ This PR implements significant improvements to maximize token limits, improve pe
   - Smaller block sizes → larger batches (throughput optimization)
   
 - **Smart Memory Management**:
+  - Block size >= 16384 → batch size 2-4
+  - Block size >= 8192 → batch size 4-8
   - Block size >= 4096 → batch size 4-8
   - Block size >= 2048 → batch size 8-16
   - Block size >= 1024 → batch size 16-24
@@ -98,10 +102,10 @@ dotnet run
 dotnet run -- --block-size 4096
 
 # Use maximum context with performance tracking
-dotnet run -- --block-size 8192 --perf
+dotnet run -- --block-size 32768 --perf
 
-# Override maximum for very large contexts
-dotnet run -- --max-block-size 16384 --block-size 8192
+# Override maximum for extremely large contexts (128GB+ RAM)
+dotnet run -- --max-block-size 65536 --block-size 32768
 
 # Use custom batch size for better throughput
 dotnet run -- --batch-size 32 --block-size 512
