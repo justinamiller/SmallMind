@@ -184,7 +184,7 @@ Actions speak louder than words.";
             Console.WriteLine($"   Rented array of size: {array1.Length}");
             pool.Return(array1);
             var array2 = pool.Rent(100);
-            Console.WriteLine($"   Reused same array: {object.ReferenceEquals(array1, array2)}");
+            Console.WriteLine($"   Reused same array: {(object.ReferenceEquals(array1, array2) ? "Yes" : "No")}");
 
             // Gradient checkpointing example
             Console.WriteLine("\n3. Gradient Checkpointing:");

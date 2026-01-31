@@ -225,7 +225,7 @@ All tests passing, including:
 - 11 gradient checkpointing tests  
 - 12 training optimization tests
 - 9 integration tests
-- 39 existing tests (unchanged)
+- 31 existing tests (unchanged)
 
 ## Security Considerations
 

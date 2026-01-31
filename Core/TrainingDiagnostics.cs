@@ -249,7 +249,7 @@ namespace TinyLLM.Core
             }
             
             float norm = MathF.Sqrt(sumSq);
-            bool hasIssue = nanCount > 0 || infCount > 0 || norm > 100 || norm < 1e-7;
+            bool hasIssue = nanCount > 0 || infCount > 0 || norm > 100 || (norm > 0 && norm < 1e-7);
             
             return (norm, hasIssue);
         }
