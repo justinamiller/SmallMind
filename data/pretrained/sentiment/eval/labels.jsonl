@@ -1,0 +1,30 @@
+{"id": "sentiment_001", "task": "sentiment", "text": "This product is amazing! I absolutely love it.", "label": "positive"}
+{"id": "sentiment_002", "task": "sentiment", "text": "Great quality and fast shipping. Highly recommend!", "label": "positive"}
+{"id": "sentiment_003", "task": "sentiment", "text": "Exceeded my expectations. Best purchase this year.", "label": "positive"}
+{"id": "sentiment_004", "task": "sentiment", "text": "Fantastic customer service and excellent product.", "label": "positive"}
+{"id": "sentiment_005", "task": "sentiment", "text": "I'm very pleased with this purchase. Worth every penny.", "label": "positive"}
+{"id": "sentiment_006", "task": "sentiment", "text": "Terrible quality. Broke after one day.", "label": "negative"}
+{"id": "sentiment_007", "task": "sentiment", "text": "Very disappointed. Would not recommend to anyone.", "label": "negative"}
+{"id": "sentiment_008", "task": "sentiment", "text": "Waste of money. Returning immediately.", "label": "negative"}
+{"id": "sentiment_009", "task": "sentiment", "text": "Poor quality and bad customer service.", "label": "negative"}
+{"id": "sentiment_010", "task": "sentiment", "text": "Not as described. Complete ripoff.", "label": "negative"}
+{"id": "sentiment_011", "task": "sentiment", "text": "It's okay. Nothing special but gets the job done.", "label": "neutral"}
+{"id": "sentiment_012", "task": "sentiment", "text": "Average product. Meets basic expectations.", "label": "neutral"}
+{"id": "sentiment_013", "task": "sentiment", "text": "Standard quality. Neither good nor bad.", "label": "neutral"}
+{"id": "sentiment_014", "task": "sentiment", "text": "As expected. No complaints but not impressed.", "label": "neutral"}
+{"id": "sentiment_015", "task": "sentiment", "text": "Acceptable for the price. Nothing more.", "label": "neutral"}
+{"id": "sentiment_016", "task": "sentiment", "text": "Outstanding performance! This is exactly what I needed.", "label": "positive"}
+{"id": "sentiment_017", "task": "sentiment", "text": "Brilliant product. Can't fault it at all.", "label": "positive"}
+{"id": "sentiment_018", "task": "sentiment", "text": "Superb quality. Highly satisfied with my purchase.", "label": "positive"}
+{"id": "sentiment_019", "task": "sentiment", "text": "Absolutely awful. Do not buy this product.", "label": "negative"}
+{"id": "sentiment_020", "task": "sentiment", "text": "Completely useless. Total waste of time and money.", "label": "negative"}
+{"id": "sentiment_021", "task": "sentiment", "text": "Reasonable product. Does what it's supposed to do.", "label": "neutral"}
+{"id": "sentiment_022", "task": "sentiment", "text": "Fair quality. Adequate for everyday use.", "label": "neutral"}
+{"id": "sentiment_023", "task": "sentiment", "text": "Love it! Will definitely buy again.", "label": "positive"}
+{"id": "sentiment_024", "task": "sentiment", "text": "Excellent value for money. Very happy customer.", "label": "positive"}
+{"id": "sentiment_025", "task": "sentiment", "text": "Defective product. Had to return it immediately.", "label": "negative"}
+{"id": "sentiment_026", "task": "sentiment", "text": "Very poor construction. Falls apart easily.", "label": "negative"}
+{"id": "sentiment_027", "task": "sentiment", "text": "Decent product. Could be better but acceptable.", "label": "neutral"}
+{"id": "sentiment_028", "task": "sentiment", "text": "Perfect! Exactly as advertised.", "label": "positive"}
+{"id": "sentiment_029", "task": "sentiment", "text": "Misleading description. Not what I ordered.", "label": "negative"}
+{"id": "sentiment_030", "task": "sentiment", "text": "Middle of the road. Nothing to write home about.", "label": "neutral"}

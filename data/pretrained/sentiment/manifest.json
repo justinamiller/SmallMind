@@ -1,0 +1,29 @@
+{
+  "id": "sm.pretrained.sentiment.v1",
+  "type": "task-pack",
+  "domain": "sentiment",
+  "intended_use": ["classification", "evaluation", "benchmarking"],
+  "language": ["en"],
+  "source": {
+    "origin": "synthetic",
+    "license": "MIT",
+    "notes": "Redistributable starter data for sentiment analysis pipeline validation"
+  },
+  "recommended_settings": {
+    "context_tokens": 512,
+    "deterministic": true
+  },
+  "task": {
+    "type": "sentiment_analysis",
+    "labels": ["positive", "negative", "neutral"],
+    "description": "General sentiment analysis for product reviews and user feedback"
+  },
+  "statistics": {
+    "total_samples": 30,
+    "label_distribution": {
+      "positive": 11,
+      "negative": 10,
+      "neutral": 9
+    }
+  }
+}

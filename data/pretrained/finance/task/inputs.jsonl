@@ -1,0 +1,30 @@
+{"id": "finance_sentiment_001", "task": "finance_sentiment", "text": "Stock prices surged after strong earnings report exceeded expectations.", "label": "positive"}
+{"id": "finance_sentiment_002", "task": "finance_sentiment", "text": "Market rallies on positive economic data and investor optimism.", "label": "positive"}
+{"id": "finance_sentiment_003", "task": "finance_sentiment", "text": "Company announces record profits, shares hit all-time high.", "label": "positive"}
+{"id": "finance_sentiment_004", "task": "finance_sentiment", "text": "Investors celebrate as tech stocks post impressive gains.", "label": "positive"}
+{"id": "finance_sentiment_005", "task": "finance_sentiment", "text": "Strong GDP growth boosts market confidence significantly.", "label": "positive"}
+{"id": "finance_sentiment_006", "task": "finance_sentiment", "text": "Market crashes amid fears of economic recession.", "label": "negative"}
+{"id": "finance_sentiment_007", "task": "finance_sentiment", "text": "Stocks plummet on disappointing quarterly results.", "label": "negative"}
+{"id": "finance_sentiment_008", "task": "finance_sentiment", "text": "Investor panic leads to massive sell-off in global markets.", "label": "negative"}
+{"id": "finance_sentiment_009", "task": "finance_sentiment", "text": "Economic indicators point to potential downturn ahead.", "label": "negative"}
+{"id": "finance_sentiment_010", "task": "finance_sentiment", "text": "Company shares tank after CEO resignation announcement.", "label": "negative"}
+{"id": "finance_sentiment_011", "task": "finance_sentiment", "text": "Market remains stable despite mixed economic signals.", "label": "neutral"}
+{"id": "finance_sentiment_012", "task": "finance_sentiment", "text": "Investors take wait-and-see approach amid uncertainty.", "label": "neutral"}
+{"id": "finance_sentiment_013", "task": "finance_sentiment", "text": "Trading volumes remain moderate with no clear direction.", "label": "neutral"}
+{"id": "finance_sentiment_014", "task": "finance_sentiment", "text": "Analysts maintain neutral outlook pending more data.", "label": "neutral"}
+{"id": "finance_sentiment_015", "task": "finance_sentiment", "text": "Market consolidates in narrow range awaiting catalyst.", "label": "neutral"}
+{"id": "finance_sentiment_016", "task": "finance_sentiment", "text": "Merger announcement drives stock prices higher.", "label": "positive"}
+{"id": "finance_sentiment_017", "task": "finance_sentiment", "text": "Federal Reserve decision boosts investor sentiment.", "label": "positive"}
+{"id": "finance_sentiment_018", "task": "finance_sentiment", "text": "Strong employment numbers lift market spirits.", "label": "positive"}
+{"id": "finance_sentiment_019", "task": "finance_sentiment", "text": "Trade tensions weigh heavily on market performance.", "label": "negative"}
+{"id": "finance_sentiment_020", "task": "finance_sentiment", "text": "Inflation concerns trigger widespread market decline.", "label": "negative"}
+{"id": "finance_sentiment_021", "task": "finance_sentiment", "text": "Market ends flat as gains and losses offset.", "label": "neutral"}
+{"id": "finance_sentiment_022", "task": "finance_sentiment", "text": "Cautious trading ahead of earnings season.", "label": "neutral"}
+{"id": "finance_sentiment_023", "task": "finance_sentiment", "text": "Breakthrough innovation propels tech sector gains.", "label": "positive"}
+{"id": "finance_sentiment_024", "task": "finance_sentiment", "text": "Consumer confidence reaches highest level in years.", "label": "positive"}
+{"id": "finance_sentiment_025", "task": "finance_sentiment", "text": "Banking sector faces headwinds from regulatory changes.", "label": "negative"}
+{"id": "finance_sentiment_026", "task": "finance_sentiment", "text": "Oil prices collapse on oversupply concerns.", "label": "negative"}
+{"id": "finance_sentiment_027", "task": "finance_sentiment", "text": "Mixed results from retail sector leave investors uncertain.", "label": "neutral"}
+{"id": "finance_sentiment_028", "task": "finance_sentiment", "text": "Record-breaking IPO performance excites market.", "label": "positive"}
+{"id": "finance_sentiment_029", "task": "finance_sentiment", "text": "Credit rating downgrade sends shockwaves through market.", "label": "negative"}
+{"id": "finance_sentiment_030", "task": "finance_sentiment", "text": "Sideways movement continues as market awaits direction.", "label": "neutral"}

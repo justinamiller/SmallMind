@@ -1,0 +1,34 @@
+{
+  "id": "sm.pretrained.finance.v1",
+  "type": "task-pack",
+  "domain": "finance",
+  "intended_use": ["classification", "extraction", "rag", "evaluation"],
+  "language": ["en"],
+  "source": {
+    "origin": "synthetic",
+    "license": "MIT",
+    "notes": "Redistributable starter data for finance domain sentiment analysis and RAG validation"
+  },
+  "recommended_settings": {
+    "context_tokens": 4096,
+    "deterministic": true
+  },
+  "task": {
+    "type": "sentiment_analysis",
+    "labels": ["positive", "negative", "neutral"],
+    "description": "Finance-specific sentiment analysis for market news and financial reports"
+  },
+  "statistics": {
+    "total_samples": 30,
+    "label_distribution": {
+      "positive": 11,
+      "negative": 10,
+      "neutral": 9
+    }
+  },
+  "rag": {
+    "enabled": true,
+    "document_count": 5,
+    "index_type": "semantic"
+  }
+}
