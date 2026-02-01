@@ -34,6 +34,31 @@ namespace SmallMind.Transformers
         private readonly Linear _lmHead;
 
         public List<Tensor> Parameters { get; private set; }
+        
+        /// <summary>
+        /// Vocabulary size (number of unique tokens).
+        /// </summary>
+        public int VocabSize => _vocabSize;
+        
+        /// <summary>
+        /// Maximum sequence length (context window).
+        /// </summary>
+        public int BlockSize => _blockSize;
+        
+        /// <summary>
+        /// Embedding dimension.
+        /// </summary>
+        public int EmbedDim => _nEmbd;
+        
+        /// <summary>
+        /// Number of attention heads per layer.
+        /// </summary>
+        public int NumHeads => _nHead;
+        
+        /// <summary>
+        /// Number of transformer layers.
+        /// </summary>
+        public int NumLayers => _nLayer;
 
         public TransformerModel(int vocabSize, int blockSize, int nEmbd, int nLayer, int nHead, double dropout, int seed = 42)
         {

@@ -1,4 +1,5 @@
-using SmallMind.Core.Core;
+using SmallMind.Core;
+using SmallMind.Core.Exceptions;
 using SmallMind.Transformers;
 using System;
 using System.Collections.Generic;
@@ -7,7 +8,12 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Tokenizers;
-using SmallMind.Core.Validation;
+
+// Use aliases to avoid ambiguity
+using Tensor = SmallMind.Core.Core.Tensor;
+using Guard = SmallMind.Core.Validation.Guard;
+using CheckpointStrategy = SmallMind.Core.Core.CheckpointStrategy;
+using AdamW = SmallMind.Core.Core.AdamW;
 
 namespace SmallMind.Runtime
 {
@@ -35,9 +41,10 @@ namespace SmallMind.Runtime
         private readonly int _batchSize;
         private readonly List<int> _data;
         private readonly Random _random;
+        private readonly ICheckpointStore _checkpointStore;
 
         public Training(TransformerModel model, ITokenizer tokenizer, string trainingText, 
-                       int blockSize, int batchSize, int seed)
+                       int blockSize, int batchSize, int seed, ICheckpointStore? checkpointStore = null)
         {
             Guard.NotNull(model);
             Guard.NotNull(tokenizer);
@@ -48,6 +55,7 @@ namespace SmallMind.Runtime
             _model = model;
             _tokenizer = tokenizer;
             _blockSize = blockSize;
+            _checkpointStore = checkpointStore ?? new BinaryCheckpointStore();
             _batchSize = batchSize;
             _random = new Random(seed);
 
@@ -57,7 +65,7 @@ namespace SmallMind.Runtime
 
             if (_data.Count < blockSize + 1)
             {
-                throw new Exceptions.TrainingException($"Training data too short. Need at least {blockSize + 1} tokens, but got {_data.Count}.");
+                throw new TrainingException($"Training data too short. Need at least {blockSize + 1} tokens, but got {_data.Count}.");
             }
         }
 
@@ -513,62 +521,40 @@ namespace SmallMind.Runtime
         }
 
         /// <summary>
-        /// Save model checkpoint as JSON
+        /// Save model checkpoint using the configured checkpoint store.
         /// </summary>
         public void SaveCheckpoint(string path)
         {
-            var checkpoint = new Dictionary<string, object>();
-            checkpoint["parameters"] = new List<object>();
-
-            foreach (var param in _model.Parameters)
-            {
-                var paramData = new Dictionary<string, object>
-                {
-                    ["shape"] = param.Shape,
-                    ["data"] = param.Data
-                };
-                ((List<object>)checkpoint["parameters"]).Add(paramData);
-            }
-
-            var json = JsonSerializer.Serialize(checkpoint, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, json);
+            var checkpoint = _model.ToCheckpoint();
+            _checkpointStore.SaveAsync(checkpoint, path).GetAwaiter().GetResult();
         }
 
         /// <summary>
-        /// Load model checkpoint from JSON
+        /// Load model checkpoint using the configured checkpoint store.
+        /// Supports both binary and legacy JSON formats.
         /// </summary>
         public void LoadCheckpoint(string path)
         {
-            var json = File.ReadAllText(path);
-            var checkpoint = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+            ModelCheckpoint checkpoint;
 
-            if (checkpoint == null || !checkpoint.ContainsKey("parameters"))
+            // Auto-detect format based on file extension or content
+            if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("Invalid checkpoint format");
+                // Use JSON loader for legacy files
+                var jsonStore = new JsonCheckpointStore();
+                checkpoint = jsonStore.LoadAsync(path).GetAwaiter().GetResult();
+            }
+            else
+            {
+                // Use configured store (binary by default)
+                checkpoint = _checkpointStore.LoadAsync(path).GetAwaiter().GetResult();
             }
 
-            var parameters = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(checkpoint["parameters"].ToString()!);
-            
-            if (parameters == null || parameters.Count != _model.Parameters.Count)
-            {
-                Console.WriteLine($"Warning: Checkpoint has {parameters?.Count ?? 0} parameters, model has {_model.Parameters.Count}");
-                return;
-            }
-
-            for (int i = 0; i < parameters.Count && i < _model.Parameters.Count; i++)
-            {
-                var paramData = parameters[i];
-                var data = JsonSerializer.Deserialize<float[]>(paramData["data"].ToString()!);
-                
-                if (data != null && data.Length == _model.Parameters[i].Size)
-                {
-                    Array.Copy(data, _model.Parameters[i].Data, data.Length);
-                }
-            }
-
+            _model.LoadFromCheckpoint(checkpoint);
             Console.WriteLine($"Checkpoint loaded from {path}");
         }
 
+        /* TrainOptimized method temporarily disabled for v0.2 - requires additional dependencies
         /// <summary>
         /// Advanced training loop with Phase 2 optimizations:
         /// - Optional mixed precision (FP16/FP32)
@@ -577,6 +563,8 @@ namespace SmallMind.Runtime
         /// - Memory tracking
         /// - Gradient health monitoring
         /// </summary>
+        [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+        [Obsolete("TrainOptimized is temporarily disabled in v0.2 - use Train() instead")]
         public void TrainOptimized(
             int steps, 
             double learningRate, 
@@ -855,5 +843,6 @@ namespace SmallMind.Runtime
                 memoryTracker.PrintReport();
             }
         }
+        */ // End of TrainOptimized - temporarily disabled
     }
 }
