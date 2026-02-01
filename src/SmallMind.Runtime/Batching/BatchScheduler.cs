@@ -257,15 +257,23 @@ namespace SmallMind.Runtime.Batching
                 // Expected
             }
 
-            // Cancel all pending requests
+            // Cancel all pending requests and current batch
             lock (_queueLock)
             {
+                // Cancel requests in pending queue
                 while (_pendingRequests.Count > 0)
                 {
                     var request = _pendingRequests.Dequeue();
                     request.MarkFailed(new OperationCanceledException("Scheduler shutdown"));
                 }
                 _totalQueuedCount = 0;
+
+                // Cancel requests in current batch that never got processed
+                for (int i = 0; i < _currentBatch.Count; i++)
+                {
+                    _currentBatch[i].MarkFailed(new OperationCanceledException("Scheduler shutdown"));
+                }
+                _currentBatch.Clear();
             }
         }
 

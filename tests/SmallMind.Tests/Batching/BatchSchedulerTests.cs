@@ -247,12 +247,19 @@ namespace SmallMind.Tests.Batching
             var request = new InferenceRequest(SessionId.NewId(), new[] { 1 }, inferenceOptions);
             scheduler.EnqueueRequest(request);
 
-            // Act
-            await scheduler.ShutdownAsync();
+            // Give time for the request to be queued (but not processed since we have no executor)
+            await Task.Delay(50);
 
-            // Assert - Should complete without error
-            // The request should be marked complete (either successfully or cancelled)
-            Assert.True(request.IsComplete || request.IsCancelled);
+            // Act - Shutdown should complete without hanging
+            var shutdownTask = scheduler.ShutdownAsync();
+            var completed = await Task.WhenAny(shutdownTask, Task.Delay(5000)) == shutdownTask;
+
+            // Assert - Shutdown should complete quickly
+            Assert.True(completed, "Shutdown did not complete within timeout");
+
+            // After shutdown, pending requests should be cancelled
+            await Task.Delay(50);
+            Assert.True(request.IsComplete, "Request should be marked complete after shutdown");
 
             // Cleanup
             request.Dispose();
