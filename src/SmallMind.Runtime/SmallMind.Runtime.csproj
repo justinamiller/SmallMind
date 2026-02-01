@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>SmallMind.Runtime</PackageId>
+    <Version>0.2.0</Version>
+    <Authors>Justin Miller</Authors>
+    <Company>Justin Miller</Company>
+    <Product>SmallMind</Product>
+    <Description>Text generation runtime, sampling strategies, and conversation sessions for SmallMind.</Description>
+    <PackageTags>llm;text-generation;sampling;inference;educational;csharp</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/justinamiller/SmallMind</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/justinamiller/SmallMind</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
+    <ProjectReference Include="..\SmallMind.Transformers\SmallMind.Transformers.csproj" />
+    <ProjectReference Include="..\SmallMind.Tokenizers\SmallMind.Tokenizers.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmallMind.Tests" />
+    <InternalsVisibleTo Include="SmallMind.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

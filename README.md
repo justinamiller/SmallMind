@@ -1,6 +1,64 @@
-# SmallMind - Tiny Educational LLM in Pure C#
+# SmallMind - Pure C# Educational Language Model
 
-SmallMind is a deliberately tiny, educational language model built entirely in C# (.NET 8) from scratch **with NO 3rd party dependencies**. It demonstrates the core concepts of decoder-only Transformers (GPT-style) using only native C# classes.
+SmallMind is a deliberately tiny, educational language model built entirely in C# (.NET 8) from scratch **with NO 3rd party dependencies**. It demonstrates decoder-only Transformers (GPT-style) using only native C# classes.
+
+> **v0.2.0**: Now available as a multi-project library with binary checkpointing! See [Commercial Readiness Roadmap](docs/commercial-readiness-roadmap.md) for details.
+
+## Installation
+
+### NuGet Packages (Recommended)
+
+```bash
+# Core library (tensor operations, autograd, SIMD)
+dotnet add package SmallMind.Core
+
+# Transformer models
+dotnet add package SmallMind.Transformers
+
+# Text tokenization
+dotnet add package SmallMind.Tokenizers
+
+# Text generation and training
+dotnet add package SmallMind.Runtime
+```
+
+### From Source
+
+```bash
+git clone https://github.com/justinamiller/SmallMind.git
+cd SmallMind
+dotnet build
+```
+
+## Quick Start
+
+```csharp
+using SmallMind.Core;
+using SmallMind.Transformers;
+using SmallMind.Tokenizers;
+using SmallMind.Runtime;
+
+// Load a trained checkpoint
+var store = new BinaryCheckpointStore();
+var checkpoint = await store.LoadAsync("model.smnd");
+var model = CheckpointExtensions.FromCheckpoint(checkpoint);
+
+// Generate text
+var tokenizer = new CharTokenizer("abcdefghijklmnopqrstuvwxyz ");
+var generator = new Sampling(model, tokenizer, model.BlockSize);
+
+var text = generator.Generate(
+    prompt: "Hello world",
+    maxNewTokens: 50,
+    temperature: 0.8,
+    topK: 40,
+    seed: 42
+);
+
+Console.WriteLine(text);
+```
+
+See [examples/MinimalGenerate](examples/MinimalGenerate) for a complete working example.
 
 ## Features
 

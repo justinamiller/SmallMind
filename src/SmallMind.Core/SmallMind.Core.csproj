@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>SmallMind.Core</PackageId>
+    <Version>0.2.0</Version>
+    <Authors>Justin Miller</Authors>
+    <Company>Justin Miller</Company>
+    <Product>SmallMind</Product>
+    <Description>Core tensor operations, automatic differentiation, and SIMD-optimized kernels for SmallMind - a pure C# educational language model with no external dependencies.</Description>
+    <PackageTags>llm;language-model;tensor;autograd;machine-learning;simd;educational;csharp</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/justinamiller/SmallMind</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/justinamiller/SmallMind</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmallMind.Tests" />
+    <InternalsVisibleTo Include="SmallMind.IntegrationTests" />
+  </ItemGroup>
+
+</Project>
