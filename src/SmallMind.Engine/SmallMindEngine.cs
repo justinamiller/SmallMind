@@ -55,29 +55,14 @@ namespace SmallMind.Engine
         {
             ThrowIfDisposed();
 
-            if (string.IsNullOrWhiteSpace(request.Path))
-            {
-                throw new ArgumentException("Model path cannot be empty", nameof(request));
-            }
-
-            if (!File.Exists(request.Path))
-            {
-                throw new FileNotFoundException($"Model file not found: {request.Path}");
-            }
+            // Early validation with actionable error messages
+            ModelValidator.ValidatePathAndExtension(request);
 
             var ext = Path.GetExtension(request.Path).ToLowerInvariant();
 
             // Handle GGUF import if requested
             if (ext == ".gguf")
             {
-                if (!request.AllowGgufImport)
-                {
-                    throw new UnsupportedModelException(
-                        request.Path,
-                        ext,
-                        "GGUF files require AllowGgufImport=true in ModelLoadRequest");
-                }
-
                 return await LoadGgufModelAsync(request, cancellationToken);
             }
 
@@ -87,11 +72,11 @@ namespace SmallMind.Engine
                 return await LoadSmqModelAsync(request, cancellationToken);
             }
 
-            // Unsupported format
+            // Should never reach here due to ValidatePathAndExtension, but defensive
             throw new UnsupportedModelException(
                 request.Path,
                 ext,
-                $"Unsupported model format '{ext}'. Supported formats: .smq, .gguf (with AllowGgufImport=true)");
+                $"Unsupported model format '{ext}'. This should have been caught by validation.");
         }
 
         public IChatSession CreateChatSession(IModelHandle model, SessionOptions options)
@@ -230,12 +215,32 @@ namespace SmallMind.Engine
             // Load SMQ metadata
             var metadata = QuantizedModelLoader.LoadQuantizedModelMetadata(request.Path);
 
+            // Validate metadata sanity
+            ModelValidator.ValidateMetadata(metadata.Metadata, request.Path);
+
             // Extract model dimensions from metadata
             int vocabSize = ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257);
             int blockSize = ExtractMetadataInt(metadata.Metadata, "block_size", 1024);
             int embedDim = ExtractMetadataInt(metadata.Metadata, "embed_dim", 768);
             int numLayers = ExtractMetadataInt(metadata.Metadata, "num_layers", 12);
             int numHeads = ExtractMetadataInt(metadata.Metadata, "num_heads", 12);
+
+            // Check memory budget if specified
+            if (request.MaxMemoryBytes.HasValue)
+            {
+                var estimatedBytes = ModelValidator.EstimateMemoryRequirementBytes(
+                    metadata.Metadata,
+                    quantizationBits: 8); // Assume Q8 for SMQ files
+
+                if (estimatedBytes > request.MaxMemoryBytes.Value)
+                {
+                    throw new UnsupportedModelException(
+                        request.Path,
+                        ".smq",
+                        $"Model exceeds memory budget: estimated {estimatedBytes / 1024 / 1024}MB > max {request.MaxMemoryBytes.Value / 1024 / 1024}MB.{Environment.NewLine}" +
+                        $"Remediation: Increase MaxMemoryBytes, use a smaller model, or use higher quantization (Q4 instead of Q8).");
+                }
+            }
 
             // For now, we create a placeholder FP32 model structure
             // In a production system, this would load the quantized weights directly
