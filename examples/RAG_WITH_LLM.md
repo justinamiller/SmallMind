@@ -14,6 +14,7 @@ This example demonstrates how to use SmallMind's RAG system with actual LLM gene
 using System;
 using System.IO;
 using SmallMind.Core;
+using System.Threading.Tasks;
 using SmallMind.Text;
 using SmallMind.Tokenizers;
 using SmallMind.Rag;
