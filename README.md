@@ -20,6 +20,9 @@ dotnet add package SmallMind.Tokenizers
 
 # Text generation and training
 dotnet add package SmallMind.Runtime
+
+# RAG system (document retrieval and generation)
+dotnet add package SmallMind.Rag
 ```
 
 ### From Source
@@ -116,7 +119,14 @@ See [examples/MinimalGenerate](examples/MinimalGenerate) and [samples/](samples/
   - Step-level validation and automatic repair
   - Budget enforcement and retry policies
   - Deterministic execution with seed control
-- **Question-answering capability** - Answer questions based on training data
+- **Retrieval-Augmented Generation (RAG)** - Knowledge-grounded responses (NEW!)
+  - BM25 sparse retrieval and dense vector search
+  - Hybrid search combining multiple methods
+  - Document ingestion with automatic chunking
+  - Source citations in all responses
+  - CLI tool for quick document indexing
+  - Zero external dependencies
+- **Question-answering capability** - Answer questions based on training data or indexed documents
 - **Interactive conversation mode** - Multi-turn conversations with session context
 - **Session context management** - Maintain conversation history across turns
 - **Checkpointing** to save and load model weights (JSON format)
@@ -368,6 +378,137 @@ Console.WriteLine($"Task: {loadedModel.Task}, Domain: {loadedModel.Domain}");
 ```
 
 See [examples/PretrainedModels](examples/PretrainedModels) for complete working examples and [docs/pretrained-models.md](docs/pretrained-models.md) for comprehensive documentation.
+
+## Retrieval-Augmented Generation (RAG)
+
+SmallMind includes a **zero-dependency RAG system** that combines document retrieval with text generation for knowledge-grounded responses. The RAG system supports both sparse (BM25) and dense (vector) retrieval methods.
+
+### Key Features
+
+- **BM25 Sparse Retrieval** - Fast lexical matching using BM25 algorithm
+- **Dense Vector Retrieval** - Optional feature hashing embeddings
+- **Hybrid Search** - Combine sparse and dense methods for better results
+- **Document Ingestion** - Automatic chunking and indexing
+- **Citation Support** - All generated answers include source citations
+- **Security & Authorization** - Built-in access control for chunks
+- **LLM Integration** - Plug in any text generator (including SmallMind's own)
+- **CLI Tool** - Command-line interface for quick document indexing and querying
+
+### Quick Start
+
+```csharp
+using SmallMind.Rag;
+using SmallMind.Rag.Pipeline;
+using SmallMind.Rag.Generation;
+
+// 1. Create and initialize RAG pipeline
+var options = new RagOptions
+{
+    IndexDirectory = "./my-index",
+    Chunking = new RagOptions.ChunkingOptions
+    {
+        MaxChunkSize = 512,
+        OverlapSize = 64
+    },
+    Retrieval = new RagOptions.RetrievalOptions
+    {
+        TopK = 5,
+        MinScore = 0.0f
+    }
+};
+
+var pipeline = new RagPipeline(options);
+pipeline.Initialize();
+
+// 2. Ingest documents
+pipeline.IngestDocuments("./my-documents", rebuild: true, 
+    includePatterns: "*.txt;*.md");
+
+// 3. Ask questions (returns prompt with context)
+var prompt = pipeline.AskQuestion("What is SmallMind?");
+Console.WriteLine(prompt);
+```
+
+### Using with LLM Generation
+
+To get actual generated answers, plug in a text generator:
+
+```csharp
+using SmallMind.Rag.Generation;
+
+// Create a text generator from your trained model
+var generator = new SmallMindTextGenerator(model, tokenizer, blockSize);
+
+// Create pipeline with generator
+var pipeline = new RagPipeline(
+    options,
+    textGenerator: generator
+);
+
+pipeline.Initialize();
+pipeline.IngestDocuments("./my-documents", rebuild: true);
+
+// Now AskQuestion generates actual answers
+var answer = pipeline.AskQuestion(
+    "How do I train SmallMind?",
+    maxTokens: 200,
+    temperature: 0.7
+);
+
+Console.WriteLine(answer);
+// Output: Based on the provided sources, to train SmallMind...
+```
+
+### CLI Tool (`smrag`)
+
+The RAG CLI provides a convenient command-line interface:
+
+```bash
+# Ingest documents
+dotnet run --project samples/SmallMind.Rag.Cli -- \
+    ingest --path ./docs --index ./my-index
+
+# Ask questions
+dotnet run --project samples/SmallMind.Rag.Cli -- \
+    ask --index ./my-index \
+    --question "What is SmallMind?" \
+    --topk 5
+```
+
+### Advanced Features
+
+**Dense Retrieval:**
+```csharp
+// Enable vector-based retrieval
+pipeline.EnableDenseRetrieval(embeddingDim: 256);
+```
+
+**Hybrid Search:**
+```csharp
+// Combine sparse and dense retrieval
+pipeline.EnableDenseRetrieval(embeddingDim: 256);
+pipeline.EnableHybridRetrieval(sparseWeight: 0.5f, denseWeight: 0.5f);
+```
+
+**Incremental Updates:**
+```csharp
+// Add new documents without rebuilding
+pipeline.IngestDocuments("./new-docs", rebuild: false);
+```
+
+**Security & Authorization:**
+```csharp
+using SmallMind.Rag.Security;
+
+var userContext = new UserContext("user123");
+userContext.AllowedLabels.Add("public");
+userContext.AllowedTags.Add("documentation");
+
+// Retrieve with access control
+var results = pipeline.Retrieve("query", userContext: userContext);
+```
+
+See [docs/RAG_AND_CHAT.md](docs/RAG_AND_CHAT.md) for comprehensive documentation, [examples/RAG_WITH_LLM.md](examples/RAG_WITH_LLM.md) for a complete code example, and [samples/RagChatExample.cs](samples/RagChatExample.cs) for a working sample application.
 
 ## Data Loading
 

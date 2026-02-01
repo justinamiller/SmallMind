@@ -1,0 +1,17 @@
+Training SmallMind
+
+To train SmallMind, follow these steps:
+
+1. Prepare your training data in a text file
+2. Create a character-level tokenizer with your vocabulary
+3. Initialize a TransformerModel with desired hyperparameters:
+   - Number of layers (default: 6)
+   - Embedding dimension (default: 256)
+   - Number of attention heads (default: 8)
+   - Block size / context length (default: 128)
+4. Use the Training class to run gradient descent
+5. Save checkpoints periodically during training
+6. Monitor the loss to ensure convergence
+
+Important: Use gradient clipping to prevent exploding gradients.
+Set learning rate appropriately (typical: 0.001-0.0001).

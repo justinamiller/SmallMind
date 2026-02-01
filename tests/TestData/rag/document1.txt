@@ -1,0 +1,13 @@
+SmallMind Architecture
+
+SmallMind is a pure C# implementation of a decoder-only Transformer language model. 
+The architecture consists of several key components:
+
+1. Token and positional embeddings that convert input tokens into dense vectors
+2. Multi-head self-attention layers that allow the model to focus on different parts of the input
+3. Feed-forward neural networks that process the attended representations
+4. Layer normalization for training stability
+5. Residual connections to enable deep networks
+
+The model is trained using gradient descent with the Adam optimizer.
+It supports both training and inference modes on CPU without any external dependencies.

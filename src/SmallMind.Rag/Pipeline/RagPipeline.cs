@@ -10,6 +10,7 @@ using SmallMind.Rag.Retrieval;
 using SmallMind.Rag.Security;
 using SmallMind.Rag.Telemetry;
 using SmallMind.Rag.Prompting;
+using SmallMind.Rag.Generation;
 
 namespace SmallMind.Rag.Pipeline
 {
@@ -30,6 +31,7 @@ namespace SmallMind.Rag.Pipeline
         private readonly IRagMetrics _metrics;
         private readonly RagOptions _options;
         private readonly string _indexDirectory;
+        private readonly ITextGenerator? _textGenerator;
         private bool _isInitialized;
         private readonly object _initLock = new object();
 
@@ -40,11 +42,13 @@ namespace SmallMind.Rag.Pipeline
         /// <param name="authorizer">Optional custom authorizer. Uses DefaultAuthorizer if null.</param>
         /// <param name="logger">Optional custom logger. Uses ConsoleRagLogger if null.</param>
         /// <param name="metrics">Optional custom metrics collector. Uses InMemoryRagMetrics if null.</param>
+        /// <param name="textGenerator">Optional text generator for LLM-powered answers. If null, AskQuestion returns prompts only.</param>
         public RagPipeline(
             RagOptions options,
             IAuthorizer? authorizer = null,
             IRagLogger? logger = null,
-            IRagMetrics? metrics = null)
+            IRagMetrics? metrics = null,
+            ITextGenerator? textGenerator = null)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _indexDirectory = options.IndexDirectory ?? throw new ArgumentException("IndexDirectory must be set", nameof(options));
@@ -52,6 +56,7 @@ namespace SmallMind.Rag.Pipeline
             _authorizer = authorizer ?? new DefaultAuthorizer();
             _logger = logger ?? new ConsoleRagLogger();
             _metrics = metrics ?? new InMemoryRagMetrics();
+            _textGenerator = textGenerator;
 
             _chunkStore = new Dictionary<string, Chunk>();
             _invertedIndex = new InvertedIndex();
@@ -317,13 +322,20 @@ namespace SmallMind.Rag.Pipeline
 
         /// <summary>
         /// Answers a question by retrieving relevant context and composing a prompt.
+        /// If a text generator is configured, generates an actual answer. Otherwise, returns the prompt.
         /// </summary>
         /// <param name="question">The question to answer.</param>
         /// <param name="userContext">Optional user context for authorization filtering.</param>
         /// <param name="topK">Optional override for number of chunks to retrieve.</param>
-        /// <param name="maxContextTokens">Optional override for maximum context tokens. Uses RagOptions.MaxContextTokens if null.</param>
-        /// <returns>A prompt string with context (or insufficient evidence message). Actual LLM generation would happen here in the future.</returns>
-        public string AskQuestion(string question, UserContext? userContext = null, int? topK = null, int? maxContextTokens = null)
+        /// <param name="maxTokens">Maximum tokens to generate (only used if text generator is configured).</param>
+        /// <param name="temperature">Sampling temperature for generation (only used if text generator is configured).</param>
+        /// <returns>Generated answer if text generator is configured, otherwise the composed prompt with context.</returns>
+        public string AskQuestion(
+            string question, 
+            UserContext? userContext = null, 
+            int? topK = null, 
+            int maxTokens = 200,
+            double temperature = 0.7)
         {
             if (!_isInitialized)
                 throw new InvalidOperationException("Pipeline must be initialized before asking questions. Call Initialize() first.");
@@ -352,9 +364,21 @@ namespace SmallMind.Rag.Pipeline
 
                 _logger.LogInfo(traceId, $"Prompt composed successfully");
 
-                // Note: Actual LLM generation would be called here
-                // For now, we just return the prompt
-                return prompt;
+                // Generate answer if text generator is available
+                if (_textGenerator != null)
+                {
+                    _logger.LogInfo(traceId, $"Generating answer with LLM");
+                    int? seed = _options.Deterministic ? _options.Seed : null;
+                    string answer = _textGenerator.Generate(prompt, maxTokens, temperature, seed);
+                    _logger.LogInfo(traceId, $"Answer generated successfully");
+                    return answer;
+                }
+                else
+                {
+                    // No text generator configured, return prompt
+                    _logger.LogInfo(traceId, $"No text generator configured, returning prompt");
+                    return prompt;
+                }
             }
             catch (Exception ex)
             {
@@ -458,5 +482,10 @@ namespace SmallMind.Rag.Pipeline
         /// Gets whether hybrid retrieval is enabled.
         /// </summary>
         public bool IsHybridRetrievalEnabled => _hybridRetriever != null;
+
+        /// <summary>
+        /// Gets whether text generation is enabled (LLM configured).
+        /// </summary>
+        public bool IsTextGenerationEnabled => _textGenerator != null;
     }
 }
