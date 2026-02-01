@@ -190,9 +190,8 @@ namespace SmallMind.Runtime.Batching
                 }
                 catch (Exception ex)
                 {
-                    // Log error but don't crash scheduler
-                    // In production, use proper logging
-                    Console.Error.WriteLine($"BatchScheduler error: {ex}");
+                    // Silently continue - scheduler should be resilient to errors
+                    // Future: Use proper logging when IRuntimeLogger is available
                 }
             }
         }

@@ -469,11 +469,27 @@ namespace SmallMind.Runtime.Batching
             return probs;
         }
 
+        [ThreadStatic]
+        private static Random? _threadLocalRandom;
+
         private int SampleFromProbs(float[] probs, ProductionInferenceOptions options)
         {
-            var random = options.Seed.HasValue
-                ? new Random(options.Seed.Value)
-                : new Random();
+            Random random;
+            
+            if (options.Seed.HasValue)
+            {
+                // Use deterministic random with seed
+                random = new Random(options.Seed.Value);
+            }
+            else
+            {
+                // Use thread-local random for efficiency
+                if (_threadLocalRandom == null)
+                {
+                    _threadLocalRandom = new Random();
+                }
+                random = _threadLocalRandom;
+            }
 
             double target = random.NextDouble();
             double cumSum = 0.0;
