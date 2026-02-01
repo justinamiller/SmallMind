@@ -256,9 +256,15 @@ namespace SmallMind.Retrieval
             }
 
             // Normalize by document length (TF)
-            foreach (var term in termFrequency.Keys.ToList())
+            var termKeys = new List<string>(termFrequency.Count);
+            foreach (var key in termFrequency.Keys)
             {
-                termFrequency[term] = termFrequency[term] / terms.Count;
+                termKeys.Add(key);
+            }
+            
+            for (int i = 0; i < termKeys.Count; i++)
+            {
+                termFrequency[termKeys[i]] = termFrequency[termKeys[i]] / terms.Count;
             }
 
             _chunkTermFrequencies[chunk.ChunkId] = termFrequency;
@@ -284,10 +290,14 @@ namespace SmallMind.Retrieval
         private void RemoveDocument(string documentId)
         {
             // Find all chunks belonging to this document
-            var chunksToRemove = _chunks.Values
-                .Where(c => c.DocumentId == documentId)
-                .Select(c => c.ChunkId)
-                .ToList();
+            var chunksToRemove = new List<string>();
+            foreach (var chunk in _chunks.Values)
+            {
+                if (chunk.DocumentId == documentId)
+                {
+                    chunksToRemove.Add(chunk.ChunkId);
+                }
+            }
 
             foreach (var chunkId in chunksToRemove)
             {

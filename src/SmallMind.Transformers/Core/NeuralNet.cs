@@ -16,9 +16,9 @@ namespace SmallMind.Transformers
 
         public void ZeroGrad()
         {
-            foreach (var param in Parameters)
+            for (int i = 0; i < Parameters.Count; i++)
             {
-                param.ZeroGrad();
+                Parameters[i].ZeroGrad();
             }
         }
 

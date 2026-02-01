@@ -521,7 +521,21 @@ namespace SmallMind.ConsoleApp
             }
 
             // Sort by throughput (descending)
-            var sortedResults = results.OrderByDescending(r => r.TokensPerSecond).ToArray();
+            // Sort results by tokens per second descending
+            for (int i = 0; i < results.Count - 1; i++)
+            {
+                for (int j = 0; j < results.Count - i - 1; j++)
+                {
+                    if (results[j].TokensPerSecond < results[j + 1].TokensPerSecond)
+                    {
+                        var temp = results[j];
+                        results[j] = results[j + 1];
+                        results[j + 1] = temp;
+                    }
+                }
+            }
+            
+            var sortedResults = results.ToArray();
 
             // Print best throughput
             if (sortedResults.Length > 0)

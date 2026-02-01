@@ -230,16 +230,23 @@ namespace SmallMind.Tokenizers
 
         private int DecodeInnerTokens(List<int> tokens, Span<byte> utf8Out)
         {
+            int[] tokenArray = ArrayPool<int>.Shared.Rent(tokens.Count);
             byte[] buffer = ArrayPool<byte>.Shared.Rent(tokens.Count * 10);
             try
             {
-                int count = _innerTokenizer.Decode(tokens.ToArray().AsSpan(), buffer);
+                for (int i = 0; i < tokens.Count; i++)
+                {
+                    tokenArray[i] = tokens[i];
+                }
+                
+                int count = _innerTokenizer.Decode(tokenArray.AsSpan(0, tokens.Count), buffer);
                 int toCopy = Math.Min(count, utf8Out.Length);
                 buffer.AsSpan(0, toCopy).CopyTo(utf8Out);
                 return toCopy;
             }
             finally
             {
+                ArrayPool<int>.Shared.Return(tokenArray);
                 ArrayPool<byte>.Shared.Return(buffer);
             }
         }
@@ -249,14 +256,21 @@ namespace SmallMind.Tokenizers
         /// </summary>
         public string Decode(List<int> tokens)
         {
+            int[] tokenArray = ArrayPool<int>.Shared.Rent(tokens.Count);
             byte[] buffer = ArrayPool<byte>.Shared.Rent(tokens.Count * 4);
             try
             {
-                int byteCount = Decode(tokens.ToArray().AsSpan(), buffer);
+                for (int i = 0; i < tokens.Count; i++)
+                {
+                    tokenArray[i] = tokens[i];
+                }
+                
+                int byteCount = Decode(tokenArray.AsSpan(0, tokens.Count), buffer);
                 return Encoding.UTF8.GetString(buffer, 0, byteCount);
             }
             finally
             {
+                ArrayPool<int>.Shared.Return(tokenArray);
                 ArrayPool<byte>.Shared.Return(buffer);
             }
         }

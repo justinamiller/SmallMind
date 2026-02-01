@@ -133,14 +133,31 @@ namespace SmallMind.Runtime.PretrainedModels
                 throw new ArgumentException("Train ratio must be between 0 and 1", nameof(trainRatio));
             }
 
-            // Shuffle samples
+            // Shuffle samples using Fisher-Yates algorithm
             var random = new Random(seed);
-            var shuffled = samples.OrderBy(x => random.Next()).ToList();
+            var shuffled = new List<LabeledSample>(samples);
+            int n = shuffled.Count;
+            for (int i = n - 1; i > 0; i--)
+            {
+                int j = random.Next(i + 1);
+                var temp = shuffled[i];
+                shuffled[i] = shuffled[j];
+                shuffled[j] = temp;
+            }
 
             // Split
             int trainCount = (int)(shuffled.Count * trainRatio);
-            var train = shuffled.Take(trainCount).ToList();
-            var validation = shuffled.Skip(trainCount).ToList();
+            var train = new List<LabeledSample>(trainCount);
+            for (int i = 0; i < trainCount; i++)
+            {
+                train.Add(shuffled[i]);
+            }
+            
+            var validation = new List<LabeledSample>(shuffled.Count - trainCount);
+            for (int i = trainCount; i < shuffled.Count; i++)
+            {
+                validation.Add(shuffled[i]);
+            }
 
             return (train, validation);
         }
@@ -152,7 +169,15 @@ namespace SmallMind.Runtime.PretrainedModels
         /// <returns>Array of unique labels</returns>
         public static string[] GetUniqueLabels(List<LabeledSample> samples)
         {
-            return samples.Select(s => s.Label).Distinct().OrderBy(l => l).ToArray();
+            var labelSet = new HashSet<string>();
+            for (int i = 0; i < samples.Count; i++)
+            {
+                labelSet.Add(samples[i].Label);
+            }
+            
+            var labels = new List<string>(labelSet);
+            labels.Sort();
+            return labels.ToArray();
         }
 
         /// <summary>
@@ -162,10 +187,23 @@ namespace SmallMind.Runtime.PretrainedModels
         /// <returns>Dictionary with label counts</returns>
         public static Dictionary<string, int> GetLabelDistribution(List<LabeledSample> samples)
         {
-            return samples
-                .GroupBy(s => s.Label)
-                .OrderBy(g => g.Key)
-                .ToDictionary(g => g.Key, g => g.Count());
+            var counts = new Dictionary<string, int>();
+            
+            // Count occurrences
+            for (int i = 0; i < samples.Count; i++)
+            {
+                string label = samples[i].Label;
+                if (counts.ContainsKey(label))
+                {
+                    counts[label]++;
+                }
+                else
+                {
+                    counts[label] = 1;
+                }
+            }
+            
+            return counts;
         }
 
         /// <summary>
@@ -187,11 +225,27 @@ namespace SmallMind.Runtime.PretrainedModels
             }
 
             // Text length statistics
-            var textLengths = samples.Select(s => s.Text.Length).ToList();
-            Console.WriteLine($"\nText length statistics:");
-            Console.WriteLine($"  Min: {textLengths.Min()}");
-            Console.WriteLine($"  Max: {textLengths.Max()}");
-            Console.WriteLine($"  Average: {textLengths.Average():F1}");
+            if (samples.Count > 0)
+            {
+                int min = int.MaxValue;
+                int max = int.MinValue;
+                long sum = 0;
+                
+                for (int i = 0; i < samples.Count; i++)
+                {
+                    int len = samples[i].Text.Length;
+                    if (len < min) min = len;
+                    if (len > max) max = len;
+                    sum += len;
+                }
+                
+                double average = (double)sum / samples.Count;
+                
+                Console.WriteLine($"\nText length statistics:");
+                Console.WriteLine($"  Min: {min}");
+                Console.WriteLine($"  Max: {max}");
+                Console.WriteLine($"  Average: {average:F1}");
+            }
         }
     }
 }

@@ -46,10 +46,10 @@ namespace SmallMind.Core.Core
             _m = new List<float[]>(_parameters.Count);
             _v = new List<float[]>(_parameters.Count);
             
-            foreach (var param in _parameters)
+            for (int p = 0; p < _parameters.Count; p++)
             {
-                _m.Add(new float[param.Size]);
-                _v.Add(new float[param.Size]);
+                _m.Add(new float[_parameters[p].Size]);
+                _v.Add(new float[_parameters[p].Size]);
             }
         }
 
@@ -100,8 +100,9 @@ namespace SmallMind.Core.Core
         /// <param name="maxValue">Maximum absolute value for gradients</param>
         private void ClipGradients(float maxValue)
         {
-            foreach (var param in _parameters)
+            for (int p = 0; p < _parameters.Count; p++)
             {
+                var param = _parameters[p];
                 if (param.Grad == null) continue;
 
                 for (int i = 0; i < param.Size; i++)
@@ -122,8 +123,9 @@ namespace SmallMind.Core.Core
         {
             // Compute global gradient norm
             float totalNorm = 0.0f;
-            foreach (var param in _parameters)
+            for (int p = 0; p < _parameters.Count; p++)
             {
+                var param = _parameters[p];
                 if (param.Grad == null) continue;
 
                 for (int i = 0; i < param.Size; i++)
@@ -137,8 +139,9 @@ namespace SmallMind.Core.Core
             if (totalNorm > maxNorm)
             {
                 float scale = maxNorm / (totalNorm + 1e-6f);
-                foreach (var param in _parameters)
+                for (int p = 0; p < _parameters.Count; p++)
                 {
+                    var param = _parameters[p];
                     if (param.Grad == null) continue;
 
                     for (int i = 0; i < param.Size; i++)
@@ -151,9 +154,9 @@ namespace SmallMind.Core.Core
 
         public void ZeroGrad()
         {
-            foreach (var param in _parameters)
+            for (int p = 0; p < _parameters.Count; p++)
             {
-                param.ZeroGrad();
+                _parameters[p].ZeroGrad();
             }
         }
 

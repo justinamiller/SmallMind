@@ -266,14 +266,22 @@ namespace SmallMind.Tokenizers
         /// </summary>
         public string Decode(List<int> tokens)
         {
+            // Use CollectionsMarshal or manual copy to avoid ToArray allocation
+            int[] tokenArray = ArrayPool<int>.Shared.Rent(tokens.Count);
             byte[] buffer = ArrayPool<byte>.Shared.Rent(tokens.Count * 4);
             try
             {
-                int byteCount = Decode(tokens.ToArray().AsSpan(), buffer);
+                for (int i = 0; i < tokens.Count; i++)
+                {
+                    tokenArray[i] = tokens[i];
+                }
+                
+                int byteCount = Decode(tokenArray.AsSpan(0, tokens.Count), buffer);
                 return Encoding.UTF8.GetString(buffer, 0, byteCount);
             }
             finally
             {
+                ArrayPool<int>.Shared.Return(tokenArray);
                 ArrayPool<byte>.Shared.Return(buffer);
             }
         }
