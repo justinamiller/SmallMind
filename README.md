@@ -1,28 +1,33 @@
-# SmallMind - Pure C# Educational Language Model
+# SmallMind - Local C# Language Model Inference Engine
 
-SmallMind is a deliberately tiny, educational language model built entirely in C# (.NET 8) from scratch **with NO 3rd party dependencies**. It demonstrates decoder-only Transformers (GPT-style) using only native C# classes.
+SmallMind is a production-ready, local language model inference engine built entirely in C# (.NET 10) **with NO 3rd party dependencies**. It provides a stable, commercial-grade API for running decoder-only Transformers (GPT-style) on your infrastructure.
 
-> **v0.3.0**: Now with advanced training features, builder pattern, and comprehensive tutorials! See [CHANGELOG](CHANGELOG.md) for details.
+> **Commercial Stable API**: Use the stable `SmallMind.Engine` facade for production deployments. The internal implementation remains educational and transparent for learning purposes.
+
+## Why SmallMind?
+
+- ✅ **Zero Dependencies**: No black-box libraries - full control over your inference stack
+- ✅ **Local & Private**: Runs entirely on your infrastructure, no external API calls
+- ✅ **Stable API**: Semantic versioning with commercial support guarantees
+- ✅ **Performance Optimized**: SIMD acceleration, quantization (Q8/Q4), KV caching
+- ✅ **Production Ready**: Resource governance, budgets, deterministic mode, observability
+- ✅ **RAG Built-in**: Document retrieval and citation-backed generation
+- ✅ **Platform Native**: Pure .NET - runs on Windows, Linux, macOS, containers
 
 ## Installation
 
-### NuGet Packages (Recommended)
+### NuGet Packages
 
 ```bash
-# Core library (tensor operations, autograd, SIMD, optimizers)
-dotnet add package SmallMind.Core
+# Stable public API (recommended for production)
+dotnet add package SmallMind.Engine
+dotnet add package SmallMind.Abstractions
 
-# Transformer models
-dotnet add package SmallMind.Transformers
-
-# Text tokenization
-dotnet add package SmallMind.Tokenizers
-
-# Text generation and training
-dotnet add package SmallMind.Runtime
-
-# RAG system (document retrieval and generation)
-dotnet add package SmallMind.Rag
+# Optional: Core libraries for advanced scenarios
+dotnet add package SmallMind.Core        # Tensor operations, SIMD
+dotnet add package SmallMind.Transformers # Model implementations
+dotnet add package SmallMind.Runtime     # Inference runtime
+dotnet add package SmallMind.Rag         # RAG capabilities
 ```
 
 ### From Source
@@ -33,43 +38,91 @@ cd SmallMind
 dotnet build
 ```
 
-## Quick Start
+## Quick Start (Stable API)
 
 ```csharp
-using SmallMind.Core;
-using SmallMind.Transformers;
-using SmallMind.Tokenizers;
-using SmallMind.Runtime;
+using SmallMind.Abstractions;
+using SmallMind.Engine;
 
-// Load a trained checkpoint
-var store = new BinaryCheckpointStore();
-var checkpoint = await store.LoadAsync("model.smnd");
-var model = CheckpointExtensions.FromCheckpoint(checkpoint);
+// Create engine
+using var engine = SmallMind.Create(new SmallMindOptions
+{
+    EnableKvCache = true,
+    EnableRag = true
+});
 
-// Generate text
-var tokenizer = new CharTokenizer("abcdefghijklmnopqrstuvwxyz ");
-var generator = new Sampling(model, tokenizer, model.BlockSize);
+// Load model (.smq or .gguf)
+using var model = await engine.LoadModelAsync(new ModelLoadRequest
+{
+    Path = "model.smq",
+    AllowGgufImport = true  // Auto-convert .gguf files
+});
 
-var text = generator.Generate(
-    prompt: "Hello world",
-    maxNewTokens: 50,
-    temperature: 0.8,
-    topK: 40,
-    seed: 42
-);
+// Generate text with streaming
+var request = new GenerationRequest
+{
+    Prompt = "Once upon a time",
+    Options = new GenerationOptions
+    {
+        MaxNewTokens = 100,
+        Temperature = 0.8,
+        Mode = GenerationMode.Exploratory
+    }
+};
 
-Console.WriteLine(text);
+await foreach (var token in engine.GenerateStreamingAsync(model, request))
+{
+    if (token.Kind == TokenEventKind.Token)
+        Console.Write(token.Text.ToString());
+}
 ```
 
-Or use the new builder pattern:
+**See [docs/quickstart.md](docs/quickstart.md) for complete examples.**
+
+## Key Features
+
+### 🔒 Stable Public API
+
+Use the **stable contract** for production deployments:
+- **Single entry point**: `SmallMind.Create()`
+- **Clean interfaces**: `ISmallMindEngine`, `IModelHandle`, `IChatSession`, `IRagEngine`
+- **Typed exceptions**: Actionable error messages with remediation
+- **Semantic versioning**: Predictable API evolution
+
+See [docs/api-contract.md](docs/api-contract.md) for stability guarantees.
+
+### ⚡ Production Features
+
+- **Streaming**: Token-by-token output with cancellation support
+- **KV Cache**: 13x speedup for multi-turn conversations
+- **Batching**: 5x throughput for concurrent requests
+- **Resource Governance**: Hard budgets (tokens, time, memory)
+- **Deterministic Mode**: Same seed + prompt = identical output
+- **Quantization**: Q8/Q4 for 4-7x memory reduction
+
+### 📚 RAG (Retrieval-Augmented Generation)
+
+Built-in document retrieval with citations:
 
 ```csharp
-// Create model with builder
-var model = TransformerModelBuilder.Create()
-    .UseSmallConfig(vocabSize: tokenizer.VocabSize)
-    .WithBlockSize(128)
-    .WithDropout(0.1)
-    .Build();
+// Build index from documents
+var index = await engine.Rag.BuildIndexAsync(new RagBuildRequest
+{
+    SourcePaths = new[] { "docs/" },
+    IndexDirectory = "rag-index"
+});
+
+// Ask questions with citations
+var answer = await engine.Rag.AskAsync(model, new RagAskRequest
+{
+    Query = "What is SmallMind?",
+    Index = index,
+    TopK = 5
+});
+
+Console.WriteLine(answer.Answer);
+foreach (var citation in answer.Citations)
+    Console.WriteLine($"  [{citation.Confidence:F2}] {citation.SourceUri}");
 ```
 
 ### Run a GGUF Model in 2 Minutes
@@ -1658,6 +1711,24 @@ Note: Larger models train much slower without GPU!
 | Educational Value | Medium | Very High |
 | Production Ready | Yes | No |
 | Binary Size | Large (~500MB+) | Small (~200KB) |
+
+## Documentation
+
+Comprehensive documentation for the stable public API:
+
+### Core Documentation
+- **[API Contract](docs/api-contract.md)** - Stability guarantees, versioning policy, capability discovery
+- **[QuickStart Guide](docs/quickstart.md)** - Copy-paste examples for common scenarios
+- **[Operational Notes](docs/operational-notes.md)** - Error taxonomy, budgets, performance tuning
+
+### Samples
+- **[SmallMind.QuickStart](samples/SmallMind.QuickStart/)** - Demonstrates the stable API "golden path"
+- **[Production Examples](examples/)** - Advanced scenarios (KV cache, batching, RAG)
+
+### Architecture (Educational)
+- **[Quantization](docs/quantization.md)** - SMQ format, GGUF import, Q8/Q4 schemes
+- **[RAG Implementation](docs/rag.md)** - Document ingestion, retrieval, citation
+- **[Workflows](docs/WORKFLOWS.md)** - LLM-powered decision automation
 
 ## License
 
