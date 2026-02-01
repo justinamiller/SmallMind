@@ -36,9 +36,9 @@ namespace SmallMind.Domain
         /// </summary>
         /// <param name="message">The error message.</param>
         /// <param name="policyName">The name of the policy that was violated.</param>
-        /// <param name="innerException">The inner exception.</param>
         /// <param name="violatingValue">The value that violated the policy.</param>
-        public DomainPolicyViolationException(string message, string policyName, Exception innerException, object? violatingValue = null)
+        /// <param name="innerException">The inner exception.</param>
+        public DomainPolicyViolationException(string message, string policyName, object? violatingValue, Exception innerException)
             : base(message, innerException, "DOMAIN_POLICY_VIOLATION")
         {
             PolicyName = policyName;

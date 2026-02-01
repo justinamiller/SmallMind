@@ -33,14 +33,16 @@ namespace SmallMind.Tests.Domain
             // Arrange
             var message = "Test policy violation";
             var policyName = "TestPolicy";
+            var violatingValue = 42;
             var innerException = new InvalidOperationException("Inner error");
 
             // Act
-            var exception = new DomainPolicyViolationException(message, policyName, innerException);
+            var exception = new DomainPolicyViolationException(message, policyName, violatingValue, innerException);
 
             // Assert
             Assert.Equal(message, exception.Message);
             Assert.Equal(policyName, exception.PolicyName);
+            Assert.Equal(violatingValue, exception.ViolatingValue);
             Assert.Equal(innerException, exception.InnerException);
         }
 
