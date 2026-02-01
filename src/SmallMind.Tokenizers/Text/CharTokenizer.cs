@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Text;
 
@@ -15,6 +16,8 @@ namespace SmallMind.Tokenizers
         private readonly Dictionary<int, char> _idxToChar;
 
         public int VocabSize { get; }
+        
+        public TokenizerInfo Info { get; }
 
         /// <summary>
         /// Creates a new CharTokenizer from the given training text.
@@ -46,6 +49,11 @@ namespace SmallMind.Tokenizers
             }
 
             VocabSize = chars.Length;
+            Info = new TokenizerInfo(
+                name: "CharTokenizer",
+                vocabSize: VocabSize,
+                supportsByteFallback: false
+            );
             Console.WriteLine($"CharTokenizer: Vocabulary built with {VocabSize} unique characters");
         }
 
@@ -70,6 +78,79 @@ namespace SmallMind.Tokenizers
                 }
             }
             return result;
+        }
+
+        /// <summary>
+        /// Encode UTF-8 bytes into token IDs (fast path).
+        /// </summary>
+        public int Encode(ReadOnlySpan<byte> utf8, Span<int> tokensOut)
+        {
+            // Decode UTF-8 to string first (CharTokenizer operates on chars)
+            string text = Encoding.UTF8.GetString(utf8);
+            int count = 0;
+            
+            foreach (char ch in text)
+            {
+                if (count >= tokensOut.Length)
+                    break;
+                    
+                if (_charToIdx.TryGetValue(ch, out int idx))
+                {
+                    tokensOut[count++] = idx;
+                }
+            }
+            
+            return count;
+        }
+
+        /// <summary>
+        /// Decode token IDs back into UTF-8 bytes (fast path).
+        /// </summary>
+        public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
+        {
+            // Build string first, then encode to UTF-8
+            // For small buffers, use stack allocation
+            int maxChars = tokens.Length;
+            char[]? rentedArray = null;
+            Span<char> chars = maxChars <= 256 
+                ? stackalloc char[maxChars] 
+                : (rentedArray = ArrayPool<char>.Shared.Rent(maxChars)).AsSpan(0, maxChars);
+            
+            try
+            {
+                int charCount = 0;
+                foreach (int idx in tokens)
+                {
+                    if (_idxToChar.TryGetValue(idx, out char ch))
+                    {
+                        chars[charCount++] = ch;
+                    }
+                }
+                
+                int bytesWritten = Encoding.UTF8.GetBytes(chars.Slice(0, charCount), utf8Out);
+                return bytesWritten;
+            }
+            finally
+            {
+                if (rentedArray != null)
+                    ArrayPool<char>.Shared.Return(rentedArray);
+            }
+        }
+
+        /// <summary>
+        /// Decode token IDs back to string (convenience).
+        /// </summary>
+        public string DecodeToString(ReadOnlySpan<int> tokens)
+        {
+            var sb = new StringBuilder(tokens.Length);
+            foreach (int idx in tokens)
+            {
+                if (_idxToChar.TryGetValue(idx, out char ch))
+                {
+                    sb.Append(ch);
+                }
+            }
+            return sb.ToString();
         }
 
         /// <summary>

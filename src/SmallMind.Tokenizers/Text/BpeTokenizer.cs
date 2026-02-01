@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -23,6 +24,8 @@ namespace SmallMind.Tokenizers
         private const string EndOfTextToken = "[EOT]";
 
         public int VocabSize => _vocab.Count;
+        
+        public TokenizerInfo Info { get; }
 
         /// <summary>
         /// Creates a new BpeTokenizer by loading assets from the specified directory.
@@ -102,6 +105,17 @@ namespace SmallMind.Tokenizers
                 // Pre-tokenization regex: split on whitespace and punctuation boundaries
                 // This pattern matches sequences of letters, digits, or individual punctuation/whitespace
                 _preTokenizeRegex = new Regex(@"\w+|[^\w\s]|\s+", RegexOptions.Compiled);
+
+                int eosId = _vocab.TryGetValue(EndOfTextToken, out int id) ? id : -1;
+                int unkId = _vocab.TryGetValue(UnknownToken, out int id2) ? id2 : -1;
+                
+                Info = new TokenizerInfo(
+                    name: "BpeTokenizer",
+                    vocabSize: _vocab.Count,
+                    eosTokenId: eosId,
+                    unkTokenId: unkId,
+                    supportsByteFallback: false
+                );
 
                 Console.WriteLine($"BpeTokenizer: Loaded {_vocab.Count} tokens and {_merges.Count} merge rules from {assetsPath}");
             }
@@ -194,6 +208,53 @@ namespace SmallMind.Tokenizers
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Encode UTF-8 bytes into token IDs (fast path).
+        /// </summary>
+        public int Encode(ReadOnlySpan<byte> utf8, Span<int> tokensOut)
+        {
+            // Decode UTF-8 to string first, then use existing logic
+            string text = Encoding.UTF8.GetString(utf8);
+            List<int> tokens = Encode(text);
+            
+            int count = Math.Min(tokens.Count, tokensOut.Length);
+            for (int i = 0; i < count; i++)
+            {
+                tokensOut[i] = tokens[i];
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// Decode token IDs back into UTF-8 bytes (fast path).
+        /// </summary>
+        public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
+        {
+            // Use existing Decode to get string, then encode to UTF-8
+            var tokenList = new List<int>(tokens.Length);
+            foreach (int token in tokens)
+            {
+                tokenList.Add(token);
+            }
+            
+            string text = Decode(tokenList);
+            int bytesWritten = Encoding.UTF8.GetBytes(text.AsSpan(), utf8Out);
+            return bytesWritten;
+        }
+
+        /// <summary>
+        /// Decode token IDs back to string (convenience).
+        /// </summary>
+        public string DecodeToString(ReadOnlySpan<int> tokens)
+        {
+            var tokenList = new List<int>(tokens.Length);
+            foreach (int token in tokens)
+            {
+                tokenList.Add(token);
+            }
+            return Decode(tokenList);
         }
 
         /// <summary>
