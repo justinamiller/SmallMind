@@ -1,16 +1,29 @@
-# SmallMind - Local C# Language Model Inference Engine
+# SmallMind - Production-Ready OSS Local Inference Runtime for .NET
 
-SmallMind is a production-ready, local language model inference engine built entirely in C# (.NET 10) **with NO 3rd party dependencies**. It provides a stable, commercial-grade API for running decoder-only Transformers (GPT-style) on your infrastructure.
+SmallMind is a **production-ready, open source, local, CPU-first LLM inference runtime** built entirely in C# (.NET 8+) with **NO 3rd party dependencies**. It provides a stable public API for running decoder-only Transformers (GPT-style) on your infrastructure.
 
-> **Commercial Stable API**: Use the stable `SmallMind.Engine` facade for production deployments. The internal implementation remains educational and transparent for learning purposes.
+## Project Intent
+
+**SmallMind is designed for production-grade local inference, not training at scale.**
+
+The **stable public API** (`SmallMind.Abstractions` + `SmallMind.Engine` facade) is the recommended adoption surface for:
+- Loading models for inference (`.smq`, `.gguf` import)
+- Text generation with streaming and cancellation
+- Multi-turn conversations with KV cache optimization
+- Resource governance (token/time/memory budgets)
+- Deterministic generation for testing and reproducibility
+
+**Internals and experimental modules** (training, research utilities) may change between versions. The stable facade provides predictable, versioned access to the inference engine while keeping internal implementation transparent for learning and customization.
+
+See [docs/stability-and-compatibility.md](docs/stability-and-compatibility.md) for detailed stability guarantees.
 
 ## Why SmallMind?
 
 - ✅ **Zero Dependencies**: No black-box libraries - full control over your inference stack
 - ✅ **Local & Private**: Runs entirely on your infrastructure, no external API calls
-- ✅ **Stable API**: Semantic versioning with commercial support guarantees
+- ✅ **Stable Public API**: Semantic versioning with clear stability guarantees (no paid support)
 - ✅ **Performance Optimized**: SIMD acceleration, quantization (Q8/Q4), KV caching
-- ✅ **Production Ready**: Resource governance, budgets, deterministic mode, observability
+- ✅ **Production Ready**: Resource governance, budgets, deterministic mode, safe loading
 - ✅ **RAG Built-in**: Document retrieval and citation-backed generation
 - ✅ **Platform Native**: Pure .NET - runs on Windows, Linux, macOS, containers
 
@@ -79,6 +92,19 @@ await foreach (var token in engine.GenerateStreamingAsync(model, request))
 
 **See [docs/quickstart.md](docs/quickstart.md) for complete examples.**
 
+## Documentation
+
+### Stable API & Compatibility
+- **[Stability and Compatibility](docs/stability-and-compatibility.md)** - What's stable, versioning policy, determinism, concurrency
+- **[Compatibility Matrix](docs/compatibility-matrix.md)** - Model formats, quantization, tokenizers, runtime limits
+- **[API Contract](docs/api-contract.md)** - Public API stability guarantees and usage patterns
+- **[Operational Notes](docs/operational-notes.md)** - Exception handling, resource management, production deployment
+
+### Getting Started
+- **[Quick Start Guide](docs/quickstart.md)** - Installation, first steps, basic examples
+- **[Pretrained Models](docs/pretrained-models.md)** - Using pretrained models and GGUF import
+- **[Configuration](docs/configuration.md)** - Engine options, generation parameters, tuning
+
 ## Key Features
 
 ### 🔒 Stable Public API
@@ -89,7 +115,7 @@ Use the **stable contract** for production deployments:
 - **Typed exceptions**: Actionable error messages with remediation
 - **Semantic versioning**: Predictable API evolution
 
-See [docs/api-contract.md](docs/api-contract.md) for stability guarantees.
+See [docs/api-contract.md](docs/api-contract.md) and [docs/stability-and-compatibility.md](docs/stability-and-compatibility.md) for detailed stability guarantees.
 
 ### ⚡ Production Features
 

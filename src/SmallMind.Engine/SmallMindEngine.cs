@@ -55,29 +55,14 @@ namespace SmallMind.Engine
         {
             ThrowIfDisposed();
 
-            if (string.IsNullOrWhiteSpace(request.Path))
-            {
-                throw new ArgumentException("Model path cannot be empty", nameof(request));
-            }
-
-            if (!File.Exists(request.Path))
-            {
-                throw new FileNotFoundException($"Model file not found: {request.Path}");
-            }
+            // Early validation with actionable error messages
+            ModelValidator.ValidatePathAndExtension(request);
 
             var ext = Path.GetExtension(request.Path).ToLowerInvariant();
 
             // Handle GGUF import if requested
             if (ext == ".gguf")
             {
-                if (!request.AllowGgufImport)
-                {
-                    throw new UnsupportedModelException(
-                        request.Path,
-                        ext,
-                        "GGUF files require AllowGgufImport=true in ModelLoadRequest");
-                }
-
                 return await LoadGgufModelAsync(request, cancellationToken);
             }
 
@@ -87,11 +72,11 @@ namespace SmallMind.Engine
                 return await LoadSmqModelAsync(request, cancellationToken);
             }
 
-            // Unsupported format
+            // Should never reach here due to ValidatePathAndExtension, but defensive
             throw new UnsupportedModelException(
                 request.Path,
                 ext,
-                $"Unsupported model format '{ext}'. Supported formats: .smq, .gguf (with AllowGgufImport=true)");
+                $"Unsupported model format '{ext}'. This should have been caught by validation.");
         }
 
         public IChatSession CreateChatSession(IModelHandle model, SessionOptions options)
@@ -128,22 +113,41 @@ namespace SmallMind.Engine
                 throw new ArgumentException("Model handle must be created by this engine", nameof(model));
             }
 
-            // Use existing inference engine
+            // Enforce budgets with BudgetEnforcer
+            using var budgetEnforcer = new BudgetEnforcer(request.Options, cancellationToken);
+
+            // Use existing inference engine with combined cancellation token
             var session = internalHandle.CreateInferenceSession(request.Options, _options);
             try
             {
+                // Tokenize prompt to validate context length (use tokenizer from model handle)
+                var promptTokens = internalHandle.Tokenizer.Encode(request.Prompt);
+                budgetEnforcer.ValidateContextLength(promptTokens.Count);
+
                 var text = await session.GenerateAsync(
                     request.Prompt,
                     metrics: null,
-                    cancellationToken: cancellationToken);
+                    cancellationToken: budgetEnforcer.CombinedToken);
+
+                // Return actual generated tokens (don't use fallback estimate)
+                var generatedTokens = budgetEnforcer.GeneratedTokens;
 
                 return new GenerationResult
                 {
                     Text = text,
-                    GeneratedTokens = session.Options.MaxNewTokens, // Approximate
-                    StoppedByBudget = false,
-                    StopReason = "completed"
+                    GeneratedTokens = generatedTokens,
+                    StoppedByBudget = budgetEnforcer.BudgetExceeded,
+                    StopReason = budgetEnforcer.BudgetExceeded 
+                        ? $"budget_exceeded_{budgetEnforcer.ExceededReason}" 
+                        : "completed"
                 };
+            }
+            catch (OperationCanceledException) when (budgetEnforcer.BudgetExceeded)
+            {
+                // Budget exceeded, throw our exception instead
+                budgetEnforcer.ThrowIfExceeded();
+                // If ThrowIfExceeded didn't throw (shouldn't happen), rethrow original
+                throw;
             }
             finally
             {
@@ -168,6 +172,21 @@ namespace SmallMind.Engine
                 throw new ArgumentException("Model handle must be created by this engine", nameof(model));
             }
 
+            // Use helper method to avoid yield in try-catch
+            await foreach (var token in GenerateStreamingAsyncImpl(internalHandle, request, cancellationToken))
+            {
+                yield return token;
+            }
+        }
+
+        private async IAsyncEnumerable<TokenEvent> GenerateStreamingAsyncImpl(
+            ModelHandle internalHandle,
+            GenerationRequest request,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            // Enforce budgets with BudgetEnforcer
+            using var budgetEnforcer = new BudgetEnforcer(request.Options, cancellationToken);
+
             // Emit started event
             yield return new TokenEvent
             {
@@ -178,32 +197,25 @@ namespace SmallMind.Engine
                 IsFinal = false
             };
 
-            int tokenCount = 0;
+            InferenceSession? session = null;
 
-            var session = internalHandle.CreateInferenceSession(request.Options, _options);
             try
             {
-                bool isLast = false;
-                await foreach (var token in session.GenerateStreamAsync(
-                    request.Prompt,
-                    metrics: null,
-                    cancellationToken: cancellationToken))
+                session = internalHandle.CreateInferenceSession(request.Options, _options);
+                
+                // Tokenize prompt to validate context length (use tokenizer from model handle)
+                var promptTokens = internalHandle.Tokenizer.Encode(request.Prompt);
+                budgetEnforcer.ValidateContextLength(promptTokens.Count);
+
+                // Use helper to avoid yield in try-catch
+                await foreach (var token in GenerateTokensWithBudgetAsync(session, request, budgetEnforcer))
                 {
-                    tokenCount++;
-                    isLast = (tokenCount >= request.Options.MaxNewTokens);
+                    yield return token;
 
-                    yield return new TokenEvent
+                    // Stop if final token
+                    if (token.IsFinal)
                     {
-                        Kind = TokenEventKind.Token,
-                        Text = token.Text.AsMemory(),
-                        TokenId = token.TokenId,
-                        GeneratedTokens = tokenCount,
-                        IsFinal = isLast
-                    };
-
-                    if (isLast)
-                    {
-                        break;
+                        yield break;
                     }
                 }
 
@@ -213,13 +225,58 @@ namespace SmallMind.Engine
                     Kind = TokenEventKind.Completed,
                     Text = ReadOnlyMemory<char>.Empty,
                     TokenId = -1,
-                    GeneratedTokens = tokenCount,
+                    GeneratedTokens = budgetEnforcer.GeneratedTokens,
                     IsFinal = true
                 };
             }
             finally
             {
-                session.Dispose();
+                session?.Dispose();
+            }
+        }
+
+        private async IAsyncEnumerable<TokenEvent> GenerateTokensWithBudgetAsync(
+            InferenceSession session,
+            GenerationRequest request,
+            BudgetEnforcer budgetEnforcer)
+        {
+            await foreach (var token in session.GenerateStreamAsync(
+                request.Prompt,
+                metrics: null,
+                cancellationToken: budgetEnforcer.CombinedToken))
+            {
+                // Check budget before emitting token
+                if (!budgetEnforcer.ShouldContinue())
+                {
+                    // Budget exceeded - emit error event and stop
+                    yield return new TokenEvent
+                    {
+                        Kind = TokenEventKind.Error,
+                        Text = $"Budget exceeded: {budgetEnforcer.ExceededReason}".AsMemory(),
+                        TokenId = -1,
+                        GeneratedTokens = budgetEnforcer.GeneratedTokens,
+                        IsFinal = true
+                    };
+                    yield break;
+                }
+
+                budgetEnforcer.IncrementTokenCount();
+
+                bool isLast = !budgetEnforcer.ShouldContinue();
+
+                yield return new TokenEvent
+                {
+                    Kind = TokenEventKind.Token,
+                    Text = token.Text.AsMemory(),
+                    TokenId = token.TokenId,
+                    GeneratedTokens = budgetEnforcer.GeneratedTokens,
+                    IsFinal = isLast
+                };
+
+                if (isLast)
+                {
+                    break;
+                }
             }
         }
 
@@ -230,12 +287,32 @@ namespace SmallMind.Engine
             // Load SMQ metadata
             var metadata = QuantizedModelLoader.LoadQuantizedModelMetadata(request.Path);
 
+            // Validate metadata sanity
+            ModelValidator.ValidateMetadata(metadata.Metadata, request.Path);
+
             // Extract model dimensions from metadata
             int vocabSize = ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257);
             int blockSize = ExtractMetadataInt(metadata.Metadata, "block_size", 1024);
             int embedDim = ExtractMetadataInt(metadata.Metadata, "embed_dim", 768);
             int numLayers = ExtractMetadataInt(metadata.Metadata, "num_layers", 12);
             int numHeads = ExtractMetadataInt(metadata.Metadata, "num_heads", 12);
+
+            // Check memory budget if specified
+            if (request.MaxMemoryBytes.HasValue)
+            {
+                var estimatedBytes = ModelValidator.EstimateMemoryRequirementBytes(
+                    metadata.Metadata,
+                    quantizationBits: 8); // Assume Q8 for SMQ files
+
+                if (estimatedBytes > request.MaxMemoryBytes.Value)
+                {
+                    throw new UnsupportedModelException(
+                        request.Path,
+                        ".smq",
+                        $"Model exceeds memory budget: estimated {estimatedBytes / 1024 / 1024}MB > max {request.MaxMemoryBytes.Value / 1024 / 1024}MB.{Environment.NewLine}" +
+                        $"Remediation: Increase MaxMemoryBytes, use a smaller model, or use higher quantization (Q4 instead of Q8).");
+                }
+            }
 
             // For now, we create a placeholder FP32 model structure
             // In a production system, this would load the quantized weights directly
