@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AssemblyName>SmallMind.Engine</AssemblyName>
+    <RootNamespace>SmallMind.Engine</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmallMind.Abstractions\SmallMind.Abstractions.csproj" />
+    <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
+    <ProjectReference Include="..\SmallMind.Runtime\SmallMind.Runtime.csproj" />
+    <ProjectReference Include="..\SmallMind.Transformers\SmallMind.Transformers.csproj" />
+    <ProjectReference Include="..\SmallMind.Tokenizers\SmallMind.Tokenizers.csproj" />
+    <ProjectReference Include="..\SmallMind.Rag\SmallMind.Rag.csproj" />
+  </ItemGroup>
+
+</Project>
