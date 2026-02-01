@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-01
+
+### Added - Advanced Training & Usability Enhancements
+
+#### Learning Rate Schedulers
+- **ILearningRateScheduler**: Interface for learning rate scheduling strategies
+- **ConstantLR**: No scheduling (baseline)
+- **WarmupLR**: Linear warmup from 0 to target learning rate
+- **CosineAnnealingLR**: Cosine decay with optional warmup (recommended for most cases)
+- **StepDecayLR**: Decay learning rate by factor at regular intervals
+- **ExponentialDecayLR**: Smooth exponential decay
+- **OneCycleLR**: Triangular policy for fast convergence
+
+#### Gradient Clipping
+- **AdamW.gradClipValue**: Clip gradients by value to prevent exploding gradients
+- **AdamW.ClipGradientsByNorm()**: Clip by global L2 norm (recommended for transformers)
+- Integrated into optimizer step for automatic application
+
+#### Model Builder Pattern
+- **TransformerModelBuilder**: Fluent API for creating models
+  - `WithVocabSize()`, `WithBlockSize()`, `WithEmbedDim()`, etc.
+  - Preset configurations: `UseTinyConfig()`, `UseSmallConfig()`, `UseMediumConfig()`, `UseLargeConfig()`
+  - Automatic validation of embedding dimension divisibility by number of heads
+  - Example: `TransformerModelBuilder.Create().UseSmallConfig(vocabSize).Build()`
+
+#### Documentation & Tutorials
+- **Tutorial 1**: Loading Models and Generating Text
+  - Binary vs JSON checkpoints
+  - Character and BPE tokenization
+  - Greedy, temperature, and top-K sampling
+  - Async and streaming generation
+- **Tutorial 2**: Concurrent Inference
+  - Thread-safe model sharing patterns
+  - Parallel batch processing
+  - Performance benchmarking
+  - Memory management and pooling
+- **Tutorial 5**: Advanced Training
+  - Learning rate schedule usage
+  - Gradient clipping techniques
+  - Training with validation
+  - Optimizer configuration strategies
+- **Tutorials README**: Quick start guide and overview
+
+#### Sample Applications
+- **MultiThreadedGeneration**: Production-quality concurrent inference demo
+  - Scenario 1: Basic concurrent generation
+  - Scenario 2: Batch processing with progress tracking
+  - Scenario 3: Performance benchmark across concurrency levels
+  - BatchProcessor class for parallel text generation
+  - ProgressBar class for console feedback
+  - Thread-safe shared model usage
+
+#### NuGet Packaging
+- Version synchronized to 0.3.0 across all packages
+- Successfully tested `dotnet pack` for all libraries:
+  - SmallMind.Core (62KB)
+  - SmallMind.Transformers (16KB)
+  - SmallMind.Tokenizers (11KB)
+  - SmallMind.Runtime (19KB)
+
+### Changed
+- **AdamW optimizer**: Constructor now accepts `gradClipValue` parameter (default: 0.0, disabled)
+- **AdamW**: Added public `ClipGradientsByNorm()` method for manual gradient clipping
+- All library projects updated to version 0.3.0
+
+### Improved
+- **Developer Experience**: Builder pattern makes model creation more intuitive
+- **Training Stability**: Gradient clipping prevents training divergence
+- **Training Quality**: Learning rate schedules improve convergence
+- **Documentation**: Comprehensive tutorials cover common use cases
+- **Examples**: Multi-threaded sample demonstrates production patterns
+
 ## [0.2.0] - 2026-02-01
 
 ### Added - Commercial Readiness v0.2

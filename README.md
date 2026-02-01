@@ -2,14 +2,14 @@
 
 SmallMind is a deliberately tiny, educational language model built entirely in C# (.NET 8) from scratch **with NO 3rd party dependencies**. It demonstrates decoder-only Transformers (GPT-style) using only native C# classes.
 
-> **v0.2.0**: Now available as a multi-project library with binary checkpointing! See [Commercial Readiness Roadmap](docs/commercial-readiness-roadmap.md) for details.
+> **v0.3.0**: Now with advanced training features, builder pattern, and comprehensive tutorials! See [CHANGELOG](CHANGELOG.md) for details.
 
 ## Installation
 
 ### NuGet Packages (Recommended)
 
 ```bash
-# Core library (tensor operations, autograd, SIMD)
+# Core library (tensor operations, autograd, SIMD, optimizers)
 dotnet add package SmallMind.Core
 
 # Transformer models
@@ -58,7 +58,34 @@ var text = generator.Generate(
 Console.WriteLine(text);
 ```
 
-See [examples/MinimalGenerate](examples/MinimalGenerate) for a complete working example.
+Or use the new builder pattern:
+
+```csharp
+// Create model with builder
+var model = TransformerModelBuilder.Create()
+    .UseSmallConfig(vocabSize: tokenizer.VocabSize)
+    .WithBlockSize(128)
+    .WithDropout(0.1)
+    .Build();
+```
+
+See [examples/MinimalGenerate](examples/MinimalGenerate) and [samples/](samples/) for complete working examples.
+
+## What's New in v0.3.0
+
+### Advanced Training Features
+- **6 Learning Rate Schedulers**: Constant, Warmup, Cosine Annealing, Step Decay, Exponential, One-Cycle
+- **Gradient Clipping**: Both value-based and norm-based clipping to prevent exploding gradients
+- **Enhanced Optimizer**: AdamW with configurable gradient clipping
+
+### Improved Developer Experience
+- **TransformerModelBuilder**: Fluent API with preset configurations (Tiny, Small, Medium, Large)
+- **Comprehensive Tutorials**: Step-by-step guides for loading, inference, and advanced training
+- **Sample Applications**: Production-quality multi-threaded generation example
+
+### Better Performance
+- **Performance Benchmark Utility**: Built-in benchmarking with percentile metrics
+- **Multi-threaded Sample**: Demonstrates concurrent inference patterns
 
 ## Features
 
