@@ -14,7 +14,7 @@ namespace SmallMind.RAG
     public class QuestionAnsweringEngine
     {
         private readonly TransformerModel _model;
-        private readonly Tokenizer _tokenizer;
+        private readonly ITokenizer _tokenizer;
         private readonly int _blockSize;
         private readonly Sampling _sampler;
         private readonly string _trainingCorpus;
@@ -31,7 +31,7 @@ Answer:";
         private const string SIMPLE_QA_TEMPLATE = @"Q: {question}
 A:";
 
-        public QuestionAnsweringEngine(TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingCorpus = "")
+        public QuestionAnsweringEngine(TransformerModel model, ITokenizer tokenizer, int blockSize, string trainingCorpus = "")
         {
             _model = model;
             _tokenizer = tokenizer;

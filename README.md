@@ -16,7 +16,10 @@ SmallMind is a deliberately tiny, educational language model built entirely in C
   - Feed-forward MLP with GELU activation
   - LayerNorm and residual connections
   - Final linear head to vocabulary
-- **Character-level tokenizer** for simplicity
+- **Flexible tokenization** with automatic selection:
+  - **CharTokenizer** (default) - Simple character-level tokenization
+  - **BpeTokenizer** - Production-ready Byte Pair Encoding
+  - **Auto mode** - Automatically selects BPE if assets exist, falls back to Char
 - **Training from scratch** on CPU with next-token prediction
 - **Enhanced training mode** with:
   - Gradient accumulation for larger effective batch sizes
@@ -212,6 +215,134 @@ The repository includes sample data files in the `sample_data/` directory:
 
 All files contain identical content to demonstrate format equivalence.
 
+## Tokenization
+
+SmallMind supports **two tokenization strategies** to balance simplicity and production readiness:
+
+### 1. CharTokenizer (Default)
+**Character-level tokenization** - Simple and works with any text without external assets.
+- **Best for**: Learning, prototyping, small datasets, languages with large character sets
+- **Vocabulary**: Built from unique characters in training text
+- **No assets required**: Works out-of-the-box
+
+```csharp
+using SmallMind.Text;
+
+// Create from training text
+var tokenizer = new CharTokenizer("Hello World");
+var tokens = tokenizer.Encode("Hello");
+var text = tokenizer.Decode(tokens);
+```
+
+### 2. BpeTokenizer (Production)
+**Byte Pair Encoding** - Production-oriented subword tokenization for better compression and generalization.
+- **Best for**: Production deployments, larger models, multilingual text
+- **Vocabulary**: Loaded from `vocab.json` and `merges.txt` files
+- **Better compression**: Typically 3-5x fewer tokens than character-level
+- **Requires assets**: `vocab.json` (token→ID mapping) and `merges.txt` (merge rules)
+
+```csharp
+using SmallMind.Text;
+
+// Load from assets directory
+var tokenizer = new BpeTokenizer("assets/tokenizers/default");
+var tokens = tokenizer.Encode("Hello World");
+var text = tokenizer.Decode(tokens);
+```
+
+### TokenizerFactory - Automatic Selection
+
+Use `TokenizerFactory` to automatically select the right tokenizer based on available assets:
+
+```csharp
+using SmallMind.Text;
+
+// Auto mode: Uses BPE if assets exist, otherwise falls back to CharTokenizer
+var options = new TokenizerOptions 
+{ 
+    Mode = TokenizerMode.Auto,  // Auto | Char | Bpe
+    TokenizerName = "default",
+    Strict = false  // false = fallback to Char if BPE fails
+};
+
+var tokenizer = TokenizerFactory.Create(options, trainingText);
+```
+
+### Tokenizer Modes
+
+| Mode | Behavior |
+|------|----------|
+| `Auto` | Tries BPE if assets exist, falls back to CharTokenizer otherwise |
+| `Char` | Always uses CharTokenizer (requires training text) |
+| `Bpe` | Always uses BPE (throws if assets missing in strict mode, falls back if non-strict) |
+
+### Asset Discovery
+
+TokenizerFactory searches for assets in this order:
+1. **Explicit path**: `options.TokenizerPath` (if specified)
+2. **Relative path**: `./assets/tokenizers/<TokenizerName>/`
+3. **App directory**: `<AppContext.BaseDirectory>/assets/tokenizers/<TokenizerName>/`
+
+### Creating BPE Assets
+
+BPE tokenizer requires two files:
+
+**vocab.json** - Maps tokens to IDs:
+```json
+{
+  " ": 0,
+  "a": 1,
+  "hello": 42,
+  "world": 43,
+  "[UNK]": 100,
+  "[EOT]": 101
+}
+```
+
+**merges.txt** - Merge rules (one per line):
+```
+h e
+l l
+e l
+hel lo
+```
+
+Sample assets are included in `assets/tokenizers/default/` with 103 tokens and 67 merge rules.
+
+### Strict Mode
+
+```csharp
+// Strict mode: throws exception if BPE assets are missing
+var strictOptions = new TokenizerOptions 
+{ 
+    Mode = TokenizerMode.Bpe,
+    Strict = true  // Throw instead of fallback
+};
+
+try 
+{
+    var tokenizer = TokenizerFactory.Create(strictOptions);
+}
+catch (TokenizationException ex)
+{
+    // Provides actionable error message with:
+    // - Searched locations
+    // - Expected file formats
+    // - How to fix the issue
+}
+```
+
+### Backwards Compatibility
+
+The original `Tokenizer` class is now an alias for `CharTokenizer`:
+```csharp
+// These are equivalent:
+var tokenizer1 = new Tokenizer(text);
+var tokenizer2 = new CharTokenizer(text);
+```
+
+All existing code using `Tokenizer` continues to work unchanged.
+
 ## Requirements
 
 - .NET 8 SDK
@@ -240,9 +371,14 @@ SmallMind/
 │   │   │   ├── ElementWiseOps.cs     # SIMD element-wise ops
 │   │   │   └── SoftmaxOps.cs         # SIMD softmax
 │   │   ├── Text/                # Text processing utilities
-│   │   │   ├── Tokenizer.cs     # Character-level tokenizer
-│   │   │   ├── DataLoader.cs    # Multi-format data loading
-│   │   │   └── Sampling.cs      # Text generation sampling
+│   │   │   ├── ITokenizer.cs     # Tokenizer interface
+│   │   │   ├── Tokenizer.cs      # Alias for CharTokenizer (backwards compat)
+│   │   │   ├── CharTokenizer.cs  # Character-level tokenizer (default)
+│   │   │   ├── BpeTokenizer.cs   # Byte Pair Encoding tokenizer
+│   │   │   ├── TokenizerFactory.cs # Auto-selection factory
+│   │   │   ├── TokenizerOptions.cs # Tokenizer configuration
+│   │   │   ├── DataLoader.cs     # Multi-format data loading
+│   │   │   └── Sampling.cs       # Text generation sampling
 │   │   ├── RAG/                 # Retrieval-Augmented Generation
 │   │   ├── Embeddings/          # Embedding providers (TF-IDF)
 │   │   └── Indexing/            # Vector indexing

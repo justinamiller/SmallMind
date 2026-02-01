@@ -28,13 +28,13 @@ namespace SmallMind.Core
     public class Training
     {
         private readonly TransformerModel _model;
-        private readonly Tokenizer _tokenizer;
+        private readonly ITokenizer _tokenizer;
         private readonly int _blockSize;
         private readonly int _batchSize;
         private readonly List<int> _data;
         private readonly Random _random;
 
-        public Training(TransformerModel model, Tokenizer tokenizer, string trainingText, 
+        public Training(TransformerModel model, ITokenizer tokenizer, string trainingText, 
                        int blockSize, int batchSize, int seed)
         {
             Guard.NotNull(model);

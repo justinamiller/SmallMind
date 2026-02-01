@@ -14,13 +14,13 @@ namespace SmallMind.Text
     {
         private readonly int _maxContextTokens;
         private readonly List<ConversationTurn> _history;
-        private readonly Tokenizer _tokenizer;
+        private readonly ITokenizer _tokenizer;
         
         public string SessionId { get; private set; }
         public DateTime CreatedAt { get; private set; }
         public DateTime LastUpdatedAt { get; private set; }
 
-        public ConversationSession(string sessionId, Tokenizer tokenizer, int maxContextTokens = 512)
+        public ConversationSession(string sessionId, ITokenizer tokenizer, int maxContextTokens = 512)
         {
             SessionId = sessionId ?? Guid.NewGuid().ToString();
             _tokenizer = tokenizer;
@@ -161,7 +161,7 @@ namespace SmallMind.Text
         /// <summary>
         /// Load session from a JSON file
         /// </summary>
-        public static ConversationSession LoadFromFile(string filePath, Tokenizer tokenizer, int maxContextTokens = 512)
+        public static ConversationSession LoadFromFile(string filePath, ITokenizer tokenizer, int maxContextTokens = 512)
         {
             var json = File.ReadAllText(filePath);
             var sessionData = JsonSerializer.Deserialize<SessionData>(json);

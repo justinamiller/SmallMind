@@ -12,13 +12,13 @@ namespace SmallMind.Text
     public class Sampling
     {
         private readonly TransformerModel _model;
-        private readonly Tokenizer _tokenizer;
+        private readonly ITokenizer _tokenizer;
         private readonly int _blockSize;
         
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
 
-        public Sampling(TransformerModel model, Tokenizer tokenizer, int blockSize)
+        public Sampling(TransformerModel model, ITokenizer tokenizer, int blockSize)
         {
             _model = model;
             _tokenizer = tokenizer;
