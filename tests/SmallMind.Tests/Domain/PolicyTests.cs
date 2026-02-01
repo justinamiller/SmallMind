@@ -1,5 +1,6 @@
 using System;
 using Xunit;
+using SmallMind.Domain;
 using SmallMind.Domain.Policies;
 using SmallMind.Exceptions;
 
