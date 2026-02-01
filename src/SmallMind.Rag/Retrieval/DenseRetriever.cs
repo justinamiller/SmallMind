@@ -1,4 +1,4 @@
-using SmallMind.Rag.Chunking;
+using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Retrieval;
 
@@ -51,12 +51,17 @@ public sealed class DenseRetriever
 
             if (chunkStore.TryGetValue(chunkId, out var chunk))
             {
-                var retrieved = new RetrievedChunk
-                {
-                    Chunk = chunk,
-                    Score = score,
-                    Rank = i + 1
-                };
+                string excerpt = chunk.Text.Length <= 200
+                    ? chunk.Text
+                    : chunk.Text.Substring(0, 200) + "...";
+
+                var retrieved = new RetrievedChunk(
+                    chunkId: chunk.ChunkId,
+                    docId: chunk.DocId,
+                    score: score,
+                    rank: i + 1,
+                    excerpt: excerpt
+                );
 
                 retrievedChunks.Add(retrieved);
             }

@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using SmallMind.Rag.Tokenization;
+using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Retrieval;
 
@@ -11,7 +11,6 @@ public sealed class FeatureHashingEmbedder : IEmbedder
 {
     private readonly int _dimension;
     private readonly int _seed;
-    private readonly RagTokenizer _tokenizer;
 
     /// <summary>
     /// Initializes a new feature hashing embedder.
@@ -25,7 +24,6 @@ public sealed class FeatureHashingEmbedder : IEmbedder
 
         _dimension = dimension;
         _seed = seed;
-        _tokenizer = new RagTokenizer();
     }
 
     /// <inheritdoc/>
@@ -38,7 +36,7 @@ public sealed class FeatureHashingEmbedder : IEmbedder
             return new float[_dimension];
 
         var vector = new float[_dimension];
-        var tokens = _tokenizer.Tokenize(text);
+        var tokens = RagTokenizer.Tokenize(text);
 
         for (int i = 0; i < tokens.Count; i++)
         {

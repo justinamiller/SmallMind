@@ -1,4 +1,4 @@
-using SmallMind.Rag.Chunking;
+using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Retrieval;
 
@@ -77,12 +77,13 @@ public sealed class HybridRetriever
         for (int i = 0; i < bm25Results.Count; i++)
         {
             var result = bm25Results[i];
-            string chunkId = result.Chunk.Id;
+            string chunkId = result.ChunkId;
 
-            if (normalizedBm25.TryGetValue(chunkId, out float normScore))
+            if (chunkStore.TryGetValue(chunkId, out var chunk) && 
+                normalizedBm25.TryGetValue(chunkId, out float normScore))
             {
                 float combinedScore = _sparseWeight * normScore;
-                combinedScores[chunkId] = (result.Chunk, combinedScore);
+                combinedScores[chunkId] = (chunk, combinedScore);
             }
         }
 
@@ -90,9 +91,10 @@ public sealed class HybridRetriever
         for (int i = 0; i < denseResults.Count; i++)
         {
             var result = denseResults[i];
-            string chunkId = result.Chunk.Id;
+            string chunkId = result.ChunkId;
 
-            if (normalizedDense.TryGetValue(chunkId, out float normScore))
+            if (chunkStore.TryGetValue(chunkId, out var chunk) &&
+                normalizedDense.TryGetValue(chunkId, out float normScore))
             {
                 float denseContribution = _denseWeight * normScore;
 
@@ -102,7 +104,7 @@ public sealed class HybridRetriever
                 }
                 else
                 {
-                    combinedScores[chunkId] = (result.Chunk, denseContribution);
+                    combinedScores[chunkId] = (chunk, denseContribution);
                 }
             }
         }
@@ -123,12 +125,18 @@ public sealed class HybridRetriever
         for (int i = 0; i < returnCount; i++)
         {
             var (chunk, score) = mergedResults[i];
-            finalResults.Add(new RetrievedChunk
-            {
-                Chunk = chunk,
-                Score = score,
-                Rank = i + 1
-            });
+
+            string excerpt = chunk.Text.Length <= 200
+                ? chunk.Text
+                : chunk.Text.Substring(0, 200) + "...";
+
+            finalResults.Add(new RetrievedChunk(
+                chunkId: chunk.ChunkId,
+                docId: chunk.DocId,
+                score: score,
+                rank: i + 1,
+                excerpt: excerpt
+            ));
         }
 
         return finalResults;
@@ -161,7 +169,7 @@ public sealed class HybridRetriever
         for (int i = 0; i < results.Count; i++)
         {
             var result = results[i];
-            normalized[result.Chunk.Id] = result.Score / maxScore;
+            normalized[result.ChunkId] = result.Score / maxScore;
         }
 
         return normalized;
