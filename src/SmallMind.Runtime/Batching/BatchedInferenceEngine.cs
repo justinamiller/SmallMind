@@ -478,16 +478,14 @@ namespace SmallMind.Runtime.Batching
             
             if (options.Seed.HasValue)
             {
-                // Use deterministic random with seed
+                // Always create new deterministic random with seed for reproducibility
+                // Note: This creates overhead but ensures deterministic behavior
                 random = new Random(options.Seed.Value);
             }
             else
             {
-                // Use thread-local random for efficiency
-                if (_threadLocalRandom == null)
-                {
-                    _threadLocalRandom = new Random();
-                }
+                // Use thread-local random for efficiency in non-deterministic mode
+                _threadLocalRandom ??= new Random();
                 random = _threadLocalRandom;
             }
 

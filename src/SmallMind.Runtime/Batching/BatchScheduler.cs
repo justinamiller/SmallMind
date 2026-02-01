@@ -190,8 +190,16 @@ namespace SmallMind.Runtime.Batching
                 }
                 catch (Exception ex)
                 {
-                    // Silently continue - scheduler should be resilient to errors
-                    // Future: Use proper logging when IRuntimeLogger is available
+                    // Track error in metrics to maintain observability
+                    // Scheduler must remain resilient and not crash on individual errors
+                    try
+                    {
+                        _metrics.RecordRequestLatencyMs(-1); // Use -1 to indicate error
+                    }
+                    catch
+                    {
+                        // If metrics recording fails, silently continue
+                    }
                 }
             }
         }
