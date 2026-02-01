@@ -320,7 +320,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public void RealWorldScenario_32kTokensWith16GB()
+        public void RealWorldScenario_32kTokensWith64GB()
         {
             // Use 64GB RAM with extensive optimizations for 32k tokens
             var config = new MemoryConfiguration(
