@@ -1,0 +1,35 @@
+# Sample Sentiment Analysis Training Data
+
+# Format: sentiment|text
+# Labels: positive, negative, neutral
+
+positive|This product is amazing! I absolutely love it.
+positive|Great quality and fast shipping. Highly recommend!
+positive|Exceeded my expectations. Best purchase this year.
+positive|Fantastic customer service and excellent product.
+positive|I'm very pleased with this purchase. Worth every penny.
+negative|Terrible quality. Broke after one day.
+negative|Very disappointed. Would not recommend to anyone.
+negative|Waste of money. Returning immediately.
+negative|Poor quality and bad customer service.
+negative|Not as described. Complete ripoff.
+neutral|It's okay. Nothing special but gets the job done.
+neutral|Average product. Meets basic expectations.
+neutral|Standard quality. Neither good nor bad.
+neutral|As expected. No complaints but not impressed.
+neutral|Acceptable for the price. Nothing more.
+positive|Outstanding performance! This is exactly what I needed.
+positive|Brilliant product. Can't fault it at all.
+positive|Superb quality. Highly satisfied with my purchase.
+negative|Absolutely awful. Do not buy this product.
+negative|Completely useless. Total waste of time and money.
+neutral|Reasonable product. Does what it's supposed to do.
+neutral|Fair quality. Adequate for everyday use.
+positive|Love it! Will definitely buy again.
+positive|Excellent value for money. Very happy customer.
+negative|Defective product. Had to return it immediately.
+negative|Very poor construction. Falls apart easily.
+neutral|Decent product. Could be better but acceptable.
+positive|Perfect! Exactly as advertised.
+negative|Misleading description. Not what I ordered.
+neutral|Middle of the road. Nothing to write home about.

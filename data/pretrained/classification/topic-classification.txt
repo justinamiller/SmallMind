@@ -1,0 +1,35 @@
+# Sample Text Classification Training Data
+
+# Format: category|text
+# Labels: Technology, Sports, Politics, Entertainment
+
+Technology|New smartphone features groundbreaking AI capabilities and 5G connectivity.
+Technology|Software update brings major improvements to user interface.
+Technology|Tech giant announces revolutionary quantum computing breakthrough.
+Technology|Cybersecurity experts warn about emerging threats.
+Technology|Cloud computing services expand to new markets.
+Sports|Championship team celebrates historic victory in overtime thriller.
+Sports|Olympic athlete breaks world record in spectacular fashion.
+Sports|Star player signs record-breaking contract extension.
+Sports|Underdog team stages amazing comeback in finals.
+Sports|Coach announces retirement after legendary career.
+Politics|Congress passes landmark legislation after months of debate.
+Politics|Election results show surprising shift in voter preferences.
+Politics|International summit addresses global climate change.
+Politics|New policy aims to reform healthcare system.
+Politics|Diplomatic talks resume between neighboring countries.
+Entertainment|Award-winning film breaks box office records worldwide.
+Entertainment|Popular streaming series renewed for another season.
+Entertainment|Music festival announces star-studded lineup.
+Entertainment|Celebrity couple announces engagement at premiere.
+Entertainment|New album debuts at number one on charts.
+Technology|Artificial intelligence system demonstrates human-level reasoning.
+Technology|Electric vehicle sales reach all-time high this quarter.
+Sports|National team qualifies for world championship tournament.
+Sports|Rookie sensation leads league in scoring average.
+Politics|Supreme Court delivers historic ruling on key issue.
+Politics|Mayor proposes ambitious infrastructure development plan.
+Entertainment|Theater production receives standing ovation on opening night.
+Entertainment|Documentary wins prestigious film festival award.
+Technology|Startup unveils innovative solution to data privacy concerns.
+Sports|Marathon runner achieves personal best at major event.

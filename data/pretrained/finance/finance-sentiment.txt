@@ -1,0 +1,35 @@
+# Sample Finance Sentiment Analysis Data
+
+# Format: sentiment|text
+# Labels: positive, negative, neutral
+
+positive|Stock prices surged after strong earnings report exceeded expectations.
+positive|Market rallies on positive economic data and investor optimism.
+positive|Company announces record profits, shares hit all-time high.
+positive|Investors celebrate as tech stocks post impressive gains.
+positive|Strong GDP growth boosts market confidence significantly.
+negative|Market crashes amid fears of economic recession.
+negative|Stocks plummet on disappointing quarterly results.
+negative|Investor panic leads to massive sell-off in global markets.
+negative|Economic indicators point to potential downturn ahead.
+negative|Company shares tank after CEO resignation announcement.
+neutral|Market remains stable despite mixed economic signals.
+neutral|Investors take wait-and-see approach amid uncertainty.
+neutral|Trading volumes remain moderate with no clear direction.
+neutral|Analysts maintain neutral outlook pending more data.
+neutral|Market consolidates in narrow range awaiting catalyst.
+positive|Merger announcement drives stock prices higher.
+positive|Federal Reserve decision boosts investor sentiment.
+positive|Strong employment numbers lift market spirits.
+negative|Trade tensions weigh heavily on market performance.
+negative|Inflation concerns trigger widespread market decline.
+neutral|Market ends flat as gains and losses offset.
+neutral|Cautious trading ahead of earnings season.
+positive|Breakthrough innovation propels tech sector gains.
+positive|Consumer confidence reaches highest level in years.
+negative|Banking sector faces headwinds from regulatory changes.
+negative|Oil prices collapse on oversupply concerns.
+neutral|Mixed results from retail sector leave investors uncertain.
+positive|Record-breaking IPO performance excites market.
+negative|Credit rating downgrade sends shockwaves through market.
+neutral|Sideways movement continues as market awaits direction.
