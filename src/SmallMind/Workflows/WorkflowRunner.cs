@@ -19,14 +19,14 @@ namespace SmallMind.Workflows
     public class WorkflowRunner : IWorkflowRunner
     {
         private readonly TransformerModel _model;
-        private readonly Tokenizer _tokenizer;
+        private readonly ITokenizer _tokenizer;
         private readonly int _blockSize;
         private readonly ILogger<WorkflowRunner>? _logger;
         private readonly OutputValidator _validator;
 
         public WorkflowRunner(
             TransformerModel model,
-            Tokenizer tokenizer,
+            ITokenizer tokenizer,
             int blockSize,
             ILogger<WorkflowRunner>? logger = null)
         {

@@ -19,7 +19,7 @@ namespace SmallMind.Chat
         private readonly ISessionStore _sessionStore;
         private readonly IRetrievalIndex? _retrievalIndex;
         private readonly TransformerModel _model;
-        private readonly Tokenizer _tokenizer;
+        private readonly ITokenizer _tokenizer;
         private readonly int _blockSize;
         private readonly ILogger<ChatOrchestrator>? _logger;
         private readonly Sampling _sampling;
@@ -36,7 +36,7 @@ namespace SmallMind.Chat
         public ChatOrchestrator(
             ISessionStore sessionStore,
             TransformerModel model,
-            Tokenizer tokenizer,
+            ITokenizer tokenizer,
             int blockSize,
             IRetrievalIndex? retrievalIndex = null,
             ILogger<ChatOrchestrator>? logger = null)
