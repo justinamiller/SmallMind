@@ -19,6 +19,11 @@ namespace SmallMind.Quantization.IO.Smq
         private Dictionary<string, object>? _metadata;
         private bool _headerRead;
 
+        /// <summary>
+        /// Creates a new SMQ reader.
+        /// </summary>
+        /// <param name="stream">Input stream (must be readable and seekable).</param>
+        /// <param name="leaveOpen">If true, keeps stream open after disposal.</param>
         public SmqReader(Stream stream, bool leaveOpen = false)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
@@ -307,6 +312,9 @@ namespace SmallMind.Quantization.IO.Smq
                 throw new InvalidOperationException("Header not read. Call ReadHeader() first.");
         }
 
+        /// <summary>
+        /// Dispose resources.
+        /// </summary>
         public void Dispose()
         {
             if (!_leaveOpen)

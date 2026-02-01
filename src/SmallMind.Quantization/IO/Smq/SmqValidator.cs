@@ -16,10 +16,24 @@ namespace SmallMind.Quantization.IO.Smq
         /// </summary>
         public class ValidationError
         {
+            /// <summary>
+            /// Error or warning message.
+            /// </summary>
             public string Message { get; set; } = "";
+            
+            /// <summary>
+            /// Associated tensor name (null if not tensor-specific).
+            /// </summary>
             public string? TensorName { get; set; }
+            
+            /// <summary>
+            /// Severity level of the validation issue.
+            /// </summary>
             public ValidationSeverity Severity { get; set; }
 
+            /// <summary>
+            /// Returns formatted error string.
+            /// </summary>
             public override string ToString()
             {
                 string prefix = Severity == ValidationSeverity.Error ? "ERROR" : "WARNING";
@@ -28,9 +42,19 @@ namespace SmallMind.Quantization.IO.Smq
             }
         }
 
+        /// <summary>
+        /// Severity level for validation issues.
+        /// </summary>
         public enum ValidationSeverity
         {
+            /// <summary>
+            /// Warning: non-critical issue.
+            /// </summary>
             Warning,
+            
+            /// <summary>
+            /// Error: critical issue that prevents file from being read.
+            /// </summary>
             Error
         }
 

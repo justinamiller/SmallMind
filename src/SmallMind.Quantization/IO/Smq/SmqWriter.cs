@@ -16,6 +16,11 @@ namespace SmallMind.Quantization.IO.Smq
         private readonly BinaryWriter _writer;
         private readonly bool _leaveOpen;
 
+        /// <summary>
+        /// Creates a new SMQ writer.
+        /// </summary>
+        /// <param name="stream">Output stream (must be writable).</param>
+        /// <param name="leaveOpen">If true, keeps stream open after disposal.</param>
         public SmqWriter(Stream stream, bool leaveOpen = false)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
@@ -261,6 +266,9 @@ namespace SmallMind.Quantization.IO.Smq
             return tensorCount * entrySize;
         }
 
+        /// <summary>
+        /// Dispose resources.
+        /// </summary>
         public void Dispose()
         {
             if (!_leaveOpen)
