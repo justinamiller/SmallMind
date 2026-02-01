@@ -1316,6 +1316,10 @@ SmallMind uses a custom exception hierarchy with error codes:
 - [Versioning Policy](docs/VERSIONING.md)
 - [CHANGELOG.md](CHANGELOG.md)
 
+### Implementation Roadmaps
+
+- [Monte Carlo Planning (MCP) Framework Roadmap](MCP_FRAMEWORK_ROADMAP.md) - Comprehensive guide for implementing agent-based planning with MCTS
+
 ## Educational Notes
 
 ### Why Pure C#?
