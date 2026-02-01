@@ -108,18 +108,19 @@ namespace SmallMind.Benchmarks
             }
             catch { machine.Endianness = "Unknown"; }
 
-            // NUMA awareness (best-effort)
+            // NUMA awareness (best-effort heuristic)
             try
             {
-                // Check if we can get NUMA node count on Windows
+                // Note: This is a rough approximation based on core count.
+                // Accurate NUMA detection requires platform-specific APIs (e.g., GetNumaHighestNodeNumber on Windows).
+                // Systems with >64 cores are more likely to have NUMA architecture, but this is not definitive.
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    // This is a best-effort check - actual NUMA detection would require P/Invoke
-                    machine.NumaAware = machine.LogicalCores > 64; // Heuristic
+                    machine.NumaAware = machine.LogicalCores > 64; // Heuristic for potential NUMA systems
                 }
                 else
                 {
-                    machine.NumaAware = false; // Default for non-Windows
+                    machine.NumaAware = false; // Default for non-Windows without reliable detection
                 }
             }
             catch { machine.NumaAware = false; }
@@ -230,9 +231,10 @@ namespace SmallMind.Benchmarks
             try
             {
                 // Check via AppContext switch
+                // Note: Tiered compilation is enabled by default in .NET Core 3.0+ / .NET 5+
                 var tieredCompilationEnabled = AppContext.TryGetSwitch("System.Runtime.TieredCompilation", out bool enabled) 
                     ? enabled 
-                    : true; // Default is true in modern .NET
+                    : true; // Default is enabled in .NET Core 3.0+ and .NET 5+
                 runtime.TieredCompilation = tieredCompilationEnabled;
             }
             catch { runtime.TieredCompilation = false; }
@@ -240,9 +242,11 @@ namespace SmallMind.Benchmarks
             // ReadyToRun
             try
             {
-                // Check via AppContext switch
+                // Note: This is a heuristic approximation. Exact R2R detection would require
+                // inspecting assembly attributes or module metadata. QuickJit being disabled
+                // suggests R2R code may be preferred, but this is not definitive.
                 var r2rEnabled = AppContext.TryGetSwitch("System.Runtime.TieredCompilation.QuickJit", out bool enabled)
-                    ? !enabled  // QuickJit disabled means R2R is more likely used
+                    ? !enabled  // QuickJit disabled suggests R2R preference
                     : false;
                 runtime.ReadyToRun = r2rEnabled;
             }

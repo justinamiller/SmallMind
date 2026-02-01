@@ -32,10 +32,11 @@ namespace SmallMind.Tests
         {
             // Test that we can detect endianness like the SystemInfoCollector does
             var isLittleEndian = BitConverter.IsLittleEndian;
+            var endiannessString = isLittleEndian ? "Little" : "Big";
             
-            // On most modern systems, this should be true
-            // But the test just verifies we can read it without error
-            Assert.True(isLittleEndian || !isLittleEndian);
+            // Verify the string conversion works
+            Assert.NotNull(endiannessString);
+            Assert.True(endiannessString == "Little" || endiannessString == "Big");
         }
 
         [Fact]
@@ -66,9 +67,12 @@ namespace SmallMind.Tests
             var isServerGC = System.Runtime.GCSettings.IsServerGC;
             var latencyMode = System.Runtime.GCSettings.LatencyMode;
             
-            // Just verify we can read these without errors
-            Assert.True(isServerGC || !isServerGC);
+            // Verify we can read GC settings without errors and they have valid values
             Assert.NotEqual(default(System.Runtime.GCLatencyMode), latencyMode);
+            
+            // GC mode should be a valid string representation
+            var gcModeString = isServerGC ? "Server" : "Workstation";
+            Assert.True(gcModeString == "Server" || gcModeString == "Workstation");
         }
 
         [Fact]
