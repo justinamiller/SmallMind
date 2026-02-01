@@ -264,6 +264,189 @@ namespace SmallMind.Text
         }
 
         /// <summary>
+        /// Generate text with KV caching for efficient inference.
+        /// </summary>
+        public string GenerateWithCache(
+            string prompt, 
+            int maxNewTokens, 
+            double temperature = 1.0, 
+            int topK = 0, 
+            int? seed = null, 
+            bool showPerf = false)
+        {
+            _model.Eval();
+
+            Random random;
+            if (seed.HasValue)
+            {
+                random = new Random(seed.Value);
+            }
+            else
+            {
+                random = new Random();
+            }
+
+            // Encode the prompt
+            var context = _tokenizer.Encode(prompt);
+            if (context.Count == 0)
+            {
+                Console.WriteLine("Warning: Empty prompt, starting with empty context");
+                context = new List<int> { 0 }; // Start with first token in vocab
+            }
+
+            int inputTokens = context.Count;
+            
+            // Performance tracking
+            int cacheHits = 0;
+            int tokensGenerated = 0;
+            var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var prefillStopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            if (!showPerf)
+            {
+                Console.WriteLine($"\nGenerating {maxNewTokens} tokens with KV cache...");
+                Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}");
+                Console.WriteLine($"Prompt: \"{prompt}\"");
+                Console.WriteLine("---");
+            }
+
+            // Create inference session with KV cache
+            using var session = new InferenceSession(
+                _model.NumLayers, 
+                _blockSize, 
+                _model.NumHeads, 
+                _model.HeadDim);
+
+            // PREFILL PHASE: Process entire prompt
+            var contextData = new float[context.Count];
+            for (int j = 0; j < context.Count; j++)
+            {
+                contextData[j] = context[j];
+            }
+            var contextTensor = new Tensor(contextData, new int[] { 1, context.Count });
+            
+            // Forward pass for prefill - populates KV cache
+            var logits = _model.Forward(contextTensor, session, isPrefill: true);
+            
+            prefillStopwatch.Stop();
+            
+            // Get logits for the last position to start generation
+            int T = context.Count;
+            int vocabSize = logits.Shape[2];
+            var logitsLast = new float[vocabSize];
+            int lastPosOffset = (T - 1) * vocabSize;
+            for (int v = 0; v < vocabSize; v++)
+            {
+                logitsLast[v] = logits.Data[lastPosOffset + v];
+            }
+
+            // Apply temperature
+            if (temperature != 1.0)
+            {
+                for (int v = 0; v < vocabSize; v++)
+                {
+                    logitsLast[v] /= (float)temperature;
+                }
+            }
+
+            // Apply top-k filtering
+            if (topK > 0)
+            {
+                logitsLast = ApplyTopK(logitsLast, topK);
+            }
+
+            // Convert to probabilities (softmax)
+            var probs = Softmax(logitsLast);
+
+            // Sample first new token
+            var nextToken = SampleFromProbs(probs, random);
+            context.Add(nextToken);
+            tokensGenerated++;
+
+            // DECODE PHASE: Generate one token at a time using cache
+            var decodeStopwatch = System.Diagnostics.Stopwatch.StartNew();
+            
+            for (int i = 1; i < maxNewTokens; i++)
+            {
+                // Create tensor for single new token
+                var singleTokenData = new float[1] { nextToken };
+                var singleTokenTensor = new Tensor(singleTokenData, new int[] { 1, 1 });
+
+                // Forward pass for decode - uses KV cache
+                logits = _model.Forward(singleTokenTensor, session, isPrefill: false);
+                cacheHits++; // Each decode step is a cache hit
+
+                // Get logits for the single new position
+                vocabSize = logits.Shape[2];
+                logitsLast = new float[vocabSize];
+                for (int v = 0; v < vocabSize; v++)
+                {
+                    logitsLast[v] = logits.Data[v]; // Only one position now
+                }
+
+                // Apply temperature
+                if (temperature != 1.0)
+                {
+                    for (int v = 0; v < vocabSize; v++)
+                    {
+                        logitsLast[v] /= (float)temperature;
+                    }
+                }
+
+                // Apply top-k filtering
+                if (topK > 0)
+                {
+                    logitsLast = ApplyTopK(logitsLast, topK);
+                }
+
+                // Convert to probabilities (softmax)
+                probs = Softmax(logitsLast);
+
+                // Sample from the distribution
+                nextToken = SampleFromProbs(probs, random);
+                context.Add(nextToken);
+                tokensGenerated++;
+
+                // Optional: print progress
+                if (!showPerf && (i + 1) % 50 == 0)
+                {
+                    Console.Write(".");
+                }
+            }
+
+            decodeStopwatch.Stop();
+            totalStopwatch.Stop();
+
+            if (!showPerf && maxNewTokens >= 50)
+            {
+                Console.WriteLine(); // New line after progress dots
+            }
+
+            // Output performance metrics
+            if (showPerf)
+            {
+                double totalMs = totalStopwatch.Elapsed.TotalMilliseconds;
+                double prefillMs = prefillStopwatch.Elapsed.TotalMilliseconds;
+                double decodeMs = decodeStopwatch.Elapsed.TotalMilliseconds;
+                double tokensPerSec = tokensGenerated / totalStopwatch.Elapsed.TotalSeconds;
+                
+                Console.WriteLine("\n=== KV Cache Performance ===");
+                Console.WriteLine($"Prompt tokens: {inputTokens}");
+                Console.WriteLine($"Generated tokens: {tokensGenerated}");
+                Console.WriteLine($"Cache hits: {cacheHits}");
+                Console.WriteLine($"Prefill time: {prefillMs:F2}ms");
+                Console.WriteLine($"Decode time: {decodeMs:F2}ms");
+                Console.WriteLine($"Total time: {totalMs:F2}ms");
+                Console.WriteLine($"Throughput: {tokensPerSec:F2} tokens/sec");
+                Console.WriteLine($"Avg decode latency: {(decodeMs / Math.Max(1, tokensGenerated - 1)):F2}ms/token");
+            }
+
+            // Decode and return
+            var generated = _tokenizer.Decode(context);
+            return generated;
+        }
+
+        /// <summary>
         /// Apply top-k filtering to logits
         /// </summary>
         private float[] ApplyTopK(float[] logits, int k)

@@ -32,6 +32,13 @@ namespace SmallMind.Core
         private readonly Linear _lmHead;
 
         public List<Tensor> Parameters { get; private set; }
+        
+        // Public properties for inference session creation
+        public int BlockSize => _blockSize;
+        public int NumLayers => _nLayer;
+        public int NumHeads => _nHead;
+        public int EmbeddingDim => _nEmbd;
+        public int HeadDim => _nEmbd / _nHead;
 
         public TransformerModel(int vocabSize, int blockSize, int nEmbd, int nLayer, int nHead, double dropout, int seed = 42)
         {
@@ -66,7 +73,9 @@ namespace SmallMind.Core
             _blocks = new List<TransformerBlock>(_nLayer);
             for (int i = 0; i < _nLayer; i++)
             {
-                _blocks.Add(new TransformerBlock(_nEmbd, _nHead, _blockSize, (float)dropout, _random));
+                var block = new TransformerBlock(_nEmbd, _nHead, _blockSize, (float)dropout, _random);
+                block.Attention.LayerIndex = i;  // Set layer index for KV cache
+                _blocks.Add(block);
             }
 
             // Final layer norm and language model head
@@ -129,6 +138,67 @@ namespace SmallMind.Core
 
             // Language model head: (B, T, n_embd) -> (B, T, vocab_size)
             var logits = _lmHead.Forward(x);
+
+            return logits;
+        }
+
+        /// <summary>
+        /// Forward pass with KV caching for efficient inference.
+        /// </summary>
+        /// <param name="idx">Input token indices (batch_size, sequence_length)</param>
+        /// <param name="session">Inference session with KV cache</param>
+        /// <param name="isPrefill">True for prefill phase, false for decode phase</param>
+        public Tensor Forward(Tensor idx, InferenceSession? session, bool isPrefill)
+        {
+            Guard.NotNull(idx);
+            
+            // If no session provided, use standard forward pass
+            if (session == null)
+            {
+                return Forward(idx);
+            }
+            
+            // idx shape: (batch_size, sequence_length)
+            int B = idx.Shape[0];
+            int T = idx.Shape[1];
+
+            if (T > _blockSize)
+            {
+                throw new ArgumentException($"Sequence length {T} exceeds block size {_blockSize}");
+            }
+
+            // Token embeddings: (B, T) -> (B, T, n_embd)
+            var tokEmb = _tokenEmbedding.Forward(idx);
+
+            // Position embeddings: create position indices (T,)
+            // For decode, start from current position
+            int startPos = session.CurrentPosition;
+            var posIndices = new Tensor(new float[T], new int[] { T });
+            for (int i = 0; i < T; i++)
+            {
+                posIndices.Data[i] = startPos + i;
+            }
+            var posEmb = _positionEmbedding.Forward(posIndices);
+
+            // Add token and position embeddings: (B, T, n_embd)
+            // Broadcast posEmb across batch dimension
+            var x = AddPositionEmbeddings(tokEmb, posEmb, B, T, _nEmbd);
+            x = _embDropout.Forward(x);
+
+            // Pass through transformer blocks with KV cache
+            foreach (var block in _blocks)
+            {
+                x = block.Forward(x, session, isPrefill);
+            }
+
+            // Final layer norm: (B, T, n_embd)
+            x = _lnFinal.Forward(x);
+
+            // Language model head: (B, T, n_embd) -> (B, T, vocab_size)
+            var logits = _lmHead.Forward(x);
+
+            // Advance session position
+            session.AdvancePosition(T);
 
             return logits;
         }
@@ -217,6 +287,9 @@ namespace SmallMind.Core
         private readonly MLP _mlp;
 
         public List<Tensor> Parameters { get; private set; }
+        
+        // Expose attention layer for layer index setting
+        internal MultiHeadAttention Attention => _attn;
 
         public TransformerBlock(int nEmbd, int nHead, int blockSize, float dropout, Random random)
         {
@@ -237,6 +310,22 @@ namespace SmallMind.Core
             // Pre-norm architecture with residual connections
             // x: (B, T, n_embd)
             var attnOut = _attn.Forward(_ln1.Forward(x));
+            x = AddTensors(x, attnOut);
+            
+            var mlpOut = _mlp.Forward(_ln2.Forward(x));
+            x = AddTensors(x, mlpOut);
+            
+            return x;
+        }
+
+        /// <summary>
+        /// Forward pass with optional KV caching.
+        /// </summary>
+        public Tensor Forward(Tensor x, InferenceSession? session, bool isPrefill)
+        {
+            // Pre-norm architecture with residual connections
+            // x: (B, T, n_embd)
+            var attnOut = _attn.Forward(_ln1.Forward(x), session, isPrefill);
             x = AddTensors(x, attnOut);
             
             var mlpOut = _mlp.Forward(_ln2.Forward(x));
@@ -288,6 +377,7 @@ namespace SmallMind.Core
 
     /// <summary>
     /// Masked multi-head self-attention implemented in pure C#.
+    /// Supports optional KV caching for efficient inference.
     /// </summary>
     public class MultiHeadAttention
     {
@@ -300,6 +390,9 @@ namespace SmallMind.Core
         private readonly Dropout _projDropout;
         private readonly bool[,] _causalMask;
         private readonly int _blockSize;
+        
+        // Layer index for KV cache access (set by TransformerBlock)
+        internal int LayerIndex { get; set; }
 
         public List<Tensor> Parameters { get; private set; }
 
@@ -355,6 +448,70 @@ namespace SmallMind.Core
 
             // Apply attention to values
             var y = ApplyAttention(att, v, B, T);
+
+            // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
+            var yReshaped = ReshapeAttentionOutput(y, B, T);
+
+            // Final projection and dropout
+            var output = _proj.Forward(yReshaped);
+            output = _projDropout.Forward(output);
+
+            return output;
+        }
+
+        /// <summary>
+        /// Forward pass with optional KV caching for efficient inference.
+        /// </summary>
+        /// <param name="x">Input tensor (B, T, n_embd) where T is the number of NEW tokens</param>
+        /// <param name="session">Optional inference session with KV cache</param>
+        /// <param name="isPrefill">True if processing full prompt, false if generating single token</param>
+        public Tensor Forward(Tensor x, InferenceSession? session, bool isPrefill)
+        {
+            // If no session, fall back to standard forward
+            if (session == null)
+            {
+                return Forward(x);
+            }
+
+            // x shape: (B, T, n_embd)
+            // For prefill: T = prompt_length
+            // For decode: T = 1 (single new token)
+            int B = x.Shape[0];
+            int T = x.Shape[1];
+
+            // Compute Q, K, V for new tokens: (B, T, n_embd) -> (B, T, 3 * n_embd)
+            var qkv = _qkv.Forward(x);
+
+            // Split into Q, K, V and reshape to (B, nHead, T, headSize)
+            var q = ExtractAndReshapeQKV(qkv, 0, B, T);
+            var kNew = ExtractAndReshapeQKV(qkv, 1, B, T);
+            var vNew = ExtractAndReshapeQKV(qkv, 2, B, T);
+
+            // Get cache buffers for this layer
+            float[] keyCache = session.GetKeyCache(LayerIndex);
+            float[] valueCache = session.GetValueCache(LayerIndex);
+
+            int startPos = session.CurrentPosition;
+            int endPos = startPos + T;
+            
+            // Store new K, V into cache
+            // Cache layout: [position * numHeads * headDim]
+            StoreInCache(kNew, keyCache, startPos, B, T);
+            StoreInCache(vNew, valueCache, startPos, B, T);
+
+            // For attention, we need full K, V up to current position
+            // Create views of K, V that include cached + new
+            int totalSeqLen = endPos;
+            var kFull = CreateFullKVFromCache(keyCache, 0, totalSeqLen, B);
+            var vFull = CreateFullKVFromCache(valueCache, 0, totalSeqLen, B);
+
+            // Compute attention scores
+            // q: (B, nHead, T, headSize) - only for new tokens
+            // kFull: (B, nHead, totalSeqLen, headSize) - all tokens so far
+            var att = ComputeAttentionScoresWithCache(q, kFull, B, T, totalSeqLen);
+
+            // Apply attention to values
+            var y = ApplyAttentionWithCache(att, vFull, B, T, totalSeqLen);
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
             var yReshaped = ReshapeAttentionOutput(y, B, T);
@@ -644,6 +801,199 @@ namespace SmallMind.Core
                             int yIdx = ((b * _nHead + h) * T + t) * _headSize + d;
                             int outIdx = (b * T + t) * _nEmbd + h * _headSize + d;
                             output.Data[outIdx] = y.Data[yIdx];
+                        }
+                    }
+                }
+            }
+            
+            return output;
+        }
+
+        /// <summary>
+        /// Store new K or V tensors into the cache at the specified position.
+        /// </summary>
+        private void StoreInCache(Tensor kv, float[] cache, int startPos, int B, int T)
+        {
+            // kv: (B, nHead, T, headSize) - only works for B=1 currently
+            // cache layout: [position * numHeads * headDim]
+            
+            for (int t = 0; t < T; t++)
+            {
+                int cachePos = startPos + t;
+                for (int h = 0; h < _nHead; h++)
+                {
+                    for (int d = 0; d < _headSize; d++)
+                    {
+                        // Source: kv tensor at (b=0, h, t, d)
+                        int kvIdx = (h * T + t) * _headSize + d;
+                        
+                        // Destination: cache at position cachePos
+                        int cacheIdx = cachePos * _nHead * _headSize + h * _headSize + d;
+                        
+                        cache[cacheIdx] = kv.Data[kvIdx];
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Create a tensor view of the full K or V from cache up to endPos.
+        /// </summary>
+        private Tensor CreateFullKVFromCache(float[] cache, int startPos, int endPos, int B)
+        {
+            // Returns: (B, nHead, seqLen, headSize) where seqLen = endPos - startPos
+            int seqLen = endPos - startPos;
+            var result = new Tensor(new int[] { B, _nHead, seqLen, _headSize }, requiresGrad: false);
+            
+            // Copy from cache to tensor (B=1 for now)
+            for (int t = 0; t < seqLen; t++)
+            {
+                int cachePos = startPos + t;
+                for (int h = 0; h < _nHead; h++)
+                {
+                    for (int d = 0; d < _headSize; d++)
+                    {
+                        int cacheIdx = cachePos * _nHead * _headSize + h * _headSize + d;
+                        int resultIdx = (h * seqLen + t) * _headSize + d;
+                        result.Data[resultIdx] = cache[cacheIdx];
+                    }
+                }
+            }
+            
+            return result;
+        }
+
+        /// <summary>
+        /// Compute attention scores with KV cache support.
+        /// q: (B, nHead, qLen, headSize) - queries for new tokens
+        /// k: (B, nHead, kvLen, headSize) - keys for all tokens (cached + new)
+        /// </summary>
+        private Tensor ComputeAttentionScoresWithCache(Tensor q, Tensor k, int B, int qLen, int kvLen)
+        {
+            // output: (B, nHead, qLen, kvLen)
+            var scores = new Tensor(new int[] { B, _nHead, qLen, kvLen }, requiresGrad: true);
+            float scale = 1.0f / MathF.Sqrt(_headSize);
+            
+            // NOTE: We need to know the starting position for proper causal masking
+            // This method is called from Forward(Tensor, InferenceSession, bool) where we know startPos
+            // For now, we'll compute it from kvLen and qLen
+            // During prefill: startPos = 0, qLen = T, kvLen = T, so startPos = kvLen - qLen = 0
+            // During decode: startPos = kvLen - qLen (e.g., if kvLen=6 and qLen=1, startPos=5)
+            int startPos = kvLen - qLen;
+            
+            // For each query position, compute scores against all key positions
+            for (int b = 0; b < B; b++)
+            {
+                for (int h = 0; h < _nHead; h++)
+                {
+                    for (int i = 0; i < qLen; i++)
+                    {
+                        // Absolute position of this query
+                        int queryPos = startPos + i;
+                        
+                        for (int j = 0; j < kvLen; j++)
+                        {
+                            float sum = 0;
+                            for (int d = 0; d < _headSize; d++)
+                            {
+                                int qIdx = ((b * _nHead + h) * qLen + i) * _headSize + d;
+                                int kIdx = ((b * _nHead + h) * kvLen + j) * _headSize + d;
+                                sum += q.Data[qIdx] * k.Data[kIdx];
+                            }
+                            
+                            int scoreIdx = ((b * _nHead + h) * qLen + i) * kvLen + j;
+                            
+                            // Apply causal masking: query at position queryPos can only attend to keys at positions <= queryPos
+                            // Key at k-index j has absolute position j (since kFull starts from position 0)
+                            if (j <= queryPos)
+                            {
+                                scores.Data[scoreIdx] = sum * scale;
+                            }
+                            else
+                            {
+                                scores.Data[scoreIdx] = float.NegativeInfinity;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Apply softmax over last dimension
+            return ApplySoftmaxKVCache(scores, B, qLen, kvLen);
+        }
+
+        /// <summary>
+        /// Apply softmax for KV cache scenario with different query and key lengths.
+        /// </summary>
+        private Tensor ApplySoftmaxKVCache(Tensor scores, int B, int qLen, int kvLen)
+        {
+            var result = new Tensor(scores.Shape, requiresGrad: true);
+            
+            for (int b = 0; b < B; b++)
+            {
+                for (int h = 0; h < _nHead; h++)
+                {
+                    for (int i = 0; i < qLen; i++)
+                    {
+                        int offset = ((b * _nHead + h) * qLen + i) * kvLen;
+                        
+                        // Find max for numerical stability
+                        float max = float.NegativeInfinity;
+                        for (int j = 0; j < kvLen; j++)
+                        {
+                            max = Math.Max(max, scores.Data[offset + j]);
+                        }
+                        
+                        // Exp and sum
+                        float sum = 0;
+                        for (int j = 0; j < kvLen; j++)
+                        {
+                            result.Data[offset + j] = MathF.Exp(scores.Data[offset + j] - max);
+                            sum += result.Data[offset + j];
+                        }
+                        
+                        // Normalize
+                        if (sum > 0)
+                        {
+                            for (int j = 0; j < kvLen; j++)
+                            {
+                                result.Data[offset + j] /= sum;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return _attnDropout.Forward(result);
+        }
+
+        /// <summary>
+        /// Apply attention with KV cache support.
+        /// att: (B, nHead, qLen, kvLen)
+        /// v: (B, nHead, kvLen, headSize)
+        /// output: (B, nHead, qLen, headSize)
+        /// </summary>
+        private Tensor ApplyAttentionWithCache(Tensor att, Tensor v, int B, int qLen, int kvLen)
+        {
+            var output = new Tensor(new int[] { B, _nHead, qLen, _headSize }, requiresGrad: true);
+            
+            for (int b = 0; b < B; b++)
+            {
+                for (int h = 0; h < _nHead; h++)
+                {
+                    for (int i = 0; i < qLen; i++)
+                    {
+                        for (int d = 0; d < _headSize; d++)
+                        {
+                            float sum = 0;
+                            for (int j = 0; j < kvLen; j++)
+                            {
+                                int attIdx = ((b * _nHead + h) * qLen + i) * kvLen + j;
+                                int vIdx = ((b * _nHead + h) * kvLen + j) * _headSize + d;
+                                sum += att.Data[attIdx] * v.Data[vIdx];
+                            }
+                            int outIdx = ((b * _nHead + h) * qLen + i) * _headSize + d;
+                            output.Data[outIdx] = sum;
                         }
                     }
                 }
