@@ -125,14 +125,17 @@ namespace SmallMind.Engine
                 temperature: request.GenerationOptions.Temperature);
 
             // Extract citations from chunks
+            // TODO: Access chunk store to get full chunk details (CharStart, CharEnd) for accurate location
             var chunks = pipeline.Retrieve(request.Query, userContext: null, topK: request.TopK);
             var citations = chunks
                 .Where(c => c.Score >= request.MinConfidence)
                 .Select(c => new RagCitation
                 {
                     SourceUri = $"chunk://{c.ChunkId}",
-                    CharRange = (0, 0),
-                    LineRange = (0, 0),
+                    // Note: CharRange and LineRange would need actual Chunk lookup from chunk store
+                    // RetrievedChunk only has ChunkId, DocId, Score, Rank, Excerpt
+                    CharRange = (0, 0), // Placeholder - requires chunk store access
+                    LineRange = null, // Optional in schema
                     Snippet = c.Excerpt.Length > 200 ? c.Excerpt.Substring(0, 200) + "..." : c.Excerpt,
                     Confidence = c.Score
                 })

@@ -316,16 +316,18 @@ namespace SmallMind.Engine
 
         private static ITokenizer CreateDefaultTokenizer(int vocabSize)
         {
-            // Create a simple character tokenizer for demonstration
-            // In production, this would be loaded from model metadata
+            // WARNING: This is a fallback tokenizer for demonstration purposes only.
+            // Production deployments should load tokenizer configuration from model metadata.
+            // This simple character tokenizer is NOT suitable for real models.
+            
             var vocab = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?;:'-\n";
             if (vocab.Length < vocabSize)
             {
-                // Pad vocabulary
+                // Pad vocabulary with placeholder characters
                 var paddedVocab = vocab;
                 for (int i = vocab.Length; i < vocabSize; i++)
                 {
-                    paddedVocab += ((char)i).ToString();
+                    paddedVocab += ((char)(128 + i)).ToString();
                 }
                 vocab = paddedVocab;
             }

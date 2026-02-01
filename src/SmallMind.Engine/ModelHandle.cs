@@ -96,8 +96,11 @@ namespace SmallMind.Engine
 
         private static string GetBuildHash()
         {
-            // In production, this would come from build metadata
-            return DateTime.UtcNow.ToString("yyyyMMdd");
+            // In production, this would come from build metadata or Git commit hash
+            // For now, return a placeholder that indicates this needs proper implementation
+            var assembly = typeof(SmallMindEngine).Assembly;
+            var version = assembly.GetName().Version;
+            return $"dev-{version?.ToString() ?? "1.0.0"}";
         }
 
         private void ThrowIfDisposed()
