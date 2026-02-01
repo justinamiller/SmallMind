@@ -27,7 +27,7 @@ namespace SmallMind.Text
                     return CreateCharTokenizer(trainingText);
 
                 case TokenizerMode.Bpe:
-                    return CreateBpeTokenizer(options, trainingText, strict: options.Strict);
+                    return CreateBpeTokenizer(options, trainingText);
 
                 case TokenizerMode.Auto:
                     return CreateAutoTokenizer(options, trainingText);
@@ -55,13 +55,13 @@ namespace SmallMind.Text
         /// <summary>
         /// Creates a BpeTokenizer instance.
         /// </summary>
-        private static ITokenizer CreateBpeTokenizer(TokenizerOptions options, string? trainingText, bool strict)
+        private static ITokenizer CreateBpeTokenizer(TokenizerOptions options, string? trainingText)
         {
             string? assetsPath = FindTokenizerAssets(options);
 
             if (assetsPath == null)
             {
-                if (strict || options.Strict)
+                if (options.Strict)
                 {
                     throw new TokenizationException(
                         $"BPE tokenizer assets not found for tokenizer '{options.TokenizerName}'.\n" +
@@ -89,7 +89,7 @@ namespace SmallMind.Text
             {
                 return new BpeTokenizer(assetsPath);
             }
-            catch (TokenizationException) when (!strict && !options.Strict)
+            catch (TokenizationException) when (!options.Strict)
             {
                 // Fallback to CharTokenizer on BPE load failure (non-strict mode)
                 Console.WriteLine($"Failed to load BPE tokenizer. Falling back to CharTokenizer.");
@@ -102,8 +102,8 @@ namespace SmallMind.Text
         /// </summary>
         private static ITokenizer CreateAutoTokenizer(TokenizerOptions options, string? trainingText)
         {
-            // Try BPE first (non-strict, will fallback to Char if not found)
-            return CreateBpeTokenizer(options, trainingText, strict: false);
+            // Try BPE first (will fallback to Char if not found since Strict is already false in Auto mode)
+            return CreateBpeTokenizer(options, trainingText);
         }
 
         /// <summary>
