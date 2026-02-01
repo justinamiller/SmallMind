@@ -66,6 +66,12 @@ namespace SmallMind.Rag.Generation
         /// <param name="options">Generation options.</param>
         /// <param name="cancellationToken">Cancellation token to stop generation.</param>
         /// <returns>Async enumerable of generated token IDs.</returns>
+        /// <remarks>
+        /// NOTE: This is currently a stub implementation that falls back to non-streaming generation.
+        /// True streaming support requires enhancement to the Sampling class to support token-by-token emission.
+        /// For now, this method generates the full text and yields a single completion signal.
+        /// To use true streaming, integrate with InferenceSession.GenerateStreamAsync directly.
+        /// </remarks>
         public async IAsyncEnumerable<int> GenerateStreamAsync(
             string prompt,
             GenerationOptions options,
@@ -76,9 +82,9 @@ namespace SmallMind.Rag.Generation
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
 
-            // Note: The current Sampling class doesn't have streaming support
-            // For now, we'll fall back to non-streaming and yield all at once
-            // TODO: Enhance Sampling class to support true streaming
+            // NOTE: This is a fallback implementation until Sampling supports true streaming.
+            // For production use, consider using InferenceEngine/InferenceSession directly,
+            // which provide full streaming support via IAsyncEnumerable<GeneratedToken>.
             
             var result = _sampling.Generate(
                 prompt: prompt,
@@ -90,12 +96,12 @@ namespace SmallMind.Rag.Generation
                 isPerfJsonMode: false
             );
 
-            // Since we don't have true streaming in Sampling, yield a single result
-            // In a real implementation, this would yield tokens as they're generated
-            await System.Threading.Tasks.Task.CompletedTask; // Make async
+            // Signal completion (in a real streaming impl, would yield actual token IDs)
+            await System.Threading.Tasks.Task.CompletedTask;
             
-            // Return a placeholder token (in a real impl, would be the actual tokens)
-            yield return 0; // Placeholder
+            // Return -1 to signal end of generation (not a valid token ID)
+            // Callers should check for -1 and stop consuming the stream
+            yield return -1;
         }
     }
 }

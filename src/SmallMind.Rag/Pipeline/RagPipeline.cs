@@ -399,7 +399,16 @@ namespace SmallMind.Rag.Pipeline
         /// <param name="maxTokens">Maximum number of tokens to generate.</param>
         /// <param name="temperature">Sampling temperature for generation.</param>
         /// <param name="cancellationToken">Cancellation token to stop generation.</param>
-        /// <returns>Async enumerable of generated token IDs, or empty if no text generator configured.</returns>
+        /// <returns>
+        /// Async enumerable of generated token IDs. The actual token values depend on the ITextGenerator implementation.
+        /// - For SmallMindTextGenerator (stub): Returns -1 to signal completion
+        /// - For full streaming: Use InferenceEngine/InferenceSession which returns GeneratedToken with TokenId and Text
+        /// Returns empty enumerable if no text generator configured or insufficient evidence.
+        /// </returns>
+        /// <remarks>
+        /// NOTE: The current SmallMindTextGenerator implementation is a stub that doesn't provide true streaming.
+        /// For production streaming, use InferenceEngine/InferenceSession directly with the composed RAG prompt.
+        /// </remarks>
         public async IAsyncEnumerable<int> AskQuestionAsync(
             string question,
             UserContext? userContext = null,
