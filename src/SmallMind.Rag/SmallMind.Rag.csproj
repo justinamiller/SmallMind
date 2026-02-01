@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>SmallMind.Rag</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Justin Miller</Authors>
+    <Company>Justin Miller</Company>
+    <Product>SmallMind</Product>
+    <Description>Enterprise-grade Retrieval-Augmented Generation (RAG) system for SmallMind with zero 3rd-party dependencies. Includes BM25 sparse retrieval, dense embeddings, hybrid search, and comprehensive document indexing.</Description>
+    <PackageTags>rag;retrieval;bm25;embeddings;hybrid-search;document-indexing;llm;csharp</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/justinamiller/SmallMind</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/justinamiller/SmallMind</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
+    <ProjectReference Include="..\SmallMind.Tokenizers\SmallMind.Tokenizers.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmallMind.Tests" />
+  </ItemGroup>
+
+</Project>
