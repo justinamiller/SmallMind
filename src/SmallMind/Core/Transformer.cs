@@ -86,9 +86,9 @@ namespace SmallMind.Core
             Parameters = new List<Tensor>();
             Parameters.AddRange(_tokenEmbedding.Parameters);
             Parameters.AddRange(_positionEmbedding.Parameters);
-            foreach (var block in _blocks)
+            for (int i = 0; i < _blocks.Count; i++)
             {
-                Parameters.AddRange(block.Parameters);
+                Parameters.AddRange(_blocks[i].Parameters);
             }
             Parameters.AddRange(_lnFinal.Parameters);
             Parameters.AddRange(_lmHead.Parameters);
@@ -128,9 +128,9 @@ namespace SmallMind.Core
             x = _embDropout.Forward(x);
 
             // Pass through transformer blocks
-            foreach (var block in _blocks)
+            for (int i = 0; i < _blocks.Count; i++)
             {
-                x = block.Forward(x);
+                x = _blocks[i].Forward(x);
             }
 
             // Final layer norm: (B, T, n_embd)
@@ -186,9 +186,9 @@ namespace SmallMind.Core
             x = _embDropout.Forward(x);
 
             // Pass through transformer blocks with KV cache
-            foreach (var block in _blocks)
+            for (int i = 0; i < _blocks.Count; i++)
             {
-                x = block.Forward(x, session, isPrefill);
+                x = _blocks[i].Forward(x, session, isPrefill);
             }
 
             // Final layer norm: (B, T, n_embd)
@@ -260,18 +260,18 @@ namespace SmallMind.Core
         public void Train()
         {
             _embDropout.Train();
-            foreach (var block in _blocks)
+            for (int i = 0; i < _blocks.Count; i++)
             {
-                block.Train();
+                _blocks[i].Train();
             }
         }
 
         public void Eval()
         {
             _embDropout.Eval();
-            foreach (var block in _blocks)
+            for (int i = 0; i < _blocks.Count; i++)
             {
-                block.Eval();
+                _blocks[i].Eval();
             }
         }
     }

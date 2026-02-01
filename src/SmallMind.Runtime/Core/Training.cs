@@ -215,8 +215,9 @@ namespace SmallMind.Runtime
                 // Scale gradients if using gradient accumulation
                 if (gradAccumSteps > 1)
                 {
-                    foreach (var param in _model.Parameters)
+                    for (int p = 0; p < _model.Parameters.Count; p++)
                     {
+                        var param = _model.Parameters[p];
                         if (param.Grad != null)
                         {
                             for (int i = 0; i < param.Grad.Length; i++)
@@ -721,8 +722,9 @@ namespace SmallMind.Runtime
                 // Scale gradients if using gradient accumulation
                 if (gradAccumSteps > 1)
                 {
-                    foreach (var param in _model.Parameters)
+                    for (int p = 0; p < _model.Parameters.Count; p++)
                     {
+                        var param = _model.Parameters[p];
                         if (param.Grad != null)
                         {
                             for (int i = 0; i < param.Grad.Length; i++)
@@ -736,8 +738,9 @@ namespace SmallMind.Runtime
                 // Gradient health check
                 if (config.CheckGradientHealth && (step + 1) % config.DiagnosticInterval == 0)
                 {
-                    foreach (var param in _model.Parameters)
+                    for (int p = 0; p < _model.Parameters.Count; p++)
                     {
+                        var param = _model.Parameters[p];
                         if (param.Grad != null)
                         {
                             GradientDiagnostics.CheckGradients($"Step{step + 1}", param.Grad);
