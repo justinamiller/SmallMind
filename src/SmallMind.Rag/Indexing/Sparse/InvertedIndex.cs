@@ -213,6 +213,74 @@ public sealed class InvertedIndex
     }
 
     /// <summary>
+    /// Gets all terms in the vocabulary.
+    /// </summary>
+    /// <returns>An enumerable collection of all indexed terms.</returns>
+    internal IEnumerable<string> GetAllTerms()
+    {
+        return _index.Keys;
+    }
+
+    /// <summary>
+    /// Gets all postings (chunk ID and term frequency pairs) for a specific term.
+    /// </summary>
+    /// <param name="term">The term to look up.</param>
+    /// <returns>An enumerable collection of (chunkId, frequency) tuples.</returns>
+    internal IEnumerable<(string chunkId, int frequency)> GetPostingsForTerm(string term)
+    {
+        if (string.IsNullOrEmpty(term))
+            return Array.Empty<(string, int)>();
+
+        if (_index.TryGetValue(term, out PostingsList? postings))
+            return postings.GetAllPostings();
+
+        return Array.Empty<(string, int)>();
+    }
+
+    /// <summary>
+    /// Gets all document lengths as an enumerable collection.
+    /// </summary>
+    /// <returns>An enumerable collection of (chunkId, length) pairs.</returns>
+    internal IEnumerable<(string chunkId, int length)> GetAllDocLengths()
+    {
+        foreach (var kvp in _docLengths)
+        {
+            yield return (kvp.Key, kvp.Value);
+        }
+    }
+
+    /// <summary>
+    /// Sets internal state for deserialization. Used only by IndexSerializer.
+    /// </summary>
+    /// <param name="totalChunks">The total number of chunks.</param>
+    /// <param name="avgDocLength">The average document length.</param>
+    internal void SetState(int totalChunks, double avgDocLength)
+    {
+        _totalChunks = totalChunks;
+        _avgDocLength = avgDocLength;
+    }
+
+    /// <summary>
+    /// Adds a document length entry. Used only by IndexSerializer for deserialization.
+    /// </summary>
+    internal void AddDocLength(string chunkId, int length)
+    {
+        _docLengths[chunkId] = length;
+    }
+
+    /// <summary>
+    /// Adds a posting entry. Used only by IndexSerializer for deserialization.
+    /// </summary>
+    internal void AddPosting(string term, string chunkId, int termFrequency)
+    {
+        if (!_index.ContainsKey(term))
+        {
+            _index[term] = new PostingsList();
+        }
+        _index[term].Add(chunkId, termFrequency);
+    }
+
+    /// <summary>
     /// Updates the average document length based on current document lengths.
     /// </summary>
     private void UpdateAvgDocLength()
@@ -266,6 +334,14 @@ public sealed class InvertedIndex
         public IEnumerable<string> GetChunkIds()
         {
             return _postings.Keys;
+        }
+
+        public IEnumerable<(string chunkId, int frequency)> GetAllPostings()
+        {
+            foreach (var kvp in _postings)
+            {
+                yield return (kvp.Key, kvp.Value);
+            }
         }
     }
 }
