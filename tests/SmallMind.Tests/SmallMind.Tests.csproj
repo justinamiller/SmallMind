@@ -25,6 +25,7 @@
     <ProjectReference Include="..\..\src\SmallMind.Transformers\SmallMind.Transformers.csproj" />
     <ProjectReference Include="..\..\src\SmallMind.Tokenizers\SmallMind.Tokenizers.csproj" />
     <ProjectReference Include="..\..\src\SmallMind.Runtime\SmallMind.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\SmallMind.Rag\SmallMind.Rag.csproj" />
   </ItemGroup>
 
 </Project>
