@@ -6,8 +6,12 @@
     <Project Path="src/SmallMind.Runtime/SmallMind.Runtime.csproj" />
     <Project Path="src/SmallMind/SmallMind.csproj" />
     <Project Path="src/SmallMind.Console/SmallMind.Console.csproj" />
+    <Project Path="src/SmallMind.Rag/SmallMind.Rag.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SmallMind.Tests/SmallMind.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/SmallMind.Rag.Cli/SmallMind.Rag.Cli.csproj" />
   </Folder>
 </Solution>
