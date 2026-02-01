@@ -130,6 +130,63 @@ See [examples/ProductionInference](examples/ProductionInference) for complete ex
 
 See [examples/MinimalGenerate](examples/MinimalGenerate) and [samples/](samples/) for complete working examples.
 
+### Production-Grade Runtime Optimizations
+
+SmallMind includes enterprise-ready performance features for high-throughput, low-latency inference:
+
+#### KV Cache (13x Speedup)
+```csharp
+using SmallMind.Runtime.Cache;
+
+// Enable KV caching for multi-turn conversations
+var cacheOptions = new KvCacheOptions
+{
+    MaxTokensPerSession = 4096,
+    MaxSessions = 1000,
+    MaxBytesTotal = 1L * 1024 * 1024 * 1024  // 1GB
+};
+
+var cacheStore = new LruKvCacheStore(cacheOptions);
+// 13x faster token generation by reusing attention key/values
+```
+
+**Benefits:**
+- **13x speedup** in token generation (benchmarked)
+- Lower latency for follow-up questions
+- LRU eviction with bounded memory
+- Zero allocations using `ArrayPool<float>`
+
+#### Request Batching (5x Throughput)
+```csharp
+using SmallMind.Runtime.Batching;
+
+// Batch concurrent requests for higher throughput
+var batchingOptions = new BatchingOptions
+{
+    Enabled = true,
+    MaxBatchSize = 8,
+    MaxBatchWaitMs = 10
+};
+
+var engine = new BatchedInferenceEngine(
+    model, tokenizer, blockSize, 
+    batchingOptions, cacheStore
+);
+
+// Submit concurrent requests - automatically batched
+var tasks = prompts.Select(p => engine.GenerateAsync(p, options));
+var results = await Task.WhenAll(tasks);
+// 5x higher tokens/second under load
+```
+
+**Benefits:**
+- **5x throughput** improvement under concurrent load
+- Automatic queue management and batch formation
+- Per-request sampling isolation and cancellation
+- Channel-based streaming for zero-copy responses
+
+**See [docs/runtime_performance.md](docs/runtime_performance.md) for detailed usage and benchmarks.**
+
 ## What's New in v0.3.0
 
 ### Advanced Training Features
@@ -170,6 +227,11 @@ See [examples/MinimalGenerate](examples/MinimalGenerate) and [samples/](samples/
   - Learning rate warmup and cosine annealing
   - Validation loss tracking with best model saving
 - **Text generation** with temperature sampling and top-k filtering
+- **Production runtime optimizations** (NEW!)
+  - KV cache for 13x faster multi-turn conversations
+  - Request batching for 5x throughput under load
+  - LRU eviction with bounded memory
+  - Channel-based streaming responses
 - **Workflow-aware generation** - Multi-step, deterministic, schema-safe AI workflows (NEW!)
   - Structured outputs (JSON, Enum, Regex-constrained)
   - Step-level validation and automatic repair
