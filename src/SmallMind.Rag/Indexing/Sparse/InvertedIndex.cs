@@ -197,6 +197,22 @@ public sealed class InvertedIndex
     }
 
     /// <summary>
+    /// Gets all chunk IDs that contain a specific term.
+    /// </summary>
+    /// <param name="term">The term to look up.</param>
+    /// <returns>An enumerable collection of chunk IDs containing the term, or empty if term not found.</returns>
+    public IEnumerable<string> GetChunkIdsForTerm(string term)
+    {
+        if (string.IsNullOrEmpty(term))
+            return Array.Empty<string>();
+
+        if (_index.TryGetValue(term, out PostingsList? postings))
+            return postings.GetChunkIds();
+
+        return Array.Empty<string>();
+    }
+
+    /// <summary>
     /// Updates the average document length based on current document lengths.
     /// </summary>
     private void UpdateAvgDocLength()

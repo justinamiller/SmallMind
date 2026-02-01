@@ -63,18 +63,11 @@ public sealed class Bm25Retriever
         for (int i = 0; i < queryTerms.Count; i++)
         {
             string term = queryTerms[i];
-            int df = _index.GetDocumentFrequency(term);
             
-            if (df == 0)
-                continue;
-
-            // Get all chunks containing this term
-            foreach (string chunkId in _index.GetAllChunkIds())
+            // Get all chunks containing this term directly from the index
+            foreach (string chunkId in _index.GetChunkIdsForTerm(term))
             {
-                if (_index.GetTermFrequency(term, chunkId) > 0)
-                {
-                    candidates.Add(chunkId);
-                }
+                candidates.Add(chunkId);
             }
         }
 
