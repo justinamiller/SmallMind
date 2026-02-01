@@ -23,6 +23,11 @@ SmallMind is a deliberately tiny, educational language model built entirely in C
   - Learning rate warmup and cosine annealing
   - Validation loss tracking with best model saving
 - **Text generation** with temperature sampling and top-k filtering
+- **Workflow-aware generation** - Multi-step, deterministic, schema-safe AI workflows (NEW!)
+  - Structured outputs (JSON, Enum, Regex-constrained)
+  - Step-level validation and automatic repair
+  - Budget enforcement and retry policies
+  - Deterministic execution with seed control
 - **Question-answering capability** - Answer questions based on training data
 - **Interactive conversation mode** - Multi-turn conversations with session context
 - **Session context management** - Maintain conversation history across turns
@@ -79,6 +84,93 @@ SmallMind uses .NET's hardware intrinsics to implement optimized kernels for:
 5. **Dot Product**: Horizontal SIMD reduction for inner products
 
 For more details, see [.github/copilot-instructions-simd.md](.github/copilot-instructions-simd.md).
+
+## Workflow-Aware Generation
+
+SmallMind supports **multi-step, deterministic, schema-safe workflows** for producing structured, machine-consumable outputs instead of free-form chat responses.
+
+### Key Features
+
+- **Structured outputs**: JSON, Enum, Regex-constrained, or PlainText
+- **Automatic validation and repair**: Invalid outputs are detected and automatically repaired
+- **Deterministic execution**: Same seed + inputs → same outputs
+- **Budget enforcement**: Control token usage and execution time
+- **Step-level retry policies**: Automatic retry with repair prompts
+- **Stateful context**: Share data across workflow steps
+
+### Quick Example
+
+```csharp
+using SmallMind.Workflows;
+
+// Define a workflow
+var workflow = new WorkflowDefinition
+{
+    Name = "IT Ticket Triage",
+    Version = "1.0",
+    RunnerOptions = new WorkflowRunnerOptions
+    {
+        Deterministic = true,
+        Seed = 42,
+        Temperature = 0.3
+    },
+    Steps = new List<WorkflowStep>
+    {
+        new WorkflowStep
+        {
+            StepId = "classify",
+            Title = "Classify Ticket Type",
+            Instruction = "Classify this as incident, request, or problem.",
+            InputSpec = new StepInputSpec
+            {
+                RequiredStateKeys = new List<string> { "ticket_description" }
+            },
+            OutputSpec = new StepOutputSpec
+            {
+                Format = OutputFormat.EnumOnly,
+                AllowedValues = new List<string> { "incident", "request", "problem" },
+                Strict = true
+            }
+        }
+    }
+};
+
+// Create initial state
+var state = new WorkflowState();
+state.Set("ticket_description", "Database is down, affecting all users.");
+
+// Execute workflow
+var runner = new WorkflowRunner(model, tokenizer, blockSize);
+var result = await runner.RunAsync(new WorkflowRunRequest
+{
+    Workflow = workflow,
+    InitialState = state
+});
+
+// Access results
+if (result.Status == WorkflowRunStatus.Success)
+{
+    var classification = result.FinalState.GetStepOutput("classify");
+    Console.WriteLine($"Ticket type: {classification}");
+}
+```
+
+### Example Workflows
+
+Two complete workflow examples are included:
+
+1. **IT Ticket Triage** (`samples/Workflows/ItTicketTriageWorkflow.cs`)
+   - Classifies ticket type (incident/request/problem)
+   - Determines severity (low/medium/high/critical)
+   - Assigns to support group
+   - Recommends next action (JSON output)
+
+2. **Policy Decision** (`samples/Workflows/PolicyDecisionWorkflow.cs`)
+   - Extracts relevant policy clause (JSON)
+   - Determines compliance (enum: compliant/noncompliant/unknown)
+   - Generates decision record with justification (JSON)
+
+For comprehensive documentation, see [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
 
 ## Data Loading
 
