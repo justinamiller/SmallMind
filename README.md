@@ -508,7 +508,7 @@ userContext.AllowedTags.Add("documentation");
 var results = pipeline.Retrieve("query", userContext: userContext);
 ```
 
-See [docs/RAG_AND_CHAT.md](docs/RAG_AND_CHAT.md) for comprehensive documentation and [samples/RagChatExample.cs](samples/RagChatExample.cs) for a complete working example.
+See [docs/RAG_AND_CHAT.md](docs/RAG_AND_CHAT.md) for comprehensive documentation, [examples/RAG_WITH_LLM.md](examples/RAG_WITH_LLM.md) for a complete code example, and [samples/RagChatExample.cs](samples/RagChatExample.cs) for a working sample application.
 
 ## Data Loading
 
