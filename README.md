@@ -260,6 +260,115 @@ Two complete workflow examples are included:
 
 For comprehensive documentation, see [docs/WORKFLOWS.md](docs/WORKFLOWS.md).
 
+## Pre-Trained Models
+
+SmallMind now supports pre-trained models for common NLP tasks including **sentiment analysis** and **text classification**. These models are built on the same Transformer architecture but specialized for specific tasks.
+
+### Supported Tasks
+
+1. **Sentiment Analysis** - Classify text as Positive, Negative, or Neutral
+2. **Text Classification** - Categorize text into custom labels
+3. **Summarization** - Coming soon
+4. **Question Answering** - Coming soon
+
+### Quick Example: Sentiment Analysis
+
+```csharp
+using SmallMind.Runtime.PretrainedModels;
+
+// Create a sentiment analysis model
+var model = PretrainedModelFactory.CreateSentimentModel(
+    vocabSize: tokenizer.VocabSize,
+    domain: DomainType.Finance  // Finance, Healthcare, Legal, ECommerce, or General
+);
+
+// Analyze sentiment
+var sentiment = model.AnalyzeSentiment("Stock prices surged on positive earnings!");
+// Returns: "Positive"
+
+// Get detailed scores
+var scores = model.AnalyzeSentimentWithScores("Market remains uncertain.");
+// Returns: { "Positive": 0.25, "Negative": 0.30, "Neutral": 0.45 }
+
+// Save model as .smnd checkpoint
+await PretrainedModelFactory.SaveAsync(model, "sentiment-finance.smnd");
+```
+
+### Quick Example: Text Classification
+
+```csharp
+// Create classifier with custom categories
+var labels = new[] { "Technology", "Sports", "Politics", "Entertainment" };
+var classifier = PretrainedModelFactory.CreateClassificationModel(
+    vocabSize: tokenizer.VocabSize,
+    labels: labels,
+    domain: DomainType.General
+);
+
+// Classify text
+var category = classifier.Classify("The team won the championship!");
+// Returns: "Sports"
+
+// Get probabilities for all categories
+var probs = classifier.ClassifyWithProbabilities("New AI breakthrough announced.");
+// Returns: { "Technology": 0.75, "Sports": 0.10, "Politics": 0.10, "Entertainment": 0.05 }
+```
+
+### Domain-Specific Models
+
+SmallMind supports domain specialization for:
+- **Finance** - Financial news, market analysis
+- **Healthcare** - Medical records, health articles  
+- **Legal** - Contracts, legal documents
+- **E-commerce** - Product reviews, shopping trends
+- **General** - All-purpose models
+
+### Working with Datasets
+
+Load and process labeled datasets for training:
+
+```csharp
+using SmallMind.Runtime.PretrainedModels;
+
+// Load sentiment data
+var samples = DatasetLoader.LoadSentimentData("data/pretrained/sentiment/sample-sentiment.txt");
+
+// Split into train/validation
+var (train, val) = DatasetLoader.SplitDataset(samples, trainRatio: 0.8);
+
+// Print statistics
+DatasetLoader.PrintStatistics(train, "Training Set");
+// Output:
+// Training Set Statistics:
+// Total samples: 24
+// Label distribution:
+//   positive: 8 (33.3%)
+//   negative: 8 (33.3%)
+//   neutral: 8 (33.3%)
+```
+
+### Sample Datasets
+
+The `data/pretrained/` directory includes sample datasets:
+- `sentiment/sample-sentiment.txt` - General sentiment examples
+- `finance/finance-sentiment.txt` - Financial sentiment examples
+- `classification/topic-classification.txt` - Topic classification examples
+
+### Model Checkpoints
+
+All pre-trained models use the `.smnd` (SmallMind) binary checkpoint format:
+
+```csharp
+// Save model
+await PretrainedModelFactory.SaveAsync(model, "my-model.smnd");
+
+// Load model (automatically detects task type)
+var loadedModel = await PretrainedModelFactory.LoadAsync("my-model.smnd", tokenizer);
+Console.WriteLine($"Task: {loadedModel.Task}, Domain: {loadedModel.Domain}");
+```
+
+See [examples/PretrainedModels](examples/PretrainedModels) for complete working examples and [docs/pretrained-models.md](docs/pretrained-models.md) for comprehensive documentation.
+
 ## Data Loading
 
 SmallMind now supports loading training data from multiple sources using the `DataLoader` class:
