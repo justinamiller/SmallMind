@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using SmallMind.Core;
+using SmallMind.Explainability;
 
 namespace SmallMind.Text
 {
@@ -25,9 +26,19 @@ namespace SmallMind.Text
         }
 
         /// <summary>
-        /// Generate text from a prompt.
+        /// Generate text from a prompt with optional explainability capture.
         /// </summary>
-        public string Generate(string prompt, int maxNewTokens, double temperature = 1.0, int topK = 0, int? seed = null, bool showPerf = false, bool isPerfJsonMode = false, PerformanceMetrics? metrics = null)
+        public string Generate(
+            string prompt, 
+            int maxNewTokens, 
+            double temperature = 1.0, 
+            int topK = 0, 
+            int? seed = null, 
+            bool showPerf = false, 
+            bool isPerfJsonMode = false, 
+            PerformanceMetrics? metrics = null,
+            ExplainabilityOptions? explainabilityOptions = null,
+            IExplainabilitySink? explainabilitySink = null)
         {
             _model.Eval();
 
@@ -50,6 +61,18 @@ namespace SmallMind.Text
             }
 
             int inputTokens = context.Count;
+
+            // Initialize explainability sink if provided
+            bool captureExplainability = explainabilitySink != null && explainabilitySink.IsEnabled;
+            if (captureExplainability && explainabilityOptions != null)
+            {
+                explainabilityOptions.Validate();
+                var ctx = new ExplainabilityContext(
+                    context,
+                    explainabilityOptions.RedactPromptText ? null : prompt,
+                    explainabilityOptions);
+                explainabilitySink!.OnGenerationStart(ctx);
+            }
 
             // Use provided metrics or create new one if perf tracking is enabled
             bool isMetricsOwner = false;
@@ -89,6 +112,10 @@ namespace SmallMind.Text
 
             for (int i = 0; i < maxNewTokens; i++)
             {
+                var stepStopwatch = captureExplainability && explainabilityOptions!.IncludeTiming 
+                    ? System.Diagnostics.Stopwatch.StartNew() 
+                    : null;
+
                 // Crop context to last blockSize tokens (avoid LINQ allocation)
                 List<int> contextCropped;
                 if (context.Count <= _blockSize)
@@ -149,6 +176,26 @@ namespace SmallMind.Text
                 // Sample from the distribution
                 var nextToken = SampleFromProbs(probs, random);
 
+                // Capture explainability data if enabled
+                if (captureExplainability && explainabilityOptions != null)
+                {
+                    try
+                    {
+                        CaptureTokenStep(
+                            explainabilitySink!,
+                            explainabilityOptions,
+                            i,
+                            nextToken,
+                            probs,
+                            stepStopwatch);
+                    }
+                    catch
+                    {
+                        // Explainability failures must not fail generation
+                        // Silently continue
+                    }
+                }
+
                 // Add to context
                 context.Add(nextToken);
                 
@@ -168,6 +215,20 @@ namespace SmallMind.Text
 
             totalStopwatch.Stop();
             
+            // Notify explainability sink of completion
+            if (captureExplainability)
+            {
+                try
+                {
+                    var summary = new ExplainabilitySummary(totalStopwatch.Elapsed, success: true);
+                    explainabilitySink!.OnGenerationEnd(summary);
+                }
+                catch
+                {
+                    // Explainability failures must not fail generation
+                }
+            }
+
             // Record completion
             if (metrics != null)
             {
@@ -309,6 +370,151 @@ namespace SmallMind.Text
 
             // Fallback
             return probs.Length - 1;
+        }
+
+        /// <summary>
+        /// Captures explainability data for a single token generation step.
+        /// Efficient top-k extraction without full sort.
+        /// </summary>
+        private void CaptureTokenStep(
+            IExplainabilitySink sink,
+            ExplainabilityOptions options,
+            int stepIndex,
+            int selectedTokenId,
+            float[] probs,
+            System.Diagnostics.Stopwatch? stepStopwatch)
+        {
+            // Get selected token probability
+            double selectedProb = probs[selectedTokenId];
+
+            // Extract top-k alternatives using efficient partial selection
+            int k = Math.Min(options.TopKAlternatives, probs.Length);
+            if (k == 0)
+            {
+                // No alternatives requested, just record the selected token
+                var stepData = new TokenStepData(
+                    stepIndex,
+                    selectedTokenId,
+                    _tokenizer.Decode(new List<int> { selectedTokenId }),
+                    selectedProb,
+                    Array.Empty<int>(),
+                    Array.Empty<string>(),
+                    Array.Empty<double>(),
+                    entropy: null,
+                    elapsed: stepStopwatch?.Elapsed);
+                sink.OnTokenStep(stepData);
+                return;
+            }
+
+            // Use partial heap-based top-k selection (O(n log k) instead of O(n log n))
+            var topK = ExtractTopK(probs, k);
+
+            // Decode token texts
+            var tokenIds = new int[topK.Count];
+            var tokenTexts = new string[topK.Count];
+            var tokenProbs = new double[topK.Count];
+
+            for (int i = 0; i < topK.Count; i++)
+            {
+                tokenIds[i] = topK[i].Index;
+                tokenProbs[i] = topK[i].Prob;
+                tokenTexts[i] = _tokenizer.Decode(new List<int> { topK[i].Index });
+            }
+
+            // Compute entropy if requested (Standard or Detailed level)
+            double? entropy = null;
+            if (options.Level >= ExplainabilityLevel.Standard)
+            {
+                entropy = ComputeEntropy(probs);
+            }
+
+            var stepDataFull = new TokenStepData(
+                stepIndex,
+                selectedTokenId,
+                _tokenizer.Decode(new List<int> { selectedTokenId }),
+                selectedProb,
+                tokenIds,
+                tokenTexts,
+                tokenProbs,
+                entropy,
+                stepStopwatch?.Elapsed);
+
+            sink.OnTokenStep(stepDataFull);
+        }
+
+        /// <summary>
+        /// Efficiently extracts top-k probabilities using a min-heap.
+        /// Returns indices and probabilities sorted by descending probability.
+        /// </summary>
+        private List<(int Index, double Prob)> ExtractTopK(float[] probs, int k)
+        {
+            // Use a simple O(n*k) approach for small k (which is typical: k <= 50)
+            // For small k, this is faster than heap-based approaches due to better cache locality
+            var topK = new List<(int Index, double Prob)>(k);
+
+            for (int i = 0; i < probs.Length; i++)
+            {
+                double prob = probs[i];
+                
+                // Skip zero probabilities
+                if (prob <= 0)
+                    continue;
+
+                // Insert into top-k list, maintaining sorted order
+                if (topK.Count < k)
+                {
+                    // List not full yet, insert in sorted position
+                    int insertPos = topK.Count;
+                    for (int j = 0; j < topK.Count; j++)
+                    {
+                        if (prob > topK[j].Prob)
+                        {
+                            insertPos = j;
+                            break;
+                        }
+                    }
+                    topK.Insert(insertPos, (i, prob));
+                }
+                else if (prob > topK[k - 1].Prob)
+                {
+                    // Replace smallest element and bubble up
+                    topK[k - 1] = (i, prob);
+                    
+                    // Bubble the new element up to maintain sorted order
+                    for (int j = k - 2; j >= 0; j--)
+                    {
+                        if (topK[j + 1].Prob > topK[j].Prob)
+                        {
+                            var tmp = topK[j];
+                            topK[j] = topK[j + 1];
+                            topK[j + 1] = tmp;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // List is already sorted, no need for final sort
+            return topK;
+        }
+
+        /// <summary>
+        /// Computes Shannon entropy of a probability distribution.
+        /// </summary>
+        private double ComputeEntropy(float[] probs)
+        {
+            double entropy = 0.0;
+            for (int i = 0; i < probs.Length; i++)
+            {
+                if (probs[i] > 0)
+                {
+                    entropy -= probs[i] * Math.Log(probs[i], 2.0);
+                }
+            }
+            return entropy;
         }
     }
 }
