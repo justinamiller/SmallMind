@@ -183,12 +183,14 @@ namespace SmallMind.Engine
             var session = internalHandle.CreateInferenceSession(request.Options, _options);
             try
             {
-                await foreach (var token in session.GenerateStreamingAsync(
+                bool isLast = false;
+                await foreach (var token in session.GenerateStreamAsync(
                     request.Prompt,
                     metrics: null,
                     cancellationToken: cancellationToken))
                 {
                     tokenCount++;
+                    isLast = (tokenCount >= request.Options.MaxNewTokens);
 
                     yield return new TokenEvent
                     {
@@ -196,10 +198,10 @@ namespace SmallMind.Engine
                         Text = token.Text.AsMemory(),
                         TokenId = token.TokenId,
                         GeneratedTokens = tokenCount,
-                        IsFinal = token.IsFinal
+                        IsFinal = isLast
                     };
 
-                    if (token.IsFinal)
+                    if (isLast)
                     {
                         break;
                     }

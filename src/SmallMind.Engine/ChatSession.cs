@@ -149,13 +149,15 @@ namespace SmallMind.Engine
                     IsFinal = false
                 };
 
-                await foreach (var token in session.GenerateStreamingAsync(
+                bool isLast = false;
+                await foreach (var token in session.GenerateStreamAsync(
                     prompt,
                     metrics: null,
                     cancellationToken: cancellationToken))
                 {
                     tokenCount++;
                     responseBuilder.Append(token.Text);
+                    isLast = (tokenCount >= options.MaxNewTokens);
 
                     yield return new TokenEvent
                     {
@@ -163,10 +165,10 @@ namespace SmallMind.Engine
                         Text = token.Text.AsMemory(),
                         TokenId = token.TokenId,
                         GeneratedTokens = tokenCount,
-                        IsFinal = token.IsFinal
+                        IsFinal = isLast
                     };
 
-                    if (token.IsFinal)
+                    if (isLast)
                     {
                         break;
                     }

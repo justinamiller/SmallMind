@@ -46,16 +46,15 @@ namespace SmallMind.Engine
             var ragOptions = new RagNamespace.RagOptions
             {
                 IndexDirectory = request.IndexDirectory,
-                Chunking = new RagNamespace.ChunkingOptions
+                Chunking = new RagNamespace.RagOptions.ChunkingOptions
                 {
-                    ChunkSize = request.ChunkSize,
-                    ChunkOverlap = request.ChunkOverlap
+                    MaxChunkSize = request.ChunkSize,
+                    OverlapSize = request.ChunkOverlap
                 },
-                Retrieval = new RagNamespace.RetrievalOptions
+                Retrieval = new RagNamespace.RagOptions.RetrievalOptions
                 {
                     TopK = 5,
-                    MinScore = 0.0,
-                    UseBm25 = true
+                    MinScore = 0.0f
                 }
             };
 
@@ -114,12 +113,8 @@ namespace SmallMind.Engine
             var modelHandle = (ModelHandle)model;
             var textGenerator = new InferenceEngineAdapter(modelHandle);
 
-            // Update pipeline with text generator
+            // Use existing pipeline
             var pipeline = indexFacade.Pipeline;
-            var pipelineWithGenerator = new RagPipeline(
-                indexFacade.Options,
-                textGenerator: textGenerator);
-            pipelineWithGenerator.Initialize();
 
             // Ask question
             var answer = pipeline.AskQuestion(
@@ -135,10 +130,10 @@ namespace SmallMind.Engine
                 .Where(c => c.Score >= request.MinConfidence)
                 .Select(c => new RagCitation
                 {
-                    SourceUri = c.SourceUri,
-                    CharRange = (c.CharStartIndex, c.CharEndIndex),
-                    LineRange = (c.LineStartIndex, c.LineEndIndex),
-                    Snippet = c.Text.Length > 200 ? c.Text.Substring(0, 200) + "..." : c.Text,
+                    SourceUri = $"chunk://{c.ChunkId}",
+                    CharRange = (0, 0),
+                    LineRange = (0, 0),
+                    Snippet = c.Excerpt.Length > 200 ? c.Excerpt.Substring(0, 200) + "..." : c.Excerpt,
                     Confidence = c.Score
                 })
                 .ToArray();
@@ -206,11 +201,13 @@ namespace SmallMind.Engine
 
             // Stream tokens from generator
             int tokenCount = 0;
+            bool isLast = false;
             await foreach (var token in textGenerator.GenerateStreamingAsync(
                 request.Query,
                 cancellationToken: cancellationToken))
             {
                 tokenCount++;
+                isLast = (tokenCount >= request.GenerationOptions.MaxNewTokens);
 
                 yield return new TokenEvent
                 {
@@ -218,10 +215,10 @@ namespace SmallMind.Engine
                     Text = token.Text.AsMemory(),
                     TokenId = token.TokenId,
                     GeneratedTokens = tokenCount,
-                    IsFinal = token.IsFinal
+                    IsFinal = isLast
                 };
 
-                if (token.IsFinal)
+                if (isLast)
                 {
                     break;
                 }
@@ -255,7 +252,6 @@ namespace SmallMind.Engine
         }
 
         internal RagPipeline Pipeline => _pipeline;
-        internal RagNamespace.RagOptions Options { get; }
 
         public RagIndexInfo Info
         {
@@ -369,7 +365,7 @@ namespace SmallMind.Engine
 
             try
             {
-                await foreach (var token in session.GenerateStreamingAsync(
+                await foreach (var token in session.GenerateStreamAsync(
                     prompt,
                     metrics: null,
                     cancellationToken: cancellationToken))
@@ -407,7 +403,7 @@ namespace SmallMind.Engine
 
             try
             {
-                await foreach (var token in session.GenerateStreamingAsync(
+                await foreach (var token in session.GenerateStreamAsync(
                     prompt,
                     metrics: null,
                     cancellationToken: cancellationToken))
