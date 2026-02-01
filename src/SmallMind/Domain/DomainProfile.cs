@@ -139,7 +139,7 @@ namespace SmallMind.Domain
                 MaxInputTokens = 256,
                 MaxOutputTokens = 128,
                 MaxExecutionTime = TimeSpan.FromSeconds(15),
-                Sampling = SamplingPolicy.Deterministic(),
+                Sampling = SamplingPolicy.CreateDeterministic(),
                 Safety = SafetyPolicy.Strict(),
                 Provenance = ProvenancePolicy.Enabled()
             };
@@ -173,7 +173,7 @@ namespace SmallMind.Domain
                 Name = "JsonOutput",
                 Version = "1.0",
                 Output = OutputPolicy.JsonOnly(),
-                Sampling = SamplingPolicy.Deterministic()
+                Sampling = SamplingPolicy.CreateDeterministic()
             };
         }
     }

@@ -89,7 +89,7 @@ namespace SmallMind.Domain.Policies
         /// </summary>
         /// <param name="seed">Optional seed for reproducibility.</param>
         /// <returns>A deterministic sampling policy.</returns>
-        public static SamplingPolicy Deterministic(int? seed = null)
+        public static SamplingPolicy CreateDeterministic(int? seed = null)
         {
             return new SamplingPolicy
             {
