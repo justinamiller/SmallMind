@@ -874,6 +874,13 @@ namespace SmallMind.Core
             var scores = new Tensor(new int[] { B, _nHead, qLen, kvLen }, requiresGrad: true);
             float scale = 1.0f / MathF.Sqrt(_headSize);
             
+            // NOTE: We need to know the starting position for proper causal masking
+            // This method is called from Forward(Tensor, InferenceSession, bool) where we know startPos
+            // For now, we'll compute it from kvLen and qLen
+            // During prefill: startPos = 0, qLen = T, kvLen = T, so startPos = kvLen - qLen = 0
+            // During decode: startPos = kvLen - qLen (e.g., if kvLen=6 and qLen=1, startPos=5)
+            int startPos = kvLen - qLen;
+            
             // For each query position, compute scores against all key positions
             for (int b = 0; b < B; b++)
             {
@@ -881,6 +888,9 @@ namespace SmallMind.Core
                 {
                     for (int i = 0; i < qLen; i++)
                     {
+                        // Absolute position of this query
+                        int queryPos = startPos + i;
+                        
                         for (int j = 0; j < kvLen; j++)
                         {
                             float sum = 0;
@@ -893,9 +903,16 @@ namespace SmallMind.Core
                             
                             int scoreIdx = ((b * _nHead + h) * qLen + i) * kvLen + j;
                             
-                            // Apply causal masking: query position i can only attend to key positions <= i
-                            // In decode mode, we're at position currentPos + i, can attend to positions 0..currentPos+i
-                            scores.Data[scoreIdx] = sum * scale;
+                            // Apply causal masking: query at position queryPos can only attend to keys at positions <= queryPos
+                            // Key at k-index j has absolute position j (since kFull starts from position 0)
+                            if (j <= queryPos)
+                            {
+                                scores.Data[scoreIdx] = sum * scale;
+                            }
+                            else
+                            {
+                                scores.Data[scoreIdx] = float.NegativeInfinity;
+                            }
                         }
                     }
                 }
