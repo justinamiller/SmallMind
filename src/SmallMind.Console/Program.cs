@@ -7,12 +7,14 @@ using SmallMind.RAG;
 using SmallMind.Embeddings;
 using SmallMind.Indexing;
 using SmallMind.Simd;
+using SmallMind.ConsoleApp.Commands;
 
 namespace SmallMind.ConsoleApp
 {
     /// <summary>
     /// CLI entry point for the Tiny LLM - Pure C# implementation.
     /// Supports training and generation modes with command-line arguments.
+    /// Also supports quantization commands: quantize, import-gguf, inspect, verify.
     /// No 3rd party dependencies - everything implemented in pure C#.
     /// </summary>
     class Program
@@ -122,6 +124,20 @@ namespace SmallMind.ConsoleApp
 
         static void Main(string[] args)
         {
+            // Check for quantization commands first
+            if (args.Length > 0)
+            {
+                var router = new CommandRouter();
+                if (router.HasCommand(args[0]))
+                {
+                    // Route to quantization command
+                    var commandArgs = args.Length > 1 ? args[1..] : Array.Empty<string>();
+                    var exitCode = router.ExecuteAsync(args[0], commandArgs).GetAwaiter().GetResult();
+                    Environment.Exit(exitCode);
+                    return;
+                }
+            }
+
             try
             {
                 Console.WriteLine("=== Tiny LLM - Educational Transformer in Pure C# ===");
