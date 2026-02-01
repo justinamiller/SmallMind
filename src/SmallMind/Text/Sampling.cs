@@ -463,21 +463,24 @@ namespace SmallMind.Text
                 // Insert into top-k list, maintaining sorted order
                 if (topK.Count < k)
                 {
-                    // List not full yet, just add
-                    topK.Add((i, prob));
-                    
-                    // Sort to maintain descending order
-                    if (topK.Count == k)
+                    // List not full yet, insert in sorted position
+                    int insertPos = topK.Count;
+                    for (int j = 0; j < topK.Count; j++)
                     {
-                        topK.Sort((a, b) => b.Prob.CompareTo(a.Prob));
+                        if (prob > topK[j].Prob)
+                        {
+                            insertPos = j;
+                            break;
+                        }
                     }
+                    topK.Insert(insertPos, (i, prob));
                 }
                 else if (prob > topK[k - 1].Prob)
                 {
-                    // Replace smallest element
+                    // Replace smallest element and bubble up
                     topK[k - 1] = (i, prob);
                     
-                    // Re-sort (bubble the new element up)
+                    // Bubble the new element up to maintain sorted order
                     for (int j = k - 2; j >= 0; j--)
                     {
                         if (topK[j + 1].Prob > topK[j].Prob)
@@ -494,8 +497,7 @@ namespace SmallMind.Text
                 }
             }
 
-            // Final sort to ensure descending order
-            topK.Sort((a, b) => b.Prob.CompareTo(a.Prob));
+            // List is already sorted, no need for final sort
             return topK;
         }
 
