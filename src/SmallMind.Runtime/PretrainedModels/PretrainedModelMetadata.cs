@@ -28,9 +28,17 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         public static TaskType GetTaskType(this ModelMetadata metadata)
         {
-            if (metadata.Extra.TryGetValue(TaskTypeKey, out var value) && value is string str)
+            if (metadata.Extra.TryGetValue(TaskTypeKey, out var value))
             {
-                if (Enum.TryParse<TaskType>(str, out var taskType))
+                // Handle both string and JsonElement cases (after deserialization)
+                string? strValue = value switch
+                {
+                    string s => s,
+                    System.Text.Json.JsonElement je when je.ValueKind == System.Text.Json.JsonValueKind.String => je.GetString(),
+                    _ => value?.ToString()
+                };
+
+                if (!string.IsNullOrEmpty(strValue) && Enum.TryParse<TaskType>(strValue, out var taskType))
                 {
                     return taskType;
                 }
@@ -51,9 +59,17 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         public static DomainType GetDomainType(this ModelMetadata metadata)
         {
-            if (metadata.Extra.TryGetValue(DomainTypeKey, out var value) && value is string str)
+            if (metadata.Extra.TryGetValue(DomainTypeKey, out var value))
             {
-                if (Enum.TryParse<DomainType>(str, out var domainType))
+                // Handle both string and JsonElement cases (after deserialization)
+                string? strValue = value switch
+                {
+                    string s => s,
+                    System.Text.Json.JsonElement je when je.ValueKind == System.Text.Json.JsonValueKind.String => je.GetString(),
+                    _ => value?.ToString()
+                };
+
+                if (!string.IsNullOrEmpty(strValue) && Enum.TryParse<DomainType>(strValue, out var domainType))
                 {
                     return domainType;
                 }
@@ -74,9 +90,15 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         public static string GetModelName(this ModelMetadata metadata)
         {
-            if (metadata.Extra.TryGetValue(ModelNameKey, out var value) && value is string str)
+            if (metadata.Extra.TryGetValue(ModelNameKey, out var value))
             {
-                return str;
+                // Handle both string and JsonElement cases
+                return value switch
+                {
+                    string s => s,
+                    System.Text.Json.JsonElement je when je.ValueKind == System.Text.Json.JsonValueKind.String => je.GetString() ?? "Unnamed Model",
+                    _ => value?.ToString() ?? "Unnamed Model"
+                };
             }
             return "Unnamed Model";
         }
@@ -94,9 +116,15 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         public static string GetModelDescription(this ModelMetadata metadata)
         {
-            if (metadata.Extra.TryGetValue(ModelDescriptionKey, out var value) && value is string str)
+            if (metadata.Extra.TryGetValue(ModelDescriptionKey, out var value))
             {
-                return str;
+                // Handle both string and JsonElement cases
+                return value switch
+                {
+                    string s => s,
+                    System.Text.Json.JsonElement je when je.ValueKind == System.Text.Json.JsonValueKind.String => je.GetString() ?? string.Empty,
+                    _ => value?.ToString() ?? string.Empty
+                };
             }
             return string.Empty;
         }
@@ -114,9 +142,15 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         public static string GetModelVersion(this ModelMetadata metadata)
         {
-            if (metadata.Extra.TryGetValue(ModelVersionKey, out var value) && value is string str)
+            if (metadata.Extra.TryGetValue(ModelVersionKey, out var value))
             {
-                return str;
+                // Handle both string and JsonElement cases
+                return value switch
+                {
+                    string s => s,
+                    System.Text.Json.JsonElement je when je.ValueKind == System.Text.Json.JsonValueKind.String => je.GetString() ?? "1.0.0",
+                    _ => value?.ToString() ?? "1.0.0"
+                };
             }
             return "1.0.0";
         }
@@ -134,9 +168,20 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         public static string[] GetClassificationLabels(this ModelMetadata metadata)
         {
-            if (metadata.Extra.TryGetValue(LabelsKey, out var value) && value is string str)
+            if (metadata.Extra.TryGetValue(LabelsKey, out var value))
             {
-                return str.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                // Handle both string and JsonElement cases
+                string? strValue = value switch
+                {
+                    string s => s,
+                    System.Text.Json.JsonElement je when je.ValueKind == System.Text.Json.JsonValueKind.String => je.GetString(),
+                    _ => value?.ToString()
+                };
+
+                if (!string.IsNullOrEmpty(strValue))
+                {
+                    return strValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                }
             }
             return Array.Empty<string>();
         }

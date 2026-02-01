@@ -152,9 +152,12 @@ namespace SmallMind.Runtime.PretrainedModels
             // Add task-specific metadata
             if (pretrainedModel is ITextClassificationModel classificationModel)
             {
-                checkpoint.Metadata.SetClassificationLabels(
-                    classificationModel.Labels as string[] ?? 
-                    new string[classificationModel.Labels.Count]);
+                var labelsArray = new string[classificationModel.Labels.Count];
+                for (int i = 0; i < classificationModel.Labels.Count; i++)
+                {
+                    labelsArray[i] = classificationModel.Labels[i];
+                }
+                checkpoint.Metadata.SetClassificationLabels(labelsArray);
             }
             
             var store = new BinaryCheckpointStore();
