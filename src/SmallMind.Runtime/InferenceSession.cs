@@ -247,7 +247,7 @@ namespace SmallMind.Runtime
                     tokenId: nextToken,
                     text: tokenText,
                     index: i,
-                    logProb: null // TODO: Add logprob support if IncludeLogProbs is true
+                    logProb: null // Note: Log probability calculation not yet implemented (future enhancement)
                 );
             }
             

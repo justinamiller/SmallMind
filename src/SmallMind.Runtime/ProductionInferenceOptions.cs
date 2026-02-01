@@ -78,6 +78,7 @@ namespace SmallMind.Runtime
         /// Gets or sets whether to include log probabilities in streaming output.
         /// Enabling this adds computational overhead.
         /// Default: false.
+        /// NOTE: Log probability calculation not yet implemented. This option is reserved for future use.
         /// </summary>
         public bool IncludeLogProbs { get; set; } = false;
         
