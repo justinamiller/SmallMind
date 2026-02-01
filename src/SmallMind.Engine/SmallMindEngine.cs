@@ -113,22 +113,42 @@ namespace SmallMind.Engine
                 throw new ArgumentException("Model handle must be created by this engine", nameof(model));
             }
 
-            // Use existing inference engine
+            // Enforce budgets with BudgetEnforcer
+            using var budgetEnforcer = new BudgetEnforcer(request.Options, cancellationToken);
+
+            // Use existing inference engine with combined cancellation token
             var session = internalHandle.CreateInferenceSession(request.Options, _options);
             try
             {
+                // Tokenize prompt to validate context length
+                var promptTokens = session.Tokenizer.Encode(request.Prompt);
+                budgetEnforcer.ValidateContextLength(promptTokens.Count);
+
                 var text = await session.GenerateAsync(
                     request.Prompt,
                     metrics: null,
-                    cancellationToken: cancellationToken);
+                    cancellationToken: budgetEnforcer.CombinedToken);
+
+                // Check if budget was exceeded (though session should handle this)
+                var generatedTokens = budgetEnforcer.GeneratedTokens > 0 
+                    ? budgetEnforcer.GeneratedTokens 
+                    : request.Options.MaxNewTokens; // Fallback estimate
 
                 return new GenerationResult
                 {
                     Text = text,
-                    GeneratedTokens = session.Options.MaxNewTokens, // Approximate
-                    StoppedByBudget = false,
-                    StopReason = "completed"
+                    GeneratedTokens = generatedTokens,
+                    StoppedByBudget = budgetEnforcer.BudgetExceeded,
+                    StopReason = budgetEnforcer.BudgetExceeded 
+                        ? $"budget_exceeded_{budgetEnforcer.ExceededReason}" 
+                        : "completed"
                 };
+            }
+            catch (OperationCanceledException) when (budgetEnforcer.BudgetExceeded)
+            {
+                // Budget exceeded, throw our exception instead
+                budgetEnforcer.ThrowIfExceeded();
+                throw; // Shouldn't reach here
             }
             finally
             {
@@ -153,6 +173,9 @@ namespace SmallMind.Engine
                 throw new ArgumentException("Model handle must be created by this engine", nameof(model));
             }
 
+            // Enforce budgets with BudgetEnforcer
+            using var budgetEnforcer = new BudgetEnforcer(request.Options, cancellationToken);
+
             // Emit started event
             yield return new TokenEvent
             {
@@ -163,26 +186,43 @@ namespace SmallMind.Engine
                 IsFinal = false
             };
 
-            int tokenCount = 0;
-
             var session = internalHandle.CreateInferenceSession(request.Options, _options);
             try
             {
-                bool isLast = false;
+                // Tokenize prompt to validate context length
+                var promptTokens = session.Tokenizer.Encode(request.Prompt);
+                budgetEnforcer.ValidateContextLength(promptTokens.Count);
+
                 await foreach (var token in session.GenerateStreamAsync(
                     request.Prompt,
                     metrics: null,
-                    cancellationToken: cancellationToken))
+                    cancellationToken: budgetEnforcer.CombinedToken))
                 {
-                    tokenCount++;
-                    isLast = (tokenCount >= request.Options.MaxNewTokens);
+                    // Check budget before emitting token
+                    if (!budgetEnforcer.ShouldContinue())
+                    {
+                        // Budget exceeded - emit error event and stop
+                        yield return new TokenEvent
+                        {
+                            Kind = TokenEventKind.Error,
+                            Text = $"Budget exceeded: {budgetEnforcer.ExceededReason}".AsMemory(),
+                            TokenId = -1,
+                            GeneratedTokens = budgetEnforcer.GeneratedTokens,
+                            IsFinal = true
+                        };
+                        yield break;
+                    }
+
+                    budgetEnforcer.IncrementTokenCount();
+
+                    bool isLast = !budgetEnforcer.ShouldContinue();
 
                     yield return new TokenEvent
                     {
                         Kind = TokenEventKind.Token,
                         Text = token.Text.AsMemory(),
                         TokenId = token.TokenId,
-                        GeneratedTokens = tokenCount,
+                        GeneratedTokens = budgetEnforcer.GeneratedTokens,
                         IsFinal = isLast
                     };
 
@@ -198,7 +238,19 @@ namespace SmallMind.Engine
                     Kind = TokenEventKind.Completed,
                     Text = ReadOnlyMemory<char>.Empty,
                     TokenId = -1,
-                    GeneratedTokens = tokenCount,
+                    GeneratedTokens = budgetEnforcer.GeneratedTokens,
+                    IsFinal = true
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelled - emit cancelled event
+                yield return new TokenEvent
+                {
+                    Kind = TokenEventKind.Cancelled,
+                    Text = ReadOnlyMemory<char>.Empty,
+                    TokenId = -1,
+                    GeneratedTokens = budgetEnforcer.GeneratedTokens,
                     IsFinal = true
                 };
             }

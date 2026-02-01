@@ -245,7 +245,12 @@ namespace SmallMind.Abstractions
         /// <summary>
         /// An error occurred during generation.
         /// </summary>
-        Error
+        Error,
+
+        /// <summary>
+        /// Generation was cancelled by user request or timeout.
+        /// </summary>
+        Cancelled
     }
 
     /// <summary>
