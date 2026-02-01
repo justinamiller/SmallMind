@@ -9,7 +9,7 @@ namespace SmallMind.Workflows
     /// <summary>
     /// Validates and optionally repairs step outputs based on OutputSpec.
     /// </summary>
-    internal class OutputValidator
+    public class OutputValidator
     {
         /// <summary>
         /// Validate output against the specification.
