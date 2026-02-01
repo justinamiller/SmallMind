@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using SmallMind.Simd;
 
 namespace SmallMind.Benchmarks
@@ -10,13 +12,28 @@ namespace SmallMind.Benchmarks
     /// </summary>
     class SimdBenchmarks
     {
+        private static BenchmarkReport _report = new();
+
         static void Main(string[] args)
         {
             Console.WriteLine("=== SmallMind SIMD Benchmarks ===\n");
             
+            // Collect system information
+            Console.WriteLine("Collecting system metadata...");
+            _report.SystemInfo = SystemInfoCollector.Collect();
+            _report.ReportTimestamp = DateTime.UtcNow;
+            Console.WriteLine();
+            
             // Display CPU capabilities
             SimdCapabilities.PrintCapabilities();
             Console.WriteLine();
+
+            // Warn if not Release build
+            if (!_report.SystemInfo.Build.IsReleaseBuild)
+            {
+                Console.WriteLine("⚠️  WARNING: Running in Debug mode. Results may not be representative.");
+                Console.WriteLine("   Build in Release mode for accurate benchmarks.\n");
+            }
 
             // Run benchmarks
             BenchmarkElementWiseAdd();
@@ -26,6 +43,9 @@ namespace SmallMind.Benchmarks
             BenchmarkDotProduct();
 
             Console.WriteLine("\n=== Benchmarks Complete ===");
+            
+            // Generate and save reports
+            SaveReports();
         }
 
         static void BenchmarkElementWiseAdd()
@@ -65,6 +85,24 @@ namespace SmallMind.Benchmarks
             Console.WriteLine($"  Time: {msPerOp:F3} ms/op");
             Console.WriteLine($"  Throughput: {gbPerSec:F2} GB/s");
             Console.WriteLine();
+
+            // Record result
+            var benchResult = new BenchmarkResult
+            {
+                Name = "Element-wise Add",
+                Timestamp = DateTime.UtcNow,
+                Parameters = new Dictionary<string, object>
+                {
+                    ["Size"] = size,
+                    ["Iterations"] = iterations
+                },
+                Metrics = new Dictionary<string, double>
+                {
+                    ["Time (ms/op)"] = msPerOp,
+                    ["Throughput (GB/s)"] = gbPerSec
+                }
+            };
+            _report.Results.Add(benchResult);
         }
 
         static void BenchmarkReLU()
@@ -101,6 +139,24 @@ namespace SmallMind.Benchmarks
             Console.WriteLine($"  Time: {msPerOp:F3} ms/op");
             Console.WriteLine($"  Throughput: {gbPerSec:F2} GB/s");
             Console.WriteLine();
+
+            // Record result
+            var benchResult = new BenchmarkResult
+            {
+                Name = "ReLU Activation",
+                Timestamp = DateTime.UtcNow,
+                Parameters = new Dictionary<string, object>
+                {
+                    ["Size"] = size,
+                    ["Iterations"] = iterations
+                },
+                Metrics = new Dictionary<string, double>
+                {
+                    ["Time (ms/op)"] = msPerOp,
+                    ["Throughput (GB/s)"] = gbPerSec
+                }
+            };
+            _report.Results.Add(benchResult);
         }
 
         static void BenchmarkSoftmax()
@@ -136,6 +192,24 @@ namespace SmallMind.Benchmarks
             Console.WriteLine($"  Size: {rows} x {cols}");
             Console.WriteLine($"  Time: {msPerOp:F3} ms/op");
             Console.WriteLine();
+
+            // Record result
+            var benchResult = new BenchmarkResult
+            {
+                Name = "Softmax",
+                Timestamp = DateTime.UtcNow,
+                Parameters = new Dictionary<string, object>
+                {
+                    ["Rows"] = rows,
+                    ["Cols"] = cols,
+                    ["Iterations"] = iterations
+                },
+                Metrics = new Dictionary<string, double>
+                {
+                    ["Time (ms/op)"] = msPerOp
+                }
+            };
+            _report.Results.Add(benchResult);
         }
 
         static void BenchmarkMatMul()
@@ -174,6 +248,26 @@ namespace SmallMind.Benchmarks
             Console.WriteLine($"  Time: {msPerOp:F3} ms/op");
             Console.WriteLine($"  Performance: {gflops:F2} GFLOPS");
             Console.WriteLine();
+
+            // Record result
+            var benchResult = new BenchmarkResult
+            {
+                Name = "Matrix Multiplication",
+                Timestamp = DateTime.UtcNow,
+                Parameters = new Dictionary<string, object>
+                {
+                    ["M"] = M,
+                    ["K"] = K,
+                    ["N"] = N,
+                    ["Iterations"] = iterations
+                },
+                Metrics = new Dictionary<string, double>
+                {
+                    ["Time (ms/op)"] = msPerOp,
+                    ["Performance (GFLOPS)"] = gflops
+                }
+            };
+            _report.Results.Add(benchResult);
         }
 
         static void BenchmarkDotProduct()
@@ -212,6 +306,46 @@ namespace SmallMind.Benchmarks
             Console.WriteLine($"  Performance: {gflops:F2} GFLOPS");
             Console.WriteLine($"  Result (sanity check): {result:F6}");
             Console.WriteLine();
+
+            // Record result
+            var benchResult = new BenchmarkResult
+            {
+                Name = "Dot Product",
+                Timestamp = DateTime.UtcNow,
+                Parameters = new Dictionary<string, object>
+                {
+                    ["Size"] = size,
+                    ["Iterations"] = iterations
+                },
+                Metrics = new Dictionary<string, double>
+                {
+                    ["Time (ms/op)"] = msPerOp,
+                    ["Performance (GFLOPS)"] = gflops
+                }
+            };
+            _report.Results.Add(benchResult);
+        }
+
+        static void SaveReports()
+        {
+            try
+            {
+                // Generate markdown report
+                var markdownReport = MarkdownReportWriter.GenerateReport(_report);
+                var markdownPath = "benchmark-results.md";
+                File.WriteAllText(markdownPath, markdownReport);
+                Console.WriteLine($"\n✓ Markdown report saved to: {markdownPath}");
+
+                // Generate JSON report
+                var jsonReport = JsonReportWriter.GenerateReport(_report);
+                var jsonPath = "benchmark-results.json";
+                File.WriteAllText(jsonPath, jsonReport);
+                Console.WriteLine($"✓ JSON report saved to: {jsonPath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n✗ Error saving reports: {ex.Message}");
+            }
         }
     }
 }

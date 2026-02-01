@@ -10,4 +10,8 @@
     <ProjectReference Include="../src/SmallMind/SmallMind.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="8.0.0" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+  </ItemGroup>
+
 </Project>
