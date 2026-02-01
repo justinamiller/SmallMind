@@ -72,6 +72,62 @@ var model = TransformerModelBuilder.Create()
     .Build();
 ```
 
+### Run a GGUF Model in 2 Minutes
+
+SmallMind supports importing quantized models from the popular GGUF format (Q8_0 and Q4_0 only):
+
+```bash
+# Import GGUF model to SMQ format
+dotnet run --project src/SmallMind.Console import-gguf model.gguf model.smq
+
+# Inspect the model
+dotnet run --project src/SmallMind.Console inspect model.smq --tensors
+
+# Verify integrity
+dotnet run --project src/SmallMind.Console verify model.smq
+```
+
+**Supported quantization schemes:**
+- **Q8_0**: 8-bit symmetric quantization (excellent accuracy, 4x compression)
+- **Q4_0**: 4-bit symmetric quantization (good accuracy, 7x compression)
+
+**Note**: K-quants (Q4_K_M, Q5_K_S, etc.) and other quantization types are not supported. The import will fail gracefully if unsupported types are encountered.
+
+See [docs/quantization.md](docs/quantization.md) for detailed usage.
+
+### Streaming Generation
+
+SmallMind supports streaming token generation with full cancellation and hard budgets:
+
+```csharp
+using SmallMind.Runtime;
+
+var options = new ProductionInferenceOptions
+{
+    MaxNewTokens = 100,
+    MaxContextTokens = 2048,
+    MaxTimeMs = 30000,  // 30 second timeout
+    Temperature = 0.8,
+    Seed = 42  // Deterministic generation
+};
+
+var engine = new InferenceEngine(model, tokenizer, blockSize, maxConcurrentSessions: 4);
+
+await foreach (var token in engine.GenerateStreamAsync(prompt, options, cancellationToken))
+{
+    Console.Write(token.Text);  // Print tokens as they're generated
+}
+```
+
+**Features:**
+- **Streaming**: Tokens emitted as they're generated via `IAsyncEnumerable<GeneratedToken>`
+- **Cancellation**: Full `CancellationToken` support for graceful shutdown
+- **Hard budgets**: `MaxNewTokens`, `MaxContextTokens`, `TimeoutMs` strictly enforced
+- **Deterministic mode**: Fixed seed produces identical output
+- **Concurrent sessions**: Bounded concurrency for production deployments
+
+See [examples/ProductionInference](examples/ProductionInference) for complete examples.
+
 See [examples/MinimalGenerate](examples/MinimalGenerate) and [samples/](samples/) for complete working examples.
 
 ## What's New in v0.3.0
