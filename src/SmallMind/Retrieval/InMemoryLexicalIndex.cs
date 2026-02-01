@@ -6,7 +6,7 @@ using System.Threading;
 namespace SmallMind.Retrieval
 {
     /// <summary>
-    /// In-memory lexical retrieval index using TF-IDF scoring.
+    /// In-memory lexical retrieval index using BM25 scoring.
     /// No external dependencies, deterministic, and memory-efficient.
     /// </summary>
     public class InMemoryLexicalIndex : IRetrievalIndex

@@ -260,7 +260,7 @@ namespace SmallMind.Samples
         /// </summary>
         private static void DemonstrateChatSession(InMemorySessionStore sessionStore)
         {
-            var sessionId = "demo-session-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            var sessionId = "demo-session-" + Guid.NewGuid().ToString("N")[..8];
             Console.WriteLine($"Creating chat session: {sessionId}\n");
 
             // Create a session

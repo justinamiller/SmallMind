@@ -153,15 +153,7 @@ namespace SmallMind.Retrieval
 
             sb.AppendLine("=== ANSWER ===");
 
-            // Final check: ensure we haven't exceeded max context chars
-            var finalPrompt = sb.ToString();
-            if (finalPrompt.Length > options.MaxContextChars)
-            {
-                // This shouldn't happen, but just in case, truncate
-                finalPrompt = finalPrompt.Substring(0, options.MaxContextChars);
-            }
-
-            return finalPrompt;
+            return sb.ToString();
         }
 
         /// <summary>

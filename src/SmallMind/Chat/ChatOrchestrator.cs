@@ -22,6 +22,7 @@ namespace SmallMind.Chat
         private readonly Tokenizer _tokenizer;
         private readonly int _blockSize;
         private readonly ILogger<ChatOrchestrator>? _logger;
+        private readonly Sampling _sampling;
 
         /// <summary>
         /// Create a new chat orchestrator.
@@ -46,6 +47,7 @@ namespace SmallMind.Chat
             _blockSize = blockSize;
             _retrievalIndex = retrievalIndex;
             _logger = logger;
+            _sampling = new Sampling(_model, _tokenizer, _blockSize);
         }
 
         /// <summary>
@@ -227,9 +229,7 @@ namespace SmallMind.Chat
         {
             return await Task.Run(() =>
             {
-                var sampling = new Sampling(_model, _tokenizer, _blockSize);
-                
-                return sampling.Generate(
+                return _sampling.Generate(
                     prompt,
                     options.MaxTokens,
                     options.Temperature,
