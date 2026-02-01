@@ -1,0 +1,28 @@
+SmallMind Training Guide
+
+Training Process:
+To train SmallMind, prepare a text corpus and use the Training class. The training process includes:
+1. Data loading and tokenization
+2. Forward pass through the Transformer
+3. Loss calculation (cross-entropy)
+4. Backward pass (automatic differentiation)
+5. Parameter updates using the optimizer
+
+Hyperparameters:
+Important hyperparameters include learning rate (typically 1e-3 to 1e-4), batch size, number of epochs,
+block size (context window), embedding dimension, number of layers, and number of attention heads.
+
+The model uses the Adam optimizer with optional learning rate scheduling. Gradient clipping helps
+prevent exploding gradients during training.
+
+Best Practices:
+- Start with a small dataset to verify your setup
+- Monitor training loss to ensure it's decreasing
+- Use validation data to check for overfitting
+- Save checkpoints regularly
+- Consider gradient checkpointing for large models to save memory
+
+Troubleshooting:
+If training loss is not decreasing, try lowering the learning rate or increasing the batch size.
+If you encounter out-of-memory errors, reduce the batch size or enable gradient checkpointing.
+Monitor gradient norms to detect numerical instability.
