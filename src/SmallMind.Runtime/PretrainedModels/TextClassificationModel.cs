@@ -3,7 +3,6 @@ using SmallMind.Tokenizers;
 using SmallMind.Transformers;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace SmallMind.Runtime.PretrainedModels
 {
@@ -64,7 +63,20 @@ namespace SmallMind.Runtime.PretrainedModels
         public string Classify(string text)
         {
             var probs = ClassifyWithProbabilities(text);
-            return probs.OrderByDescending(x => x.Value).First().Key;
+            
+            // Find label with highest probability
+            string? bestLabel = null;
+            float maxProb = float.NegativeInfinity;
+            foreach (var kvp in probs)
+            {
+                if (kvp.Value > maxProb)
+                {
+                    maxProb = kvp.Value;
+                    bestLabel = kvp.Key;
+                }
+            }
+            
+            return bestLabel ?? _labels[0];
         }
 
         /// <summary>
@@ -76,12 +88,22 @@ namespace SmallMind.Runtime.PretrainedModels
             {
                 // Return uniform distribution for empty text
                 var uniformProb = 1.0f / _labels.Count;
-                return _labels.ToDictionary(label => label, _ => uniformProb);
+                var result = new Dictionary<string, float>(_labels.Count);
+                for (int i = 0; i < _labels.Count; i++)
+                {
+                    result[_labels[i]] = uniformProb;
+                }
+                return result;
             }
 
             // Tokenize input
             var tokensList = _tokenizer.Encode(text);
-            var tokens = tokensList.ToArray();
+            int tokenCount = tokensList.Count;
+            int[] tokens = new int[tokenCount];
+            for (int i = 0; i < tokenCount; i++)
+            {
+                tokens[i] = tokensList[i];
+            }
             
             // Truncate to model's block size
             if (tokens.Length > _model.BlockSize)
@@ -128,10 +150,33 @@ namespace SmallMind.Runtime.PretrainedModels
 
         private float[] Softmax(float[] logits)
         {
-            var max = logits.Max();
-            var exp = logits.Select(x => MathF.Exp(x - max)).ToArray();
-            var sum = exp.Sum();
-            return exp.Select(x => x / sum).ToArray();
+            // Find max for numerical stability
+            float max = float.NegativeInfinity;
+            for (int i = 0; i < logits.Length; i++)
+            {
+                if (logits[i] > max)
+                {
+                    max = logits[i];
+                }
+            }
+            
+            // Compute exp and sum
+            float[] exp = new float[logits.Length];
+            float sum = 0f;
+            for (int i = 0; i < logits.Length; i++)
+            {
+                exp[i] = MathF.Exp(logits[i] - max);
+                sum += exp[i];
+            }
+            
+            // Normalize
+            float invSum = 1f / sum;
+            for (int i = 0; i < exp.Length; i++)
+            {
+                exp[i] *= invSum;
+            }
+            
+            return exp;
         }
 
         private Dictionary<string, float> MapToLabels(float[] probs)
@@ -159,10 +204,15 @@ namespace SmallMind.Runtime.PretrainedModels
             }
 
             // Normalize to ensure sum = 1
-            var total = labelProbs.Values.Sum();
+            float total = 0f;
+            foreach (var kvp in labelProbs)
+            {
+                total += kvp.Value;
+            }
+            
             if (total > 0)
             {
-                var normalized = new Dictionary<string, float>();
+                var normalized = new Dictionary<string, float>(labelProbs.Count);
                 foreach (var kvp in labelProbs)
                 {
                     normalized[kvp.Key] = kvp.Value / total;

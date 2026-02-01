@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -199,13 +198,15 @@ namespace SmallMind.Chat
             var prompt = new System.Text.StringBuilder();
 
             // Include recent turns for context (last 3 turns)
-            var recentTurns = session.Turns.TakeLast(3).ToList();
+            int startIndex = Math.Max(0, session.Turns.Count - 3);
+            int count = session.Turns.Count - startIndex;
 
-            if (recentTurns.Count > 0)
+            if (count > 0)
             {
                 prompt.AppendLine("=== CONVERSATION HISTORY ===");
-                foreach (var turn in recentTurns)
+                for (int i = startIndex; i < session.Turns.Count; i++)
                 {
+                    var turn = session.Turns[i];
                     prompt.AppendLine($"User: {turn.UserMessage}");
                     prompt.AppendLine($"Assistant: {turn.AssistantMessage}");
                     prompt.AppendLine();

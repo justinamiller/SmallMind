@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Core;
@@ -34,10 +33,16 @@ namespace SmallMind.Transformers
 
             foreach (var param in model.Parameters)
             {
+                var shape = new int[param.Shape.Length];
+                Array.Copy(param.Shape, shape, param.Shape.Length);
+                
+                var data = new float[param.Data.Length];
+                Array.Copy(param.Data, data, param.Data.Length);
+                
                 checkpoint.Parameters.Add(new TensorData
                 {
-                    Shape = param.Shape.ToArray(),
-                    Data = param.Data.ToArray()
+                    Shape = shape,
+                    Data = data
                 });
             }
 

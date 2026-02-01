@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Text;
 
 namespace SmallMind.Core.Core
@@ -86,11 +85,37 @@ namespace SmallMind.Core.Core
             Console.WriteLine("║ Operation                    │ Total (ms) │ Avg (ms) │ Count  │ % Time  ║");
             Console.WriteLine("╟──────────────────────────────┼────────────┼──────────┼────────┼─────────╢");
             
-            var sorted = _stats.OrderByDescending(x => x.Value.TotalTicks).ToList();
-            double totalTime = sorted.Sum(x => x.Value.TotalMs);
-            
-            foreach (var (op, stats) in sorted)
+            // Sort by total ticks descending
+            var statsList = new List<KeyValuePair<string, OperationStats>>(_stats.Count);
+            foreach (var kvp in _stats)
             {
+                statsList.Add(kvp);
+            }
+            
+            // Bubble sort (simple and allocation-free for small lists)
+            for (int i = 0; i < statsList.Count - 1; i++)
+            {
+                for (int j = 0; j < statsList.Count - i - 1; j++)
+                {
+                    if (statsList[j].Value.TotalTicks < statsList[j + 1].Value.TotalTicks)
+                    {
+                        var temp = statsList[j];
+                        statsList[j] = statsList[j + 1];
+                        statsList[j + 1] = temp;
+                    }
+                }
+            }
+            
+            double totalTime = 0;
+            for (int i = 0; i < statsList.Count; i++)
+            {
+                totalTime += statsList[i].Value.TotalMs;
+            }
+            
+            for (int i = 0; i < statsList.Count; i++)
+            {
+                var op = statsList[i].Key;
+                var stats = statsList[i].Value;
                 double pct = totalTime > 0 ? (stats.TotalMs / totalTime * 100) : 0;
                 Console.WriteLine($"║ {op,-28} │ {stats.TotalMs,10:F2} │ {stats.AvgMs,8:F3} │ {stats.Count,6} │ {pct,6:F1}% ║");
             }

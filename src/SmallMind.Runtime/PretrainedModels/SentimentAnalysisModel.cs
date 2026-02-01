@@ -3,7 +3,6 @@ using SmallMind.Tokenizers;
 using SmallMind.Transformers;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace SmallMind.Runtime.PretrainedModels
 {
@@ -56,7 +55,20 @@ namespace SmallMind.Runtime.PretrainedModels
         public string AnalyzeSentiment(string text)
         {
             var scores = AnalyzeSentimentWithScores(text);
-            return scores.OrderByDescending(x => x.Value).First().Key;
+            
+            // Find sentiment with highest score
+            string? bestSentiment = null;
+            float maxScore = float.NegativeInfinity;
+            foreach (var kvp in scores)
+            {
+                if (kvp.Value > maxScore)
+                {
+                    maxScore = kvp.Value;
+                    bestSentiment = kvp.Key;
+                }
+            }
+            
+            return bestSentiment ?? "Neutral";
         }
 
         /// <summary>
@@ -76,7 +88,12 @@ namespace SmallMind.Runtime.PretrainedModels
 
             // Tokenize input
             var tokensList = _tokenizer.Encode(text);
-            var tokens = tokensList.ToArray();
+            int tokenCount = tokensList.Count;
+            int[] tokens = new int[tokenCount];
+            for (int i = 0; i < tokenCount; i++)
+            {
+                tokens[i] = tokensList[i];
+            }
             
             // Truncate to model's block size
             if (tokens.Length > _model.BlockSize)
@@ -126,10 +143,33 @@ namespace SmallMind.Runtime.PretrainedModels
 
         private float[] Softmax(float[] logits)
         {
-            var max = logits.Max();
-            var exp = logits.Select(x => MathF.Exp(x - max)).ToArray();
-            var sum = exp.Sum();
-            return exp.Select(x => x / sum).ToArray();
+            // Find max for numerical stability
+            float max = float.NegativeInfinity;
+            for (int i = 0; i < logits.Length; i++)
+            {
+                if (logits[i] > max)
+                {
+                    max = logits[i];
+                }
+            }
+            
+            // Compute exp and sum
+            float[] exp = new float[logits.Length];
+            float sum = 0f;
+            for (int i = 0; i < logits.Length; i++)
+            {
+                exp[i] = MathF.Exp(logits[i] - max);
+                sum += exp[i];
+            }
+            
+            // Normalize
+            float invSum = 1f / sum;
+            for (int i = 0; i < exp.Length; i++)
+            {
+                exp[i] *= invSum;
+            }
+            
+            return exp;
         }
 
         private Dictionary<string, float> ComputeSentimentScores(float[] probs)
@@ -138,13 +178,41 @@ namespace SmallMind.Runtime.PretrainedModels
             // This is a placeholder - in a real model, you'd have specific output heads
             
             // Calculate basic statistics
-            var mean = probs.Average();
-            var variance = probs.Select(p => (p - mean) * (p - mean)).Average();
-            var entropy = -probs.Where(p => p > 0).Sum(p => p * MathF.Log(p));
+            float mean = 0f;
+            for (int i = 0; i < probs.Length; i++)
+            {
+                mean += probs[i];
+            }
+            mean /= probs.Length;
+            
+            float variance = 0f;
+            for (int i = 0; i < probs.Length; i++)
+            {
+                float diff = probs[i] - mean;
+                variance += diff * diff;
+            }
+            variance /= probs.Length;
+            
+            float entropy = 0f;
+            for (int i = 0; i < probs.Length; i++)
+            {
+                if (probs[i] > 0)
+                {
+                    entropy -= probs[i] * MathF.Log(probs[i]);
+                }
+            }
             
             // High entropy = neutral, low entropy with high values = strong sentiment
-            var maxProb = probs.Max();
-            var maxIdx = Array.IndexOf(probs, maxProb);
+            float maxProb = float.NegativeInfinity;
+            int maxIdx = 0;
+            for (int i = 0; i < probs.Length; i++)
+            {
+                if (probs[i] > maxProb)
+                {
+                    maxProb = probs[i];
+                    maxIdx = i;
+                }
+            }
             
             float positive, negative, neutral;
             

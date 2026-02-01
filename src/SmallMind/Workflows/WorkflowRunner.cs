@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -73,11 +72,23 @@ namespace SmallMind.Workflows
                     cancellationToken.ThrowIfCancellationRequested();
 
                     // Check if we should stop on previous failure
-                    if (workflow.RunnerOptions.StopOnFailure &&
-                        stepResults.Any(r => r.Status == StepStatus.Failed))
+                    if (workflow.RunnerOptions.StopOnFailure)
                     {
-                        _logger?.LogWarning("Stopping workflow {RunId} due to previous step failure", runId);
-                        break;
+                        bool hasFailure = false;
+                        for (int i = 0; i < stepResults.Count; i++)
+                        {
+                            if (stepResults[i].Status == StepStatus.Failed)
+                            {
+                                hasFailure = true;
+                                break;
+                            }
+                        }
+                        
+                        if (hasFailure)
+                        {
+                            _logger?.LogWarning("Stopping workflow {RunId} due to previous step failure", runId);
+                            break;
+                        }
                     }
 
                     var stepResult = await ExecuteStepAsync(
@@ -115,15 +126,29 @@ namespace SmallMind.Workflows
                 }
 
                 // Determine overall status
-                if (stepResults.All(r => r.Status == StepStatus.Success))
+                bool allSuccess = true;
+                StepResult? firstFailedStep = null;
+                
+                for (int i = 0; i < stepResults.Count; i++)
+                {
+                    if (stepResults[i].Status != StepStatus.Success)
+                    {
+                        allSuccess = false;
+                        if (stepResults[i].Status == StepStatus.Failed && firstFailedStep == null)
+                        {
+                            firstFailedStep = stepResults[i];
+                        }
+                    }
+                }
+                
+                if (allSuccess)
                 {
                     result.Status = WorkflowRunStatus.Success;
                 }
-                else if (stepResults.Any(r => r.Status == StepStatus.Failed))
+                else if (firstFailedStep != null)
                 {
                     result.Status = WorkflowRunStatus.Failed;
-                    var failedStep = stepResults.First(r => r.Status == StepStatus.Failed);
-                    result.FailureReason = $"Step {failedStep.StepId} failed: {failedStep.FailureReason}";
+                    result.FailureReason = $"Step {firstFailedStep.StepId} failed: {firstFailedStep.FailureReason}";
                 }
                 else
                 {
@@ -237,7 +262,10 @@ namespace SmallMind.Workflows
                 {
                     result.Status = StepStatus.Failed;
                     result.FailureReason = $"Missing required state keys: {string.Join(", ", missingKeys)}";
-                    result.ValidationErrors.AddRange(missingKeys.Select(k => $"Missing: {k}"));
+                    for (int i = 0; i < missingKeys.Count; i++)
+                    {
+                        result.ValidationErrors.Add($"Missing: {missingKeys[i]}");
+                    }
                     return result;
                 }
 
