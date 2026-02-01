@@ -1,0 +1,32 @@
+SmallMind RAG and Workflows
+
+Retrieval-Augmented Generation (RAG):
+SmallMind supports RAG to enhance generation with external knowledge. The RAG pipeline includes:
+1. Document ingestion and chunking
+2. Indexing with TF-IDF or vector embeddings
+3. Query-based retrieval
+4. Context-aware prompt assembly
+5. Answer generation with citations
+
+The InMemoryLexicalIndex provides deterministic BM25-based retrieval without external dependencies.
+For semantic search, you can plug in custom embedding providers.
+
+Workflow Engine:
+The workflow system allows you to chain multiple steps for complex tasks. Each workflow step can:
+- Read from and write to shared state
+- Enforce budgets (tokens, duration, steps)
+- Validate outputs (JSON, enums, regex)
+- Retry on failure
+- Require human approval
+
+Example workflows include IT ticket triage, policy decisions, and multi-step reasoning tasks.
+Workflows support deterministic execution for reproducibility.
+
+Chat Sessions:
+The ChatOrchestrator manages multi-turn conversations with persistent state. It integrates
+retrieval, prompt building, and generation into a cohesive chat experience. Sessions maintain
+conversation history and can use RAG to ground responses in retrieved documents.
+
+Integration:
+All components are designed to work together: workflows can use RAG, chat sessions can run workflows,
+and the entire system supports cancellation tokens, logging, and telemetry.

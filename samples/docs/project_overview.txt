@@ -1,0 +1,26 @@
+SmallMind Project Overview
+
+SmallMind is an educational, pure C# language model implementation with no external ML dependencies. 
+It demonstrates a decoder-only Transformer architecture (GPT-style) using only native C# classes.
+
+Key Features:
+- Custom automatic differentiation engine
+- CPU-only execution (no GPU required)
+- Character-level tokenization
+- Training and inference capabilities
+- Production-ready features including explainability, telemetry, and health checks
+
+Architecture:
+The model uses a Transformer architecture with multi-head self-attention and feedforward layers. 
+The attention mechanism allows the model to weigh the importance of different parts of the input sequence.
+Layer normalization and residual connections help with training stability.
+
+Performance Optimizations:
+SmallMind includes SIMD vectorization for matrix operations, memory pooling to reduce garbage collection,
+and gradient checkpointing for memory efficiency during training. The codebase follows performance best practices
+for .NET, including the use of Span<T> and ArrayPool where appropriate.
+
+Use Cases:
+SmallMind is ideal for educational purposes, understanding how language models work under the hood,
+and experimenting with small-scale language modeling tasks. It can be deployed as a microservice
+with built-in health checks and monitoring.
