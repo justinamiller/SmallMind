@@ -26,7 +26,7 @@ public static class GroundingRules
     /// <param name="chunks">The list of retrieved chunks.</param>
     /// <param name="minScoreThreshold">The minimum score threshold for sufficient evidence (default: 0.5).</param>
     /// <returns>True if the top chunk score is above the threshold and evidence is sufficient; otherwise, false.</returns>
-    public static bool HasSufficientEvidence(string question, List<RetrievedChunk> chunks, double minScoreThreshold = 0.5)
+    public static bool HasSufficientEvidence(string question, List<RetrievedChunk> chunks, float minScoreThreshold = 0.5f)
     {
         if (question == null) throw new ArgumentNullException(nameof(question));
         if (chunks == null) throw new ArgumentNullException(nameof(chunks));
