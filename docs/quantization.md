@@ -90,6 +90,103 @@ SmallMind can import models from GGUF (GPT-Generated Unified Format), the standa
 - Block size: GGUF uses 32, SMQ uses 64 → automatic re-quantization
 - FP16 weights: Converted to FP32 on import
 
+## CLI Tools
+
+SmallMind provides command-line tools for working with quantized models.
+
+### Import GGUF Model
+
+```bash
+# Import a GGUF model to SMQ format
+dotnet run --project src/SmallMind.Console import-gguf model.gguf model.smq
+
+# Example output:
+# Importing GGUF model from: model.gguf
+# Output SMQ file: model.smq
+#
+# ✓ Import complete!
+#   Output: model.smq
+#   Manifest: model.smq.manifest.json
+#   GGUF size: 145.23 MB
+#   SMQ size: 145.50 MB
+```
+
+**Supported GGUF quantization types:** Q8_0, Q4_0  
+**Unsupported types will fail with error:**
+```
+Error: Unsupported tensor quantization type: Q4_K_M
+
+Note: SmallMind only supports Q8_0 and Q4_0 quantization schemes.
+Models using other quantization types (K-quants, Q4_1, Q5_0, etc.) are not supported.
+```
+
+### Inspect Model
+
+```bash
+# Basic inspection
+dotnet run --project src/SmallMind.Console inspect model.smq
+
+# Example output:
+# === SMQ Model: model.smq ===
+#
+# File Information:
+#   Size: 145.50 MB
+#   Created: 2026-02-01 18:30:45
+#
+# Model Metadata:
+#   embed_dim: 384
+#   num_layers: 6
+#   vocab_size: 50257
+#
+# Tensors: 32 total
+
+# Detailed tensor listing
+dotnet run --project src/SmallMind.Console inspect model.smq --tensors
+
+# Example output (partial):
+# Tensor Details:
+# Name                                     Type       Shape                Size
+# ------------------------------------------------------------------------------------------
+# tok_emb.weight                           Q8_0       50257×384           18.51 MB
+# blocks.0.attn.qkv_proj.weight            Q4_0       384×1152            0.21 MB
+# blocks.0.attn.out_proj.weight            Q8_0       384×384             0.14 MB
+# blocks.0.mlp.fc1.weight                  Q4_0       384×1536            0.28 MB
+# ...
+
+# Verbose mode (includes manifest)
+dotnet run --project src/SmallMind.Console inspect model.smq --verbose
+```
+
+### Verify Model Integrity
+
+```bash
+# Validate SMQ file integrity
+dotnet run --project src/SmallMind.Console verify model.smq
+
+# Example output (success):
+# Verifying SMQ file: model.smq
+#
+# ✓ Validation PASSED
+#
+# Manifest file: Found
+#   Model name: my-quantized-model
+#   Tensor count: 32
+#   Created: 2026-02-01T18:30:45.1234567Z
+#   Quant schemes: Q8_0, Q4_0
+
+# Verbose mode
+dotnet run --project src/SmallMind.Console verify model.smq --verbose
+
+# Example output (validation error):
+# Verifying SMQ file: corrupt-model.smq
+#
+# ✗ Validation FAILED
+#
+# Errors (2):
+#   - Invalid magic header: expected 'SMQv0001', got 'CORRUPT0'
+#   - Tensor directory checksum mismatch
+```
+
 ## Usage Examples
 
 ### Basic Quantization (Programmatic)

@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using SmallMind.Core;
 using SmallMind.Text;
 
@@ -53,6 +56,52 @@ namespace SmallMind.Rag.Generation
                 showPerf: false,
                 isPerfJsonMode: false
             );
+        }
+
+        /// <summary>
+        /// Generates text from the given prompt with streaming support.
+        /// Yields token IDs as they are generated.
+        /// </summary>
+        /// <param name="prompt">The input prompt to generate from.</param>
+        /// <param name="options">Generation options.</param>
+        /// <param name="cancellationToken">Cancellation token to stop generation.</param>
+        /// <returns>Async enumerable of generated token IDs.</returns>
+        /// <remarks>
+        /// NOTE: This is currently a stub implementation that falls back to non-streaming generation.
+        /// True streaming support requires enhancement to the Sampling class to support token-by-token emission.
+        /// For now, this method generates the full text and yields a single completion signal.
+        /// To use true streaming, integrate with InferenceSession.GenerateStreamAsync directly.
+        /// </remarks>
+        public async IAsyncEnumerable<int> GenerateStreamAsync(
+            string prompt,
+            GenerationOptions options,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(prompt))
+                throw new ArgumentException("Prompt cannot be null or empty", nameof(prompt));
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+
+            // NOTE: This is a fallback implementation until Sampling supports true streaming.
+            // For production use, consider using InferenceEngine/InferenceSession directly,
+            // which provide full streaming support via IAsyncEnumerable<GeneratedToken>.
+            
+            var result = _sampling.Generate(
+                prompt: prompt,
+                maxNewTokens: options.MaxTokens,
+                temperature: options.Temperature,
+                topK: options.TopK,
+                seed: options.Seed,
+                showPerf: false,
+                isPerfJsonMode: false
+            );
+
+            // Signal completion (in a real streaming impl, would yield actual token IDs)
+            await System.Threading.Tasks.Task.CompletedTask;
+            
+            // Return -1 to signal end of generation (not a valid token ID)
+            // Callers should check for -1 and stop consuming the stream
+            yield return -1;
         }
     }
 }

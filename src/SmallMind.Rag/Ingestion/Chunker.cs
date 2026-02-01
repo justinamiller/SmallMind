@@ -53,9 +53,17 @@ public sealed class Chunker
             }
             
             // Find the actual position in the original content
-            int charStart = content.IndexOf(segmentText, charOffset, StringComparison.Ordinal);
-            if (charStart < 0)
-                charStart = charOffset; // Fallback if exact match not found
+            int charStart;
+            if (charOffset < content.Length)
+            {
+                charStart = content.IndexOf(segmentText, charOffset, StringComparison.Ordinal);
+                if (charStart < 0)
+                    charStart = charOffset; // Fallback if exact match not found
+            }
+            else
+            {
+                charStart = charOffset; // At or past end, use current offset
+            }
             
             int charEnd = charStart + segmentText.Length;
             

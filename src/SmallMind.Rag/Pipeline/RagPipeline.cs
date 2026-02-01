@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using SmallMind.Rag.Indexing;
 using SmallMind.Rag.Indexing.Sparse;
 using SmallMind.Rag.Ingestion;
@@ -384,6 +386,98 @@ namespace SmallMind.Rag.Pipeline
             {
                 _logger.LogError(traceId, "AskQuestion", ex);
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Asks a question with streaming support for LLM generation.
+        /// Retrieves relevant chunks, composes a prompt, and generates an answer using streaming.
+        /// </summary>
+        /// <param name="question">The user's question.</param>
+        /// <param name="userContext">Optional user context for authorization filtering.</param>
+        /// <param name="topK">Optional override for number of results to return. Uses RagOptions.TopK if null.</param>
+        /// <param name="maxTokens">Maximum number of tokens to generate.</param>
+        /// <param name="temperature">Sampling temperature for generation.</param>
+        /// <param name="cancellationToken">Cancellation token to stop generation.</param>
+        /// <returns>
+        /// Async enumerable of generated token IDs. The actual token values depend on the ITextGenerator implementation.
+        /// - For SmallMindTextGenerator (stub): Returns -1 to signal completion
+        /// - For full streaming: Use InferenceEngine/InferenceSession which returns GeneratedToken with TokenId and Text
+        /// Returns empty enumerable if no text generator configured or insufficient evidence.
+        /// </returns>
+        /// <remarks>
+        /// NOTE: The current SmallMindTextGenerator implementation is a stub that doesn't provide true streaming.
+        /// For production streaming, use InferenceEngine/InferenceSession directly with the composed RAG prompt.
+        /// </remarks>
+        public async IAsyncEnumerable<int> AskQuestionAsync(
+            string question,
+            UserContext? userContext = null,
+            int? topK = null,
+            int maxTokens = 200,
+            double temperature = 0.7,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            if (!_isInitialized)
+                throw new InvalidOperationException("Pipeline must be initialized before asking questions. Call Initialize() first.");
+
+            RagContext.TraceId ??= RagContext.GenerateTraceId();
+            string traceId = RagContext.TraceId;
+
+            _logger.LogInfo(traceId, $"Processing question (streaming): {question}");
+
+            // Retrieve relevant chunks
+            List<RetrievedChunk> chunks;
+            string prompt;
+            
+            try
+            {
+                chunks = Retrieve(question, userContext, topK);
+
+                // Check if we have sufficient evidence
+                if (!GroundingRules.HasSufficientEvidence(question, chunks, _options.Retrieval.MinScore))
+                {
+                    _logger.LogWarning(traceId, $"Insufficient evidence to answer question");
+                    // Return empty enumerable for insufficient evidence
+                    yield break;
+                }
+
+                // Compose prompt
+                _logger.LogInfo(traceId, $"Composing prompt");
+                var composer = new PromptComposer(_options.Retrieval);
+                prompt = composer.ComposePrompt(question, chunks, _chunkStore);
+
+                _logger.LogInfo(traceId, $"Prompt composed successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(traceId, "AskQuestionAsync_Prepare", ex);
+                throw;
+            }
+
+            // Generate answer if text generator is available
+            if (_textGenerator != null)
+            {
+                _logger.LogInfo(traceId, $"Generating answer with LLM (streaming)");
+                
+                int? seed = _options.Deterministic ? _options.Seed : null;
+                var options = new GenerationOptions
+                {
+                    MaxTokens = maxTokens,
+                    Temperature = temperature,
+                    Seed = seed
+                };
+
+                await foreach (var tokenId in _textGenerator.GenerateStreamAsync(prompt, options, cancellationToken))
+                {
+                    yield return tokenId;
+                }
+                
+                _logger.LogInfo(traceId, $"Answer generation completed");
+            }
+            else
+            {
+                // No text generator configured
+                _logger.LogInfo(traceId, $"No text generator configured for streaming");
             }
         }
 
