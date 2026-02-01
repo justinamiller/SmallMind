@@ -10,3 +10,7 @@ sessions/
 *.vsidx
 .vs/
 TestResults/
+
+# Benchmark output files
+benchmark-results.md
+benchmark-results.json
