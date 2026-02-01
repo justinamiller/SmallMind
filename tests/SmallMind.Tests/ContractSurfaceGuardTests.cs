@@ -39,12 +39,15 @@ namespace SmallMind.Tests
             "SmallMind.Abstractions.RagAnswer",
             "SmallMind.Abstractions.RagCitation",
             "SmallMind.Abstractions.ModelInfo",
+            "SmallMind.Abstractions.RagIndexInfo",  // RAG index metadata
+            "SmallMind.Abstractions.SessionInfo",   // Chat session metadata
 
             // Options DTOs
             "SmallMind.Abstractions.SmallMindOptions",
             "SmallMind.Abstractions.GenerationOptions",
             "SmallMind.Abstractions.SessionOptions",
             "SmallMind.Abstractions.EngineCapabilities",
+            "SmallMind.Abstractions.OutputConstraints",  // Output constraints for workflow
 
             // Enums
             "SmallMind.Abstractions.GenerationMode",
@@ -97,7 +100,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public void SmallMindAbstractions_AllPublicTypesAreDocumented()
+        public void SmallMindAbstractions_AllPublicTypesAreNotCompilerGenerated()
         {
             // Arrange
             var assembly = typeof(ISmallMindEngine).Assembly;
@@ -105,21 +108,19 @@ namespace SmallMind.Tests
                 .Where(t => t.IsPublic && t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .ToList();
 
-            // Act - check for XML documentation
-            var undocumentedTypes = new List<string>();
+            // Act - check for compiler-generated types
+            var compilerGeneratedTypes = new List<string>();
             foreach (var type in publicTypes)
             {
-                var docComment = type.GetCustomAttribute<System.Runtime.CompilerServices.CompilerGeneratedAttribute>();
-                // Note: Ideally we'd check for actual XML doc comments, but that requires
-                // the XML file. For now, just ensure types are not compiler-generated.
-                if (docComment != null)
+                var compilerGenerated = type.GetCustomAttribute<System.Runtime.CompilerServices.CompilerGeneratedAttribute>();
+                if (compilerGenerated != null)
                 {
-                    undocumentedTypes.Add(type.FullName!);
+                    compilerGeneratedTypes.Add(type.FullName!);
                 }
             }
 
             // Assert - all public types should be hand-written (not compiler-generated)
-            Assert.Empty(undocumentedTypes);
+            Assert.Empty(compilerGeneratedTypes);
         }
 
         [Fact]
@@ -260,6 +261,7 @@ namespace SmallMind.Tests
             {
                 var publicFields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
                     .Where(f => !f.IsLiteral) // Exclude const fields
+                    .Where(f => f.Name != "value__") // Exclude enum value__ field
                     .ToList();
 
                 if (publicFields.Any())
@@ -269,6 +271,7 @@ namespace SmallMind.Tests
             }
 
             // Assert - no public fields (use properties instead)
+            // Note: Enum value__ fields are automatically excluded
             Assert.Empty(typesWithPublicFields);
         }
 

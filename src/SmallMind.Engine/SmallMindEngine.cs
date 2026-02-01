@@ -129,10 +129,8 @@ namespace SmallMind.Engine
                     metrics: null,
                     cancellationToken: budgetEnforcer.CombinedToken);
 
-                // Check if budget was exceeded (though session should handle this)
-                var generatedTokens = budgetEnforcer.GeneratedTokens > 0 
-                    ? budgetEnforcer.GeneratedTokens 
-                    : request.Options.MaxNewTokens; // Fallback estimate
+                // Return actual generated tokens (don't use fallback estimate)
+                var generatedTokens = budgetEnforcer.GeneratedTokens;
 
                 return new GenerationResult
                 {
@@ -148,7 +146,8 @@ namespace SmallMind.Engine
             {
                 // Budget exceeded, throw our exception instead
                 budgetEnforcer.ThrowIfExceeded();
-                throw; // Shouldn't reach here
+                // If ThrowIfExceeded didn't throw (shouldn't happen), rethrow original
+                throw;
             }
             finally
             {

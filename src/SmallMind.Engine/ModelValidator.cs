@@ -11,6 +11,15 @@ namespace SmallMind.Engine;
 /// </summary>
 internal static class ModelValidator
 {
+    // Validation constants
+    private const int MaxVocabSize = 1_000_000;
+    private const int MaxBlockSize = 1_000_000;
+    private const int MaxEmbedDim = 100_000;
+    private const int MaxNumLayers = 1_000;
+    private const int MaxNumHeads = 256;
+    private const double MaxRopeTheta = 1_000_000;
+    private const long MaxTensorElements = 2_500_000_000; // ~10GB at FP32
+
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".smq",
@@ -92,12 +101,12 @@ internal static class ModelValidator
         if (metadata.TryGetValue("vocab_size", out var vocabObj))
         {
             var vocabSize = Convert.ToInt32(vocabObj);
-            if (vocabSize <= 0 || vocabSize > 1_000_000)
+            if (vocabSize <= 0 || vocabSize > MaxVocabSize)
             {
                 throw new UnsupportedModelException(
                     modelPath,
                     Path.GetExtension(modelPath),
-                    $"Invalid vocab_size={vocabSize}. Expected range: 1-1,000,000.{Environment.NewLine}" +
+                    $"Invalid vocab_size={vocabSize}. Expected range: 1-{MaxVocabSize}.{Environment.NewLine}" +
                     $"Remediation: The model file may be corrupted or in an unsupported format.");
             }
         }
@@ -106,20 +115,13 @@ internal static class ModelValidator
         if (metadata.TryGetValue("block_size", out var blockSizeObj))
         {
             var blockSize = Convert.ToInt32(blockSizeObj);
-            if (blockSize <= 0 || blockSize > 1_000_000)
+            if (blockSize <= 0 || blockSize > MaxBlockSize)
             {
                 throw new UnsupportedModelException(
                     modelPath,
                     Path.GetExtension(modelPath),
-                    $"Invalid block_size={blockSize}. Expected range: 1-1,000,000.{Environment.NewLine}" +
+                    $"Invalid block_size={blockSize}. Expected range: 1-{MaxBlockSize}.{Environment.NewLine}" +
                     $"Remediation: The model file may be corrupted. Context length should be reasonable (e.g., 512-8192).");
-            }
-
-            // Warn about very large context sizes (performance concern)
-            if (blockSize > 16384)
-            {
-                // Note: We can't log here easily without adding dependencies, so we'll just validate
-                // In the future, consider adding a warning mechanism
             }
         }
 
@@ -127,12 +129,12 @@ internal static class ModelValidator
         if (metadata.TryGetValue("embed_dim", out var embedDimObj))
         {
             var embedDim = Convert.ToInt32(embedDimObj);
-            if (embedDim <= 0 || embedDim > 100000)
+            if (embedDim <= 0 || embedDim > MaxEmbedDim)
             {
                 throw new UnsupportedModelException(
                     modelPath,
                     Path.GetExtension(modelPath),
-                    $"Invalid embed_dim={embedDim}. Expected range: 1-100,000.{Environment.NewLine}" +
+                    $"Invalid embed_dim={embedDim}. Expected range: 1-{MaxEmbedDim}.{Environment.NewLine}" +
                     $"Remediation: The model file may be corrupted. Typical embedding dimensions are 256-4096.");
             }
         }
@@ -141,12 +143,12 @@ internal static class ModelValidator
         if (metadata.TryGetValue("num_layers", out var numLayersObj))
         {
             var numLayers = Convert.ToInt32(numLayersObj);
-            if (numLayers <= 0 || numLayers > 1000)
+            if (numLayers <= 0 || numLayers > MaxNumLayers)
             {
                 throw new UnsupportedModelException(
                     modelPath,
                     Path.GetExtension(modelPath),
-                    $"Invalid num_layers={numLayers}. Expected range: 1-1,000.{Environment.NewLine}" +
+                    $"Invalid num_layers={numLayers}. Expected range: 1-{MaxNumLayers}.{Environment.NewLine}" +
                     $"Remediation: The model file may be corrupted. Typical layer counts are 6-96.");
             }
         }
@@ -155,12 +157,12 @@ internal static class ModelValidator
         if (metadata.TryGetValue("num_heads", out var numHeadsObj))
         {
             var numHeads = Convert.ToInt32(numHeadsObj);
-            if (numHeads <= 0 || numHeads > 256)
+            if (numHeads <= 0 || numHeads > MaxNumHeads)
             {
                 throw new UnsupportedModelException(
                     modelPath,
                     Path.GetExtension(modelPath),
-                    $"Invalid num_heads={numHeads}. Expected range: 1-256.{Environment.NewLine}" +
+                    $"Invalid num_heads={numHeads}. Expected range: 1-{MaxNumHeads}.{Environment.NewLine}" +
                     $"Remediation: The model file may be corrupted. Typical head counts are 8-32.");
             }
 
@@ -183,12 +185,12 @@ internal static class ModelValidator
         if (metadata.TryGetValue("rope_theta", out var ropeObj))
         {
             var ropeTheta = Convert.ToDouble(ropeObj);
-            if (ropeTheta <= 0 || ropeTheta > 1_000_000)
+            if (ropeTheta <= 0 || ropeTheta > MaxRopeTheta)
             {
                 throw new UnsupportedModelException(
                     modelPath,
                     Path.GetExtension(modelPath),
-                    $"Invalid rope_theta={ropeTheta}. Expected range: 0-1,000,000.{Environment.NewLine}" +
+                    $"Invalid rope_theta={ropeTheta}. Expected range: 0-{MaxRopeTheta}.{Environment.NewLine}" +
                     $"Remediation: The model file may have invalid RoPE parameters.");
             }
         }
@@ -223,14 +225,13 @@ internal static class ModelValidator
             }
 
             // Check for excessively large tensors (> 10GB per tensor)
-            const long maxElements = 2_500_000_000; // ~10GB at FP32
-            if (elementCount > maxElements)
+            if (elementCount > MaxTensorElements)
             {
                 throw new UnsupportedModelException(
                     modelPath,
                     Path.GetExtension(modelPath),
                     $"Tensor '{tensorName}' is too large ({elementCount} elements, shape: [{string.Join(", ", shape)}]).{Environment.NewLine}" +
-                    $"Maximum supported tensor size: {maxElements} elements.{Environment.NewLine}" +
+                    $"Maximum supported tensor size: {MaxTensorElements} elements.{Environment.NewLine}" +
                     $"Remediation: The model may be too large for this runtime, or the file may be corrupted.");
             }
         }

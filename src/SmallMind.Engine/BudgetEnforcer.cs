@@ -42,9 +42,18 @@ internal sealed class BudgetEnforcer : IDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _stopwatch = Stopwatch.StartNew();
 
-        // Create timeout cancellation token if timeout is specified
+        // Validate and create timeout cancellation token if timeout is specified
         if (_options.TimeoutMs > 0)
         {
+            // Validate timeout is not excessively large (prevent overflow)
+            if (_options.TimeoutMs > int.MaxValue / 2)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(options.TimeoutMs),
+                    _options.TimeoutMs,
+                    $"TimeoutMs is too large ({_options.TimeoutMs}ms). Maximum allowed: {int.MaxValue / 2}ms.");
+            }
+
             _timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_options.TimeoutMs));
         }
 
