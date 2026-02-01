@@ -101,24 +101,59 @@ namespace SmallMind.Tokenizers
             {
                 int innerCount = _innerTokenizer.Encode(utf8, innerTokens);
                 
-                // Check if inner tokenizer produced UNK tokens
+                // Check if we need byte fallback
+                // If the inner tokenizer doesn't support byte fallback and has UNK tokens, OR
+                // if it skipped characters (e.g., CharTokenizer), fall back to bytes
                 int unkId = _innerTokenizer.Info.UnkTokenId;
-                bool hasUnk = false;
+                bool needsFallback = false;
                 
+                // Check for UNK tokens
                 if (unkId >= 0)
                 {
                     for (int i = 0; i < innerCount; i++)
                     {
                         if (innerTokens[i] == unkId)
                         {
-                            hasUnk = true;
+                            needsFallback = true;
                             break;
                         }
                     }
                 }
+                
+                // Also check if inner tokenizer might have skipped bytes
+                // Decode and compare byte counts to detect loss
+                if (!needsFallback && innerCount > 0)
+                {
+                    byte[] decoded = ArrayPool<byte>.Shared.Rent(utf8.Length * 2);
+                    try
+                    {
+                        int decodedCount = _innerTokenizer.Decode(innerTokens.AsSpan(0, innerCount), decoded);
+                        // If decoded bytes don't match input length, we lost information
+                        if (decodedCount != utf8.Length)
+                        {
+                            needsFallback = true;
+                        }
+                        else
+                        {
+                            // Compare actual bytes
+                            for (int i = 0; i < utf8.Length; i++)
+                            {
+                                if (decoded[i] != utf8[i])
+                                {
+                                    needsFallback = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(decoded);
+                    }
+                }
 
-                // If no UNK tokens, use inner tokenizer result
-                if (!hasUnk && innerCount > 0)
+                // If no fallback needed, use inner tokenizer result
+                if (!needsFallback && innerCount > 0)
                 {
                     int count = Math.Min(innerCount, tokensOut.Length);
                     for (int i = 0; i < count; i++)
