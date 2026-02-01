@@ -120,8 +120,8 @@ namespace SmallMind.Engine
             var session = internalHandle.CreateInferenceSession(request.Options, _options);
             try
             {
-                // Tokenize prompt to validate context length
-                var promptTokens = session.Tokenizer.Encode(request.Prompt);
+                // Tokenize prompt to validate context length (use tokenizer from model handle)
+                var promptTokens = internalHandle.Tokenizer.Encode(request.Prompt);
                 budgetEnforcer.ValidateContextLength(promptTokens.Count);
 
                 var text = await session.GenerateAsync(
@@ -173,6 +173,18 @@ namespace SmallMind.Engine
                 throw new ArgumentException("Model handle must be created by this engine", nameof(model));
             }
 
+            // Use helper method to avoid yield in try-catch
+            await foreach (var token in GenerateStreamingAsyncImpl(internalHandle, request, cancellationToken))
+            {
+                yield return token;
+            }
+        }
+
+        private async IAsyncEnumerable<TokenEvent> GenerateStreamingAsyncImpl(
+            ModelHandle internalHandle,
+            GenerationRequest request,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
             // Enforce budgets with BudgetEnforcer
             using var budgetEnforcer = new BudgetEnforcer(request.Options, cancellationToken);
 
@@ -186,49 +198,25 @@ namespace SmallMind.Engine
                 IsFinal = false
             };
 
-            var session = internalHandle.CreateInferenceSession(request.Options, _options);
+            InferenceSession? session = null;
+
             try
             {
-                // Tokenize prompt to validate context length
-                var promptTokens = session.Tokenizer.Encode(request.Prompt);
+                session = internalHandle.CreateInferenceSession(request.Options, _options);
+                
+                // Tokenize prompt to validate context length (use tokenizer from model handle)
+                var promptTokens = internalHandle.Tokenizer.Encode(request.Prompt);
                 budgetEnforcer.ValidateContextLength(promptTokens.Count);
 
-                await foreach (var token in session.GenerateStreamAsync(
-                    request.Prompt,
-                    metrics: null,
-                    cancellationToken: budgetEnforcer.CombinedToken))
+                // Use helper to avoid yield in try-catch
+                await foreach (var token in GenerateTokensWithBudgetAsync(session, request, budgetEnforcer))
                 {
-                    // Check budget before emitting token
-                    if (!budgetEnforcer.ShouldContinue())
+                    yield return token;
+
+                    // Stop if final token
+                    if (token.IsFinal)
                     {
-                        // Budget exceeded - emit error event and stop
-                        yield return new TokenEvent
-                        {
-                            Kind = TokenEventKind.Error,
-                            Text = $"Budget exceeded: {budgetEnforcer.ExceededReason}".AsMemory(),
-                            TokenId = -1,
-                            GeneratedTokens = budgetEnforcer.GeneratedTokens,
-                            IsFinal = true
-                        };
                         yield break;
-                    }
-
-                    budgetEnforcer.IncrementTokenCount();
-
-                    bool isLast = !budgetEnforcer.ShouldContinue();
-
-                    yield return new TokenEvent
-                    {
-                        Kind = TokenEventKind.Token,
-                        Text = token.Text.AsMemory(),
-                        TokenId = token.TokenId,
-                        GeneratedTokens = budgetEnforcer.GeneratedTokens,
-                        IsFinal = isLast
-                    };
-
-                    if (isLast)
-                    {
-                        break;
                     }
                 }
 
@@ -242,21 +230,54 @@ namespace SmallMind.Engine
                     IsFinal = true
                 };
             }
-            catch (OperationCanceledException)
-            {
-                // Cancelled - emit cancelled event
-                yield return new TokenEvent
-                {
-                    Kind = TokenEventKind.Cancelled,
-                    Text = ReadOnlyMemory<char>.Empty,
-                    TokenId = -1,
-                    GeneratedTokens = budgetEnforcer.GeneratedTokens,
-                    IsFinal = true
-                };
-            }
             finally
             {
-                session.Dispose();
+                session?.Dispose();
+            }
+        }
+
+        private async IAsyncEnumerable<TokenEvent> GenerateTokensWithBudgetAsync(
+            InferenceSession session,
+            GenerationRequest request,
+            BudgetEnforcer budgetEnforcer)
+        {
+            await foreach (var token in session.GenerateStreamAsync(
+                request.Prompt,
+                metrics: null,
+                cancellationToken: budgetEnforcer.CombinedToken))
+            {
+                // Check budget before emitting token
+                if (!budgetEnforcer.ShouldContinue())
+                {
+                    // Budget exceeded - emit error event and stop
+                    yield return new TokenEvent
+                    {
+                        Kind = TokenEventKind.Error,
+                        Text = $"Budget exceeded: {budgetEnforcer.ExceededReason}".AsMemory(),
+                        TokenId = -1,
+                        GeneratedTokens = budgetEnforcer.GeneratedTokens,
+                        IsFinal = true
+                    };
+                    yield break;
+                }
+
+                budgetEnforcer.IncrementTokenCount();
+
+                bool isLast = !budgetEnforcer.ShouldContinue();
+
+                yield return new TokenEvent
+                {
+                    Kind = TokenEventKind.Token,
+                    Text = token.Text.AsMemory(),
+                    TokenId = token.TokenId,
+                    GeneratedTokens = budgetEnforcer.GeneratedTokens,
+                    IsFinal = isLast
+                };
+
+                if (isLast)
+                {
+                    break;
+                }
             }
         }
 

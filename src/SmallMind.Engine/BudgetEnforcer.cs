@@ -43,9 +43,9 @@ internal sealed class BudgetEnforcer : IDisposable
         _stopwatch = Stopwatch.StartNew();
 
         // Create timeout cancellation token if timeout is specified
-        if (_options.TimeoutMs.HasValue && _options.TimeoutMs.Value > 0)
+        if (_options.TimeoutMs > 0)
         {
-            _timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_options.TimeoutMs.Value));
+            _timeoutCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(_options.TimeoutMs));
         }
 
         // Combine user token and timeout token
@@ -64,13 +64,11 @@ internal sealed class BudgetEnforcer : IDisposable
     /// </summary>
     public void ValidateContextLength(int promptTokens)
     {
-        if (_options.MaxContextTokens.HasValue && promptTokens > _options.MaxContextTokens.Value)
+        if (_options.MaxContextTokens > 0 && promptTokens > _options.MaxContextTokens)
         {
             throw new ContextLimitExceededException(
                 promptTokens,
-                _options.MaxContextTokens.Value,
-                $"Prompt length ({promptTokens} tokens) exceeds maximum context length ({_options.MaxContextTokens.Value} tokens).{Environment.NewLine}" +
-                $"Remediation: Reduce prompt length or increase MaxContextTokens (if model supports larger context).");
+                _options.MaxContextTokens);
         }
     }
 
@@ -100,10 +98,10 @@ internal sealed class BudgetEnforcer : IDisposable
         }
 
         // Check timeout
-        if (_options.TimeoutMs.HasValue)
+        if (_options.TimeoutMs > 0)
         {
             var elapsedMs = _stopwatch.ElapsedMilliseconds;
-            if (elapsedMs >= _options.TimeoutMs.Value)
+            if (elapsedMs >= _options.TimeoutMs)
             {
                 BudgetExceeded = true;
                 ExceededReason = "TimeoutMs";
@@ -150,22 +148,18 @@ internal sealed class BudgetEnforcer : IDisposable
         if (ExceededReason == "MaxNewTokens")
         {
             throw new BudgetExceededException(
+                "MaxNewTokens",
                 GeneratedTokens,
-                _options.MaxNewTokens,
-                $"Generation stopped: MaxNewTokens limit ({_options.MaxNewTokens}) reached.{Environment.NewLine}" +
-                $"Generated {GeneratedTokens} tokens.{Environment.NewLine}" +
-                $"Remediation: Increase MaxNewTokens if more output is needed.");
+                _options.MaxNewTokens);
         }
 
         if (ExceededReason == "TimeoutMs")
         {
             var elapsedMs = _stopwatch.ElapsedMilliseconds;
             throw new BudgetExceededException(
-                (int)elapsedMs,
-                _options.TimeoutMs!.Value,
-                $"Generation stopped: TimeoutMs limit ({_options.TimeoutMs.Value}ms) reached.{Environment.NewLine}" +
-                $"Elapsed time: {elapsedMs}ms, Generated {GeneratedTokens} tokens.{Environment.NewLine}" +
-                $"Remediation: Increase TimeoutMs or optimize generation speed.");
+                "TimeoutMs",
+                elapsedMs,
+                _options.TimeoutMs);
         }
 
         if (ExceededReason == "Cancellation")
@@ -176,10 +170,9 @@ internal sealed class BudgetEnforcer : IDisposable
 
         // Unknown reason
         throw new BudgetExceededException(
+            "Unknown",
             GeneratedTokens,
-            _options.MaxNewTokens,
-            $"Generation stopped: Budget exceeded ({ExceededReason ?? "unknown reason"}).{Environment.NewLine}" +
-            $"Generated {GeneratedTokens} tokens.");
+            _options.MaxNewTokens);
     }
 
     /// <summary>
@@ -199,12 +192,12 @@ internal sealed class BudgetEnforcer : IDisposable
     {
         get
         {
-            if (!_options.TimeoutMs.HasValue)
+            if (_options.TimeoutMs <= 0)
             {
                 return null;
             }
 
-            var remaining = _options.TimeoutMs.Value - _stopwatch.ElapsedMilliseconds;
+            var remaining = _options.TimeoutMs - _stopwatch.ElapsedMilliseconds;
             return Math.Max(0, remaining);
         }
     }
