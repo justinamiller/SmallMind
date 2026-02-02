@@ -1,0 +1,133 @@
+name: PR Requirements Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [ main, develop ]
+
+permissions:
+  pull-requests: write
+  contents: read
+  checks: write
+
+jobs:
+  check-pr-requirements:
+    name: Validate PR Requirements
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check PR is not a draft
+      if: github.event.pull_request.draft == true
+      run: |
+        echo "::error::This PR is marked as draft. Please mark it ready for review before merging."
+        exit 1
+    
+    - name: Check PR has description
+      if: github.event.pull_request.body == ''
+      run: |
+        echo "::error::PR must have a description. Please add a description explaining your changes."
+        exit 1
+    
+    - name: Check PR title follows convention
+      run: |
+        PR_TITLE="${{ github.event.pull_request.title }}"
+        
+        # Check that PR title is not empty
+        if [ -z "$PR_TITLE" ]; then
+          echo "::error::PR title cannot be empty"
+          exit 1
+        fi
+        
+        # Check that PR title has reasonable length
+        TITLE_LENGTH=${#PR_TITLE}
+        if [ $TITLE_LENGTH -lt 10 ]; then
+          echo "::warning::PR title is very short ($TITLE_LENGTH chars). Consider adding more detail."
+        fi
+        
+        if [ $TITLE_LENGTH -gt 100 ]; then
+          echo "::warning::PR title is very long ($TITLE_LENGTH chars). Consider shortening it."
+        fi
+        
+        echo "✅ PR title looks good: $PR_TITLE"
+    
+    - name: Check PR targets correct branch
+      run: |
+        BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+        
+        if [ "$BASE_BRANCH" != "main" ] && [ "$BASE_BRANCH" != "develop" ]; then
+          echo "::warning::PR is targeting '$BASE_BRANCH'. Most PRs should target 'main' or 'develop'."
+        else
+          echo "✅ PR is targeting '$BASE_BRANCH'"
+        fi
+    
+    - name: Check PR size
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const pr = context.payload.pull_request;
+          const additions = pr.additions;
+          const deletions = pr.deletions;
+          const totalChanges = additions + deletions;
+          
+          console.log(`PR size: +${additions} -${deletions} (total: ${totalChanges} lines)`);
+          
+          // Large PR warning
+          if (totalChanges > 1000) {
+            core.warning(`This PR is large (${totalChanges} lines changed). Consider breaking it into smaller PRs for easier review.`);
+          }
+          
+          // Very large PR
+          if (totalChanges > 2000) {
+            core.warning(`This PR is very large (${totalChanges} lines changed). It may be difficult to review thoroughly.`);
+          }
+          
+          console.log('✅ PR size check completed');
+    
+    - name: Add PR labels based on size
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const pr = context.payload.pull_request;
+          const totalChanges = pr.additions + pr.deletions;
+          
+          let sizeLabel = '';
+          if (totalChanges < 50) {
+            sizeLabel = 'size/XS';
+          } else if (totalChanges < 200) {
+            sizeLabel = 'size/S';
+          } else if (totalChanges < 500) {
+            sizeLabel = 'size/M';
+          } else if (totalChanges < 1000) {
+            sizeLabel = 'size/L';
+          } else {
+            sizeLabel = 'size/XL';
+          }
+          
+          try {
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: [sizeLabel]
+            });
+            console.log(`✅ Added label: ${sizeLabel}`);
+          } catch (error) {
+            console.log(`Could not add label (may not exist): ${error.message}`);
+          }
+    
+    - name: Summary
+      run: |
+        echo "### PR Requirements Check ✅" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Your pull request meets the basic requirements:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ PR is not a draft" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ PR has a description" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ PR has a valid title" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ PR targets the correct branch" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Next steps:**" >> $GITHUB_STEP_SUMMARY
+        echo "1. Wait for automated tests to complete" >> $GITHUB_STEP_SUMMARY
+        echo "2. Address any review feedback" >> $GITHUB_STEP_SUMMARY
+        echo "3. Get approval from a maintainer" >> $GITHUB_STEP_SUMMARY
+        echo "4. Ensure all conversations are resolved" >> $GITHUB_STEP_SUMMARY
+        echo "5. Merge when all checks pass ✨" >> $GITHUB_STEP_SUMMARY

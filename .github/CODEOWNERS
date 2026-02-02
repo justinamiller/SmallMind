@@ -1,0 +1,19 @@
+# Default owner for everything in the repository
+* @justinamiller
+
+# Core library components require maintainer review
+/src/SmallMind.Core/ @justinamiller
+/src/SmallMind.Transformers/ @justinamiller
+/src/SmallMind.Runtime/ @justinamiller
+
+# CI/CD and GitHub workflows require review
+/.github/ @justinamiller
+/.github/workflows/ @justinamiller
+
+# Build configuration requires review
+/Directory.Build.props @justinamiller
+*.slnx @justinamiller
+
+# Documentation - anyone can contribute but needs review
+/docs/ @justinamiller
+*.md @justinamiller

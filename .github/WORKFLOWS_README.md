@@ -23,7 +23,37 @@ This directory contains GitHub Actions workflow files that automate various task
 
 ---
 
-### 2. Release to NuGet (`release.yml`)
+### 2. PR Requirements Check (`pr-requirements.yml`) 🆕
+**Triggers:**
+- Pull request opened, synchronized, reopened, or marked ready for review
+- Targets `main` or `develop` branches
+
+**Purpose:** Validates that pull requests meet basic quality requirements before merge.
+
+**Key Features:**
+- ✅ Checks PR is not a draft
+- ✅ Validates PR has a description
+- ✅ Validates PR title format and length
+- ✅ Confirms PR targets correct branch
+- ✅ Checks PR size and warns if too large
+- ✅ Auto-labels PRs by size (XS, S, M, L, XL)
+
+**Checks:**
+- **Draft Check**: Fails if PR is marked as draft
+- **Description Check**: Fails if PR has no description
+- **Title Check**: Warns if title is too short (<10 chars) or too long (>100 chars)
+- **Branch Check**: Warns if targeting non-standard branch
+- **Size Check**: 
+  - Warning at >1000 lines changed
+  - Strong warning at >2000 lines changed
+  - Auto-labels: XS (<50), S (<200), M (<500), L (<1000), XL (>1000)
+
+**Why This Matters:**
+This workflow helps maintain code quality by ensuring PRs are properly documented and sized appropriately for review. It's part of the branch protection strategy for the `main` branch.
+
+---
+
+### 3. Release to NuGet (`release.yml`)
 **Triggers:**
 - GitHub release published
 - Manual workflow dispatch
@@ -41,7 +71,7 @@ This directory contains GitHub Actions workflow files that automate various task
 
 ---
 
-### 3. Cleanup Merged Branches (`cleanup-merged-branches.yml`) 🆕
+### 4. Cleanup Merged Branches (`cleanup-merged-branches.yml`)
 **Triggers:**
 - Scheduled daily at 3:00 AM UTC
 - Manual workflow dispatch
@@ -104,11 +134,62 @@ You can manually trigger this workflow from the Actions tab:
 
 ---
 
+## Branch Protection and Workflows
+
+These workflows work together to enforce quality standards for the SmallMind repository, especially for the protected `main` branch.
+
+### How Branch Protection Works
+
+The `main` branch is protected to ensure code quality and stability. This means:
+
+1. **No Direct Pushes**: You cannot push directly to `main` - all changes must go through pull requests
+2. **Required Checks**: PRs must pass automated tests before merging
+3. **Required Reviews**: At least one approval from a maintainer is required
+4. **Conversation Resolution**: All PR comments must be resolved
+
+### Workflow Integration with Branch Protection
+
+When you open a PR to `main`:
+
+1. **PR Requirements Check** (`pr-requirements.yml`) validates:
+   - PR has a description and proper title
+   - PR is not a draft
+   - PR is reasonably sized for review
+
+2. **Build and Test** (`build.yml`) validates:
+   - Code builds successfully
+   - All unit tests pass
+   - All integration tests pass
+
+3. **Code Review** (manual):
+   - A maintainer reviews your code
+   - Provides feedback and requests changes if needed
+   - Approves when ready
+
+4. **Merge**:
+   - Once all checks pass and approval is granted
+   - PR can be merged to `main`
+   - Merged branches are cleaned up automatically after 1 day
+
+### Setting Up Branch Protection
+
+For detailed instructions on configuring branch protection rules in GitHub, see:
+📄 **[docs/BRANCH_PROTECTION_SETUP.md](../docs/BRANCH_PROTECTION_SETUP.md)**
+
+This guide covers:
+- Step-by-step setup instructions
+- Recommended protection settings
+- Code owners configuration
+- Troubleshooting common issues
+
+---
+
 ## Workflow Permissions
 
 All workflows use the `GITHUB_TOKEN` secret which is automatically provided by GitHub Actions. The token has different permissions based on workflow needs:
 
 - **Build and Test:** `checks: write`, `contents: read`, `pull-requests: write`
+- **PR Requirements Check:** `pull-requests: write`, `contents: read`, `checks: write`
 - **Release:** Default permissions (configurable at repository level)
 - **Cleanup Merged Branches:** `contents: write`
 

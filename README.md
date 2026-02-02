@@ -1836,6 +1836,13 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 - Development setup instructions
 - Community standards and expectations
 
+**⚠️ Important**: The `main` branch is protected. All changes must go through pull requests that:
+- ✅ Pass all automated tests
+- ✅ Receive code review approval
+- ✅ Have all conversations resolved
+
+See [docs/BRANCH_PROTECTION_SETUP.md](docs/BRANCH_PROTECTION_SETUP.md) for details on setting up branch protection rules.
+
 For questions or discussions, please open an issue on GitHub.
 
 ## License
