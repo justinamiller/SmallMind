@@ -19,3 +19,6 @@ nupkg/
 # Benchmark output files
 benchmark-results.md
 benchmark-results.json
+
+# Generated/temporary training data
+data.txt
