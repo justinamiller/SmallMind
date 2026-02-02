@@ -31,7 +31,7 @@ jobs:
           
           echo "🔍 Scanning for merged branches older than 1 day..."
           
-          # Get the current timestamp (1 day ago in seconds since epoch)
+          # Get the timestamp for 1 day ago (in seconds since epoch)
           ONE_DAY_AGO=$(date -d '1 day ago' +%s)
           
           # Counter for deleted branches
