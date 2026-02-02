@@ -52,3 +52,4 @@ jobs:
           **/*.trx
         check_name: Test Results
         comment_mode: off
+        check_run: false
