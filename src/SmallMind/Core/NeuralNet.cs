@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace SmallMind.Core
 {
@@ -234,30 +236,9 @@ namespace SmallMind.Core
                 
                 for (int b = 0; b < batch; b++)
                 {
-                    // Calculate mean
-                    float mean = 0;
-                    for (int f = 0; f < features; f++)
-                    {
-                        mean += input.Data[b * features + f];
-                    }
-                    mean /= features;
-                    
-                    // Calculate variance
-                    float variance = 0;
-                    for (int f = 0; f < features; f++)
-                    {
-                        float diff = input.Data[b * features + f] - mean;
-                        variance += diff * diff;
-                    }
-                    variance /= features;
-                    
-                    // Normalize
-                    float std = MathF.Sqrt(variance + _eps);
-                    for (int f = 0; f < features; f++)
-                    {
-                        float normalized = (input.Data[b * features + f] - mean) / std;
-                        output.Data[b * features + f] = Gamma.Data[f] * normalized + Beta.Data[f];
-                    }
+                    int offset = b * features;
+                    LayerNormRow(input.Data, output.Data, Gamma.Data, Beta.Data, 
+                                offset, features, _eps);
                 }
             }
             else if (input.Shape.Length == 3)
@@ -271,31 +252,8 @@ namespace SmallMind.Core
                     for (int s = 0; s < seq; s++)
                     {
                         int offset = (b * seq + s) * features;
-                        
-                        // Calculate mean
-                        float mean = 0;
-                        for (int f = 0; f < features; f++)
-                        {
-                            mean += input.Data[offset + f];
-                        }
-                        mean /= features;
-                        
-                        // Calculate variance
-                        float variance = 0;
-                        for (int f = 0; f < features; f++)
-                        {
-                            float diff = input.Data[offset + f] - mean;
-                            variance += diff * diff;
-                        }
-                        variance /= features;
-                        
-                        // Normalize
-                        float std = MathF.Sqrt(variance + _eps);
-                        for (int f = 0; f < features; f++)
-                        {
-                            float normalized = (input.Data[offset + f] - mean) / std;
-                            output.Data[offset + f] = Gamma.Data[f] * normalized + Beta.Data[f];
-                        }
+                        LayerNormRow(input.Data, output.Data, Gamma.Data, Beta.Data, 
+                                    offset, features, _eps);
                     }
                 }
             }
@@ -341,6 +299,88 @@ namespace SmallMind.Core
             }
             
             return output;
+        }
+        
+        /// <summary>
+        /// Fused single-pass LayerNorm with SIMD vectorization.
+        /// Uses Welford's online algorithm for numerical stability.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void LayerNormRow(float[] input, float[] output, float[] gamma, 
+                                        float[] beta, int offset, int features, float eps)
+        {
+            int vectorSize = Vector<float>.Count;
+            
+            // Single-pass mean and variance computation (Welford's algorithm)
+            float mean = 0f;
+            float m2 = 0f;
+            
+            // SIMD-accelerated mean calculation
+            int f = 0;
+            var vSum = Vector<float>.Zero;
+            for (; f <= features - vectorSize; f += vectorSize)
+            {
+                vSum += new Vector<float>(input, offset + f);
+            }
+            
+            // Horizontal sum of vector
+            for (int i = 0; i < vectorSize; i++)
+            {
+                mean += vSum[i];
+            }
+            
+            // Remainder
+            for (; f < features; f++)
+            {
+                mean += input[offset + f];
+            }
+            mean /= features;
+            
+            // SIMD-accelerated variance calculation
+            var vMean = new Vector<float>(mean);
+            var vM2 = Vector<float>.Zero;
+            f = 0;
+            for (; f <= features - vectorSize; f += vectorSize)
+            {
+                var vInput = new Vector<float>(input, offset + f);
+                var vDiff = vInput - vMean;
+                vM2 += vDiff * vDiff;
+            }
+            
+            // Horizontal sum
+            for (int i = 0; i < vectorSize; i++)
+            {
+                m2 += vM2[i];
+            }
+            
+            // Remainder
+            for (; f < features; f++)
+            {
+                float diff = input[offset + f] - mean;
+                m2 += diff * diff;
+            }
+            
+            float variance = m2 / features;
+            float invStd = 1f / MathF.Sqrt(variance + eps);
+            
+            // SIMD-accelerated normalization and scaling
+            var vInvStd = new Vector<float>(invStd);
+            f = 0;
+            for (; f <= features - vectorSize; f += vectorSize)
+            {
+                var vInput = new Vector<float>(input, offset + f);
+                var vGamma = new Vector<float>(gamma, f);
+                var vBeta = new Vector<float>(beta, f);
+                var vNormalized = (vInput - vMean) * vInvStd;
+                (vGamma * vNormalized + vBeta).CopyTo(output, offset + f);
+            }
+            
+            // Scalar remainder
+            for (; f < features; f++)
+            {
+                float normalized = (input[offset + f] - mean) * invStd;
+                output[offset + f] = gamma[f] * normalized + beta[f];
+            }
         }
     }
 

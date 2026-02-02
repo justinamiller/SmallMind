@@ -1,4 +1,6 @@
 using System;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using SmallMind.Validation;
 
@@ -161,41 +163,8 @@ namespace SmallMind.Core
 
             var result = new Tensor(new int[] { M, N }, requiresGrad);
 
-            // Compute forward pass with parallel processing for large matrices
-            // Use parallel processing when M >= 32 to amortize thread overhead.
-            // For M < 32, the overhead of thread creation and context switching
-            // outweighs the benefits of parallelization on most systems.
-            if (M >= 32)
-            {
-                Parallel.For(0, M, i =>
-                {
-                    for (int j = 0; j < N; j++)
-                    {
-                        float sum = 0;
-                        for (int k = 0; k < K; k++)
-                        {
-                            sum += a.Data[i * K + k] * b.Data[k * N + j];
-                        }
-                        result.Data[i * N + j] = sum;
-                    }
-                });
-            }
-            else
-            {
-                // Sequential for small matrices
-                for (int i = 0; i < M; i++)
-                {
-                    for (int j = 0; j < N; j++)
-                    {
-                        float sum = 0;
-                        for (int k = 0; k < K; k++)
-                        {
-                            sum += a.Data[i * K + k] * b.Data[k * N + j];
-                        }
-                        result.Data[i * N + j] = sum;
-                    }
-                }
-            }
+            // Use optimized cache-friendly SIMD matmul
+            MatMulOptimized(a.Data, b.Data, result.Data, M, K, N);
 
             // Setup backward pass
             if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))
@@ -521,6 +490,78 @@ namespace SmallMind.Core
             }
             
             return result;
+        }
+
+        /// <summary>
+        /// Cache-friendly SIMD-optimized matrix multiplication using ikj loop order.
+        /// This provides better cache locality than the naive ijk order.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void MatMulOptimized(float[] A, float[] B, float[] C, int M, int K, int N)
+        {
+            int vectorSize = Vector<float>.Count;
+            
+            // Parallelize when M >= 32 to amortize overhead
+            if (M >= 32)
+            {
+                Parallel.For(0, M, i =>
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+                    
+                    // ikj loop order for better cache locality
+                    for (int k = 0; k < K; k++)
+                    {
+                        float aik = A[aRowStart + k];
+                        var vAik = new Vector<float>(aik);
+                        int bRowStart = k * N;
+                        
+                        // SIMD vectorized inner loop
+                        int j = 0;
+                        for (; j <= N - vectorSize; j += vectorSize)
+                        {
+                            var vb = new Vector<float>(B, bRowStart + j);
+                            var vc = new Vector<float>(C, cRowStart + j);
+                            (vc + vAik * vb).CopyTo(C, cRowStart + j);
+                        }
+                        
+                        // Scalar remainder
+                        for (; j < N; j++)
+                        {
+                            C[cRowStart + j] += aik * B[bRowStart + j];
+                        }
+                    }
+                });
+            }
+            else
+            {
+                // Sequential for small matrices using same optimized pattern
+                for (int i = 0; i < M; i++)
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+                    
+                    for (int k = 0; k < K; k++)
+                    {
+                        float aik = A[aRowStart + k];
+                        var vAik = new Vector<float>(aik);
+                        int bRowStart = k * N;
+                        
+                        int j = 0;
+                        for (; j <= N - vectorSize; j += vectorSize)
+                        {
+                            var vb = new Vector<float>(B, bRowStart + j);
+                            var vc = new Vector<float>(C, cRowStart + j);
+                            (vc + vAik * vb).CopyTo(C, cRowStart + j);
+                        }
+                        
+                        for (; j < N; j++)
+                        {
+                            C[cRowStart + j] += aik * B[bRowStart + j];
+                        }
+                    }
+                }
+            }
         }
 
         public static Tensor Zeros(int[] shape, bool requiresGrad = false)

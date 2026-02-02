@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace SmallMind.Core
 {
@@ -45,6 +47,16 @@ namespace SmallMind.Core
         {
             _t++;
             
+            // Pre-compute bias correction factors (major optimization - avoids redundant Pow calls)
+            float biasCorrection1 = 1.0f - MathF.Pow(_beta1, _t);
+            float biasCorrection2 = 1.0f - MathF.Pow(_beta2, _t);
+            float mScale = 1.0f / biasCorrection1;
+            float vScale = 1.0f / biasCorrection2;
+            
+            // Pre-compute constants for vectorization
+            float beta1Complement = 1.0f - _beta1;
+            float beta2Complement = 1.0f - _beta2;
+            
             for (int p = 0; p < _parameters.Count; p++)
             {
                 var param = _parameters[p];
@@ -52,24 +64,78 @@ namespace SmallMind.Core
 
                 var m = _m[p];
                 var v = _v[p];
-
-                for (int i = 0; i < param.Size; i++)
-                {
-                    float grad = param.Grad[i];
-                    
-                    // Update biased first moment estimate
-                    m[i] = _beta1 * m[i] + (1 - _beta1) * grad;
-                    
-                    // Update biased second moment estimate
-                    v[i] = _beta2 * v[i] + (1 - _beta2) * grad * grad;
-                    
-                    // Compute bias-corrected moment estimates
-                    float mHat = m[i] / (1 - MathF.Pow(_beta1, _t));
-                    float vHat = v[i] / (1 - MathF.Pow(_beta2, _t));
-                    
-                    // Update parameters with weight decay (AdamW)
-                    param.Data[i] -= _lr * (mHat / (MathF.Sqrt(vHat) + _eps) + _weightDecay * param.Data[i]);
-                }
+                
+                // Use SIMD vectorization for parameter updates
+                StepSIMD(param.Data, param.Grad, m, v, param.Size, 
+                        mScale, vScale, beta1Complement, beta2Complement);
+            }
+        }
+        
+        /// <summary>
+        /// SIMD-optimized parameter update inner loop
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void StepSIMD(float[] paramData, float[] grad, float[] m, float[] v, 
+                             int size, float mScale, float vScale, 
+                             float beta1Complement, float beta2Complement)
+        {
+            int vectorSize = Vector<float>.Count;
+            int i = 0;
+            
+            // SIMD vectorized loop
+            var vBeta1 = new Vector<float>(_beta1);
+            var vBeta2 = new Vector<float>(_beta2);
+            var vBeta1Comp = new Vector<float>(beta1Complement);
+            var vBeta2Comp = new Vector<float>(beta2Complement);
+            var vMScale = new Vector<float>(mScale);
+            var vVScale = new Vector<float>(vScale);
+            var vEps = new Vector<float>(_eps);
+            var vLr = new Vector<float>(_lr);
+            var vWeightDecay = new Vector<float>(_weightDecay);
+            
+            for (; i <= size - vectorSize; i += vectorSize)
+            {
+                // Load vectors
+                var vGrad = new Vector<float>(grad, i);
+                var vM = new Vector<float>(m, i);
+                var vV = new Vector<float>(v, i);
+                var vParam = new Vector<float>(paramData, i);
+                
+                // Update first moment: m = beta1 * m + (1 - beta1) * grad
+                vM = vBeta1 * vM + vBeta1Comp * vGrad;
+                vM.CopyTo(m, i);
+                
+                // Update second moment: v = beta2 * v + (1 - beta2) * grad^2
+                vV = vBeta2 * vV + vBeta2Comp * vGrad * vGrad;
+                vV.CopyTo(v, i);
+                
+                // Bias-corrected moments
+                var vMHat = vM * vMScale;
+                var vVHat = vV * vVScale;
+                
+                // Parameter update: param -= lr * (mHat / (sqrt(vHat) + eps) + weightDecay * param)
+                var vUpdate = vMHat / (Vector.SquareRoot(vVHat) + vEps) + vWeightDecay * vParam;
+                vParam -= vLr * vUpdate;
+                vParam.CopyTo(paramData, i);
+            }
+            
+            // Scalar remainder loop
+            for (; i < size; i++)
+            {
+                float gradVal = grad[i];
+                
+                // Update biased first moment estimate
+                m[i] = _beta1 * m[i] + beta1Complement * gradVal;
+                
+                // Update biased second moment estimate
+                v[i] = _beta2 * v[i] + beta2Complement * gradVal * gradVal;
+                
+                // Compute bias-corrected moment estimates
+                float mHat = m[i] * mScale;
+                float vHat = v[i] * vScale;
+                
+                // Update parameters with weight decay (AdamW)
+                paramData[i] -= _lr * (mHat / (MathF.Sqrt(vHat) + _eps) + _weightDecay * paramData[i]);
             }
         }
 
