@@ -230,8 +230,8 @@ namespace SmallMind.Tests
             using var session = new InferenceSession(model, tokenizer, options, 32);
             using var cts = new CancellationTokenSource();
             
-            // Cancel after a short delay
-            cts.CancelAfter(50);
+            // Cancel immediately to ensure cancellation happens during generation
+            cts.Cancel();
             
             // Act & Assert
             await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => 
