@@ -14,7 +14,7 @@ namespace SmallMind.Simd
     {
         /// <summary>
         /// ReLU activation: result[i] = max(0, input[i])
-        /// Uses AVX2 for optimal performance when available.
+        /// Uses AVX for optimal performance when available.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ReLU(ReadOnlySpan<float> input, Span<float> output)
@@ -24,7 +24,7 @@ namespace SmallMind.Simd
 
             int length = input.Length;
 
-            // Use AVX2 for best performance
+            // Use AVX for best performance
             if (Avx.IsSupported && length >= 8)
             {
                 ReLUAvx(input, output);
@@ -36,7 +36,7 @@ namespace SmallMind.Simd
         }
 
         /// <summary>
-        /// AVX2 ReLU implementation - processes 8 floats at a time.
+        /// AVX ReLU implementation - processes 8 floats at a time.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe void ReLUAvx(ReadOnlySpan<float> input, Span<float> output)
