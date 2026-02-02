@@ -22,6 +22,7 @@ public sealed class BenchmarkConfig
     public bool EmitMarkdown { get; set; } = true;
     public bool ColdStart { get; set; } = false;
     public bool ChildRun { get; set; } = false;
+    public bool EnableKvCache { get; set; } = false; // Default: disabled for consistency
 }
 
 /// <summary>
@@ -134,6 +135,10 @@ public static class CliParser
                     config.ChildRun = true;
                     break;
                     
+                case "--enable-kv-cache":
+                    config.EnableKvCache = true;
+                    break;
+                    
                 case "--help":
                 case "-h":
                     PrintHelp();
@@ -201,6 +206,7 @@ Options:
   --json                      Emit JSON report (default: true)
   --markdown                  Emit Markdown report (default: true)
   --cold                      Run in cold-start mode
+  --enable-kv-cache           Enable KV cache (default: false for consistency)
   --child-run                 Internal: run as child process
   --help, -h                  Show this help
 

@@ -12,11 +12,13 @@ public sealed class EngineAdapter : IDisposable
     private IModelHandle? _model;
     private bool _disposed;
     
-    public EngineAdapter()
+    public EngineAdapter(BenchmarkConfig config)
     {
         _engine = Engine.SmallMind.Create(new SmallMindOptions
         {
-            EnableKvCache = false, // Disable for benchmarking consistency
+            // KV cache disabled by default for consistency across runs
+            // Enable with --enable-kv-cache to benchmark real-world multi-turn scenarios
+            EnableKvCache = config.EnableKvCache,
             EnableRag = false
         });
     }

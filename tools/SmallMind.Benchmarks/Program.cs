@@ -63,7 +63,7 @@ static async Task RunBenchmarksAsync(BenchmarkConfig config)
     
     // Initialize engine and load model
     Console.WriteLine("Loading model...");
-    using var engine = new EngineAdapter();
+    using var engine = new EngineAdapter(config);
     using var cts = new CancellationTokenSource();
     
     // Handle Ctrl+C
@@ -184,7 +184,7 @@ static async Task RunChildProcessAsync(BenchmarkConfig config)
     // This is a single iteration run for cold start mode
     // Output results as JSON to stdout for parent to parse
     
-    using var engine = new EngineAdapter();
+    using var engine = new EngineAdapter(config);
     using var cts = new CancellationTokenSource();
     
     try
