@@ -1,5 +1,9 @@
 # SmallMind - Production-Ready OSS Local Inference Runtime for .NET
 
+[![Build and Test](https://github.com/justinamiller/SmallMind/actions/workflows/build.yml/badge.svg)](https://github.com/justinamiller/SmallMind/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![.NET Version](https://img.shields.io/badge/.NET-8.0%2B-512BD4)](https://dotnet.microsoft.com/download)
+
 SmallMind is a **production-ready, open source, local, CPU-first LLM inference runtime** built entirely in C# (.NET 8+) with **NO 3rd party dependencies**. It provides a stable public API for running decoder-only Transformers (GPT-style) on your infrastructure.
 
 ## Project Intent
@@ -1776,9 +1780,23 @@ Comprehensive documentation for the stable public API:
 - **[RAG Implementation](docs/rag.md)** - Document ingestion, retrieval, citation
 - **[Workflows](docs/WORKFLOWS.md)** - LLM-powered decision automation
 
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for:
+- How to report bugs and request features
+- Pull request process and code style guidelines
+- Development setup instructions
+- Community standards and expectations
+
+For questions or discussions, please open an issue on GitHub.
+
 ## License
 
+MIT License - Copyright © 2024-2026 Justin Miller
+
 This is an educational project. Feel free to use and modify for learning purposes.
+
+See [LICENSE](LICENSE) for full license text.
 
 ## References
 
