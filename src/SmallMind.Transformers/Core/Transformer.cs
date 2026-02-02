@@ -3,6 +3,7 @@ using SmallMind.Core.Core;
 using SmallMind.Core.Simd;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Threading.Tasks;
 using SmallMind.Core.Validation;
 
@@ -164,6 +165,7 @@ namespace SmallMind.Transformers
         private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, int B, int T, int nEmbd)
         {
             var result = new Tensor(new int[] { B, T, nEmbd }, requiresGrad: true);
+            int vectorSize = Vector<float>.Count;
             
             // posEmb is (T, nEmbd), need to broadcast to (B, T, nEmbd)
             // Optimization: Pre-calculate offsets to reduce redundant calculations
@@ -175,8 +177,17 @@ namespace SmallMind.Transformers
                     int tokEmbOffset = (b * T + t) * nEmbd;
                     int posEmbOffset = t * nEmbd;
                     
-                    // Vectorized addition
-                    for (int e = 0; e < nEmbd; e++)
+                    // SIMD-accelerated addition
+                    int e = 0;
+                    for (; e <= nEmbd - vectorSize; e += vectorSize)
+                    {
+                        var vTok = new Vector<float>(tokEmb.Data.AsSpan(tokEmbOffset + e));
+                        var vPos = new Vector<float>(posEmb.Data.AsSpan(posEmbOffset + e));
+                        (vTok + vPos).CopyTo(result.Data.AsSpan(resultOffset + e));
+                    }
+                    
+                    // Scalar remainder
+                    for (; e < nEmbd; e++)
                     {
                         result.Data[resultOffset + e] = 
                             tokEmb.Data[tokEmbOffset + e] + posEmb.Data[posEmbOffset + e];
@@ -276,7 +287,21 @@ namespace SmallMind.Transformers
         private Tensor AddTensors(Tensor a, Tensor b)
         {
             var result = new Tensor(a.Shape, requiresGrad: true);
-            for (int i = 0; i < a.Size; i++)
+            
+            // SIMD-accelerated forward pass
+            int vectorSize = Vector<float>.Count;
+            int i = 0;
+            
+            // SIMD loop
+            for (; i <= a.Size - vectorSize; i += vectorSize)
+            {
+                var va = new Vector<float>(a.Data.AsSpan(i));
+                var vb = new Vector<float>(b.Data.AsSpan(i));
+                (va + vb).CopyTo(result.Data.AsSpan(i));
+            }
+            
+            // Scalar remainder
+            for (; i < a.Size; i++)
             {
                 result.Data[i] = a.Data[i] + b.Data[i];
             }
@@ -287,13 +312,28 @@ namespace SmallMind.Transformers
                 {
                     if (a.RequiresGrad)
                     {
-                        for (int i = 0; i < a.Size; i++)
-                            a.Grad[i] += result.Grad[i];
+                        // SIMD-accelerated gradient accumulation
+                        int j = 0;
+                        for (; j <= a.Size - vectorSize; j += vectorSize)
+                        {
+                            var vGrad = new Vector<float>(result.Grad.AsSpan(j));
+                            var vAGrad = new Vector<float>(a.Grad.AsSpan(j));
+                            (vAGrad + vGrad).CopyTo(a.Grad.AsSpan(j));
+                        }
+                        for (; j < a.Size; j++)
+                            a.Grad[j] += result.Grad[j];
                     }
                     if (b.RequiresGrad)
                     {
-                        for (int i = 0; i < b.Size; i++)
-                            b.Grad[i] += result.Grad[i];
+                        int j = 0;
+                        for (; j <= b.Size - vectorSize; j += vectorSize)
+                        {
+                            var vGrad = new Vector<float>(result.Grad.AsSpan(j));
+                            var vBGrad = new Vector<float>(b.Grad.AsSpan(j));
+                            (vBGrad + vGrad).CopyTo(b.Grad.AsSpan(j));
+                        }
+                        for (; j < b.Size; j++)
+                            b.Grad[j] += result.Grad[j];
                     }
                 });
             }
@@ -406,23 +446,51 @@ namespace SmallMind.Transformers
             // Each head processes contiguous memory blocks
             int embdOffset = index * _nEmbd;  // Offset for Q (0), K (_nEmbd), or V (2*_nEmbd)
             
-            for (int b = 0; b < B; b++)
+            // Parallelize over batch when B >= 4
+            if (B >= 4)
             {
-                int batchInOffset = b * T * 3 * _nEmbd;
-                int batchOutOffset = b * _nHead * T * _headSize;
-                
-                for (int h = 0; h < _nHead; h++)
+                Parallel.For(0, B, b =>
                 {
-                    int headInOffset = embdOffset + h * _headSize;
-                    int headOutOffset = batchOutOffset + h * T * _headSize;
+                    int batchInOffset = b * T * 3 * _nEmbd;
+                    int batchOutOffset = b * _nHead * T * _headSize;
                     
-                    for (int t = 0; t < T; t++)
+                    for (int h = 0; h < _nHead; h++)
                     {
-                        int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
-                        int dstIdx = headOutOffset + t * _headSize;
+                        int headInOffset = embdOffset + h * _headSize;
+                        int headOutOffset = batchOutOffset + h * T * _headSize;
                         
-                        // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
-                        Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
+                        for (int t = 0; t < T; t++)
+                        {
+                            int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
+                            int dstIdx = headOutOffset + t * _headSize;
+                            
+                            // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
+                            Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
+                        }
+                    }
+                });
+            }
+            else
+            {
+                // Original sequential code for small batches
+                for (int b = 0; b < B; b++)
+                {
+                    int batchInOffset = b * T * 3 * _nEmbd;
+                    int batchOutOffset = b * _nHead * T * _headSize;
+                    
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int headInOffset = embdOffset + h * _headSize;
+                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        
+                        for (int t = 0; t < T; t++)
+                        {
+                            int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
+                            int dstIdx = headOutOffset + t * _headSize;
+                            
+                            // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
+                            Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
+                        }
                     }
                 }
             }
