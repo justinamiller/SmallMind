@@ -1,5 +1,6 @@
 using CodeProfiler;
 using SmallMind.Core.Core;
+using SmallMind.Core.Simd;
 using SmallMind.Transformers;
 using System.Diagnostics;
 
@@ -11,10 +12,12 @@ Console.WriteLine();
 string outputPath = args.Length > 0 ? args[0] : "profile-report.md";
 int numInferences = args.Length > 1 ? int.Parse(args[1]) : 3;
 int maxTokens = args.Length > 2 ? int.Parse(args[2]) : 50;
+bool deepProfile = args.Length > 3 && args[3] == "--deep";
 
 Console.WriteLine($"Output: {outputPath}");
 Console.WriteLine($"Inferences: {numInferences}");
 Console.WriteLine($"Max Tokens: {maxTokens}");
+Console.WriteLine($"Deep Profile: {deepProfile}");
 Console.WriteLine();
 
 // Create profiler
@@ -22,8 +25,17 @@ using var profiler = new PerformanceProfiler();
 
 try
 {
-    // Profile model loading and inference
-    ProfileInference(profiler, numInferences, maxTokens);
+    if (deepProfile)
+    {
+        // Deep profiling with SIMD operations
+        DeepProfiler.ProfileSimdOperations(profiler);
+        DeepProfiler.ProfileDeepTransformer(profiler, numInferences, maxTokens);
+    }
+    else
+    {
+        // Standard profiling
+        ProfileInference(profiler, numInferences, maxTokens);
+    }
 
     // Generate and save report
     Console.WriteLine("\nGenerating performance report...");
@@ -34,7 +46,14 @@ try
     Console.WriteLine();
     
     // Print summary to console
-    PrintSummary(profiler);
+    if (deepProfile)
+    {
+        DeepProfiler.PrintDetailedSummary(profiler);
+    }
+    else
+    {
+        PrintSummary(profiler);
+    }
 }
 catch (Exception ex)
 {
