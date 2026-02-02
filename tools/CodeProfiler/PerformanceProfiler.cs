@@ -253,9 +253,21 @@ public sealed class PerformanceProfiler : IDisposable
 
             var totalProfiledMs = hotPaths.Sum(p => TicksToMs(p.TotalTicks));
             var top5Ms = hotPaths.Take(5).Sum(p => TicksToMs(p.TotalTicks));
-            var top5Percent = totalMs > 0 ? (top5Ms / totalMs) * 100 : 0;
+            
+            // Note: Due to nested scopes, percentages may exceed 100%
+            // We compare against the top-level entry point time instead
+            var entryPointMs = hotPaths.FirstOrDefault()?.TotalTicks ?? 0;
+            var top5OfEntryPoint = entryPointMs > 0 ? (top5Ms / TicksToMs(entryPointMs)) * 100 : 0;
 
-            sb.AppendLine($"- **Top 5 hot paths** account for **{top5Percent:F1}%** of total runtime");
+            if (top5OfEntryPoint > 100)
+            {
+                // Nested scopes detected - report differently
+                sb.AppendLine($"- **Top 5 methods** include nested operations (some time is counted in multiple scopes)");
+            }
+            else
+            {
+                sb.AppendLine($"- **Top 5 hot paths** account for **{top5OfEntryPoint:F1}%** of total runtime");
+            }
             
             var highAllocMethods = _profiles.Values
                 .Where(p => p.CallCount > 0 && (p.TotalAllocatedBytes / p.CallCount) > 1024 * 1024)
