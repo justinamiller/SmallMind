@@ -48,6 +48,43 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
+        /// Enhanced matrix multiplication with Span overload: C = A × B
+        /// A: (M × K), B: (K × N), C: (M × N)
+        /// Zero-allocation version that works directly on spans.
+        /// </summary>
+        public static void MatMul(
+            ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
+            int M, int K, int N)
+        {
+            if (A.Length < M * K || B.Length < K * N || C.Length < M * N)
+                throw new ArgumentException("Matrix dimensions don't match buffer sizes");
+
+            // Clear output
+            C.Clear();
+
+            // Use unsafe fixed pointers for SIMD operations
+            unsafe
+            {
+                fixed (float* pA = A, pB = B, pC = C)
+                {
+                    // Select best implementation based on CPU capabilities
+                    if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
+                    {
+                        MatMulAvx2Unsafe(pA, pB, pC, M, K, N);
+                    }
+                    else if (Avx.IsSupported && K >= 8)
+                    {
+                        MatMulAvxUnsafe(pA, pB, pC, M, K, N);
+                    }
+                    else
+                    {
+                        MatMulVectorUnsafe(pA, pB, pC, M, K, N);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// AVX2 + FMA implementation (256-bit, 8 floats per vector)
         /// Uses cache-friendly ikj loop order for better performance.
         /// </summary>
@@ -258,6 +295,214 @@ namespace SmallMind.Core.Simd
             int i, int K, int N, int vectorSize)
         {
             MatMulVectorRowIndexed(A, B, C, i, K, N, vectorSize);
+        }
+
+        /// <summary>
+        /// Unsafe AVX2 + FMA implementation working directly on pointers.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void MatMulAvx2Unsafe(
+            float* pA, float* pB, float* pC,
+            int M, int K, int N)
+        {
+            const int vecSize = 8;
+
+            if (M >= PARALLEL_THRESHOLD)
+            {
+                Parallel.For(0, M, i =>
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
+                        int bRowStart = k * N;
+                        int j = 0;
+
+                        for (; j <= N - vecSize; j += vecSize)
+                        {
+                            Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
+                            Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
+                            vC = Fma.MultiplyAdd(vA, vB, vC);
+                            Avx.Store(pC + cRowStart + j, vC);
+                        }
+
+                        float aVal = pA[aRowStart + k];
+                        for (; j < N; j++)
+                        {
+                            pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int i = 0; i < M; i++)
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
+                        int bRowStart = k * N;
+                        int j = 0;
+
+                        for (; j <= N - vecSize; j += vecSize)
+                        {
+                            Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
+                            Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
+                            vC = Fma.MultiplyAdd(vA, vB, vC);
+                            Avx.Store(pC + cRowStart + j, vC);
+                        }
+
+                        float aVal = pA[aRowStart + k];
+                        for (; j < N; j++)
+                        {
+                            pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Unsafe AVX implementation working directly on pointers.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void MatMulAvxUnsafe(
+            float* pA, float* pB, float* pC,
+            int M, int K, int N)
+        {
+            const int vecSize = 8;
+
+            if (M >= PARALLEL_THRESHOLD)
+            {
+                Parallel.For(0, M, i =>
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
+                        int bRowStart = k * N;
+                        int j = 0;
+
+                        for (; j <= N - vecSize; j += vecSize)
+                        {
+                            Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
+                            Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
+                            vC = Avx.Add(vC, Avx.Multiply(vA, vB));
+                            Avx.Store(pC + cRowStart + j, vC);
+                        }
+
+                        float aVal = pA[aRowStart + k];
+                        for (; j < N; j++)
+                        {
+                            pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int i = 0; i < M; i++)
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
+                        int bRowStart = k * N;
+                        int j = 0;
+
+                        for (; j <= N - vecSize; j += vecSize)
+                        {
+                            Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
+                            Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
+                            vC = Avx.Add(vC, Avx.Multiply(vA, vB));
+                            Avx.Store(pC + cRowStart + j, vC);
+                        }
+
+                        float aVal = pA[aRowStart + k];
+                        for (; j < N; j++)
+                        {
+                            pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Unsafe Vector&lt;T&gt; fallback implementation working directly on pointers.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void MatMulVectorUnsafe(
+            float* pA, float* pB, float* pC,
+            int M, int K, int N)
+        {
+            int vectorSize = Vector<float>.Count;
+
+            if (M >= PARALLEL_THRESHOLD)
+            {
+                Parallel.For(0, M, i =>
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        float aVal = pA[aRowStart + k];
+                        int bRowStart = k * N;
+                        int j = 0;
+
+                        Vector<float> vA = new Vector<float>(aVal);
+                        for (; j <= N - vectorSize; j += vectorSize)
+                        {
+                            Vector<float> vB = System.Runtime.CompilerServices.Unsafe.Read<Vector<float>>(pB + bRowStart + j);
+                            Vector<float> vC = System.Runtime.CompilerServices.Unsafe.Read<Vector<float>>(pC + cRowStart + j);
+                            System.Runtime.CompilerServices.Unsafe.Write(pC + cRowStart + j, vC + vA * vB);
+                        }
+
+                        for (; j < N; j++)
+                        {
+                            pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int i = 0; i < M; i++)
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        float aVal = pA[aRowStart + k];
+                        int bRowStart = k * N;
+                        int j = 0;
+
+                        Vector<float> vA = new Vector<float>(aVal);
+                        for (; j <= N - vectorSize; j += vectorSize)
+                        {
+                            Vector<float> vB = System.Runtime.CompilerServices.Unsafe.Read<Vector<float>>(pB + bRowStart + j);
+                            Vector<float> vC = System.Runtime.CompilerServices.Unsafe.Read<Vector<float>>(pC + cRowStart + j);
+                            System.Runtime.CompilerServices.Unsafe.Write(pC + cRowStart + j, vC + vA * vB);
+                        }
+
+                        for (; j < N; j++)
+                        {
+                            pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>

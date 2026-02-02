@@ -47,6 +47,7 @@ namespace SmallMind.Quantization.Abstractions
 
         /// <summary>
         /// Perform matrix multiplication using SIMD-optimized FP32 matmul.
+        /// Zero-allocation version using Span overload.
         /// </summary>
         public void MatMul(ReadOnlySpan<float> activations, Span<float> output, int m, int k, int n)
         {
@@ -57,16 +58,9 @@ namespace SmallMind.Quantization.Abstractions
             if (output.Length < m * n)
                 throw new ArgumentException($"output.Length {output.Length} < m*n {m * n}");
 
-            // Convert Spans to arrays for MatMulOps (which expects arrays)
-            float[] activationsArray = activations.ToArray();
-            float[] outputArray = new float[output.Length];
-
-            // Use SIMD-optimized matmul from SmallMind.Core
+            // Use SIMD-optimized matmul from SmallMind.Core - zero allocation Span version
             // C (m × n) = A (m × k) × B^T (k × n)
-            MatMulOps.MatMul(activationsArray, _data, outputArray, m, k, n);
-
-            // Copy result back to output span
-            outputArray.AsSpan().CopyTo(output);
+            MatMulOps.MatMul(activations, _data, output, m, k, n);
         }
 
         /// <summary>
