@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using System.Threading.Tasks;
 using SmallMind.Validation;
 
@@ -208,7 +209,9 @@ namespace SmallMind.Core
             var result = new Tensor(new int[] { B, T, nEmbd }, requiresGrad: true);
             
             // posEmb is (T, nEmbd), need to broadcast to (B, T, nEmbd)
-            // Optimization: Pre-calculate offsets to reduce redundant calculations
+            // Use SIMD vectorization for faster element-wise addition
+            int vectorSize = Vector<float>.Count;
+            
             for (int b = 0; b < B; b++)
             {
                 for (int t = 0; t < T; t++)
@@ -217,8 +220,18 @@ namespace SmallMind.Core
                     int tokEmbOffset = (b * T + t) * nEmbd;
                     int posEmbOffset = t * nEmbd;
                     
-                    // Vectorized addition
-                    for (int e = 0; e < nEmbd; e++)
+                    // SIMD vectorized addition for better performance
+                    int e = 0;
+                    for (; e <= nEmbd - vectorSize; e += vectorSize)
+                    {
+                        var vTok = new Vector<float>(tokEmb.Data, tokEmbOffset + e);
+                        var vPos = new Vector<float>(posEmb.Data, posEmbOffset + e);
+                        var vResult = vTok + vPos;
+                        vResult.CopyTo(result.Data, resultOffset + e);
+                    }
+                    
+                    // Handle remaining elements
+                    for (; e < nEmbd; e++)
                     {
                         result.Data[resultOffset + e] = 
                             tokEmb.Data[tokEmbOffset + e] + posEmb.Data[posEmbOffset + e];
@@ -231,22 +244,49 @@ namespace SmallMind.Core
             {
                 result.SetBackward(() =>
                 {
+                    int vectorSize = Vector<float>.Count;
+                    
                     if (tokEmb.RequiresGrad)
                     {
-                        for (int i = 0; i < result.Size; i++)
+                        // SIMD optimized gradient accumulation for token embeddings
+                        int i = 0;
+                        for (; i <= result.Size - vectorSize; i += vectorSize)
+                        {
+                            var vGrad = new Vector<float>(result.Grad, i);
+                            var vTokGrad = new Vector<float>(tokEmb.Grad, i);
+                            var vSum = vTokGrad + vGrad;
+                            vSum.CopyTo(tokEmb.Grad, i);
+                        }
+                        
+                        // Handle remaining elements
+                        for (; i < result.Size; i++)
                         {
                             tokEmb.Grad[i] += result.Grad[i];
                         }
                     }
                     if (posEmb.RequiresGrad)
                     {
+                        // SIMD optimized gradient accumulation for position embeddings
                         for (int b = 0; b < B; b++)
                         {
                             for (int t = 0; t < T; t++)
                             {
-                                for (int e = 0; e < nEmbd; e++)
+                                int resultOffset = (b * T + t) * nEmbd;
+                                int posEmbOffset = t * nEmbd;
+                                
+                                int e = 0;
+                                for (; e <= nEmbd - vectorSize; e += vectorSize)
                                 {
-                                    posEmb.Grad[t * nEmbd + e] += result.Grad[(b * T + t) * nEmbd + e];
+                                    var vGrad = new Vector<float>(result.Grad, resultOffset + e);
+                                    var vPosGrad = new Vector<float>(posEmb.Grad, posEmbOffset + e);
+                                    var vSum = vPosGrad + vGrad;
+                                    vSum.CopyTo(posEmb.Grad, posEmbOffset + e);
+                                }
+                                
+                                // Handle remaining elements
+                                for (; e < nEmbd; e++)
+                                {
+                                    posEmb.Grad[posEmbOffset + e] += result.Grad[resultOffset + e];
                                 }
                             }
                         }
@@ -337,7 +377,21 @@ namespace SmallMind.Core
         private Tensor AddTensors(Tensor a, Tensor b)
         {
             var result = new Tensor(a.Shape, requiresGrad: true);
-            for (int i = 0; i < a.Size; i++)
+            
+            // SIMD vectorized addition for better performance
+            int vectorSize = Vector<float>.Count;
+            int i = 0;
+            
+            for (; i <= a.Size - vectorSize; i += vectorSize)
+            {
+                var va = new Vector<float>(a.Data, i);
+                var vb = new Vector<float>(b.Data, i);
+                var vResult = va + vb;
+                vResult.CopyTo(result.Data, i);
+            }
+            
+            // Handle remaining elements
+            for (; i < a.Size; i++)
             {
                 result.Data[i] = a.Data[i] + b.Data[i];
             }
@@ -346,14 +400,38 @@ namespace SmallMind.Core
             {
                 result.SetBackward(() =>
                 {
+                    int vectorSize = Vector<float>.Count;
+                    
                     if (a.RequiresGrad)
                     {
-                        for (int i = 0; i < a.Size; i++)
+                        // SIMD optimized gradient accumulation
+                        int i = 0;
+                        for (; i <= a.Size - vectorSize; i += vectorSize)
+                        {
+                            var vGrad = new Vector<float>(result.Grad, i);
+                            var vAGrad = new Vector<float>(a.Grad, i);
+                            var vSum = vAGrad + vGrad;
+                            vSum.CopyTo(a.Grad, i);
+                        }
+                        
+                        // Handle remaining elements
+                        for (; i < a.Size; i++)
                             a.Grad[i] += result.Grad[i];
                     }
                     if (b.RequiresGrad)
                     {
-                        for (int i = 0; i < b.Size; i++)
+                        // SIMD optimized gradient accumulation
+                        int i = 0;
+                        for (; i <= b.Size - vectorSize; i += vectorSize)
+                        {
+                            var vGrad = new Vector<float>(result.Grad, i);
+                            var vBGrad = new Vector<float>(b.Grad, i);
+                            var vSum = vBGrad + vGrad;
+                            vSum.CopyTo(b.Grad, i);
+                        }
+                        
+                        // Handle remaining elements
+                        for (; i < b.Size; i++)
                             b.Grad[i] += result.Grad[i];
                     }
                 });
@@ -557,6 +635,7 @@ namespace SmallMind.Core
             
             var scores = new Tensor(new int[] { B, _nHead, T, T }, requiresGrad: true);
             float scale = 1.0f / MathF.Sqrt(_headSize);
+            int vectorSize = Vector<float>.Count;
             
             // Parallelize over batch and head dimensions for better performance
             // Use parallel processing when B * nHead >= 4
@@ -572,12 +651,31 @@ namespace SmallMind.Core
                     {
                         for (int j = 0; j < T; j++)
                         {
+                            // SIMD optimized dot product
                             float sum = 0;
-                            for (int d = 0; d < _headSize; d++)
+                            int qBase = ((b * _nHead + h) * T + i) * _headSize;
+                            int kBase = ((b * _nHead + h) * T + j) * _headSize;
+                            
+                            int d = 0;
+                            // Process SIMD-width chunks
+                            Vector<float> sumVec = Vector<float>.Zero;
+                            for (; d <= _headSize - vectorSize; d += vectorSize)
                             {
-                                int qIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                                int kIdx = ((b * _nHead + h) * T + j) * _headSize + d;
-                                sum += q.Data[qIdx] * k.Data[kIdx];
+                                var vq = new Vector<float>(q.Data, qBase + d);
+                                var vk = new Vector<float>(k.Data, kBase + d);
+                                sumVec += vq * vk;
+                            }
+                            
+                            // Horizontal sum of vector
+                            for (int v = 0; v < vectorSize; v++)
+                            {
+                                sum += sumVec[v];
+                            }
+                            
+                            // Handle remaining elements
+                            for (; d < _headSize; d++)
+                            {
+                                sum += q.Data[qBase + d] * k.Data[kBase + d];
                             }
                             
                             int scoreIdx = ((b * _nHead + h) * T + i) * T + j;
@@ -604,12 +702,31 @@ namespace SmallMind.Core
                         {
                             for (int j = 0; j < T; j++)
                             {
+                                // SIMD optimized dot product
                                 float sum = 0;
-                                for (int d = 0; d < _headSize; d++)
+                                int qBase = ((b * _nHead + h) * T + i) * _headSize;
+                                int kBase = ((b * _nHead + h) * T + j) * _headSize;
+                                
+                                int d = 0;
+                                // Process SIMD-width chunks
+                                Vector<float> sumVec = Vector<float>.Zero;
+                                for (; d <= _headSize - vectorSize; d += vectorSize)
                                 {
-                                    int qIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                                    int kIdx = ((b * _nHead + h) * T + j) * _headSize + d;
-                                    sum += q.Data[qIdx] * k.Data[kIdx];
+                                    var vq = new Vector<float>(q.Data, qBase + d);
+                                    var vk = new Vector<float>(k.Data, kBase + d);
+                                    sumVec += vq * vk;
+                                }
+                                
+                                // Horizontal sum of vector
+                                for (int v = 0; v < vectorSize; v++)
+                                {
+                                    sum += sumVec[v];
+                                }
+                                
+                                // Handle remaining elements
+                                for (; d < _headSize; d++)
+                                {
+                                    sum += q.Data[qBase + d] * k.Data[kBase + d];
                                 }
                                 
                                 int scoreIdx = ((b * _nHead + h) * T + i) * T + j;
@@ -873,6 +990,7 @@ namespace SmallMind.Core
             // output: (B, nHead, qLen, kvLen)
             var scores = new Tensor(new int[] { B, _nHead, qLen, kvLen }, requiresGrad: true);
             float scale = 1.0f / MathF.Sqrt(_headSize);
+            int vectorSize = Vector<float>.Count;
             
             // NOTE: We need to know the starting position for proper causal masking
             // This method is called from Forward(Tensor, InferenceSession, bool) where we know startPos
@@ -893,12 +1011,31 @@ namespace SmallMind.Core
                         
                         for (int j = 0; j < kvLen; j++)
                         {
+                            // SIMD optimized dot product
                             float sum = 0;
-                            for (int d = 0; d < _headSize; d++)
+                            int qBase = ((b * _nHead + h) * qLen + i) * _headSize;
+                            int kBase = ((b * _nHead + h) * kvLen + j) * _headSize;
+                            
+                            int d = 0;
+                            // Process SIMD-width chunks
+                            Vector<float> sumVec = Vector<float>.Zero;
+                            for (; d <= _headSize - vectorSize; d += vectorSize)
                             {
-                                int qIdx = ((b * _nHead + h) * qLen + i) * _headSize + d;
-                                int kIdx = ((b * _nHead + h) * kvLen + j) * _headSize + d;
-                                sum += q.Data[qIdx] * k.Data[kIdx];
+                                var vq = new Vector<float>(q.Data, qBase + d);
+                                var vk = new Vector<float>(k.Data, kBase + d);
+                                sumVec += vq * vk;
+                            }
+                            
+                            // Horizontal sum of vector
+                            for (int v = 0; v < vectorSize; v++)
+                            {
+                                sum += sumVec[v];
+                            }
+                            
+                            // Handle remaining elements
+                            for (; d < _headSize; d++)
+                            {
+                                sum += q.Data[qBase + d] * k.Data[kBase + d];
                             }
                             
                             int scoreIdx = ((b * _nHead + h) * qLen + i) * kvLen + j;
