@@ -15,8 +15,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Exclude TokenizerPerf subdirectory from compilation -->
+    <!-- Exclude TokenizerPerf and TrainingBenchmark subdirectories from compilation -->
     <Compile Remove="TokenizerPerf/**/*.cs" />
+    <Compile Remove="TrainingBenchmark/**/*.cs" />
   </ItemGroup>
 
 </Project>
