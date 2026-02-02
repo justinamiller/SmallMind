@@ -9,6 +9,11 @@ on:
     # Run nightly at 2 AM UTC
     - cron: '0 2 * * *'
 
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
