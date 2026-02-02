@@ -63,7 +63,7 @@ This implementation adds comprehensive testing and documentation to SmallMind, c
 - Integration tests on every PR
 - Performance tests on schedule or `performance` label
 - Test result publishing
-- .NET 8 SDK setup
+- .NET 10 SDK setup
 - Release configuration builds
 
 ### ✅ Part B: Documentation (Priority 5) - COMPLETE

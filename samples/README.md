@@ -24,7 +24,7 @@ To run the example, compile it as a standalone program:
 cd /home/runner/work/SmallMind/SmallMind
 
 # Compile the example
-csc -out:examples/DataLoaderExample.exe -reference:bin/Debug/net8.0/SmallMind.dll examples/DataLoaderExample.cs
+csc -out:examples/DataLoaderExample.exe -reference:bin/Debug/net10.0/SmallMind.dll examples/DataLoaderExample.cs
 
 # Or use dotnet to compile and run
 dotnet build

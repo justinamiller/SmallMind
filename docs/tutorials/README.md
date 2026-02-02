@@ -27,7 +27,7 @@ All SmallMind tutorials and examples follow these principles:
 
 ## Prerequisites
 
-- .NET 8.0 SDK or later
+- .NET 10.0 SDK or later
 - Basic understanding of C# and language models
 - Familiarity with async/await for concurrent examples
 

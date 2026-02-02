@@ -53,7 +53,7 @@ SmallMind/
 
 1. **SmallMind (Library)**
    - Location: `src/SmallMind/`
-   - Type: Class library (.NET 8)
+   - Type: Class library (.NET 10)
    - Purpose: Reusable LLM library
    - Features:
      - Proper NuGet package metadata
@@ -63,14 +63,14 @@ SmallMind/
 
 2. **SmallMind.Console (Demo App)**
    - Location: `src/SmallMind.Console/`
-   - Type: Console application (.NET 8)
+   - Type: Console application (.NET 10)
    - Purpose: Demonstration and testing
    - References: SmallMind library
    - Namespace: `SmallMind.ConsoleApp` (to avoid conflicts)
 
 3. **SmallMind.Tests (Tests)**
    - Location: `tests/SmallMind.Tests/`
-   - Type: xUnit test project (.NET 8)
+   - Type: xUnit test project (.NET 10)
    - Purpose: Unit and integration testing
    - References: SmallMind library
    - Test count: 80 tests (all passing ✅)

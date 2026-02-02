@@ -154,7 +154,7 @@ dotnet run --project benchmarks/SimdBenchmarks/SimdBenchmarks.csproj -c Release
 | Softmax (1000×1000) | 180 | 35 | 5.1x |
 | Element-wise Add (10M) | 25 | 4 | 6.2x |
 
-*Benchmarked on Intel i7 (AVX2), .NET 8, Release build*
+*Benchmarked on Intel i7 (AVX2), .NET 10, Release build*
 
 ## Correctness Validation
 

@@ -149,8 +149,8 @@ Changes to internal implementation (e.g., optimizing matrix multiplication) do *
 ## Platform Support
 
 ### .NET Target Framework
-- **Primary Target**: .NET 8.0+
-- **Tested Frameworks**: .NET 8.0, .NET 9.0, .NET 10.0
+- **Primary Target**: .NET 10.0+
+- **Tested Frameworks**: .NET 9.0, .NET 10.0
 
 ### Operating Systems (Best-Effort)
 - **Windows**: x64, ARM64

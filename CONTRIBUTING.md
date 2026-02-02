@@ -16,7 +16,7 @@ Thank you for your interest in contributing to SmallMind! This project is an edu
 ## Development Setup
 
 ### Requirements
-- .NET 8 SDK
+- .NET 10 SDK
 - A code editor (Visual Studio, VS Code, Rider, etc.)
 
 ### Building the Project
