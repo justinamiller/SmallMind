@@ -38,6 +38,7 @@ namespace SmallMind.Benchmarks
             // Run benchmarks
             BenchmarkElementWiseAdd();
             BenchmarkReLU();
+            BenchmarkGELU();
             BenchmarkSoftmax();
             BenchmarkMatMul();
             BenchmarkDotProduct();
@@ -144,6 +145,60 @@ namespace SmallMind.Benchmarks
             var benchResult = new BenchmarkResult
             {
                 Name = "ReLU Activation",
+                Timestamp = DateTime.UtcNow,
+                Parameters = new Dictionary<string, object>
+                {
+                    ["Size"] = size,
+                    ["Iterations"] = iterations
+                },
+                Metrics = new Dictionary<string, double>
+                {
+                    ["Time (ms/op)"] = msPerOp,
+                    ["Throughput (GB/s)"] = gbPerSec
+                }
+            };
+            _report.Results.Add(benchResult);
+        }
+
+        static void BenchmarkGELU()
+        {
+            Console.WriteLine("--- GELU Activation Benchmark ---");
+            
+            const int size = 1_000_000;
+            const int iterations = 100;
+            
+            float[] input = new float[size];
+            float[] output = new float[size];
+            
+            Random rand = new Random(42);
+            for (int i = 0; i < size; i++)
+            {
+                input[i] = (float)(rand.NextDouble() * 6 - 3); // -3 to 3
+            }
+
+            // Warmup
+            ActivationOps.GELU(input, output);
+
+            // Benchmark
+            var sw = Stopwatch.StartNew();
+            for (int i = 0; i < iterations; i++)
+            {
+                ActivationOps.GELU(input, output);
+            }
+            sw.Stop();
+
+            double msPerOp = sw.Elapsed.TotalMilliseconds / iterations;
+            double gbPerSec = (size * sizeof(float) * 2) / (msPerOp / 1000.0) / (1024 * 1024 * 1024);
+            
+            Console.WriteLine($"  Size: {size:N0} elements");
+            Console.WriteLine($"  Time: {msPerOp:F3} ms/op");
+            Console.WriteLine($"  Throughput: {gbPerSec:F2} GB/s");
+            Console.WriteLine();
+
+            // Record result
+            var benchResult = new BenchmarkResult
+            {
+                Name = "GELU Activation",
                 Timestamp = DateTime.UtcNow,
                 Parameters = new Dictionary<string, object>
                 {

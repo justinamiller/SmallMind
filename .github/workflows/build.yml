@@ -44,6 +44,22 @@ jobs:
         RUN_PERF_TESTS: 'true'
       run: dotnet test tests/SmallMind.PerfTests/SmallMind.PerfTests.csproj --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=perf-tests.trx"
     
+    - name: Run SIMD Benchmarks
+      if: github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'performance')
+      run: |
+        cd benchmarks
+        dotnet run --configuration Release --no-build
+    
+    - name: Upload Benchmark Results
+      if: github.event_name == 'schedule' || contains(github.event.pull_request.labels.*.name, 'performance')
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: |
+          benchmarks/benchmark-results.md
+          benchmarks/benchmark-results.json
+        retention-days: 30
+    
     - name: Publish Test Results
       uses: EnricoMi/publish-unit-test-result-action@v2
       if: always()
