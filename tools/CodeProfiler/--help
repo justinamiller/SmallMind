@@ -1,0 +1,98 @@
+# Performance Profile Report
+
+**Generated:** 2026-02-02 17:08:04
+**Total Runtime:** 3783.80 ms
+**Total Allocations:** 1082.18 MB
+**Methods Profiled:** 10
+
+## System Information
+
+- **OS:** Ubuntu 24.04.3 LTS
+- **Architecture:** X64
+- **CPU Cores:** 4
+- **.NET Version:** 10.0.2
+- **GC Mode:** Workstation
+
+## 🔥 Hot Paths (by Time)
+
+Methods consuming the most CPU time:
+
+| Rank | Method | Total Time (ms) | % of Total | Calls | Avg Time (ms) | Min (ms) | Max (ms) |
+|------|--------|----------------|-----------|-------|---------------|----------|----------|
+| 1 | `InferenceComplete` | 3755.495 | 99.25% | 3 | 1251.832 | 909.146 | 1910.667 |
+| 2 | `GenerateToken` | 3754.992 | 99.24% | 150 | 25.033 | 9.049 | 67.991 |
+| 3 | `ForwardPass` | 3749.800 | 99.10% | 150 | 24.999 | 9.039 | 67.962 |
+| 4 | `ModelCreation` | 23.698 | 0.63% | 1 | 23.698 | 23.699 | 23.699 |
+| 5 | `BuilderSetup` | 22.091 | 0.58% | 1 | 22.091 | 22.376 | 22.320 |
+| 6 | `SampleToken` | 4.289 | 0.11% | 150 | 0.029 | 0.007 | 1.966 |
+| 7 | `Softmax` | 2.758 | 0.07% | 150 | 0.018 | 0.003 | 1.504 |
+| 8 | `MultinomialSample` | 0.304 | 0.01% | 150 | 0.002 | 0.001 | 0.081 |
+| 9 | `PrepareInput` | 0.196 | 0.01% | 3 | 0.065 | 0.003 | 0.192 |
+| 10 | `ApplyTemperature` | 0.174 | 0.00% | 150 | 0.001 | 0.001 | 0.004 |
+
+## 💾 Top Allocators (by Memory)
+
+Methods allocating the most memory:
+
+| Rank | Method | Total Alloc (MB) | % of Total | Calls | Avg Alloc (KB) |
+|------|--------|------------------|-----------|-------|----------------|
+| 1 | `InferenceComplete` | 1078.563 | 99.67% | 3 | 368149.492 |
+| 2 | `GenerateToken` | 1078.563 | 99.67% | 150 | 7362.990 |
+| 3 | `ForwardPass` | 1078.547 | 99.66% | 150 | 7362.883 |
+| 4 | `ModelCreation` | 3.617 | 0.33% | 1 | 3704.281 |
+| 5 | `BuilderSetup` | 3.617 | 0.33% | 1 | 3704.281 |
+| 6 | `SampleToken` | 0.016 | 0.00% | 150 | 0.107 |
+| 7 | `PrepareInput` | 0.000 | 0.00% | 3 | 0.000 |
+| 8 | `ApplyTemperature` | 0.000 | 0.00% | 150 | 0.000 |
+| 9 | `Softmax` | 0.000 | 0.00% | 150 | 0.000 |
+| 10 | `MultinomialSample` | 0.000 | 0.00% | 150 | 0.000 |
+
+## 📞 Most Called Methods
+
+Methods called most frequently:
+
+| Rank | Method | Calls | Total Time (ms) | Avg Time (μs) |
+|------|--------|-------|----------------|---------------|
+| 1 | `GenerateToken` | 150 | 3754.992 | 25033.279 |
+| 2 | `ForwardPass` | 150 | 3749.800 | 24998.669 |
+| 3 | `SampleToken` | 150 | 4.289 | 28.592 |
+| 4 | `ApplyTemperature` | 150 | 0.174 | 1.161 |
+| 5 | `Softmax` | 150 | 2.758 | 18.388 |
+| 6 | `MultinomialSample` | 150 | 0.304 | 2.029 |
+| 7 | `InferenceComplete` | 3 | 3755.495 | 1251831.553 |
+| 8 | `PrepareInput` | 3 | 0.196 | 65.499 |
+| 9 | `ModelCreation` | 1 | 23.698 | 23698.287 |
+| 10 | `BuilderSetup` | 1 | 22.091 | 22090.611 |
+
+## 🌲 Call Hierarchy
+
+Parent-child relationships for hot paths:
+
+### `InferenceComplete`
+
+*Entry point method*
+
+### `GenerateToken`
+
+**Called by:**
+- `InferenceComplete` (150 times)
+
+### `ForwardPass`
+
+**Called by:**
+- `GenerateToken` (150 times)
+
+### `ModelCreation`
+
+*Entry point method*
+
+### `BuilderSetup`
+
+**Called by:**
+- `ModelCreation` (1 times)
+
+## 💡 Performance Insights
+
+- **Top 5 methods** include nested operations (some time is counted in multiple scopes)
+- **5 methods** allocate more than 1 MB per call on average
+
