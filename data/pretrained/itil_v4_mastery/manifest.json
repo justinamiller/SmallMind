@@ -20,7 +20,7 @@
   },
   "rag": {
     "enabled": true,
-    "document_count": 19,
+    "document_count": 20,
     "index_type": "hybrid",
     "citation_required": true
   },
@@ -29,8 +29,8 @@
     "total_queries": 40
   },
   "statistics": {
-    "total_documents": 19,
-    "total_queries": 40,
+    "total_documents": 20,
+    "total_queries": 45,
     "document_topics": [
       "foundations",
       "service_value_system",
