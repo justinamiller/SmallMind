@@ -1,5 +1,31 @@
 # ITIL v4 Mastery Pack
 
+## 🚀 Quick Start - Run the Demo
+
+**Interactive Console Demo** (Recommended):
+
+```bash
+# From SmallMind root directory
+./run-itil-demo.sh    # Linux/Mac
+run-itil-demo.bat      # Windows
+```
+
+Or manually:
+```bash
+cd examples/ItilPackDemo
+dotnet run
+```
+
+The demo showcases:
+1. **Pack Loading**: Metadata, documents, queries
+2. **Content Exploration**: 45 queries across difficulty levels
+3. **Document Q&A**: Citation-backed retrieval  
+4. **Structured Output**: JSON consulting responses with schema validation
+
+**📖 Full Demo Guide**: [ITIL_DEMO_GUIDE.md](../../../ITIL_DEMO_GUIDE.md)
+
+---
+
 ## Overview
 
 **Pack ID**: `sm.pretrained.itil_v4_mastery.v1`  

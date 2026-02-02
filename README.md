@@ -151,6 +151,26 @@ foreach (var citation in answer.Citations)
     Console.WriteLine($"  [{citation.Confidence:F2}] {citation.SourceUri}");
 ```
 
+**🎯 Try the ITIL v4 Mastery Pack Demo**: A complete end-to-end demo showcasing RAG with real ITSM content:
+
+```bash
+# Run the interactive demo
+./run-itil-demo.sh    # Linux/Mac
+run-itil-demo.bat      # Windows
+
+# Or manually
+cd examples/ItilPackDemo
+dotnet run
+```
+
+The demo shows:
+- Loading knowledge packs (20 ITIL documents)
+- Running Q&A queries with citation retrieval
+- Structured JSON output for consulting scenarios
+- Schema validation and evaluation
+
+See [ITIL_DEMO_GUIDE.md](ITIL_DEMO_GUIDE.md) for full walkthrough.
+
 ### Run a GGUF Model in 2 Minutes
 
 SmallMind supports importing quantized models from the popular GGUF format (Q8_0 and Q4_0 only):
