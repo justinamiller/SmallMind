@@ -124,7 +124,6 @@ These would be new features in new PRs, not a "fix" of PR #2.
 ### Why Rebasing Won't Work:
 
 A git rebase of PR #2 onto main would encounter conflicts in every core file because:
-- Same namespace (`SmallMind` vs `SmallMind`), but different implementations
 - Different model architecture (Transformer vs simple NN)
 - Different tokenization approach (character vs word)
 - Different training loop implementation
