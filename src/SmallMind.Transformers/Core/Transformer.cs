@@ -1,5 +1,6 @@
 using SmallMind.Core.Exceptions;
 using SmallMind.Core.Core;
+using SmallMind.Core.Simd;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -446,28 +447,33 @@ namespace SmallMind.Transformers
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
+                    int bhOffset = (b * _nHead + h) * T * _headSize;
+                    int scoreOffset = (b * _nHead + h) * T * T;
                     
                     for (int i = 0; i < T; i++)
                     {
-                        for (int j = 0; j < T; j++)
+                        int qOffset = bhOffset + i * _headSize;
+                        int scoreRowOffset = scoreOffset + i * T;
+                        
+                        // Only compute for valid positions (causal mask: j <= i)
+                        for (int j = 0; j <= i; j++)
                         {
-                            float sum = 0;
-                            for (int d = 0; d < _headSize; d++)
-                            {
-                                int qIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                                int kIdx = ((b * _nHead + h) * T + j) * _headSize + d;
-                                sum += q.Data[qIdx] * k.Data[kIdx];
-                            }
+                            int kOffset = bhOffset + j * _headSize;
                             
-                            int scoreIdx = ((b * _nHead + h) * T + i) * T + j;
-                            if (_causalMask[i, j])
-                            {
-                                scores.Data[scoreIdx] = sum * scale;
-                            }
-                            else
-                            {
-                                scores.Data[scoreIdx] = float.NegativeInfinity;
-                            }
+                            // Use SIMD-accelerated dot product from MatMulOps
+                            float sum = MatMulOps.DotProduct(
+                                new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
+                                new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
+                            );
+                            
+                            scores.Data[scoreRowOffset + j] = sum * scale;
+                        }
+                        
+                        // Positions j > i are already zero (tensor initialized to zeros)
+                        // Set them to NegativeInfinity for softmax to ignore
+                        for (int j = i + 1; j < T; j++)
+                        {
+                            scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
                         }
                     }
                 });
@@ -479,27 +485,33 @@ namespace SmallMind.Transformers
                 {
                     for (int h = 0; h < _nHead; h++)
                     {
+                        int bhOffset = (b * _nHead + h) * T * _headSize;
+                        int scoreOffset = (b * _nHead + h) * T * T;
+                        
                         for (int i = 0; i < T; i++)
                         {
-                            for (int j = 0; j < T; j++)
+                            int qOffset = bhOffset + i * _headSize;
+                            int scoreRowOffset = scoreOffset + i * T;
+                            
+                            // Only compute for valid positions (causal mask: j <= i)
+                            for (int j = 0; j <= i; j++)
                             {
-                                float sum = 0;
-                                for (int d = 0; d < _headSize; d++)
-                                {
-                                    int qIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                                    int kIdx = ((b * _nHead + h) * T + j) * _headSize + d;
-                                    sum += q.Data[qIdx] * k.Data[kIdx];
-                                }
+                                int kOffset = bhOffset + j * _headSize;
                                 
-                                int scoreIdx = ((b * _nHead + h) * T + i) * T + j;
-                                if (_causalMask[i, j])
-                                {
-                                    scores.Data[scoreIdx] = sum * scale;
-                                }
-                                else
-                                {
-                                    scores.Data[scoreIdx] = float.NegativeInfinity;
-                                }
+                                // Use SIMD-accelerated dot product from MatMulOps
+                                float sum = MatMulOps.DotProduct(
+                                    new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
+                                    new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
+                                );
+                                
+                                scores.Data[scoreRowOffset + j] = sum * scale;
+                            }
+                            
+                            // Positions j > i are already zero (tensor initialized to zeros)
+                            // Set them to NegativeInfinity for softmax to ignore
+                            for (int j = i + 1; j < T; j++)
+                            {
+                                scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
                             }
                         }
                     }

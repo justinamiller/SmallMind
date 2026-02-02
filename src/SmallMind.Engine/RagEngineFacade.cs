@@ -127,19 +127,34 @@ namespace SmallMind.Engine
             // Extract citations from chunks
             // TODO: Access chunk store to get full chunk details (CharStart, CharEnd) for accurate location
             var chunks = pipeline.Retrieve(request.Query, userContext: null, topK: request.TopK);
-            var citations = chunks
-                .Where(c => c.Score >= request.MinConfidence)
-                .Select(c => new RagCitation
+            
+            // Replace LINQ with manual loop - avoid Where().Select().ToArray() allocation chain
+            int citationCount = 0;
+            for (int i = 0; i < chunks.Count; i++)
+            {
+                if (chunks[i].Score >= request.MinConfidence)
+                    citationCount++;
+            }
+            
+            var citations = new RagCitation[citationCount];
+            int citationIndex = 0;
+            for (int i = 0; i < chunks.Count; i++)
+            {
+                var c = chunks[i];
+                if (c.Score >= request.MinConfidence)
                 {
-                    SourceUri = $"chunk://{c.ChunkId}",
-                    // Note: CharRange and LineRange would need actual Chunk lookup from chunk store
-                    // RetrievedChunk only has ChunkId, DocId, Score, Rank, Excerpt
-                    CharRange = (0, 0), // Placeholder - requires chunk store access
-                    LineRange = null, // Optional in schema
-                    Snippet = c.Excerpt.Length > 200 ? c.Excerpt.Substring(0, 200) + "..." : c.Excerpt,
-                    Confidence = c.Score
-                })
-                .ToArray();
+                    citations[citationIndex++] = new RagCitation
+                    {
+                        SourceUri = $"chunk://{c.ChunkId}",
+                        // Note: CharRange and LineRange would need actual Chunk lookup from chunk store
+                        // RetrievedChunk only has ChunkId, DocId, Score, Rank, Excerpt
+                        CharRange = (0, 0), // Placeholder - requires chunk store access
+                        LineRange = null, // Optional in schema
+                        Snippet = c.Excerpt.Length > 200 ? c.Excerpt.Substring(0, 200) + "..." : c.Excerpt,
+                        Confidence = c.Score
+                    };
+                }
+            }
 
             if (citations.Length == 0 && request.MinConfidence > 0)
             {
@@ -187,7 +202,25 @@ namespace SmallMind.Engine
             // Retrieve chunks first
             var chunks = pipeline.Retrieve(request.Query, userContext: null, topK: request.TopK);
 
-            if (chunks.Count == 0 || (request.MinConfidence > 0 && chunks.All(c => c.Score < request.MinConfidence)))
+            // Replace .All() LINQ with manual loop
+            bool hasValidChunk = false;
+            if (chunks.Count > 0 && request.MinConfidence > 0)
+            {
+                for (int i = 0; i < chunks.Count; i++)
+                {
+                    if (chunks[i].Score >= request.MinConfidence)
+                    {
+                        hasValidChunk = true;
+                        break;
+                    }
+                }
+            }
+            else if (chunks.Count > 0)
+            {
+                hasValidChunk = true;
+            }
+            
+            if (!hasValidChunk)
             {
                 throw new RagInsufficientEvidenceException(request.Query, request.MinConfidence);
             }
