@@ -1458,7 +1458,7 @@ Auto-configuration scales batch size based on block size and available memory:
 
 ```
 SmallMind/
-├── TinyLLM.csproj         # .NET 8 project file (NO dependencies!)
+├── SmallMind.csproj       # .NET 8 project file (NO dependencies!)
 ├── Program.cs             # CLI entry point and argument parsing
 ├── Tokenizer.cs           # Character-level tokenization
 ├── DataLoader.cs          # Load training data from JSON, XML, CSV, text files
@@ -1480,7 +1480,7 @@ SmallMind/
 │   ├── DataLoaderExample.cs  # Comprehensive data loading examples
 │   └── README.md          # Examples documentation
 ├── Tests/                 # Unit tests
-│   ├── TinyLLM.Tests.csproj  # Test project file
+│   ├── SmallMind.Tests.csproj  # Test project file
 │   └── DataLoaderTests.cs    # DataLoader unit tests
 ├── checkpoints/           # Model checkpoints (created during training)
 │   ├── model.json         # Saved model weights

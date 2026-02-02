@@ -37,7 +37,7 @@ PR #2 "Document input format and add DataLoader utilities" **cannot be merged** 
 **Why it can't merge:**
 
 The current `main` branch (from merged PR #1) uses:
-- **TinyLLM** - Transformer-based architecture
+- **SmallMind** - Transformer-based architecture
 - Character-level tokenization
 - Single text file input
 - Classes: `TransformerModel`, `Tensor`, `NeuralNet`, etc.
@@ -57,8 +57,8 @@ These are **two completely different codebases** that cannot coexist.
 
 **Value preserved:**
 
-Even though PR #2 can't be merged, the valuable documentation ideas have been adapted for TinyLLM in this PR (#4):
-- See `DATA_LOADING.md` for data loading guide adapted to TinyLLM
+Even though PR #2 can't be merged, the valuable documentation ideas have been adapted for SmallMind in this PR (#4):
+- See `DATA_LOADING.md` for data loading guide adapted to SmallMind
 - See `PR_ANALYSIS.md` for detailed technical explanation
 
 ### 3. Optionally: Merge PR #4 (This PR)
@@ -87,16 +87,16 @@ For a complete technical explanation of why PR #2 cannot merge and what the diff
 ## Questions?
 
 **Q: Can we extract just the DataLoader from PR #2?**  
-A: Not directly. The DataLoader is designed for word-level tokenization with `string[]` input, while TinyLLM uses character-level tokenization with string input. It would need to be completely rewritten. See `DATA_LOADING.md` for an adapted version.
+A: Not directly. The DataLoader is designed for word-level tokenization with `string[]` input, while SmallMind uses character-level tokenization with string input. It would need to be completely rewritten. See `DATA_LOADING.md` for an adapted version.
 
 **Q: Why were these PRs created in parallel?**  
-A: Both PR #2 and PR #3 were branched from the initial commit (`fcc1246`) before PR #1 was merged. PR #1 introduced the TinyLLM implementation. PR #3 built upon PR #1's code, while PR #2 created a different implementation.
+A: Both PR #2 and PR #3 were branched from the initial commit (`fcc1246`) before PR #1 was merged. PR #1 introduced the SmallMind implementation. PR #3 built upon PR #1's code, while PR #2 created a different implementation.
 
 **Q: Can we support both implementations?**  
-A: Not recommended. They use different project structures, namespaces, and APIs. Pick one approach (the current TinyLLM is more sophisticated).
+A: Not recommended. They use different project structures, namespaces, and APIs. Pick one approach (the current SmallMind is more sophisticated).
 
 **Q: What about PR #2's tests?**  
-A: The tests are specific to the LanguageModel implementation. You could create similar tests for TinyLLM components, but they would be new tests, not ported ones.
+A: The tests are specific to the LanguageModel implementation. You could create similar tests for SmallMind components, but they would be new tests, not ported ones.
 
 ## Summary Table
 
@@ -111,4 +111,4 @@ A: The tests are specific to the LanguageModel implementation. You could create 
 1. ✅ Merge PR #3
 2. ❌ Close PR #2 with explanation
 3. ⚪ Decide on PR #4 (merge for docs, or close if not needed)
-4. 🎉 Celebrate having a working TinyLLM with configurable context window!
+4. 🎉 Celebrate having a working SmallMind with configurable context window!

@@ -17,8 +17,8 @@ Phase 2 introduces several performance optimizations that can dramatically reduc
 ### Basic Usage with Optimizations
 
 ```csharp
-using TinyLLM.Core;
-using TinyLLM.Text;
+using SmallMind.Core;
+using SmallMind.Text;
 
 // Initialize model and tokenizer
 var tokenizer = new Tokenizer();

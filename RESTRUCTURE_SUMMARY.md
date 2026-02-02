@@ -77,12 +77,12 @@ SmallMind/
 
 ### 3. Namespace Updates
 
-Changed all namespaces from `TinyLLM.*` to `SmallMind.*`:
-- `TinyLLM.Core` → `SmallMind.Core`
-- `TinyLLM.Text` → `SmallMind.Text`
-- `TinyLLM.RAG` → `SmallMind.RAG`
-- `TinyLLM.Embeddings` → `SmallMind.Embeddings`
-- `TinyLLM.Indexing` → `SmallMind.Indexing`
+Changed all namespaces to use `SmallMind.*` consistently:
+- `SmallMind.Core` - Core neural network components
+- `SmallMind.Text` - Text processing utilities
+- `SmallMind.RAG` - Retrieval-Augmented Generation
+- `SmallMind.Embeddings` - Embedding providers
+- `SmallMind.Indexing` - Vector indexing
 
 ### 4. Documentation Improvements
 
@@ -199,10 +199,10 @@ var model = new TransformerModel(...);
 
 ## Breaking Changes
 
-1. **Namespace Changes**: All `TinyLLM.*` → `SmallMind.*`
+1. **Namespace Changes**: All namespaces use `SmallMind.*`
 2. **Project Location**: Main code moved from root to `src/SmallMind/`
 3. **Build Commands**: Must specify project for console app
-4. **Project References**: Old `TinyLLM.csproj` is now `SmallMind.csproj`
+4. **Project References**: Project file is `SmallMind.csproj`
 
 ## Backward Compatibility
 
