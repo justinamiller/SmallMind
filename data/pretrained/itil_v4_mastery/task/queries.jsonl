@@ -1,0 +1,45 @@
+{"id":"itil_q001","task":"docqa","text":"What is the difference between incident management and problem management, and how should handoffs work?","expected_citations_min":2,"tags":["incident","problem","practices"]}
+{"id":"itil_q002","task":"docqa","text":"What are the seven guiding principles in ITIL v4 and why are they important?","expected_citations_min":1,"tags":["guiding_principles","foundations"]}
+{"id":"itil_q003","task":"docqa","text":"Explain the Service Value System (SVS) and its key components.","expected_citations_min":1,"tags":["svs","foundations"]}
+{"id":"itil_q004","task":"docqa","text":"What are the four dimensions of service management and why must all four be considered?","expected_citations_min":1,"tags":["four_dimensions","foundations"]}
+{"id":"itil_q005","task":"docqa","text":"Describe the six activities in the Service Value Chain and how they interconnect.","expected_citations_min":1,"tags":["service_value_chain","foundations"]}
+{"id":"itil_q006","task":"docqa","text":"What is a major incident and what special procedures apply?","expected_citations_min":1,"tags":["incident","major_incident"]}
+{"id":"itil_q007","task":"docqa","text":"How does ITIL v4 differ from ITIL v3?","expected_citations_min":1,"tags":["foundations","evolution"]}
+{"id":"itil_q008","task":"docqa","text":"What are the three types of changes in change enablement and when is each used?","expected_citations_min":1,"tags":["change","change_types"]}
+{"id":"itil_q009","task":"docqa","text":"Explain the purpose and composition of a Change Advisory Board (CAB).","expected_citations_min":1,"tags":["change","governance"]}
+{"id":"itil_q010","task":"docqa","text":"What is a Known Error and how does it relate to problem management?","expected_citations_min":1,"tags":["problem","known_error"]}
+{"id":"itil_q011","task":"docqa","text":"What is the difference between a service request and an incident?","expected_citations_min":2,"tags":["service_request","incident"]}
+{"id":"itil_q012","task":"docqa","text":"What is a service catalog and what should it contain?","expected_citations_min":1,"tags":["service_catalog","service_management"]}
+{"id":"itil_q013","task":"docqa","text":"What are the key metrics (KPIs) for incident management?","expected_citations_min":2,"tags":["incident","metrics","kpi"]}
+{"id":"itil_q014","task":"docqa","text":"How should monitoring and event management integrate with incident management?","expected_citations_min":2,"tags":["monitoring","incident","integration"]}
+{"id":"itil_q015","task":"docqa","text":"What is the difference between an SLA, OLA, and UC?","expected_citations_min":1,"tags":["sla","service_level"]}
+{"id":"itil_q016","task":"docqa","text":"Describe the purpose of knowledge management in ITSM.","expected_citations_min":1,"tags":["knowledge","practices"]}
+{"id":"itil_q017","task":"docqa","text":"What is continual improvement and how does it fit into the Service Value System?","expected_citations_min":2,"tags":["continual_improvement","svs"]}
+{"id":"itil_q018","task":"structured_consult","text":"We have high change failure rate and unplanned outages. Propose an ITIL v4-aligned improvement plan for change enablement, including KPIs.","expected_citations_min":2,"tags":["change","reliability","kpi"]}
+{"id":"itil_q019","task":"structured_consult","text":"Design an incident management process for a mid-sized company with 500 employees, including priority matrix, escalation paths, and success metrics.","expected_citations_min":2,"tags":["incident","process_design"]}
+{"id":"itil_q020","task":"docqa","text":"How does ITIL v4 support DevOps and continuous deployment?","expected_citations_min":2,"tags":["devops","change","deployment"]}
+{"id":"itil_q021","task":"docqa","text":"What are common anti-patterns in ITIL implementation and how can they be avoided?","expected_citations_min":1,"tags":["anti_patterns","pitfalls"]}
+{"id":"itil_q022","task":"docqa","text":"How should a Configuration Management Database (CMDB) be structured and maintained?","expected_citations_min":1,"tags":["configuration","cmdb"]}
+{"id":"itil_q023","task":"docqa","text":"What is the relationship between release management and change enablement?","expected_citations_min":2,"tags":["release","change","practices"]}
+{"id":"itil_q024","task":"structured_consult","text":"Our mean time to resolve (MTTR) for incidents is 8 hours. Create a 90-day improvement plan with specific actions, metrics, and expected outcomes.","expected_citations_min":3,"tags":["incident","improvement","metrics"]}
+{"id":"itil_q025","task":"docqa","text":"What is the Focus on Value guiding principle and how should it be applied?","expected_citations_min":1,"tags":["guiding_principles","value"]}
+{"id":"itil_q026","task":"docqa","text":"Explain the Start Where You Are principle with practical examples.","expected_citations_min":1,"tags":["guiding_principles","pragmatic"]}
+{"id":"itil_q027","task":"docqa","text":"What does Progress Iteratively with Feedback mean in an ITIL context?","expected_citations_min":1,"tags":["guiding_principles","agile"]}
+{"id":"itil_q028","task":"docqa","text":"How should problem management prioritize which problems to investigate first?","expected_citations_min":1,"tags":["problem","prioritization"]}
+{"id":"itil_q029","task":"docqa","text":"What root cause analysis techniques are recommended for problem management?","expected_citations_min":1,"tags":["problem","rca"]}
+{"id":"itil_q030","task":"structured_consult","text":"We need to implement a service catalog for the first time. Provide a phased implementation plan with deliverables, timelines, and success criteria.","expected_citations_min":2,"tags":["service_catalog","implementation"]}
+{"id":"itil_q031","task":"docqa","text":"What are the essential components of a service level agreement (SLA)?","expected_citations_min":1,"tags":["sla","service_level"]}
+{"id":"itil_q032","task":"docqa","text":"How can organizations measure the effectiveness of their ITIL practices?","expected_citations_min":2,"tags":["metrics","measurement","continual_improvement"]}
+{"id":"itil_q033","task":"docqa","text":"What is the role of governance within the Service Value System?","expected_citations_min":1,"tags":["governance","svs"]}
+{"id":"itil_q034","task":"structured_consult","text":"Design a knowledge management strategy including article creation workflow, review process, metrics, and tool requirements.","expected_citations_min":2,"tags":["knowledge","strategy"]}
+{"id":"itil_q035","task":"docqa","text":"How should emergency changes be handled while maintaining proper governance?","expected_citations_min":1,"tags":["change","emergency","governance"]}
+{"id":"itil_q036","task":"docqa","text":"What is the difference between reactive and proactive problem management?","expected_citations_min":1,"tags":["problem","reactive","proactive"]}
+{"id":"itil_q037","task":"docqa","text":"How does service request management integrate with service catalog management?","expected_citations_min":2,"tags":["service_request","service_catalog","integration"]}
+{"id":"itil_q038","task":"docqa","text":"What are OKRs and how can they be used to align ITSM with business goals?","expected_citations_min":1,"tags":["okr","metrics","strategy"]}
+{"id":"itil_q039","task":"structured_consult","text":"We want to transition from ITIL v3 to ITIL v4. Outline a transformation roadmap with phases, risks, and change management considerations.","expected_citations_min":3,"tags":["transformation","change_management","strategy"]}
+{"id":"itil_q040","task":"docqa","text":"What practices should a small organization (50-100 people) implement first and why?","expected_citations_min":2,"tags":["practices","adoption","small_org"]}
+{"id":"itil_q041","task":"docqa","text":"How does the Think and Work Holistically principle apply to the four dimensions?","expected_citations_min":2,"tags":["guiding_principles","four_dimensions"]}
+{"id":"itil_q042","task":"docqa","text":"What is the role of automation in modern ITIL implementation?","expected_citations_min":2,"tags":["automation","optimization","modernization"]}
+{"id":"itil_q043","task":"structured_consult","text":"Create a post-incident review (PIR) template and process for major incidents, including what to capture, who should attend, and how to drive improvements.","expected_citations_min":2,"tags":["incident","pir","continual_improvement"]}
+{"id":"itil_q044","task":"docqa","text":"What signals indicate successful ITIL adoption versus checkbox compliance?","expected_citations_min":2,"tags":["adoption","success","anti_patterns"]}
+{"id":"itil_q045","task":"docqa","text":"How should ITIL practices integrate with Site Reliability Engineering (SRE) principles?","expected_citations_min":1,"tags":["sre","devops","integration"]}

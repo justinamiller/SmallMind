@@ -31,11 +31,22 @@
       "tasks": ["sentiment_analysis", "rag", "evaluation"],
       "rag_enabled": true,
       "status": "stable"
+    },
+    {
+      "id": "sm.pretrained.itil_v4_mastery.v1",
+      "name": "ITIL v4 Mastery Pack",
+      "path": "itil_v4_mastery",
+      "type": "knowledge-pack",
+      "domain": "itil_v4",
+      "tasks": ["rag", "citations", "evaluation", "bench"],
+      "rag_enabled": true,
+      "status": "stable",
+      "description": "Comprehensive ITIL v4 knowledge base with 19 documents, 45 queries, citation-backed Q&A, and structured consulting output"
     }
   ],
   "metadata": {
-    "total_packs": 3,
-    "last_updated": "2026-02-01",
+    "total_packs": 4,
+    "last_updated": "2026-02-02",
     "schema_version": "1.0"
   }
 }

@@ -1,0 +1,45 @@
+{"id":"itil_q001","expected_keywords":["restore","service","quickly","root cause","prevent","recurrence","handoff"],"expected_practices":["incident_management","problem_management"],"min_quality_score":70}
+{"id":"itil_q002","expected_keywords":["focus on value","start where you are","progress iteratively","collaborate","think holistically","keep it simple","optimize","automate"],"min_quality_score":75}
+{"id":"itil_q003","expected_keywords":["guiding principles","governance","service value chain","practices","continual improvement","value co-creation"],"min_quality_score":75}
+{"id":"itil_q004","expected_keywords":["organizations","people","information","technology","partners","suppliers","value streams","processes","holistic"],"min_quality_score":75}
+{"id":"itil_q005","expected_keywords":["plan","improve","engage","design","transition","obtain","build","deliver","support","non-linear"],"min_quality_score":75}
+{"id":"itil_q006","expected_keywords":["significant impact","urgent","major incident manager","war room","stakeholder updates","post-incident review"],"min_quality_score":70}
+{"id":"itil_q007","expected_keywords":["practices","processes","service value system","lifecycle","flexibility","agile","devops"],"min_quality_score":70}
+{"id":"itil_q008","expected_keywords":["standard","normal","emergency","pre-authorized","RFC","expedited"],"min_quality_score":75}
+{"id":"itil_q009","expected_keywords":["assess","recommend","risk","change manager","service owner","technical","business"],"min_quality_score":70}
+{"id":"itil_q010","expected_keywords":["problem","analyzed","workaround","documented","knowledge base"],"min_quality_score":70}
+{"id":"itil_q011","expected_keywords":["unplanned","disruption","planned","request","incident","restore","fulfill"],"min_quality_score":70}
+{"id":"itil_q012","expected_keywords":["available services","descriptions","request procedures","SLA","pricing"],"min_quality_score":65}
+{"id":"itil_q013","expected_keywords":["MTTR","mean time to resolve","first-call resolution","reopened rate","SLA compliance"],"min_quality_score":70}
+{"id":"itil_q014","expected_keywords":["detect","alert","auto-create","proactive","monitoring","event"],"min_quality_score":70}
+{"id":"itil_q015","expected_keywords":["service level agreement","operational level agreement","underpinning contract","customer","internal","supplier"],"min_quality_score":70}
+{"id":"itil_q016","expected_keywords":["capture","share","knowledge articles","lessons learned","reuse","search"],"min_quality_score":65}
+{"id":"itil_q017","expected_keywords":["ongoing","improvement","opportunities","value","measure","embed"],"min_quality_score":70}
+{"id":"itil_q018","required_json_fields":["summary","recommended_practices","workflow","kpis","risks_and_pitfalls","next_actions_30_days","citations"],"expected_practices":["change_enablement"],"min_quality_score":70}
+{"id":"itil_q019","required_json_fields":["summary","recommended_practices","workflow","kpis","risks_and_pitfalls","next_actions_30_days","citations"],"expected_practices":["incident_management"],"min_quality_score":70}
+{"id":"itil_q020","expected_keywords":["CI/CD","continuous deployment","standard changes","automated","feature flags","peer review"],"min_quality_score":70}
+{"id":"itil_q021","expected_keywords":["checkbox compliance","process theater","tool-first","waterfall","silo","analysis paralysis"],"min_quality_score":70}
+{"id":"itil_q022","expected_keywords":["configuration items","relationships","dependencies","accuracy","discovery","automated"],"min_quality_score":65}
+{"id":"itil_q023","expected_keywords":["package","bundle","changes","deployment","authorization","coordination"],"min_quality_score":70}
+{"id":"itil_q024","required_json_fields":["summary","recommended_practices","workflow","kpis","risks_and_pitfalls","next_actions_30_days","citations"],"expected_keywords":["MTTR","first-call resolution","knowledge base","automation"],"min_quality_score":70}
+{"id":"itil_q025","expected_keywords":["stakeholder","value","outcomes","business","alignment"],"min_quality_score":70}
+{"id":"itil_q026","expected_keywords":["current state","reuse","assess","evolution","incremental"],"min_quality_score":70}
+{"id":"itil_q027","expected_keywords":["iterative","feedback","pilot","MVP","learn","adapt"],"min_quality_score":70}
+{"id":"itil_q028","expected_keywords":["impact","frequency","priority","business value","risk"],"min_quality_score":65}
+{"id":"itil_q029","expected_keywords":["5 whys","ishikawa","fishbone","pareto","root cause"],"min_quality_score":65}
+{"id":"itil_q030","required_json_fields":["summary","recommended_practices","workflow","kpis","risks_and_pitfalls","next_actions_30_days","citations"],"expected_practices":["service_catalog_management"],"min_quality_score":70}
+{"id":"itil_q031","expected_keywords":["service targets","metrics","availability","performance","response time","consequences"],"min_quality_score":65}
+{"id":"itil_q032","expected_keywords":["KPI","metrics","outcomes","value","continual improvement","data-driven"],"min_quality_score":70}
+{"id":"itil_q033","expected_keywords":["evaluate","direct","monitor","policies","authority","accountability"],"min_quality_score":70}
+{"id":"itil_q034","required_json_fields":["summary","recommended_practices","workflow","kpis","risks_and_pitfalls","next_actions_30_days","citations"],"expected_practices":["knowledge_management"],"min_quality_score":70}
+{"id":"itil_q035","expected_keywords":["urgent","expedited","ECAB","retrospective","approval","restore service"],"min_quality_score":70}
+{"id":"itil_q036","expected_keywords":["reactive","triggered by incidents","proactive","trend analysis","prevention"],"min_quality_score":70}
+{"id":"itil_q037","expected_keywords":["catalog","available services","request","fulfillment","workflow"],"min_quality_score":65}
+{"id":"itil_q038","expected_keywords":["objectives","key results","measurable","outcomes","alignment","strategy"],"min_quality_score":65}
+{"id":"itil_q039","required_json_fields":["summary","recommended_practices","workflow","kpis","risks_and_pitfalls","next_actions_30_days","citations"],"expected_keywords":["transformation","migration","communication","training"],"min_quality_score":70}
+{"id":"itil_q040","expected_keywords":["incident","service desk","change","knowledge","foundational"],"expected_practices":["incident_management","service_desk","change_enablement"],"min_quality_score":70}
+{"id":"itil_q041","expected_keywords":["holistic","interconnected","four dimensions","end-to-end","dependencies"],"min_quality_score":70}
+{"id":"itil_q042","expected_keywords":["automate","optimize first","efficiency","self-service","CI/CD"],"min_quality_score":65}
+{"id":"itil_q043","required_json_fields":["summary","recommended_practices","workflow","kpis","risks_and_pitfalls","next_actions_30_days","citations"],"expected_keywords":["blameless","lessons learned","root cause","actions"],"min_quality_score":70}
+{"id":"itil_q044","expected_keywords":["value","outcomes","adoption","collaboration","improvement","not checkbox"],"min_quality_score":70}
+{"id":"itil_q045","expected_keywords":["SRE","error budgets","post-mortems","toil","automation","SLA"],"min_quality_score":65}

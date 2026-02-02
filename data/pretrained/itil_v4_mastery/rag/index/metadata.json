@@ -1,0 +1,186 @@
+{
+  "version": "1.0",
+  "index_type": "hybrid",
+  "created": "2026-02-02",
+  "documents": [
+    {
+      "id": "001",
+      "path": "001_foundations.md",
+      "title": "ITIL v4 Foundations",
+      "topics": ["foundations", "overview", "evolution", "adoption"],
+      "key_concepts": ["Service Value System", "Guiding Principles", "Four Dimensions", "Practices", "Value Co-Creation"],
+      "word_count": 1800
+    },
+    {
+      "id": "010",
+      "path": "010_service_value_system.md",
+      "title": "Service Value System (SVS)",
+      "topics": ["svs", "framework", "governance", "value_chain"],
+      "key_concepts": ["SVS Components", "Value Creation", "Governance", "Continual Improvement"],
+      "word_count": 2300
+    },
+    {
+      "id": "020",
+      "path": "020_guiding_principles.md",
+      "title": "ITIL v4 Guiding Principles",
+      "topics": ["guiding_principles", "philosophy", "decision_making"],
+      "key_concepts": ["Focus on Value", "Start Where You Are", "Progress Iteratively", "Collaborate", "Think Holistically", "Keep It Simple", "Optimize and Automate"],
+      "word_count": 2400
+    },
+    {
+      "id": "030",
+      "path": "030_four_dimensions.md",
+      "title": "Four Dimensions of Service Management",
+      "topics": ["four_dimensions", "holistic", "balance"],
+      "key_concepts": ["Organizations and People", "Information and Technology", "Partners and Suppliers", "Value Streams and Processes"],
+      "word_count": 2100
+    },
+    {
+      "id": "040",
+      "path": "040_service_value_chain.md",
+      "title": "Service Value Chain",
+      "topics": ["value_chain", "activities", "workflows"],
+      "key_concepts": ["Plan", "Improve", "Engage", "Design & Transition", "Obtain/Build", "Deliver & Support", "Value Streams"],
+      "word_count": 2200
+    },
+    {
+      "id": "050",
+      "path": "050_practices_overview.md",
+      "title": "ITIL v4 Practices Overview",
+      "topics": ["practices", "overview", "adoption"],
+      "key_concepts": ["34 Practices", "General Management", "Service Management", "Technical Management", "Practice Relationships"],
+      "word_count": 2000
+    },
+    {
+      "id": "060",
+      "path": "060_incident_management.md",
+      "title": "Incident Management Practice",
+      "topics": ["incident", "restoration", "major_incident"],
+      "key_concepts": ["Restore Service", "MTTR", "Priority Matrix", "Escalation", "Major Incident", "Post-Incident Review"],
+      "word_count": 2600
+    },
+    {
+      "id": "070",
+      "path": "070_problem_management.md",
+      "title": "Problem Management Practice",
+      "topics": ["problem", "root_cause", "prevention"],
+      "key_concepts": ["Root Cause Analysis", "Known Error", "Workaround", "5 Whys", "Proactive vs Reactive"],
+      "word_count": 2900
+    },
+    {
+      "id": "080",
+      "path": "080_change_enablement.md",
+      "title": "Change Enablement Practice",
+      "topics": ["change", "risk", "authorization"],
+      "key_concepts": ["RFC", "CAB", "Change Types", "Standard Change", "Emergency Change", "Change Success Rate"],
+      "word_count": 3200
+    },
+    {
+      "id": "090",
+      "path": "090_service_request_management.md",
+      "title": "Service Request Management Practice",
+      "topics": ["service_request", "fulfillment", "self_service"],
+      "key_concepts": ["Service Request", "Request Fulfillment", "Self-Service Portal", "Automation"],
+      "word_count": 1200
+    },
+    {
+      "id": "100",
+      "path": "100_service_catalog_management.md",
+      "title": "Service Catalog Management Practice",
+      "topics": ["service_catalog", "offerings", "transparency"],
+      "key_concepts": ["Service Catalog", "Service Portfolio", "Service Offering", "Customer-Facing"],
+      "word_count": 1000
+    },
+    {
+      "id": "110",
+      "path": "110_service_level_management.md",
+      "title": "Service Level Management Practice",
+      "topics": ["sla", "targets", "agreements"],
+      "key_concepts": ["SLA", "OLA", "UC", "Service Level Objectives", "SLA Compliance"],
+      "word_count": 1400
+    },
+    {
+      "id": "120",
+      "path": "120_monitoring_and_event_management.md",
+      "title": "Monitoring and Event Management Practice",
+      "topics": ["monitoring", "events", "alerting"],
+      "key_concepts": ["Event", "Alert", "Monitoring", "Proactive Detection", "MTTD"],
+      "word_count": 1100
+    },
+    {
+      "id": "130",
+      "path": "130_release_management.md",
+      "title": "Release Management Practice",
+      "topics": ["release", "deployment", "packaging"],
+      "key_concepts": ["Release", "Release Package", "Major/Minor Release", "Deployment Coordination"],
+      "word_count": 1000
+    },
+    {
+      "id": "140",
+      "path": "140_configuration_management.md",
+      "title": "Service Configuration Management Practice",
+      "topics": ["configuration", "cmdb", "assets"],
+      "key_concepts": ["Configuration Item", "CMDB", "Configuration Baseline", "CI Relationships"],
+      "word_count": 1100
+    },
+    {
+      "id": "150",
+      "path": "150_knowledge_management.md",
+      "title": "Knowledge Management Practice",
+      "topics": ["knowledge", "documentation", "sharing"],
+      "key_concepts": ["Knowledge Base", "Knowledge Article", "Known Error Database", "Article Lifecycle"],
+      "word_count": 1300
+    },
+    {
+      "id": "160",
+      "path": "160_continual_improvement.md",
+      "title": "Continual Improvement Practice",
+      "topics": ["continual_improvement", "optimization", "learning"],
+      "key_concepts": ["Continual Improvement Model", "Improvement Register", "Value-Driven Improvement"],
+      "word_count": 1200
+    },
+    {
+      "id": "170",
+      "path": "170_metrics_kpis_okrs.md",
+      "title": "Metrics, KPIs, and OKRs",
+      "topics": ["metrics", "kpi", "okr", "measurement"],
+      "key_concepts": ["KPI", "OKR", "Leading Indicators", "Lagging Indicators", "Outcome Metrics"],
+      "word_count": 1500
+    },
+    {
+      "id": "180",
+      "path": "180_common_pitfalls_anti_patterns.md",
+      "title": "Common Pitfalls and Anti-Patterns",
+      "topics": ["anti_patterns", "pitfalls", "mistakes"],
+      "key_concepts": ["Checkbox Compliance", "Process Theater", "Tool-First", "Silo Optimization", "Blame Culture"],
+      "word_count": 1400
+    },
+    {
+      "id": "190",
+      "path": "190_mappings_itil_to_ops.md",
+      "title": "ITIL v4 Mappings to Operations",
+      "topics": ["devops", "sre", "cloud", "operations"],
+      "key_concepts": ["DevOps Integration", "SRE Principles", "Cloud Operations", "CI/CD", "Error Budgets"],
+      "word_count": 1800
+    }
+  ],
+  "statistics": {
+    "total_documents": 20,
+    "total_words": 32600,
+    "average_words_per_doc": 1716,
+    "topics_covered": 30,
+    "key_concepts": 75
+  },
+  "chunking_config": {
+    "max_chunk_size": 512,
+    "chunk_overlap": 64,
+    "estimated_total_chunks": 400
+  },
+  "retrieval_config": {
+    "default_top_k": 3,
+    "min_relevance_score": 0.5,
+    "index_type": "hybrid",
+    "sparse_algorithm": "BM25",
+    "dense_algorithm": "semantic_embedding"
+  }
+}

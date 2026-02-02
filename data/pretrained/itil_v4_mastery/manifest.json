@@ -1,0 +1,59 @@
+{
+  "id": "sm.pretrained.itil_v4_mastery.v1",
+  "type": "knowledge-pack",
+  "domain": "itil_v4",
+  "intended_use": ["rag", "citations", "evaluation", "bench"],
+  "language": ["en"],
+  "source": {
+    "origin": "original-authored",
+    "license": "MIT",
+    "notes": "Original ITIL v4 mastery content authored for educational purposes. Not official ITIL text. No copyrighted ITIL publications included."
+  },
+  "recommended_settings": {
+    "context_tokens": 8192,
+    "chunk_size": 512,
+    "chunk_overlap": 64,
+    "top_k": 3,
+    "min_relevance_score": 0.5,
+    "deterministic": true,
+    "temperature": 0.0
+  },
+  "rag": {
+    "enabled": true,
+    "document_count": 20,
+    "index_type": "hybrid",
+    "citation_required": true
+  },
+  "tasks": {
+    "supported": ["docqa", "structured_consult", "classification"],
+    "total_queries": 40
+  },
+  "statistics": {
+    "total_documents": 20,
+    "total_queries": 45,
+    "document_topics": [
+      "foundations",
+      "service_value_system",
+      "guiding_principles",
+      "four_dimensions",
+      "service_value_chain",
+      "practices",
+      "incident_management",
+      "problem_management",
+      "change_enablement",
+      "service_request",
+      "service_catalog",
+      "service_level_management",
+      "monitoring_events",
+      "release_management",
+      "configuration_management",
+      "knowledge_management",
+      "continual_improvement",
+      "metrics_kpis",
+      "anti_patterns"
+    ]
+  },
+  "version": "1.0.0",
+  "created": "2026-02-02",
+  "status": "stable"
+}
