@@ -1,0 +1,45 @@
+{
+  "categories": [
+    {
+      "id": "tech",
+      "name": "Technology",
+      "description": "Technology news, software, hardware, AI, cybersecurity, computing",
+      "examples": [
+        "New smartphone features groundbreaking AI capabilities",
+        "Software update brings major improvements",
+        "Cybersecurity experts warn about emerging threats"
+      ]
+    },
+    {
+      "id": "sports",
+      "name": "Sports",
+      "description": "Sports events, championships, athletes, teams, competitions",
+      "examples": [
+        "Championship team celebrates historic victory",
+        "Olympic athlete breaks world record",
+        "Star player signs record-breaking contract"
+      ]
+    },
+    {
+      "id": "politics",
+      "name": "Politics",
+      "description": "Government, elections, legislation, international relations, policy",
+      "examples": [
+        "Congress passes landmark legislation",
+        "Election results show surprising shift",
+        "International summit addresses global climate change"
+      ]
+    },
+    {
+      "id": "entertainment",
+      "name": "Entertainment",
+      "description": "Movies, music, celebrities, streaming, awards, festivals",
+      "examples": [
+        "Award-winning film breaks box office records",
+        "Popular streaming series renewed for another season",
+        "Music festival announces star-studded lineup"
+      ]
+    }
+  ],
+  "notes": "These categories are mutually exclusive and cover common news domains"
+}

@@ -1,0 +1,30 @@
+{"id": "classification_001", "task": "classification", "text": "New smartphone features groundbreaking AI capabilities and 5G connectivity.", "label": "Technology"}
+{"id": "classification_002", "task": "classification", "text": "Software update brings major improvements to user interface.", "label": "Technology"}
+{"id": "classification_003", "task": "classification", "text": "Tech giant announces revolutionary quantum computing breakthrough.", "label": "Technology"}
+{"id": "classification_004", "task": "classification", "text": "Cybersecurity experts warn about emerging threats.", "label": "Technology"}
+{"id": "classification_005", "task": "classification", "text": "Cloud computing services expand to new markets.", "label": "Technology"}
+{"id": "classification_006", "task": "classification", "text": "Championship team celebrates historic victory in overtime thriller.", "label": "Sports"}
+{"id": "classification_007", "task": "classification", "text": "Olympic athlete breaks world record in spectacular fashion.", "label": "Sports"}
+{"id": "classification_008", "task": "classification", "text": "Star player signs record-breaking contract extension.", "label": "Sports"}
+{"id": "classification_009", "task": "classification", "text": "Underdog team stages amazing comeback in finals.", "label": "Sports"}
+{"id": "classification_010", "task": "classification", "text": "Coach announces retirement after legendary career.", "label": "Sports"}
+{"id": "classification_011", "task": "classification", "text": "Congress passes landmark legislation after months of debate.", "label": "Politics"}
+{"id": "classification_012", "task": "classification", "text": "Election results show surprising shift in voter preferences.", "label": "Politics"}
+{"id": "classification_013", "task": "classification", "text": "International summit addresses global climate change.", "label": "Politics"}
+{"id": "classification_014", "task": "classification", "text": "New policy aims to reform healthcare system.", "label": "Politics"}
+{"id": "classification_015", "task": "classification", "text": "Diplomatic talks resume between neighboring countries.", "label": "Politics"}
+{"id": "classification_016", "task": "classification", "text": "Award-winning film breaks box office records worldwide.", "label": "Entertainment"}
+{"id": "classification_017", "task": "classification", "text": "Popular streaming series renewed for another season.", "label": "Entertainment"}
+{"id": "classification_018", "task": "classification", "text": "Music festival announces star-studded lineup.", "label": "Entertainment"}
+{"id": "classification_019", "task": "classification", "text": "Celebrity couple announces engagement at premiere.", "label": "Entertainment"}
+{"id": "classification_020", "task": "classification", "text": "New album debuts at number one on charts.", "label": "Entertainment"}
+{"id": "classification_021", "task": "classification", "text": "Artificial intelligence system demonstrates human-level reasoning.", "label": "Technology"}
+{"id": "classification_022", "task": "classification", "text": "Electric vehicle sales reach all-time high this quarter.", "label": "Technology"}
+{"id": "classification_023", "task": "classification", "text": "National team qualifies for world championship tournament.", "label": "Sports"}
+{"id": "classification_024", "task": "classification", "text": "Rookie sensation leads league in scoring average.", "label": "Sports"}
+{"id": "classification_025", "task": "classification", "text": "Supreme Court delivers historic ruling on key issue.", "label": "Politics"}
+{"id": "classification_026", "task": "classification", "text": "Mayor proposes ambitious infrastructure development plan.", "label": "Politics"}
+{"id": "classification_027", "task": "classification", "text": "Theater production receives standing ovation on opening night.", "label": "Entertainment"}
+{"id": "classification_028", "task": "classification", "text": "Documentary wins prestigious film festival award.", "label": "Entertainment"}
+{"id": "classification_029", "task": "classification", "text": "Startup unveils innovative solution to data privacy concerns.", "label": "Technology"}
+{"id": "classification_030", "task": "classification", "text": "Marathon runner achieves personal best at major event.", "label": "Sports"}

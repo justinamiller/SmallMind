@@ -1,0 +1,79 @@
+{
+  "index_version": "1.0",
+  "index_type": "semantic",
+  "created": "2026-02-01",
+  "documents": [
+    {
+      "id": "doc_001",
+      "path": "market-volatility.md",
+      "title": "Understanding Market Volatility",
+      "topics": ["volatility", "VIX", "risk management", "market indicators"],
+      "word_count": 350,
+      "key_concepts": [
+        "Volatility Index (VIX)",
+        "Historical vs Implied Volatility",
+        "Hedging Strategies",
+        "Diversification"
+      ]
+    },
+    {
+      "id": "doc_002",
+      "path": "stock-valuation.md",
+      "title": "Fundamentals of Stock Valuation",
+      "topics": ["valuation", "P/E ratio", "DCF", "fundamental analysis"],
+      "word_count": 450,
+      "key_concepts": [
+        "Price-to-Earnings Ratio",
+        "Discounted Cash Flow",
+        "Comparable Company Analysis",
+        "Growth vs Value Investing"
+      ]
+    },
+    {
+      "id": "doc_003",
+      "path": "interest-rates.md",
+      "title": "Understanding Interest Rates and Bond Markets",
+      "topics": ["interest rates", "bonds", "monetary policy", "yield curve"],
+      "word_count": 550,
+      "key_concepts": [
+        "Federal Funds Rate",
+        "Inverse Rate-Price Relationship",
+        "Yield Curve",
+        "Duration and Sensitivity"
+      ]
+    },
+    {
+      "id": "doc_004",
+      "path": "portfolio-diversification.md",
+      "title": "Portfolio Diversification Strategies",
+      "topics": ["diversification", "asset allocation", "portfolio management", "risk reduction"],
+      "word_count": 700,
+      "key_concepts": [
+        "Modern Portfolio Theory",
+        "Asset Class Diversification",
+        "Correlation and Risk",
+        "Rebalancing Strategies"
+      ]
+    },
+    {
+      "id": "doc_005",
+      "path": "risk-management.md",
+      "title": "Financial Risk Management",
+      "topics": ["risk management", "VaR", "hedging", "compliance"],
+      "word_count": 800,
+      "key_concepts": [
+        "Types of Financial Risk",
+        "Value at Risk (VaR)",
+        "Risk Mitigation Strategies",
+        "Enterprise Risk Management"
+      ]
+    }
+  ],
+  "metadata": {
+    "total_documents": 5,
+    "total_words": 2850,
+    "domain": "finance",
+    "language": "en",
+    "usage_notes": "These documents provide foundational finance knowledge for RAG-based Q&A and citation-backed generation. All content is synthetic and created for educational purposes."
+  }
+}

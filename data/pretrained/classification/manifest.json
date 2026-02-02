@@ -1,0 +1,30 @@
+{
+  "id": "sm.pretrained.classification.v1",
+  "type": "task-pack",
+  "domain": "classification",
+  "intended_use": ["classification", "evaluation", "benchmarking"],
+  "language": ["en"],
+  "source": {
+    "origin": "synthetic",
+    "license": "MIT",
+    "notes": "Redistributable starter data for topic classification pipeline validation"
+  },
+  "recommended_settings": {
+    "context_tokens": 512,
+    "deterministic": true
+  },
+  "task": {
+    "type": "text_classification",
+    "labels": ["Technology", "Sports", "Politics", "Entertainment"],
+    "description": "Topic classification for news articles and content categorization"
+  },
+  "statistics": {
+    "total_samples": 30,
+    "label_distribution": {
+      "Technology": 9,
+      "Sports": 7,
+      "Politics": 7,
+      "Entertainment": 7
+    }
+  }
+}

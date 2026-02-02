@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 
 namespace SmallMind.Runtime.PretrainedModels
 {
@@ -10,6 +11,16 @@ namespace SmallMind.Runtime.PretrainedModels
     /// </summary>
     public class LabeledSample
     {
+        /// <summary>
+        /// Unique identifier for this sample.
+        /// </summary>
+        public string Id { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Task type (e.g., sentiment, classification).
+        /// </summary>
+        public string Task { get; set; } = string.Empty;
+
         /// <summary>
         /// The label/category for this sample.
         /// </summary>
@@ -23,12 +34,13 @@ namespace SmallMind.Runtime.PretrainedModels
 
     /// <summary>
     /// Utility for loading pre-labeled datasets for training and fine-tuning.
+    /// Supports both JSONL (preferred) and legacy pipe-delimited formats.
     /// </summary>
     public static class DatasetLoader
     {
         /// <summary>
         /// Load sentiment analysis dataset from a file.
-        /// Expected format: label|text (one per line)
+        /// Supports both JSONL and legacy label|text formats.
         /// Labels should be: positive, negative, neutral
         /// </summary>
         /// <param name="filePath">Path to the dataset file</param>
@@ -40,7 +52,7 @@ namespace SmallMind.Runtime.PretrainedModels
 
         /// <summary>
         /// Load text classification dataset from a file.
-        /// Expected format: category|text (one per line)
+        /// Supports both JSONL and legacy category|text formats.
         /// </summary>
         /// <param name="filePath">Path to the dataset file</param>
         /// <param name="expectedLabels">Expected labels/categories (optional validation)</param>
@@ -51,12 +63,127 @@ namespace SmallMind.Runtime.PretrainedModels
         }
 
         /// <summary>
-        /// Load labeled data from a file with format: label|text
+        /// Load labeled data from a JSONL file.
+        /// Each line must be a JSON object with: id, task, text, label
+        /// </summary>
+        /// <param name="filePath">Path to the JSONL file</param>
+        /// <param name="expectedLabels">Expected labels for validation (optional)</param>
+        /// <returns>List of labeled samples</returns>
+        public static List<LabeledSample> LoadFromJsonl(string filePath, string[]? expectedLabels = null)
+        {
+            if (!File.Exists(filePath))
+            {
+                throw new FileNotFoundException($"Dataset file not found: {filePath}");
+            }
+
+            var samples = new List<LabeledSample>();
+            var expectedLabelSet = expectedLabels != null
+                ? new HashSet<string>(expectedLabels, StringComparer.OrdinalIgnoreCase)
+                : null;
+
+            using var reader = new StreamReader(filePath);
+            string? line;
+            int lineNumber = 0;
+
+            while ((line = reader.ReadLine()) != null)
+            {
+                lineNumber++;
+
+                // Skip empty lines
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var options = new JsonSerializerOptions 
+                    { 
+                        PropertyNameCaseInsensitive = true 
+                    };
+                    var sample = JsonSerializer.Deserialize<LabeledSample>(line, options);
+                    if (sample == null)
+                    {
+                        Console.WriteLine($"Warning: Failed to deserialize line {lineNumber}");
+                        continue;
+                    }
+
+                    // Validate label if expected labels provided
+                    if (expectedLabelSet != null && !string.IsNullOrWhiteSpace(sample.Label) 
+                        && !expectedLabelSet.Contains(sample.Label))
+                    {
+                        Console.WriteLine($"Warning: Unexpected label '{sample.Label}' at line {lineNumber}. Expected one of: {string.Join(", ", expectedLabels!)}");
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(sample.Text))
+                    {
+                        Console.WriteLine($"Warning: Empty text at line {lineNumber}");
+                        continue;
+                    }
+
+                    samples.Add(sample);
+                }
+                catch (JsonException ex)
+                {
+                    Console.WriteLine($"Warning: JSON parse error at line {lineNumber}: {ex.Message}");
+                    continue;
+                }
+            }
+
+            return samples;
+        }
+
+        /// <summary>
+        /// Load labeled data from a file. Auto-detects format (JSONL or legacy pipe-delimited).
+        /// Legacy format: label|text (one per line)
+        /// JSONL format: {"id":"...", "task":"...", "text":"...", "label":"..."}
         /// </summary>
         /// <param name="filePath">Path to the dataset file</param>
         /// <param name="expectedLabels">Expected labels for validation (optional)</param>
         /// <returns>List of labeled samples</returns>
         public static List<LabeledSample> LoadLabeledData(string filePath, string[]? expectedLabels = null)
+        {
+            if (!File.Exists(filePath))
+            {
+                throw new FileNotFoundException($"Dataset file not found: {filePath}");
+            }
+
+            // Auto-detect format by checking file extension or first line
+            if (filePath.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase))
+            {
+                return LoadFromJsonl(filePath, expectedLabels);
+            }
+
+            // Check first non-empty line to detect format
+            using (var reader = new StreamReader(filePath))
+            {
+                string? line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    line = line.Trim();
+                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
+                        continue;
+
+                    // Check if it's JSON
+                    if (line.StartsWith("{"))
+                    {
+                        return LoadFromJsonl(filePath, expectedLabels);
+                    }
+                    
+                    // Otherwise assume legacy pipe-delimited format
+                    break;
+                }
+            }
+
+            // Load as legacy pipe-delimited format
+            return LoadLegacyFormat(filePath, expectedLabels);
+        }
+
+        /// <summary>
+        /// Load labeled data from legacy pipe-delimited format: label|text
+        /// </summary>
+        private static List<LabeledSample> LoadLegacyFormat(string filePath, string[]? expectedLabels = null)
         {
             if (!File.Exists(filePath))
             {

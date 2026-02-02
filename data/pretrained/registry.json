@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "description": "Registry of production-grade pretrained data packs for SmallMind",
+  "packs": [
+    {
+      "id": "sm.pretrained.sentiment.v1",
+      "name": "General Sentiment Analysis",
+      "path": "sentiment",
+      "type": "task-pack",
+      "domain": "sentiment",
+      "tasks": ["sentiment_analysis", "evaluation"],
+      "rag_enabled": false,
+      "status": "stable"
+    },
+    {
+      "id": "sm.pretrained.classification.v1",
+      "name": "Topic Classification",
+      "path": "classification",
+      "type": "task-pack",
+      "domain": "classification",
+      "tasks": ["text_classification", "evaluation"],
+      "rag_enabled": false,
+      "status": "stable"
+    },
+    {
+      "id": "sm.pretrained.finance.v1",
+      "name": "Finance Sentiment & RAG",
+      "path": "finance",
+      "type": "task-pack",
+      "domain": "finance",
+      "tasks": ["sentiment_analysis", "rag", "evaluation"],
+      "rag_enabled": true,
+      "status": "stable"
+    }
+  ],
+  "metadata": {
+    "total_packs": 3,
+    "last_updated": "2026-02-01",
+    "schema_version": "1.0"
+  }
+}
