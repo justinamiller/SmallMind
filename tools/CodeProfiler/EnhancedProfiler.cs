@@ -186,10 +186,11 @@ namespace CodeProfiler
         {
             var a = new Tensor(new[] { size });
             var b = new Tensor(new[] { size });
+            var random = new Random(42);
             for (int i = 0; i < size; i++)
             {
-                a.Data[i] = (float)new Random(42).NextDouble();
-                b.Data[i] = (float)new Random(43).NextDouble();
+                a.Data[i] = (float)random.NextDouble();
+                b.Data[i] = (float)random.NextDouble();
             }
 
             using (profiler.BeginScope($"TensorAdd_{size}"))
@@ -208,10 +209,11 @@ namespace CodeProfiler
         {
             var a = new Tensor(new[] { size });
             var b = new Tensor(new[] { size });
+            var random = new Random(42);
             for (int i = 0; i < size; i++)
             {
-                a.Data[i] = (float)new Random(42).NextDouble();
-                b.Data[i] = (float)new Random(43).NextDouble();
+                a.Data[i] = (float)random.NextDouble();
+                b.Data[i] = (float)random.NextDouble();
             }
 
             using (profiler.BeginScope($"TensorMul_{size}"))
