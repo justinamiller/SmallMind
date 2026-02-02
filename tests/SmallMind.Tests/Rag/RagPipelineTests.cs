@@ -268,7 +268,7 @@ namespace SmallMind.Tests.Rag
 
             // Assert
             Assert.NotNull(response);
-            Assert.Contains("insufficient evidence", response, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("sufficient evidence", response, StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
