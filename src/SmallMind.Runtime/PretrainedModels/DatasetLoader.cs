@@ -97,7 +97,11 @@ namespace SmallMind.Runtime.PretrainedModels
 
                 try
                 {
-                    var sample = JsonSerializer.Deserialize<LabeledSample>(line);
+                    var options = new JsonSerializerOptions 
+                    { 
+                        PropertyNameCaseInsensitive = true 
+                    };
+                    var sample = JsonSerializer.Deserialize<LabeledSample>(line, options);
                     if (sample == null)
                     {
                         Console.WriteLine($"Warning: Failed to deserialize line {lineNumber}");
