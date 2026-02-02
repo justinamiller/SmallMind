@@ -13,7 +13,7 @@ public sealed class BenchmarkConfig
     public int MaxNewTokens { get; set; } = 256;
     public string PromptProfile { get; set; } = "short";
     public uint Seed { get; set; } = 42;
-    public double Temperature { get; set; } = 0.0;
+    public double Temperature { get; set; } = 1.0;
     public int TopK { get; set; } = 1;
     public double TopP { get; set; } = 1.0;
     public int Threads { get; set; } = 0; // 0 = auto
@@ -198,7 +198,7 @@ Options:
   --prompt-profile <name>     Prompt profile (default: short)
                               Options: short, med, long
   --seed <n>                  Random seed (default: 42)
-  --temperature <float>       Temperature (default: 0.0)
+  --temperature <float>       Temperature (default: 1.0)
   --topk <n>                  Top-K sampling (default: 1)
   --topp <float>              Top-P sampling (default: 1.0)
   --threads <n>               Thread count (default: auto)
