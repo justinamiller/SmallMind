@@ -1,0 +1,79 @@
+name: Release to NuGet
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for GitVersion
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+    
+    - name: Run Tests
+      run: dotnet test --configuration Release --no-build --verbosity normal
+    
+    - name: Pack NuGet Packages
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION="${{ github.event.release.tag_name }}"
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+        fi
+        
+        echo "Packing version: $VERSION"
+        
+        # Pack all library projects
+        dotnet pack src/SmallMind/SmallMind.csproj --configuration Release --no-build --output ./nupkg -p:PackageVersion=$VERSION
+        dotnet pack src/SmallMind.Core/SmallMind.Core.csproj --configuration Release --no-build --output ./nupkg -p:PackageVersion=$VERSION
+        dotnet pack src/SmallMind.Transformers/SmallMind.Transformers.csproj --configuration Release --no-build --output ./nupkg -p:PackageVersion=$VERSION
+        dotnet pack src/SmallMind.Tokenizers/SmallMind.Tokenizers.csproj --configuration Release --no-build --output ./nupkg -p:PackageVersion=$VERSION
+        dotnet pack src/SmallMind.Runtime/SmallMind.Runtime.csproj --configuration Release --no-build --output ./nupkg -p:PackageVersion=$VERSION
+        dotnet pack src/SmallMind.Rag/SmallMind.Rag.csproj --configuration Release --no-build --output ./nupkg -p:PackageVersion=$VERSION
+        dotnet pack src/SmallMind.Quantization/SmallMind.Quantization.csproj --configuration Release --no-build --output ./nupkg -p:PackageVersion=$VERSION
+        
+        # List generated packages
+        ls -lh ./nupkg/
+    
+    - name: Push to NuGet
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: |
+        if [ -z "$NUGET_API_KEY" ]; then
+          echo "::warning::NUGET_API_KEY secret is not set. Skipping NuGet push."
+          echo "To enable automatic publishing, add your NuGet API key as a repository secret named NUGET_API_KEY"
+        else
+          dotnet nuget push ./nupkg/*.nupkg \
+            --api-key $NUGET_API_KEY \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+        fi
+    
+    - name: Upload NuGet Packages as Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuget-packages
+        path: ./nupkg/*.nupkg
+        retention-days: 90
