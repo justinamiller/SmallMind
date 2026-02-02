@@ -14,7 +14,7 @@ namespace SmallMind.Simd
     {
         /// <summary>
         /// ReLU activation: result[i] = max(0, input[i])
-        /// Uses SIMD Vector.Max for optimal performance.
+        /// Uses AVX2 for optimal performance when available.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ReLU(ReadOnlySpan<float> input, Span<float> output)
@@ -22,6 +22,68 @@ namespace SmallMind.Simd
             if (input.Length != output.Length)
                 throw new ArgumentException("Input and output spans must have the same length");
 
+            int length = input.Length;
+
+            // Use AVX2 for best performance
+            if (Avx.IsSupported && length >= 8)
+            {
+                ReLUAvx(input, output);
+            }
+            else
+            {
+                ReLUVector(input, output);
+            }
+        }
+
+        /// <summary>
+        /// AVX2 ReLU implementation - processes 8 floats at a time.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void ReLUAvx(ReadOnlySpan<float> input, Span<float> output)
+        {
+            int length = input.Length;
+            const int vecSize = 8;
+            int i = 0;
+
+            Vector256<float> zero = Vector256<float>.Zero;
+
+            fixed (float* pInput = input, pOutput = output)
+            {
+                // Process 4 vectors at a time for better throughput
+                for (; i <= length - vecSize * 4; i += vecSize * 4)
+                {
+                    var v1 = Avx.LoadVector256(pInput + i);
+                    var v2 = Avx.LoadVector256(pInput + i + vecSize);
+                    var v3 = Avx.LoadVector256(pInput + i + vecSize * 2);
+                    var v4 = Avx.LoadVector256(pInput + i + vecSize * 3);
+
+                    Avx.Store(pOutput + i, Avx.Max(v1, zero));
+                    Avx.Store(pOutput + i + vecSize, Avx.Max(v2, zero));
+                    Avx.Store(pOutput + i + vecSize * 2, Avx.Max(v3, zero));
+                    Avx.Store(pOutput + i + vecSize * 3, Avx.Max(v4, zero));
+                }
+
+                // Process remaining full vectors
+                for (; i <= length - vecSize; i += vecSize)
+                {
+                    var v = Avx.LoadVector256(pInput + i);
+                    Avx.Store(pOutput + i, Avx.Max(v, zero));
+                }
+
+                // Scalar remainder
+                for (; i < length; i++)
+                {
+                    pOutput[i] = MathF.Max(0, pInput[i]);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Vector&lt;T&gt; fallback ReLU implementation.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ReLUVector(ReadOnlySpan<float> input, Span<float> output)
+        {
             int length = input.Length;
             int vectorSize = Vector<float>.Count;
             int i = 0;
@@ -95,6 +157,8 @@ namespace SmallMind.Simd
             // This is faster than the tanh-based formula and very close for most inputs
             const float scale = 1.702f;
 
+            // Simple scalar loop - exp doesn't have good SIMD intrinsic
+            // so attempting vectorization doesn't help
             for (int i = 0; i < length; i++)
             {
                 float x = input[i];
@@ -110,8 +174,13 @@ namespace SmallMind.Simd
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float FastSigmoid(float x)
         {
-            // Clamp to avoid overflow in exp
+            // Clamp to avoid overflow
             x = Math.Clamp(x, -20f, 20f);
+            
+            // Use approximation for very small/large values to avoid exp
+            if (x < -10f) return 0f;
+            if (x > 10f) return 1f;
+            
             return 1f / (1f + MathF.Exp(-x));
         }
 

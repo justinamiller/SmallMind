@@ -262,7 +262,7 @@ namespace SmallMind.Simd
 
         /// <summary>
         /// Dot product: sum(a[i] * b[i])
-        /// Uses SIMD for acceleration.
+        /// Uses SIMD for acceleration with AVX2/FMA when available.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float DotProduct(ReadOnlySpan<float> a, ReadOnlySpan<float> b)
@@ -270,6 +270,164 @@ namespace SmallMind.Simd
             if (a.Length != b.Length)
                 throw new ArgumentException("Vectors must have the same length");
 
+            int length = a.Length;
+
+            // Use AVX2 + FMA for best performance
+            if (Avx2.IsSupported && Fma.IsSupported && length >= 8)
+            {
+                return DotProductAvx2(a, b);
+            }
+            else if (Avx.IsSupported && length >= 8)
+            {
+                return DotProductAvx(a, b);
+            }
+            else
+            {
+                return DotProductVector(a, b);
+            }
+        }
+
+        /// <summary>
+        /// AVX2 + FMA dot product implementation with optimized horizontal sum.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe float DotProductAvx2(ReadOnlySpan<float> a, ReadOnlySpan<float> b)
+        {
+            int length = a.Length;
+            const int vecSize = 8;
+            int i = 0;
+
+            Vector256<float> sum1 = Vector256<float>.Zero;
+            Vector256<float> sum2 = Vector256<float>.Zero;
+            Vector256<float> sum3 = Vector256<float>.Zero;
+            Vector256<float> sum4 = Vector256<float>.Zero;
+
+            fixed (float* pA = a, pB = b)
+            {
+                // Process 4 vectors at a time for better ILP (instruction-level parallelism)
+                for (; i <= length - vecSize * 4; i += vecSize * 4)
+                {
+                    var va1 = Avx.LoadVector256(pA + i);
+                    var vb1 = Avx.LoadVector256(pB + i);
+                    sum1 = Fma.MultiplyAdd(va1, vb1, sum1);
+
+                    var va2 = Avx.LoadVector256(pA + i + vecSize);
+                    var vb2 = Avx.LoadVector256(pB + i + vecSize);
+                    sum2 = Fma.MultiplyAdd(va2, vb2, sum2);
+
+                    var va3 = Avx.LoadVector256(pA + i + vecSize * 2);
+                    var vb3 = Avx.LoadVector256(pB + i + vecSize * 2);
+                    sum3 = Fma.MultiplyAdd(va3, vb3, sum3);
+
+                    var va4 = Avx.LoadVector256(pA + i + vecSize * 3);
+                    var vb4 = Avx.LoadVector256(pB + i + vecSize * 3);
+                    sum4 = Fma.MultiplyAdd(va4, vb4, sum4);
+                }
+
+                // Combine the 4 accumulators
+                sum1 = Avx.Add(sum1, sum2);
+                sum3 = Avx.Add(sum3, sum4);
+                sum1 = Avx.Add(sum1, sum3);
+
+                // Process remaining full vectors
+                for (; i <= length - vecSize; i += vecSize)
+                {
+                    var va = Avx.LoadVector256(pA + i);
+                    var vb = Avx.LoadVector256(pB + i);
+                    sum1 = Fma.MultiplyAdd(va, vb, sum1);
+                }
+
+                // Horizontal sum using AVX2
+                // sum1 = [a0, a1, a2, a3, a4, a5, a6, a7]
+                Vector128<float> low = sum1.GetLower();   // [a0, a1, a2, a3]
+                Vector128<float> high = sum1.GetUpper();  // [a4, a5, a6, a7]
+                Vector128<float> sum128 = Sse.Add(low, high); // [a0+a4, a1+a5, a2+a6, a3+a7]
+
+                // Continue horizontal sum
+                Vector128<float> shuf = Sse.Shuffle(sum128, sum128, 0b_00_01_10_11); // [a2+a6, a3+a7, a0+a4, a1+a5]
+                sum128 = Sse.Add(sum128, shuf); // [a0+a2+a4+a6, a1+a3+a5+a7, ...]
+                
+                shuf = Sse.MoveHighToLow(shuf, sum128); // [a1+a3+a5+a7, ...]
+                sum128 = Sse.Add(sum128, shuf); // [sum, ...]
+
+                float sum = sum128.ToScalar();
+
+                // Scalar remainder
+                for (; i < length; i++)
+                {
+                    sum += pA[i] * pB[i];
+                }
+
+                return sum;
+            }
+        }
+
+        /// <summary>
+        /// AVX dot product implementation (no FMA).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe float DotProductAvx(ReadOnlySpan<float> a, ReadOnlySpan<float> b)
+        {
+            int length = a.Length;
+            const int vecSize = 8;
+            int i = 0;
+
+            Vector256<float> sum1 = Vector256<float>.Zero;
+            Vector256<float> sum2 = Vector256<float>.Zero;
+
+            fixed (float* pA = a, pB = b)
+            {
+                // Process 2 vectors at a time
+                for (; i <= length - vecSize * 2; i += vecSize * 2)
+                {
+                    var va1 = Avx.LoadVector256(pA + i);
+                    var vb1 = Avx.LoadVector256(pB + i);
+                    sum1 = Avx.Add(sum1, Avx.Multiply(va1, vb1));
+
+                    var va2 = Avx.LoadVector256(pA + i + vecSize);
+                    var vb2 = Avx.LoadVector256(pB + i + vecSize);
+                    sum2 = Avx.Add(sum2, Avx.Multiply(va2, vb2));
+                }
+
+                sum1 = Avx.Add(sum1, sum2);
+
+                // Process remaining full vectors
+                for (; i <= length - vecSize; i += vecSize)
+                {
+                    var va = Avx.LoadVector256(pA + i);
+                    var vb = Avx.LoadVector256(pB + i);
+                    sum1 = Avx.Add(sum1, Avx.Multiply(va, vb));
+                }
+
+                // Horizontal sum
+                Vector128<float> low = sum1.GetLower();
+                Vector128<float> high = sum1.GetUpper();
+                Vector128<float> sum128 = Sse.Add(low, high);
+
+                Vector128<float> shuf = Sse.Shuffle(sum128, sum128, 0b_00_01_10_11);
+                sum128 = Sse.Add(sum128, shuf);
+                
+                shuf = Sse.MoveHighToLow(shuf, sum128);
+                sum128 = Sse.Add(sum128, shuf);
+
+                float sum = sum128.ToScalar();
+
+                // Scalar remainder
+                for (; i < length; i++)
+                {
+                    sum += pA[i] * pB[i];
+                }
+
+                return sum;
+            }
+        }
+
+        /// <summary>
+        /// Vector&lt;T&gt; fallback dot product implementation.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static float DotProductVector(ReadOnlySpan<float> a, ReadOnlySpan<float> b)
+        {
             int length = a.Length;
             int vectorSize = Vector<float>.Count;
             int i = 0;
