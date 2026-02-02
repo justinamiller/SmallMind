@@ -11,6 +11,11 @@ sessions/
 .vs/
 TestResults/
 
+# NuGet packages
+nupkg/
+*.nupkg
+*.snupkg
+
 # Benchmark output files
 benchmark-results.md
 benchmark-results.json
