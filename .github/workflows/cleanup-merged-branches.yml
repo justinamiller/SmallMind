@@ -1,0 +1,111 @@
+name: Cleanup Merged Branches
+
+# Runs daily at 3 AM UTC to clean up old merged branches
+on:
+  schedule:
+    # Run every day at 3:00 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # Allows manual triggering for testing
+
+# Required permissions for GITHUB_TOKEN to delete branches
+permissions:
+  contents: write  # Required to delete branches
+
+jobs:
+  cleanup-merged-branches:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Checkout the repository with full history to analyze branches
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for all branches
+          
+      # Delete merged branches older than 1 day (except main)
+      - name: Delete old merged branches
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          
+          echo "🔍 Scanning for merged branches older than 1 day..."
+          
+          # Get the current timestamp (1 day ago in seconds since epoch)
+          ONE_DAY_AGO=$(date -d '1 day ago' +%s)
+          
+          # Counter for deleted branches
+          DELETED_COUNT=0
+          SKIPPED_COUNT=0
+          
+          # Get all remote branches
+          git fetch --all --prune
+          
+          # Get list of merged branches (excluding main)
+          MERGED_BRANCHES=$(git branch -r --merged origin/main | \
+                           grep -v "origin/main" | \
+                           grep -v "origin/HEAD" | \
+                           sed 's/origin\///' | \
+                           sed 's/^[[:space:]]*//')
+          
+          # Process each merged branch
+          for BRANCH in $MERGED_BRANCHES; do
+            # Skip if branch is empty or contains wildcards
+            if [ -z "$BRANCH" ]; then
+              continue
+            fi
+            
+            # Double-check we're not trying to delete main
+            if [ "$BRANCH" = "main" ]; then
+              echo "⚠️  Skipping protected branch: $BRANCH"
+              SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+              continue
+            fi
+            
+            # Get the last commit date of the branch
+            LAST_COMMIT_DATE=$(git log -1 --format=%ct origin/$BRANCH 2>/dev/null || echo "0")
+            
+            # Check if branch is older than 1 day
+            if [ "$LAST_COMMIT_DATE" -lt "$ONE_DAY_AGO" ]; then
+              echo "🗑️  Deleting branch: $BRANCH (last commit: $(date -d @$LAST_COMMIT_DATE '+%Y-%m-%d %H:%M:%S'))"
+              
+              # Delete the remote branch using GitHub API for better error handling
+              curl -X DELETE \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/${{ github.repository }}/git/refs/heads/$BRANCH" \
+                -w "HTTP Status: %{http_code}\n" \
+                -o /tmp/delete-response.json
+              
+              # Check if deletion was successful
+              if [ $? -eq 0 ]; then
+                DELETED_COUNT=$((DELETED_COUNT + 1))
+                echo "✅ Successfully deleted branch: $BRANCH"
+              else
+                echo "❌ Failed to delete branch: $BRANCH"
+                cat /tmp/delete-response.json
+              fi
+            else
+              echo "⏭️  Skipping branch (too recent): $BRANCH (last commit: $(date -d @$LAST_COMMIT_DATE '+%Y-%m-%d %H:%M:%S'))"
+              SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+            fi
+          done
+          
+          # Summary
+          echo ""
+          echo "📊 Summary:"
+          echo "  - Deleted: $DELETED_COUNT branches"
+          echo "  - Skipped: $SKIPPED_COUNT branches"
+          echo "✅ Branch cleanup completed successfully!"
+      
+      # Create a summary of the cleanup operation
+      - name: Create job summary
+        if: always()
+        run: |
+          echo "## 🧹 Branch Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow Run:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This workflow automatically deletes merged branches that are older than 1 day." >> $GITHUB_STEP_SUMMARY
+          echo "The \`main\` branch is always protected and will never be deleted." >> $GITHUB_STEP_SUMMARY
