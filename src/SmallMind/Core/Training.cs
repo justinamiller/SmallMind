@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -205,15 +207,13 @@ namespace SmallMind.Core
                 // Scale gradients if using gradient accumulation
                 if (gradAccumSteps > 1)
                 {
+                    float scale = 1.0f / gradAccumSteps;
                     for (int p = 0; p < _model.Parameters.Count; p++)
                     {
                         var param = _model.Parameters[p];
                         if (param.Grad != null)
                         {
-                            for (int i = 0; i < param.Grad.Length; i++)
-                            {
-                                param.Grad[i] /= gradAccumSteps;
-                            }
+                            ScaleGradients(param.Grad, scale);
                         }
                     }
                 }
@@ -285,6 +285,30 @@ namespace SmallMind.Core
                 Console.WriteLine($"Total tokens processed: {totalTokens:N0}");
                 Console.WriteLine($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
                 Console.WriteLine($"Best validation loss: {bestValLoss:F4}");
+            }
+        }
+
+        /// <summary>
+        /// SIMD-optimized gradient scaling for gradient accumulation
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ScaleGradients(float[] gradients, float scale)
+        {
+            int vectorSize = Vector<float>.Count;
+            int i = 0;
+            var vScale = new Vector<float>(scale);
+            
+            // SIMD vectorized loop
+            for (; i <= gradients.Length - vectorSize; i += vectorSize)
+            {
+                var vGrad = new Vector<float>(gradients, i);
+                (vGrad * vScale).CopyTo(gradients, i);
+            }
+            
+            // Scalar remainder
+            for (; i < gradients.Length; i++)
+            {
+                gradients[i] *= scale;
             }
         }
 
