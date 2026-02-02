@@ -301,12 +301,12 @@ See [stability-and-compatibility.md](stability-and-compatibility.md) for API ver
 
 For production deployments, test on:
 - **Primary platform** (e.g., Linux x64)
-- **Primary .NET version** (e.g., .NET 8.0)
+- **Primary .NET version** (e.g., .NET 10.0)
 - **Representative models** (your production models)
 
 **Optional testing:**
 - Secondary platforms (Windows, macOS, ARM64)
-- Multiple .NET versions (8.0, 9.0, 10.0)
+- Multiple .NET versions (9.0, 10.0)
 - Edge cases (max context, large batches, long sessions)
 
 ### Validation Checklist

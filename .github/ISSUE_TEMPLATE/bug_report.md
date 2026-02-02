@@ -23,7 +23,7 @@ A clear and concise description of what actually happened.
 
 ## Environment
 - **OS:** [e.g., Windows 11, Ubuntu 22.04, macOS 14]
-- **.NET Version:** [e.g., .NET 8.0.100, .NET 10.0.102]
+- **.NET Version:** [e.g., .NET 10.0.100, .NET 10.0.102]
 - **SmallMind Version:** [e.g., 1.0.0]
 - **Architecture:** [e.g., x64, ARM64]
 

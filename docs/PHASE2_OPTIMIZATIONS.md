@@ -311,7 +311,7 @@ training.TrainOptimized(
 - If frequent, reduce learning rate
 
 **Slow Training with FP16:**
-- Ensure .NET 8 is being used
+- Ensure .NET 10 is being used
 - Check CPU supports AVX/AVX2
 - Profile to see if conversion overhead is high
 

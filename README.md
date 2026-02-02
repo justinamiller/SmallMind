@@ -2,9 +2,9 @@
 
 [![Build and Test](https://github.com/justinamiller/SmallMind/actions/workflows/build.yml/badge.svg)](https://github.com/justinamiller/SmallMind/actions/workflows/build.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![.NET Version](https://img.shields.io/badge/.NET-8.0%2B-512BD4)](https://dotnet.microsoft.com/download)
+[![.NET Version](https://img.shields.io/badge/.NET-10.0%2B-512BD4)](https://dotnet.microsoft.com/download)
 
-SmallMind is a **production-ready, open source, local, CPU-first LLM inference runtime** built entirely in C# (.NET 8+) with **NO 3rd party dependencies**. It provides a stable public API for running decoder-only Transformers (GPT-style) on your infrastructure.
+SmallMind is a **production-ready, open source, local, CPU-first LLM inference runtime** built entirely in C# (.NET 10+) with **NO 3rd party dependencies**. It provides a stable public API for running decoder-only Transformers (GPT-style) on your infrastructure.
 
 ## Project Intent
 
@@ -901,7 +901,7 @@ All existing code using `Tokenizer` continues to work unchanged.
 
 ## Requirements
 
-- .NET 8 SDK
+- .NET 10 SDK
 - **No other dependencies!**
 - No GPU required (CPU-only, training will be slow)
 
@@ -1458,7 +1458,7 @@ Auto-configuration scales batch size based on block size and available memory:
 
 ```
 SmallMind/
-├── SmallMind.csproj       # .NET 8 project file (NO dependencies!)
+├── SmallMind.csproj       # .NET 10 project file (NO dependencies!)
 ├── Program.cs             # CLI entry point and argument parsing
 ├── Tokenizer.cs           # Character-level tokenization
 ├── DataLoader.cs          # Load training data from JSON, XML, CSV, text files

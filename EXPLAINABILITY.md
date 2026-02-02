@@ -239,7 +239,7 @@ On a typical generation workload (100 tokens, vocab=50k, temp=1.0):
 | Standard (top-5 + entropy) | ~12% | 88 |
 | Detailed (top-10 + entropy) | ~18% | 82 |
 
-*Results from internal benchmarks on .NET 8, Release build, typical CPU.*
+*Results from internal benchmarks on .NET 10, Release build, typical CPU.*
 
 ---
 
