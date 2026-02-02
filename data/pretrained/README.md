@@ -26,6 +26,26 @@ This directory contains **production-ready, redistributable pretrained data pack
 
 ## Available Packs
 
+### 📦 ITIL v4 Mastery Pack (`itil_v4_mastery/`) — **Flagship Real-World Use Case**
+- **ID**: `sm.pretrained.itil_v4_mastery.v1`
+- **Type**: Knowledge Pack
+- **Tasks**: RAG-based Q&A + Structured Consulting
+- **Domain**: IT Service Management (ITIL v4)
+- **Content**: 19 original documents, 45 queries
+- **Use Cases**: Citation-backed knowledge retrieval, structured consulting guidance, ITSM reference, evaluation benchmarking
+
+**Key Features**:
+- ✨ **Production-quality knowledge base** for ITIL v4 best practices
+- ✨ **Citation requirements** - all answers must reference corpus documents
+- ✨ **Structured JSON output** - consulting recommendations with workflows, KPIs, risks
+- ✨ **45 real-world queries** spanning foundational, scenario-based, operational, and governance questions
+- ✨ **Comprehensive evaluation harness** with automated scoring
+- ✨ **Original content** (MIT licensed, no copyrighted ITIL text)
+
+This pack demonstrates SmallMind's **full RAG capabilities** on realistic, non-toy content designed for actual IT professional use. It's the most comprehensive pack showcasing RAG, citations, structured output, and deterministic execution.
+
+[➡️ See itil_v4_mastery/README.md](itil_v4_mastery/README.md)
+
 ### 📦 Sentiment Analysis (`sentiment/`)
 - **ID**: `sm.pretrained.sentiment.v1`
 - **Task**: 3-class sentiment (positive, negative, neutral)
@@ -91,6 +111,7 @@ The `registry.json` file lists all available packs:
 ```json
 {
   "packs": [
+    {"id": "sm.pretrained.itil_v4_mastery.v1", "path": "itil_v4_mastery"},
     {"id": "sm.pretrained.sentiment.v1", "path": "sentiment"},
     {"id": "sm.pretrained.classification.v1", "path": "classification"},
     {"id": "sm.pretrained.finance.v1", "path": "finance"}

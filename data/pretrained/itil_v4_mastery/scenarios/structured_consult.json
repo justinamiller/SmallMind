@@ -1,0 +1,96 @@
+{
+  "scenario_id": "structured_consult",
+  "name": "ITIL Structured Consulting",
+  "description": "Provide structured consulting guidance in JSON format with citations",
+  "task_type": "rag",
+  "settings": {
+    "retrieval": {
+      "top_k": 5,
+      "min_relevance_score": 0.4,
+      "rerank": true
+    },
+    "generation": {
+      "temperature": 0.0,
+      "max_tokens": 2048,
+      "deterministic": true
+    },
+    "citation": {
+      "required": true,
+      "min_citations": 2,
+      "format": "json_field"
+    }
+  },
+  "system_prompt": "You are an ITIL v4 consultant providing actionable recommendations. Based on the question and retrieved documents, respond ONLY with valid JSON following this exact schema:\n\n{\n  \"summary\": \"Executive summary (2-3 sentences)\",\n  \"recommended_practices\": [\"Practice 1\", \"Practice 2\"],\n  \"workflow\": [\n    {\n      \"step\": \"Step name\",\n      \"owner\": \"Role responsible\",\n      \"inputs\": [\"Input 1\"],\n      \"outputs\": [\"Output 1\"]\n    }\n  ],\n  \"kpis\": [\n    {\n      \"name\": \"KPI name\",\n      \"definition\": \"What it measures\",\n      \"target\": \"Target value\",\n      \"cadence\": \"Measurement frequency\"\n    }\n  ],\n  \"risks_and_pitfalls\": [\"Risk 1\", \"Risk 2\"],\n  \"next_actions_30_days\": [\"Action 1\", \"Action 2\"],\n  \"citations\": [\n    {\n      \"doc_id\": \"document_name.md\",\n      \"why\": \"Reason this document supports recommendation\"\n    }\n  ]\n}\n\nProvide specific, actionable recommendations based on ITIL v4 best practices from the corpus. All advice must be grounded in the retrieved documents.",
+  "output_format": "json",
+  "output_schema": {
+    "type": "object",
+    "required": ["summary", "recommended_practices", "workflow", "kpis", "risks_and_pitfalls", "next_actions_30_days", "citations"],
+    "properties": {
+      "summary": {
+        "type": "string",
+        "minLength": 50
+      },
+      "recommended_practices": {
+        "type": "array",
+        "minItems": 1,
+        "items": {"type": "string"}
+      },
+      "workflow": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["step", "owner", "inputs", "outputs"],
+          "properties": {
+            "step": {"type": "string"},
+            "owner": {"type": "string"},
+            "inputs": {"type": "array", "items": {"type": "string"}},
+            "outputs": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      },
+      "kpis": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["name", "definition", "target", "cadence"],
+          "properties": {
+            "name": {"type": "string"},
+            "definition": {"type": "string"},
+            "target": {"type": "string"},
+            "cadence": {"type": "string"}
+          }
+        }
+      },
+      "risks_and_pitfalls": {
+        "type": "array",
+        "minItems": 1,
+        "items": {"type": "string"}
+      },
+      "next_actions_30_days": {
+        "type": "array",
+        "minItems": 1,
+        "items": {"type": "string"}
+      },
+      "citations": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["doc_id", "why"],
+          "properties": {
+            "doc_id": {"type": "string"},
+            "why": {"type": "string"}
+          }
+        }
+      }
+    }
+  },
+  "evaluation": {
+    "check_json_schema": true,
+    "check_citations": true,
+    "check_field_completeness": true,
+    "min_quality_score": 70
+  }
+}
