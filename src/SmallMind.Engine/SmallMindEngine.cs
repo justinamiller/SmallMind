@@ -386,6 +386,22 @@ namespace SmallMind.Engine
         {
             if (metadata != null && metadata.TryGetValue(key, out var value))
             {
+                // Handle JsonElement from deserialized SMQ metadata
+                if (value is System.Text.Json.JsonElement jsonElement)
+                {
+                    if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return jsonElement.GetInt32();
+                    }
+                    else if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        if (int.TryParse(jsonElement.GetString(), out int parsed))
+                        {
+                            return parsed;
+                        }
+                    }
+                }
+                
                 return Convert.ToInt32(value);
             }
             return defaultValue;

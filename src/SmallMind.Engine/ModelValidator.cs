@@ -100,7 +100,7 @@ internal static class ModelValidator
         // Validate vocab size
         if (metadata.TryGetValue("vocab_size", out var vocabObj))
         {
-            var vocabSize = Convert.ToInt32(vocabObj);
+            var vocabSize = GetMetadataInt(metadata, "vocab_size", 0);
             if (vocabSize <= 0 || vocabSize > MaxVocabSize)
             {
                 throw new UnsupportedModelException(
@@ -114,7 +114,7 @@ internal static class ModelValidator
         // Validate context length (block_size)
         if (metadata.TryGetValue("block_size", out var blockSizeObj))
         {
-            var blockSize = Convert.ToInt32(blockSizeObj);
+            var blockSize = GetMetadataInt(metadata, "block_size", 0);
             if (blockSize <= 0 || blockSize > MaxBlockSize)
             {
                 throw new UnsupportedModelException(
@@ -128,7 +128,7 @@ internal static class ModelValidator
         // Validate embedding dimension
         if (metadata.TryGetValue("embed_dim", out var embedDimObj))
         {
-            var embedDim = Convert.ToInt32(embedDimObj);
+            var embedDim = GetMetadataInt(metadata, "embed_dim", 0);
             if (embedDim <= 0 || embedDim > MaxEmbedDim)
             {
                 throw new UnsupportedModelException(
@@ -142,7 +142,7 @@ internal static class ModelValidator
         // Validate number of layers
         if (metadata.TryGetValue("num_layers", out var numLayersObj))
         {
-            var numLayers = Convert.ToInt32(numLayersObj);
+            var numLayers = GetMetadataInt(metadata, "num_layers", 0);
             if (numLayers <= 0 || numLayers > MaxNumLayers)
             {
                 throw new UnsupportedModelException(
@@ -156,7 +156,7 @@ internal static class ModelValidator
         // Validate number of attention heads
         if (metadata.TryGetValue("num_heads", out var numHeadsObj))
         {
-            var numHeads = Convert.ToInt32(numHeadsObj);
+            var numHeads = GetMetadataInt(metadata, "num_heads", 0);
             if (numHeads <= 0 || numHeads > MaxNumHeads)
             {
                 throw new UnsupportedModelException(
@@ -169,7 +169,7 @@ internal static class ModelValidator
             // Validate that embed_dim is divisible by num_heads
             if (metadata.TryGetValue("embed_dim", out var embedDimObj2))
             {
-                var embedDim = Convert.ToInt32(embedDimObj2);
+                var embedDim = GetMetadataInt(metadata, "embed_dim", 0);
                 if (embedDim % numHeads != 0)
                 {
                     throw new UnsupportedModelException(
@@ -284,6 +284,22 @@ internal static class ModelValidator
     {
         if (metadata.TryGetValue(key, out var value))
         {
+            // Handle JsonElement from deserialized SMQ metadata
+            if (value is System.Text.Json.JsonElement jsonElement)
+            {
+                if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.Number)
+                {
+                    return jsonElement.GetInt32();
+                }
+                else if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    if (int.TryParse(jsonElement.GetString(), out int parsed))
+                    {
+                        return parsed;
+                    }
+                }
+            }
+            
             return Convert.ToInt32(value);
         }
         return defaultValue;

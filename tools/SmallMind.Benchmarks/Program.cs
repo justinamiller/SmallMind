@@ -83,6 +83,7 @@ static async Task RunBenchmarksAsync(BenchmarkConfig config)
     catch (Exception ex)
     {
         Console.WriteLine($"Failed to load model: {ex.Message}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
         return;
     }
     
