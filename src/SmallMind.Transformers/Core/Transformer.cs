@@ -401,18 +401,27 @@ namespace SmallMind.Transformers
             
             var extracted = new Tensor(new int[] { B, _nHead, T, _headSize }, requiresGrad: true);
             
+            // Optimized version: process by head chunks to improve cache locality
+            // Each head processes contiguous memory blocks
+            int embdOffset = index * _nEmbd;  // Offset for Q (0), K (_nEmbd), or V (2*_nEmbd)
+            
             for (int b = 0; b < B; b++)
             {
-                for (int t = 0; t < T; t++)
+                int batchInOffset = b * T * 3 * _nEmbd;
+                int batchOutOffset = b * _nHead * T * _headSize;
+                
+                for (int h = 0; h < _nHead; h++)
                 {
-                    for (int h = 0; h < _nHead; h++)
+                    int headInOffset = embdOffset + h * _headSize;
+                    int headOutOffset = batchOutOffset + h * T * _headSize;
+                    
+                    for (int t = 0; t < T; t++)
                     {
-                        for (int d = 0; d < _headSize; d++)
-                        {
-                            int qkvIdx = (b * T + t) * (3 * _nEmbd) + index * _nEmbd + h * _headSize + d;
-                            int outIdx = ((b * _nHead + h) * T + t) * _headSize + d;
-                            extracted.Data[outIdx] = qkv.Data[qkvIdx];
-                        }
+                        int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
+                        int dstIdx = headOutOffset + t * _headSize;
+                        
+                        // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
+                        Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
                     }
                 }
             }
@@ -518,30 +527,32 @@ namespace SmallMind.Transformers
                     {
                         int offset = ((b * _nHead + h) * T + i) * T;
                         
-                        // Find max for numerical stability
+                        // Find max for numerical stability (only over valid positions: j <= i for causal mask)
                         float max = float.NegativeInfinity;
-                        for (int j = 0; j < T; j++)
+                        for (int j = 0; j <= i; j++)
                         {
-                            max = Math.Max(max, scores.Data[offset + j]);
+                            if (scores.Data[offset + j] > max)
+                                max = scores.Data[offset + j];
                         }
                         
-                        // Exp and sum
+                        // Exp and sum - branchless for valid positions
                         float sum = 0;
-                        for (int j = 0; j < T; j++)
+                        for (int j = 0; j <= i; j++)
                         {
-                            if (scores.Data[offset + j] != float.NegativeInfinity)
-                            {
-                                result.Data[offset + j] = MathF.Exp(scores.Data[offset + j] - max);
-                                sum += result.Data[offset + j];
-                            }
+                            float exp = MathF.Exp(scores.Data[offset + j] - max);
+                            result.Data[offset + j] = exp;
+                            sum += exp;
                         }
                         
-                        // Normalize
+                        // Clear masked positions (i+1 to T-1) - already zero from tensor init
+                        
+                        // Normalize only valid positions
                         if (sum > 0)
                         {
-                            for (int j = 0; j < T; j++)
+                            float invSum = 1.0f / sum;
+                            for (int j = 0; j <= i; j++)
                             {
-                                result.Data[offset + j] /= sum;
+                                result.Data[offset + j] *= invSum;
                             }
                         }
                     }
@@ -558,30 +569,32 @@ namespace SmallMind.Transformers
                         {
                             int offset = ((b * _nHead + h) * T + i) * T;
                             
-                            // Find max for numerical stability
+                            // Find max for numerical stability (only over valid positions: j <= i for causal mask)
                             float max = float.NegativeInfinity;
-                            for (int j = 0; j < T; j++)
+                            for (int j = 0; j <= i; j++)
                             {
-                                max = Math.Max(max, scores.Data[offset + j]);
+                                if (scores.Data[offset + j] > max)
+                                    max = scores.Data[offset + j];
                             }
                             
-                            // Exp and sum
+                            // Exp and sum - branchless for valid positions
                             float sum = 0;
-                            for (int j = 0; j < T; j++)
+                            for (int j = 0; j <= i; j++)
                             {
-                                if (scores.Data[offset + j] != float.NegativeInfinity)
-                                {
-                                    result.Data[offset + j] = MathF.Exp(scores.Data[offset + j] - max);
-                                    sum += result.Data[offset + j];
-                                }
+                                float exp = MathF.Exp(scores.Data[offset + j] - max);
+                                result.Data[offset + j] = exp;
+                                sum += exp;
                             }
                             
-                            // Normalize
+                            // Clear masked positions (i+1 to T-1) - already zero from tensor init
+                            
+                            // Normalize only valid positions
                             if (sum > 0)
                             {
-                                for (int j = 0; j < T; j++)
+                                float invSum = 1.0f / sum;
+                                for (int j = 0; j <= i; j++)
                                 {
-                                    result.Data[offset + j] /= sum;
+                                    result.Data[offset + j] *= invSum;
                                 }
                             }
                         }
@@ -660,18 +673,23 @@ namespace SmallMind.Transformers
             // y: (B, nHead, T, headSize) -> (B, T, n_embd)
             var output = new Tensor(new int[] { B, T, _nEmbd }, requiresGrad: true);
             
+            // Optimized version: process by head chunks with Array.Copy
             for (int b = 0; b < B; b++)
             {
+                int batchInOffset = b * _nHead * T * _headSize;
+                int batchOutOffset = b * T * _nEmbd;
+                
                 for (int t = 0; t < T; t++)
                 {
+                    int timeOutOffset = batchOutOffset + t * _nEmbd;
+                    
                     for (int h = 0; h < _nHead; h++)
                     {
-                        for (int d = 0; d < _headSize; d++)
-                        {
-                            int yIdx = ((b * _nHead + h) * T + t) * _headSize + d;
-                            int outIdx = (b * T + t) * _nEmbd + h * _headSize + d;
-                            output.Data[outIdx] = y.Data[yIdx];
-                        }
+                        int srcIdx = batchInOffset + h * T * _headSize + t * _headSize;
+                        int dstIdx = timeOutOffset + h * _headSize;
+                        
+                        // Copy entire head dimension at once
+                        Array.Copy(y.Data, srcIdx, output.Data, dstIdx, _headSize);
                     }
                 }
             }
