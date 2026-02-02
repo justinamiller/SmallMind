@@ -19,3 +19,4 @@ nupkg/
 # Benchmark output files
 benchmark-results.md
 benchmark-results.json
+benchmarks/results/

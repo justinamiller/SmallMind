@@ -404,6 +404,54 @@ SmallMind uses .NET's hardware intrinsics to implement optimized kernels for:
 
 For more details, see [.github/copilot-instructions-simd.md](.github/copilot-instructions-simd.md).
 
+## Benchmarking
+
+SmallMind includes a comprehensive benchmarking harness for measuring published/observable performance metrics with no third-party dependencies.
+
+### Quick Start
+
+```bash
+# Run all benchmark scenarios
+cd tools/SmallMind.Benchmarks
+dotnet run -c Release -- --model /path/to/model.smq --scenario all
+
+# Run specific scenarios
+dotnet run -c Release -- --model model.smq --scenario ttft --iterations 50
+dotnet run -c Release -- --model model.smq --scenario concurrency --concurrency 1,2,4,8,16
+```
+
+### Measured Metrics
+
+- **TTFT (Time to First Token)**: p50/p90/p95/p99 latency to first token
+- **Tokens/Sec**: Steady-state and overall throughput with percentiles
+- **End-to-End Latency**: Complete request latency distributions
+- **Concurrency Throughput**: Requests/sec and tail latency under load
+- **Memory Footprint**: Working set, private memory, managed heap
+- **GC & Allocations**: Collection counts, allocation rates, time in GC
+- **Runtime Counters**: CPU usage, alloc rate, thread pool metrics
+
+### Output
+
+Benchmarks generate two files:
+- `report.md` - Human-readable Markdown with full environment metadata
+- `results.json` - Machine-readable JSON for CI/CD integration
+
+Example:
+```
+benchmarks/results/20260202-123045/
+  ├── report.md
+  └── results.json
+```
+
+### Features
+
+- **No dependencies**: Pure .NET 10 implementation
+- **Cold & warm start**: Measure process startup and steady-state performance
+- **Runtime counters**: Automatic capture via EventListener
+- **Reproducible**: Full environment metadata (OS, CPU, .NET version, commit hash)
+
+**See [tools/SmallMind.Benchmarks/README.md](tools/SmallMind.Benchmarks/README.md) for complete documentation.**
+
 ## Workflow-Aware Generation
 
 SmallMind supports **multi-step, deterministic, schema-safe workflows** for producing structured, machine-consumable outputs instead of free-form chat responses.
