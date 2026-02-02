@@ -14,4 +14,9 @@
     <PackageReference Include="System.Management" Version="8.0.0" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Exclude TokenizerPerf subdirectory from compilation -->
+    <Compile Remove="TokenizerPerf/**/*.cs" />
+  </ItemGroup>
+
 </Project>
