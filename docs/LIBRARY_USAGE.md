@@ -1,11 +1,11 @@
-# TinyLLM Library Structure
+# SmallMind Library Structure
 
-TinyLLM is now organized as a reusable C# library with a clean folder structure and well-defined interfaces.
+SmallMind is now organized as a reusable C# library with a clean folder structure and well-defined interfaces.
 
 ## Folder Structure
 
 ```
-TinyLLM/
+SmallMind/
 ├── Core/                    # Core neural network components
 │   ├── Tensor.cs           # Tensor operations with automatic differentiation
 │   ├── NeuralNet.cs        # Neural network layers (Linear, LayerNorm, etc.)
@@ -42,24 +42,24 @@ TinyLLM/
 └── Program.cs              # Console application demo
 ```
 
-## Using TinyLLM as a Library
+## Using SmallMind as a Library
 
 ### 1. Reference the Project
 
-Add a project reference to `TinyLLM.csproj` in your application:
+Add a project reference to `SmallMind.csproj` in your application:
 
 ```xml
-<ProjectReference Include="../TinyLLM/TinyLLM.csproj" />
+<ProjectReference Include="../SmallMind/SmallMind.csproj" />
 ```
 
 ### 2. Add Using Directives
 
 ```csharp
-using TinyLLM.Core;
-using TinyLLM.Text;
-using TinyLLM.Embeddings;
-using TinyLLM.Indexing;
-using TinyLLM.RAG;
+using SmallMind.Core;
+using SmallMind.Text;
+using SmallMind.Embeddings;
+using SmallMind.Indexing;
+using SmallMind.RAG;
 ```
 
 ### 3. Example: Basic LLM Usage
@@ -179,5 +179,5 @@ All 18 tests pass, covering:
 
 ## No External Dependencies
 
-TinyLLM is 100% pure C# with no third-party NuGet packages (except for testing).
+SmallMind is 100% pure C# with no third-party NuGet packages (except for testing).
 Everything is implemented from scratch for educational purposes.

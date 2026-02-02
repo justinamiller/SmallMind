@@ -1,7 +1,7 @@
 # Implementation Summary
 
 ## Overview
-This PR implements three major feature sets for TinyLLM: Embeddings & Vector Store, RAG (Retrieval-Augmented Generation), and LINQ Performance Optimizations, followed by a complete codebase reorganization into a library-friendly structure.
+This PR implements three major feature sets for SmallMind: Embeddings & Vector Store, RAG (Retrieval-Augmented Generation), and LINQ Performance Optimizations, followed by a complete codebase reorganization into a library-friendly structure.
 
 ## Phase 1: New Features & Performance
 
@@ -93,7 +93,7 @@ This PR implements three major feature sets for TinyLLM: Embeddings & Vector Sto
 
 ### Folder Structure
 ```
-TinyLLM/
+SmallMind/
 ├── Core/                    # Neural network (5 files)
 │   ├── Tensor.cs
 │   ├── NeuralNet.cs
@@ -123,11 +123,11 @@ TinyLLM/
 
 ### Namespace Updates
 All files updated to use hierarchical namespaces:
-- `TinyLLM.Core`
-- `TinyLLM.Embeddings`
-- `TinyLLM.Indexing`
-- `TinyLLM.RAG`
-- `TinyLLM.Text`
+- `SmallMind.Core`
+- `SmallMind.Embeddings`
+- `SmallMind.Indexing`
+- `SmallMind.RAG`
+- `SmallMind.Text`
 
 ### Interfaces Created
 **New Interfaces:**
@@ -163,11 +163,11 @@ All files moved using `git mv` to preserve history:
 
 ### Reference the Library
 ```csharp
-using TinyLLM.Core;
-using TinyLLM.Text;
-using TinyLLM.Embeddings;
-using TinyLLM.Indexing;
-using TinyLLM.RAG;
+using SmallMind.Core;
+using SmallMind.Text;
+using SmallMind.Embeddings;
+using SmallMind.Indexing;
+using SmallMind.RAG;
 ```
 
 ### Example: RAG Pipeline
@@ -223,7 +223,7 @@ var result = answerer.Answer("What is machine learning?");
 
 ## Breaking Changes
 ⚠️ **Namespace Changes:** All code using the library must update using directives to include subnamespaces:
-- Old: `using TinyLLM;`
-- New: `using TinyLLM.Core; using TinyLLM.Text;` etc.
+- Old: `using SmallMind;`
+- New: `using SmallMind.Core; using SmallMind.Text;` etc.
 
 This is a **one-time migration** required after this PR is merged.

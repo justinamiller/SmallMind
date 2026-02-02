@@ -215,7 +215,7 @@ Based on the problem statement and implementation:
 ## Testing Results
 
 ```bash
-$ dotnet test Tests/TinyLLM.Tests.csproj
+$ dotnet test Tests/SmallMind.Tests.csproj
 ...
 Passed!  - Failed: 0, Passed: 80, Skipped: 0, Total: 80
 ```

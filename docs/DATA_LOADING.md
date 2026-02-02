@@ -1,8 +1,8 @@
-# TinyLLM Data Loading Guide
+# SmallMind Data Loading Guide
 
 ## Overview
 
-TinyLLM uses **character-level tokenization** and expects training data as a single text string. This guide shows how to load data from various sources.
+SmallMind uses **character-level tokenization** and expects training data as a single text string. This guide shows how to load data from various sources.
 
 ## Basic Input Format
 
@@ -11,7 +11,7 @@ TinyLLM uses **character-level tokenization** and expects training data as a sin
 string trainingText = File.ReadAllText("data.txt");
 ```
 
-TinyLLM will:
+SmallMind will:
 1. Build a vocabulary from all unique characters in the text
 2. Convert each character to a token ID
 3. Use sliding windows to create training examples
@@ -29,7 +29,7 @@ File.WriteAllText("combined_data.txt", allText);
 
 ### Loading from Structured Formats
 
-While TinyLLM needs plain text, you can extract text from structured formats:
+While SmallMind needs plain text, you can extract text from structured formats:
 
 #### From JSON
 

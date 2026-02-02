@@ -42,7 +42,7 @@ This document analyzes the open pull requests and explains their merge status.
 PR #2 and the current `main` branch represent **two completely different implementations** of a language model:
 
 **Current Main Branch** (from merged PR #1):
-- Project: `TinyLLM`
+- Project: `SmallMind`
 - Implementation: Transformer-based architecture
 - Files: `Transformer.cs`, `NeuralNet.cs`, `Tensor.cs`, `Training.cs`
 - Tokenization: Character-level
@@ -91,9 +91,9 @@ The following files have conflicts because they contain completely different imp
 - PR #2's features are for a different architecture
 
 **Option 2: Extract and Adapt Useful Parts**
-- Port documentation concepts to TinyLLM
-- Create data loading utilities for TinyLLM's text file format
-- Add similar test coverage to TinyLLM
+- Port documentation concepts to SmallMind
+- Create data loading utilities for SmallMind's text file format
+- Add similar test coverage to SmallMind
 - This would require creating a NEW PR, not fixing PR #2
 
 **Option 3: Rebase PR #2 onto main**
@@ -113,9 +113,9 @@ The following files have conflicts because they contain completely different imp
 
 If elements from PR #2 are desired:
 
-1. **Documentation**: Create new documentation based on TinyLLM's actual API
-2. **Data Loading**: Create utilities for loading/combining multiple text files for TinyLLM
-3. **Tests**: Add test coverage for TinyLLM components
+1. **Documentation**: Create new documentation based on SmallMind's actual API
+2. **Data Loading**: Create utilities for loading/combining multiple text files for SmallMind
+3. **Tests**: Add test coverage for SmallMind components
 
 These would be new features in new PRs, not a "fix" of PR #2.
 
@@ -124,7 +124,7 @@ These would be new features in new PRs, not a "fix" of PR #2.
 ### Why Rebasing Won't Work:
 
 A git rebase of PR #2 onto main would encounter conflicts in every core file because:
-- Different namespace (`TinyLLM` vs `SmallMind`)
+- Same namespace (`SmallMind` vs `SmallMind`), but different implementations
 - Different model architecture (Transformer vs simple NN)
 - Different tokenization approach (character vs word)
 - Different training loop implementation
@@ -134,7 +134,7 @@ The rebase would essentially require deleting all of PR #2's core code and rewri
 
 ### Branch History:
 
-Both PR #2 and PR #3 were created when `main` was at commit `fcc1246` (Initial commit), before PR #1 was merged. PR #1 introduced the TinyLLM implementation that is now in `main`. PR #3 built upon PR #1's implementation (adding configurable block size), while PR #2 created an entirely different implementation.
+Both PR #2 and PR #3 were created when `main` was at commit `fcc1246` (Initial commit), before PR #1 was merged. PR #1 introduced the SmallMind implementation that is now in `main`. PR #3 built upon PR #1's implementation (adding configurable block size), while PR #2 created an entirely different implementation.
 
 ## Conclusion
 

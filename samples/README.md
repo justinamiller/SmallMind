@@ -24,7 +24,7 @@ To run the example, compile it as a standalone program:
 cd /home/runner/work/SmallMind/SmallMind
 
 # Compile the example
-csc -out:examples/DataLoaderExample.exe -reference:bin/Debug/net8.0/TinyLLM.dll examples/DataLoaderExample.cs
+csc -out:examples/DataLoaderExample.exe -reference:bin/Debug/net8.0/SmallMind.dll examples/DataLoaderExample.cs
 
 # Or use dotnet to compile and run
 dotnet build
@@ -49,7 +49,7 @@ All files contain the same five sentences to demonstrate format equivalence.
 ### Load from Text File
 
 ```csharp
-using TinyLLM;
+using SmallMind;
 
 var text = DataLoader.FromTextFile("data.txt");
 Console.WriteLine($"Loaded {text.Length} characters");

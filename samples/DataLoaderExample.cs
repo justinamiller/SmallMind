@@ -1,5 +1,5 @@
 using System;
-using TinyLLM;
+using SmallMind;
 
 namespace SmallMind.Examples
 {
