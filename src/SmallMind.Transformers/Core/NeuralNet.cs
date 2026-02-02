@@ -2,6 +2,7 @@ using SmallMind.Core.Exceptions;
 using SmallMind.Core.Core;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace SmallMind.Transformers
 {
@@ -159,16 +160,47 @@ namespace SmallMind.Transformers
                 int seq = input.Shape[1];
                 var output = new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: true);
                 
-                for (int b = 0; b < batch; b++)
+                // Parallelize over batch when beneficial
+                if (batch >= 4)
                 {
-                    for (int s = 0; s < seq; s++)
+                    Parallel.For(0, batch, b =>
                     {
-                        int idx = (int)input.Data[b * seq + s];
-                        if (idx >= 0 && idx < _numEmbeddings)
+                        for (int s = 0; s < seq; s++)
                         {
-                            for (int j = 0; j < _embeddingDim; j++)
+                            int idx = (int)input.Data[b * seq + s];
+                            if (idx >= 0 && idx < _numEmbeddings)
                             {
-                                output.Data[(b * seq + s) * _embeddingDim + j] = Weight.Data[idx * _embeddingDim + j];
+                                int srcOffset = idx * _embeddingDim;
+                                int dstOffset = (b * seq + s) * _embeddingDim;
+                                
+                                // Use Array.Copy for bulk memory transfer (much faster)
+                                Array.Copy(
+                                    Weight.Data, srcOffset,
+                                    output.Data, dstOffset,
+                                    _embeddingDim
+                                );
+                            }
+                        }
+                    });
+                }
+                else
+                {
+                    for (int b = 0; b < batch; b++)
+                    {
+                        for (int s = 0; s < seq; s++)
+                        {
+                            int idx = (int)input.Data[b * seq + s];
+                            if (idx >= 0 && idx < _numEmbeddings)
+                            {
+                                int srcOffset = idx * _embeddingDim;
+                                int dstOffset = (b * seq + s) * _embeddingDim;
+                                
+                                // Use Array.Copy for bulk memory transfer (much faster)
+                                Array.Copy(
+                                    Weight.Data, srcOffset,
+                                    output.Data, dstOffset,
+                                    _embeddingDim
+                                );
                             }
                         }
                     }
@@ -185,9 +217,13 @@ namespace SmallMind.Transformers
                                 int idx = (int)input.Data[b * seq + s];
                                 if (idx >= 0 && idx < _numEmbeddings)
                                 {
+                                    int srcOffset = (b * seq + s) * _embeddingDim;
+                                    int dstOffset = idx * _embeddingDim;
+                                    
+                                    // Use Array.Copy for backward pass as well
                                     for (int j = 0; j < _embeddingDim; j++)
                                     {
-                                        Weight.Grad[idx * _embeddingDim + j] += output.Grad[(b * seq + s) * _embeddingDim + j];
+                                        Weight.Grad[dstOffset + j] += output.Grad[srcOffset + j];
                                     }
                                 }
                             }
