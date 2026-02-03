@@ -8,8 +8,9 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// A simple tensor class with automatic differentiation support.
     /// Supports basic operations needed for neural networks.
+    /// Now supports chunked storage for tensors exceeding int.MaxValue elements.
     /// </summary>
-    public class Tensor
+    public class Tensor : IDisposable
     {
         public float[] Data { get; private set; }
         public int[] Shape { get; private set; }
@@ -18,6 +19,11 @@ namespace SmallMind.Core.Core
         
         protected int? _logicalSize; // For pooled tensors with oversized backing arrays
         private Action? _backward;
+        
+        // Chunked storage support
+        internal ITensorStorage? _storage; // When using chunked storage
+        internal ITensorStorage? _gradStorage; // Chunked gradient storage
+        private bool _disposed;
 
         public Tensor(float[] data, int[] shape, bool requiresGrad = false)
         {
@@ -84,20 +90,15 @@ namespace SmallMind.Core.Core
         {
             Guard.NotNull(shape);
             
-            long size = 1;
-            for (int i = 0; i < shape.Length; i++)
+            long size = ShapeToSizeLong(shape);
+            
+            // Check for overflow - critical for billion-parameter models
+            if (size > int.MaxValue)
             {
-                Guard.GreaterThan(shape[i], 0);
-                size *= shape[i];
-                
-                // Check for overflow - critical for billion-parameter models
-                if (size > int.MaxValue)
-                {
-                    throw new Exceptions.ValidationException(
-                        $"Tensor size overflow: shape {string.Join("x", shape)} exceeds int.MaxValue ({int.MaxValue:N0}). " +
-                        $"For billion-parameter models, use model sharding or quantization.",
-                        nameof(shape));
-                }
+                throw new Exceptions.ValidationException(
+                    $"Tensor size overflow: shape {string.Join("x", shape)} = {size:N0} exceeds int.MaxValue ({int.MaxValue:N0}). " +
+                    $"Use Tensor.CreateChunked() for tensors larger than {int.MaxValue:N0} elements.",
+                    nameof(shape));
             }
             return (int)size;
         }
@@ -105,14 +106,154 @@ namespace SmallMind.Core.Core
         public int Size => _logicalSize ?? Data.Length;
 
         /// <summary>
+        /// Gets whether this tensor uses chunked storage (for >int.MaxValue elements).
+        /// </summary>
+        public bool IsChunked => _storage != null && _storage.IsChunked;
+
+        /// <summary>
+        /// Gets the total number of elements, supporting long for chunked tensors.
+        /// </summary>
+        public long TotalElements => _storage?.Length ?? Data.Length;
+
+        /// <summary>
+        /// Creates a new chunked tensor for large tensors exceeding int.MaxValue.
+        /// Automatically uses chunked storage when total elements exceed int.MaxValue.
+        /// </summary>
+        /// <param name="shape">Shape of the tensor.</param>
+        /// <param name="requiresGrad">Whether to track gradients.</param>
+        /// <param name="chunkSize">Size of each chunk in elements (default: 64M).</param>
+        /// <returns>A new tensor with chunked storage.</returns>
+        public static Tensor CreateChunked(int[] shape, bool requiresGrad = false, int chunkSize = ChunkedBuffer.DEFAULT_CHUNK_SIZE)
+        {
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+
+            long totalElements = ShapeToSizeLong(shape);
+            
+            var tensor = new Tensor();
+            tensor.Shape = (int[])shape.Clone();
+            tensor.RequiresGrad = requiresGrad;
+            tensor._storage = new ChunkedStorage(totalElements, chunkSize);
+            
+            // For compatibility, Data points to an empty array (most code won't use it for chunked tensors)
+            // This prevents NullReferenceException in legacy code paths
+            tensor.Data = Array.Empty<float>();
+            
+            if (requiresGrad)
+            {
+                tensor._gradStorage = new ChunkedStorage(totalElements, chunkSize);
+                tensor.Grad = Array.Empty<float>(); // For compatibility
+            }
+            
+            return tensor;
+        }
+
+        /// <summary>
+        /// Creates a memory-mapped tensor that streams data from disk.
+        /// Ideal for very large models that don't fit in RAM (inference only).
+        /// </summary>
+        /// <param name="filePath">Path to the file containing tensor data.</param>
+        /// <param name="shape">Shape of the tensor.</param>
+        /// <param name="writable">Whether to allow write access (default: false).</param>
+        /// <returns>A new tensor with memory-mapped storage.</returns>
+        public static Tensor CreateMemoryMapped(string filePath, int[] shape, bool writable = false)
+        {
+            Guard.NotNullOrWhiteSpace(filePath);
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+
+            long totalElements = ShapeToSizeLong(shape);
+            
+            var tensor = new Tensor();
+            tensor.Shape = (int[])shape.Clone();
+            tensor.RequiresGrad = false; // Memory-mapped tensors don't support gradients
+            tensor._storage = new MemoryMappedTensorStorage(filePath, totalElements, writable);
+            tensor.Data = Array.Empty<float>();
+            
+            return tensor;
+        }
+
+        /// <summary>
+        /// Creates a new memory-mapped tensor file initialized with zeros.
+        /// </summary>
+        /// <param name="filePath">Path where the file will be created.</param>
+        /// <param name="shape">Shape of the tensor.</param>
+        /// <returns>A new tensor with memory-mapped storage.</returns>
+        public static Tensor CreateMemoryMappedFile(string filePath, int[] shape)
+        {
+            Guard.NotNullOrWhiteSpace(filePath);
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+
+            long totalElements = ShapeToSizeLong(shape);
+            
+            var tensor = new Tensor();
+            tensor.Shape = (int[])shape.Clone();
+            tensor.RequiresGrad = false;
+            tensor._storage = MemoryMappedTensorStorage.Create(filePath, totalElements);
+            tensor.Data = Array.Empty<float>();
+            
+            return tensor;
+        }
+
+        /// <summary>
+        /// Gets whether this tensor uses memory-mapped storage.
+        /// </summary>
+        public bool IsMemoryMapped => _storage is MemoryMappedTensorStorage;
+
+        /// <summary>
+        /// Protected parameterless constructor for CreateChunked factory method.
+        /// </summary>
+        protected Tensor()
+        {
+            Data = Array.Empty<float>();
+            Shape = Array.Empty<int>();
+        }
+
+        /// <summary>
+        /// Calculate tensor size as long to support >int.MaxValue.
+        /// Returns long to detect overflow without throwing.
+        /// </summary>
+        public static long ShapeToSizeLong(int[] shape)
+        {
+            Guard.NotNull(shape);
+            
+            long size = 1;
+            for (int i = 0; i < shape.Length; i++)
+            {
+                Guard.GreaterThan(shape[i], 0);
+                size *= shape[i];
+            }
+            return size;
+        }
+
+        /// <summary>
         /// Initialize with random normal distribution (Xavier initialization)
         /// </summary>
         public void InitializeXavier(Random random, int fanIn, int fanOut)
         {
             float std = MathF.Sqrt(2.0f / (fanIn + fanOut));
-            for (int i = 0; i < Data.Length; i++)
+            
+            if (_storage != null)
             {
-                Data[i] = (float)(random.NextDouble() * 2 - 1) * std * MathF.Sqrt(3);
+                // Chunked storage - initialize per chunk
+                var buffer = _storage.GetChunkedBuffer();
+                for (int chunkIdx = 0; chunkIdx < buffer.ChunkCount; chunkIdx++)
+                {
+                    var chunk = buffer.GetChunkSpan(chunkIdx);
+                    for (int i = 0; i < chunk.Length; i++)
+                    {
+                        chunk[i] = (float)(random.NextDouble() * 2 - 1) * std * MathF.Sqrt(3);
+                    }
+                }
+            }
+            else
+            {
+                // Dense storage
+                for (int i = 0; i < Data.Length; i++)
+                {
+                    Data[i] = (float)(random.NextDouble() * 2 - 1) * std * MathF.Sqrt(3);
+                }
             }
         }
 
@@ -121,9 +262,26 @@ namespace SmallMind.Core.Core
         /// </summary>
         public void InitializeRandom(Random random, float scale = 0.02f)
         {
-            for (int i = 0; i < Data.Length; i++)
+            if (_storage != null)
             {
-                Data[i] = (float)(random.NextDouble() * 2 - 1) * scale;
+                // Chunked storage - initialize per chunk
+                var buffer = _storage.GetChunkedBuffer();
+                for (int chunkIdx = 0; chunkIdx < buffer.ChunkCount; chunkIdx++)
+                {
+                    var chunk = buffer.GetChunkSpan(chunkIdx);
+                    for (int i = 0; i < chunk.Length; i++)
+                    {
+                        chunk[i] = (float)(random.NextDouble() * 2 - 1) * scale;
+                    }
+                }
+            }
+            else
+            {
+                // Dense storage
+                for (int i = 0; i < Data.Length; i++)
+                {
+                    Data[i] = (float)(random.NextDouble() * 2 - 1) * scale;
+                }
             }
         }
 
@@ -651,9 +809,98 @@ namespace SmallMind.Core.Core
             }
         }
 
+        /// <summary>
+        /// Gets chunked buffer for direct access (for chunked tensors only).
+        /// </summary>
+        /// <returns>The underlying chunked buffer.</returns>
+        /// <exception cref="InvalidOperationException">If tensor is not chunked.</exception>
+        public ChunkedBuffer GetChunkedBuffer()
+        {
+            if (_storage == null || !_storage.IsChunked)
+                throw new InvalidOperationException("Tensor does not use chunked storage.");
+            return _storage.GetChunkedBuffer();
+        }
+
+        /// <summary>
+        /// Gets chunked gradient buffer for direct access (for chunked tensors only).
+        /// </summary>
+        /// <returns>The underlying chunked gradient buffer.</returns>
+        /// <exception cref="InvalidOperationException">If tensor is not chunked or doesn't have gradients.</exception>
+        public ChunkedBuffer GetChunkedGradBuffer()
+        {
+            if (_gradStorage == null || !_gradStorage.IsChunked)
+                throw new InvalidOperationException("Tensor does not use chunked gradient storage.");
+            return _gradStorage.GetChunkedBuffer();
+        }
+
+        /// <summary>
+        /// Copies data from chunked storage to a destination span.
+        /// Works for both dense and chunked tensors.
+        /// </summary>
+        /// <param name="sourceIndex">Starting index in this tensor.</param>
+        /// <param name="destination">Destination span.</param>
+        /// <param name="length">Number of elements to copy.</param>
+        public void CopyTo(long sourceIndex, Span<float> destination, int length)
+        {
+            if (_storage != null)
+            {
+                _storage.CopyTo(sourceIndex, destination, length);
+            }
+            else
+            {
+                Data.AsSpan((int)sourceIndex, length).CopyTo(destination);
+            }
+        }
+
+        /// <summary>
+        /// Copies data from a source span to this tensor.
+        /// Works for both dense and chunked tensors.
+        /// </summary>
+        /// <param name="source">Source span.</param>
+        /// <param name="destinationIndex">Starting index in this tensor.</param>
+        public void CopyFrom(ReadOnlySpan<float> source, long destinationIndex)
+        {
+            if (_storage != null)
+            {
+                _storage.CopyFrom(source, destinationIndex);
+            }
+            else
+            {
+                source.CopyTo(Data.AsSpan((int)destinationIndex));
+            }
+        }
+
         public override string ToString()
         {
+            if (IsMemoryMapped)
+            {
+                var mmStorage = (MemoryMappedTensorStorage)_storage!;
+                return $"Tensor(shape=[{string.Join(", ", Shape)}], memory-mapped, file={Path.GetFileName(mmStorage.FilePath)}, totalElements={TotalElements:N0})";
+            }
+            if (IsChunked)
+                return $"Tensor(shape=[{string.Join(", ", Shape)}], chunked, totalElements={TotalElements:N0})";
             return $"Tensor(shape=[{string.Join(", ", Shape)}], size={Size})";
+        }
+
+        /// <summary>
+        /// Disposes resources used by this tensor (only for memory-mapped tensors).
+        /// Regular dense and chunked tensors don't need disposal (GC handles them).
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            
+            if (_storage is IDisposable disposableStorage)
+            {
+                disposableStorage.Dispose();
+            }
+            
+            if (_gradStorage is IDisposable disposableGradStorage)
+            {
+                disposableGradStorage.Dispose();
+            }
+            
+            _disposed = true;
         }
     }
     

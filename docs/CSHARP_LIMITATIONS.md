@@ -211,9 +211,53 @@ For arrays >100MB:
 
 ## 5. Workarounds for Future Development
 
-### 5.1 Tensor Sharding (Not Implemented)
+### 5.1 Tensor Sharding (IMPLEMENTED!)
 
-To exceed int.MaxValue per tensor, implement sharding:
+**Update**: SmallMind now supports chunked tensors to exceed int.MaxValue per tensor!
+
+```csharp
+// Create a chunked tensor for large embedding tables
+int vocabSize = 100_000;
+int embeddingDim = 30_000;
+long totalElements = (long)vocabSize * embeddingDim; // 3B elements - exceeds int.MaxValue!
+
+// Old way - would throw exception:
+// var tensor = new Tensor(new int[] { vocabSize, embeddingDim }); // ✗ Throws!
+
+// New way - uses chunked storage:
+var tensor = Tensor.CreateChunked(new int[] { vocabSize, embeddingDim }, requiresGrad: true); // ✓ Works!
+
+Console.WriteLine($"Created chunked tensor with {tensor.TotalElements:N0} elements");
+Console.WriteLine($"Stored as {tensor.GetChunkedBuffer().ChunkCount} chunks");
+
+// Embedding lookup works transparently
+int tokenId = 50_000;
+long embeddingOffset = (long)tokenId * embeddingDim;
+var embeddingVector = new float[embeddingDim];
+tensor.CopyTo(embeddingOffset, embeddingVector, embeddingDim);
+```
+
+**How it works:**
+- Stores data in multiple fixed-size chunks (default: 64M elements = 256MB per chunk)
+- Each chunk is &lt;= int.MaxValue elements (safe for CLR)
+- Total length can exceed int.MaxValue using long indexing
+- Hot paths use Span&lt;T&gt; for zero-copy access
+- Automatic chunking when vocab_size × embedding_dim exceeds int.MaxValue
+
+**Performance:**
+- Minimal overhead for sequential access (embedding lookup)
+- Chunk boundaries handled automatically
+- Same initialization and operations as dense tensors
+- No per-element virtual dispatch
+
+**Current support:**
+- ✅ Embedding tables (vocab_size × embedding_dim)
+- ✅ Tensor initialization (random, Xavier)
+- ✅ Gradient computation
+- ⚠️  MatMul/Linear layers (partial - dense output only)
+- ⚠️  Some operations may require copying between chunks
+
+**Example usage:**
 
 ```csharp
 // Future: Sharded tensor concept
@@ -234,12 +278,113 @@ public class ShardedTensor
 }
 ```
 
-**Challenges:**
-- All operations (matmul, softmax, etc.) must handle sharding
-- Cross-shard operations have performance overhead
-- Increased code complexity
+**Status**: ✅ **IMPLEMENTED** - See `Tensor.CreateChunked()` and `ChunkedBuffer` class.
 
-### 5.2 Native Interop
+**Benefits over the concept:**
+- Integrated with existing Tensor API
+- Supports gradients and backpropagation
+- Automatic chunking based on size
+- Span-based access for performance
+- Works with embedding layers out of the box
+
+**Example from production code:**
+
+```csharp
+// From SmallMind.Transformers.Embedding class
+public class Embedding : Module
+{
+    public Embedding(int numEmbeddings, int embeddingDim, Random? random = null)
+    {
+        long totalElements = (long)numEmbeddings * embeddingDim;
+        
+        if (totalElements > int.MaxValue)
+        {
+            // Automatically use chunked storage for large embedding tables
+            Weight = Tensor.CreateChunked(
+                new int[] { numEmbeddings, embeddingDim }, 
+                requiresGrad: true
+            );
+            Console.WriteLine($"Using chunked storage: {totalElements:N0} elements in " +
+                            $"{Weight.GetChunkedBuffer().ChunkCount} chunks");
+        }
+        else
+        {
+            // Use traditional dense storage
+            Weight = new Tensor(new int[] { numEmbeddings, embeddingDim }, requiresGrad: true);
+        }
+        
+        Weight.InitializeRandom(random, 0.02f);
+    }
+    
+    // Embedding lookup works transparently with both dense and chunked storage
+    public override Tensor Forward(Tensor input)
+    {
+        // ... embedding lookup code handles both storage types automatically
+    }
+}
+```
+
+**Challenges (mostly addressed):**
+- ✅ Embedding operations handle chunking transparently
+- ✅ Initialization (random, Xavier) works on chunked tensors
+- ✅ Gradient computation works with chunked storage
+- ⚠️ Some operations (matmul) may need optimization for fully chunked workflows
+- ⚠️ Legacy code expecting `.Data` array won't work (use `.CopyTo()` instead)
+
+### 5.2 Memory-Mapped Files (IMPLEMENTED!)
+
+**Update**: SmallMind now supports memory-mapped storage for models exceeding available RAM!
+
+```csharp
+// For models that don't fit in RAM, stream from disk
+string modelPath = "large_embedding.bin";
+int vocabSize = 200_000;
+int embeddingDim = 25_000;
+long totalElements = (long)vocabSize * embeddingDim; // 5B elements = ~18GB
+
+// Create a memory-mapped file
+using var mmTensor = Tensor.CreateMemoryMappedFile(
+    modelPath,
+    new int[] { vocabSize, embeddingDim }
+);
+
+Console.WriteLine($"Created {new FileInfo(modelPath).Length / (1024.0 * 1024 * 1024):F2} GB file");
+Console.WriteLine($"Is memory-mapped: {mmTensor.IsMemoryMapped}");
+
+// Access works on-demand (OS manages paging)
+int tokenId = 50_000;
+long offset = (long)tokenId * embeddingDim;
+var embedding = new float[embeddingDim];
+mmTensor.CopyTo(offset, embedding, embeddingDim);
+
+// Later: Load existing memory-mapped file
+using var loadedTensor = Tensor.CreateMemoryMapped(
+    modelPath,
+    new int[] { vocabSize, embeddingDim },
+    writable: false // Read-only for inference
+);
+```
+
+**Key benefits:**
+- Models larger than available RAM work seamlessly
+- Operating system manages memory paging automatically
+- Share model weights across multiple processes
+- Perfect for inference-only scenarios
+- Zero-copy access when data is in page cache
+
+**Trade-offs:**
+- **Much slower** than in-memory (disk I/O bottleneck)
+- Not suitable for training (too slow for gradient updates)
+- Requires fast SSD for acceptable performance
+- Read-only by default (writable mode requires careful management)
+- Best with sequential access patterns
+
+**When to use:**
+- ✅ Large pre-trained models for inference
+- ✅ Models that exceed available RAM
+- ✅ Multi-process serving scenarios
+- ❌ Training (use in-memory or chunked tensors)
+- ❌ Latency-sensitive applications
 
 Use native libraries via P/Invoke for >2B element tensors:
 
@@ -335,28 +480,30 @@ Trade-offs:
 
 | Limitation | Value | Impact | Workaround |
 |-----------|-------|--------|-----------|
-| **Array Index** | `int.MaxValue` (2.1B) | Max elements per tensor | Tensor sharding (not impl.) |
+| **Array Index** | `int.MaxValue` (2.1B) | Max elements per tensor | ✅ Tensor chunking (IMPLEMENTED!) |
 | **Object Size** | No limit (.NET 5+) | Not a constraint | N/A |
 | **System Memory** | Your RAM | Practical limit | Quantization (Q8/Q4) |
-| **Total Parameters** | ~2B (if no tensor >2.1B) | Model size | Reduce tensor dimensions |
-| **Vocab × Embed** | Must be ≤ 2.1B | Largest tensor constraint | Reduce vocab or embed size |
+| **Total Parameters** | No hard limit | Model size | Use chunked tensors for large embeddings |
+| **Vocab × Embed** | Can exceed 2.1B | Largest tensor constraint | ✅ Use `Tensor.CreateChunked()` |
 
 ## 8. Practical Recommendations
 
 For SmallMind users:
 
-1. **Keep individual tensors small**: vocab_size × embedding_dim < 2.1B
-2. **Use quantization**: Q8 or Q4 for models >500M parameters
-3. **Validate before loading**: Use `LargeModelSupport.ValidateConfiguration()`
-4. **Monitor memory**: Check available RAM before loading large models
-5. **Plan for scale**: Models >1B parameters should use specialized frameworks
+1. **Use chunked tensors for large embeddings**: When vocab_size × embedding_dim > 2.1B, use `Tensor.CreateChunked()`
+2. **Automatic chunking**: Embedding layer now automatically uses chunked storage when needed
+3. **Use quantization**: Q8 or Q4 for models >500M parameters to save memory
+4. **Validate before loading**: Use `LargeModelSupport.ValidateConfiguration()`
+5. **Monitor memory**: Check available RAM before loading large models
+6. **Plan for scale**: Models >3B parameters work with chunked embeddings, but consider specialized frameworks for full production
 
 For SmallMind developers (future enhancements):
 
-1. **Implement tensor sharding** to exceed 2B elements per tensor
-2. **Add memory-mapped file support** for streaming from disk
-3. **Explore native interop** for critical performance paths
-4. **Add FP16 support** for 2x memory reduction (when .NET supports Half natively)
+1. ✅ **Tensor sharding implemented** - Embeddings can exceed 2B elements via ChunkedBuffer
+2. ✅ **Memory-mapped file support implemented** - Stream weights from disk for models > RAM
+3. **Optimize MatMul for chunked weights** - Currently supports dense output only
+4. **Explore native interop** for critical performance paths (if needed)
+5. **Add FP16 support** for 2x memory reduction (when .NET supports Half natively)
 
 ---
 

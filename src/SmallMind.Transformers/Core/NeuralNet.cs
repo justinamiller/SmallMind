@@ -106,8 +106,23 @@ namespace SmallMind.Transformers
             _embeddingDim = embeddingDim;
             _random = random ?? new Random(42);
             
-            Weight = new Tensor(new int[] { numEmbeddings, embeddingDim }, requiresGrad: true);
-            Weight.InitializeRandom(_random, 0.02f);
+            // Check if we need chunked storage
+            long totalElements = (long)numEmbeddings * embeddingDim;
+            
+            if (totalElements > int.MaxValue)
+            {
+                // Use chunked storage for large embedding tables
+                Weight = Tensor.CreateChunked(new int[] { numEmbeddings, embeddingDim }, requiresGrad: true);
+                Weight.InitializeRandom(_random, 0.02f);
+                Console.WriteLine($"Embedding using chunked storage: {numEmbeddings:N0} x {embeddingDim:N0} = {totalElements:N0} elements ({Weight.GetChunkedBuffer().ChunkCount} chunks)");
+            }
+            else
+            {
+                // Use traditional dense storage
+                Weight = new Tensor(new int[] { numEmbeddings, embeddingDim }, requiresGrad: true);
+                Weight.InitializeRandom(_random, 0.02f);
+            }
+            
             Parameters.Add(Weight);
         }
 
@@ -118,9 +133,63 @@ namespace SmallMind.Transformers
             
             if (input.Shape.Length == 1)
             {
-                int batch = input.Shape[0];
-                var output = new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: true);
+                return ForwardBatch(input);
+            }
+            else if (input.Shape.Length == 2)
+            {
+                return ForwardBatchSeq(input);
+            }
+            
+            throw new ArgumentException("Embedding input must be 1D or 2D");
+        }
+
+        private Tensor ForwardBatch(Tensor input)
+        {
+            int batch = input.Shape[0];
+            var output = new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: true);
+            
+            if (Weight.IsChunked)
+            {
+                // Chunked embedding lookup
+                var weightBuffer = Weight.GetChunkedBuffer();
                 
+                for (int i = 0; i < batch; i++)
+                {
+                    int idx = (int)input.Data[i];
+                    if (idx >= 0 && idx < _numEmbeddings)
+                    {
+                        long srcIndex = (long)idx * _embeddingDim;
+                        int dstOffset = i * _embeddingDim;
+                        
+                        // Copy embedding row from chunked storage
+                        Weight.CopyTo(srcIndex, output.Data.AsSpan(dstOffset, _embeddingDim), _embeddingDim);
+                    }
+                }
+                
+                // Backward: scatter gradient to embedding weights
+                if (Weight.RequiresGrad)
+                {
+                    output.SetBackward(() =>
+                    {
+                        var gradBuffer = Weight.GetChunkedGradBuffer();
+                        for (int i = 0; i < batch; i++)
+                        {
+                            int idx = (int)input.Data[i];
+                            if (idx >= 0 && idx < _numEmbeddings)
+                            {
+                                long dstIndex = (long)idx * _embeddingDim;
+                                int srcOffset = i * _embeddingDim;
+                                
+                                // Accumulate gradients to chunked storage
+                                AccumulateGradients(output.Grad.AsSpan(srcOffset, _embeddingDim), dstIndex, gradBuffer);
+                            }
+                        }
+                    });
+                }
+            }
+            else
+            {
+                // Dense embedding lookup (original implementation)
                 for (int i = 0; i < batch; i++)
                 {
                     int idx = (int)input.Data[i];
@@ -151,15 +220,87 @@ namespace SmallMind.Transformers
                         }
                     });
                 }
-                
-                return output;
             }
-            else if (input.Shape.Length == 2)
+            
+            return output;
+        }
+
+        private Tensor ForwardBatchSeq(Tensor input)
+        {
+            int batch = input.Shape[0];
+            int seq = input.Shape[1];
+            var output = new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: true);
+            
+            if (Weight.IsChunked)
             {
-                int batch = input.Shape[0];
-                int seq = input.Shape[1];
-                var output = new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: true);
+                // Chunked embedding lookup
+                var weightBuffer = Weight.GetChunkedBuffer();
                 
+                // Parallelize over batch when beneficial
+                if (batch >= 4)
+                {
+                    Parallel.For(0, batch, b =>
+                    {
+                        for (int s = 0; s < seq; s++)
+                        {
+                            int idx = (int)input.Data[b * seq + s];
+                            if (idx >= 0 && idx < _numEmbeddings)
+                            {
+                                long srcIndex = (long)idx * _embeddingDim;
+                                int dstOffset = (b * seq + s) * _embeddingDim;
+                                
+                                // Copy embedding row from chunked storage
+                                Weight.CopyTo(srcIndex, output.Data.AsSpan(dstOffset, _embeddingDim), _embeddingDim);
+                            }
+                        }
+                    });
+                }
+                else
+                {
+                    for (int b = 0; b < batch; b++)
+                    {
+                        for (int s = 0; s < seq; s++)
+                        {
+                            int idx = (int)input.Data[b * seq + s];
+                            if (idx >= 0 && idx < _numEmbeddings)
+                            {
+                                long srcIndex = (long)idx * _embeddingDim;
+                                int dstOffset = (b * seq + s) * _embeddingDim;
+                                
+                                // Copy embedding row from chunked storage
+                                Weight.CopyTo(srcIndex, output.Data.AsSpan(dstOffset, _embeddingDim), _embeddingDim);
+                            }
+                        }
+                    }
+                }
+                
+                // Backward: scatter gradient to embedding weights
+                if (Weight.RequiresGrad)
+                {
+                    output.SetBackward(() =>
+                    {
+                        var gradBuffer = Weight.GetChunkedGradBuffer();
+                        for (int b = 0; b < batch; b++)
+                        {
+                            for (int s = 0; s < seq; s++)
+                            {
+                                int idx = (int)input.Data[b * seq + s];
+                                if (idx >= 0 && idx < _numEmbeddings)
+                                {
+                                    long dstIndex = (long)idx * _embeddingDim;
+                                    int srcOffset = (b * seq + s) * _embeddingDim;
+                                    
+                                    // Accumulate gradients to chunked storage
+                                    AccumulateGradients(output.Grad.AsSpan(srcOffset, _embeddingDim), dstIndex, gradBuffer);
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+            else
+            {
+                // Dense embedding lookup (original implementation)
                 // Parallelize over batch when beneficial
                 if (batch >= 4)
                 {
@@ -230,11 +371,40 @@ namespace SmallMind.Transformers
                         }
                     });
                 }
-                
-                return output;
             }
             
-            throw new ArgumentException("Embedding input must be 1D or 2D");
+            return output;
+        }
+
+        /// <summary>
+        /// Accumulate gradients to chunked buffer. Handles chunk boundaries.
+        /// </summary>
+        private void AccumulateGradients(ReadOnlySpan<float> gradients, long baseIndex, ChunkedBuffer gradBuffer)
+        {
+            var (startChunkIdx, startOffset) = gradBuffer.GetChunkOffset(baseIndex);
+            
+            int remaining = gradients.Length;
+            int srcOffset = 0;
+            int chunkIdx = startChunkIdx;
+            int chunkOffset = startOffset;
+            
+            while (remaining > 0)
+            {
+                var chunkSpan = gradBuffer.GetChunkSpan(chunkIdx);
+                int chunkRemaining = chunkSpan.Length - chunkOffset;
+                int toCopy = Math.Min(remaining, chunkRemaining);
+                
+                // Accumulate (not copy) gradients
+                for (int i = 0; i < toCopy; i++)
+                {
+                    chunkSpan[chunkOffset + i] += gradients[srcOffset + i];
+                }
+                
+                srcOffset += toCopy;
+                remaining -= toCopy;
+                chunkIdx++;
+                chunkOffset = 0; // After first chunk, start from beginning
+            }
         }
     }
 

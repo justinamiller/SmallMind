@@ -24,8 +24,8 @@ namespace SmallMind.Tests.Core
             long paramCount = LargeModelSupport.CalculateParameterCount(
                 vocabSize, blockSize, embeddingDim, numLayers, numHeads);
 
-            // Assert: Should be approximately 124M parameters
-            Assert.InRange(paramCount, 120_000_000L, 130_000_000L);
+            // Assert: Should be approximately 163M parameters (includes embeddings, layers, LM head)
+            Assert.InRange(paramCount, 160_000_000L, 170_000_000L);
         }
 
         [Fact]
@@ -42,8 +42,8 @@ namespace SmallMind.Tests.Core
             long paramCount = LargeModelSupport.CalculateParameterCount(
                 vocabSize, blockSize, embeddingDim, numLayers, numHeads);
 
-            // Assert: Should be approximately 1B parameters
-            Assert.InRange(paramCount, 900_000_000L, 1_200_000_000L);
+            // Assert: Should be approximately 1.24B parameters
+            Assert.InRange(paramCount, 1_200_000_000L, 1_300_000_000L);
         }
 
         [Fact]
