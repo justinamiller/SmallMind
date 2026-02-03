@@ -262,7 +262,7 @@ namespace SmallMind.Transformers
 
         public override Tensor Forward(Tensor input)
         {
-            // Normalize over last dimension
+            // Use fused LayerNorm operations - no intermediate allocations
             var output = new Tensor(input.Shape, requiresGrad: true);
             
             if (input.Shape.Length == 2)
@@ -270,33 +270,15 @@ namespace SmallMind.Transformers
                 int batch = input.Shape[0];
                 int features = input.Shape[1];
                 
-                for (int b = 0; b < batch; b++)
-                {
-                    // Calculate mean
-                    float mean = 0;
-                    for (int f = 0; f < features; f++)
-                    {
-                        mean += input.Data[b * features + f];
-                    }
-                    mean /= features;
-                    
-                    // Calculate variance
-                    float variance = 0;
-                    for (int f = 0; f < features; f++)
-                    {
-                        float diff = input.Data[b * features + f] - mean;
-                        variance += diff * diff;
-                    }
-                    variance /= features;
-                    
-                    // Normalize
-                    float std = MathF.Sqrt(variance + _eps);
-                    for (int f = 0; f < features; f++)
-                    {
-                        float normalized = (input.Data[b * features + f] - mean) / std;
-                        output.Data[b * features + f] = Gamma.Data[f] * normalized + Beta.Data[f];
-                    }
-                }
+                // Fused two-pass LayerNorm
+                SmallMind.Core.Core.LayerNormOps.LayerNorm(
+                    input.Data,
+                    Gamma.Data,
+                    Beta.Data,
+                    output.Data,
+                    batch,
+                    features,
+                    _eps);
             }
             else if (input.Shape.Length == 3)
             {
@@ -304,38 +286,16 @@ namespace SmallMind.Transformers
                 int seq = input.Shape[1];
                 int features = input.Shape[2];
                 
-                for (int b = 0; b < batch; b++)
-                {
-                    for (int s = 0; s < seq; s++)
-                    {
-                        int offset = (b * seq + s) * features;
-                        
-                        // Calculate mean
-                        float mean = 0;
-                        for (int f = 0; f < features; f++)
-                        {
-                            mean += input.Data[offset + f];
-                        }
-                        mean /= features;
-                        
-                        // Calculate variance
-                        float variance = 0;
-                        for (int f = 0; f < features; f++)
-                        {
-                            float diff = input.Data[offset + f] - mean;
-                            variance += diff * diff;
-                        }
-                        variance /= features;
-                        
-                        // Normalize
-                        float std = MathF.Sqrt(variance + _eps);
-                        for (int f = 0; f < features; f++)
-                        {
-                            float normalized = (input.Data[offset + f] - mean) / std;
-                            output.Data[offset + f] = Gamma.Data[f] * normalized + Beta.Data[f];
-                        }
-                    }
-                }
+                // Fused LayerNorm for 3D tensors
+                SmallMind.Core.Core.LayerNormOps.LayerNorm3D(
+                    input.Data,
+                    Gamma.Data,
+                    Beta.Data,
+                    output.Data,
+                    batch,
+                    seq,
+                    features,
+                    _eps);
             }
             
             // Backward: simplified gradient pass

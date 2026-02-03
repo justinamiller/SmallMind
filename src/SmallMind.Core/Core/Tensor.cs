@@ -16,6 +16,7 @@ namespace SmallMind.Core.Core
         public float[]? Grad { get; set; }
         public bool RequiresGrad { get; set; }
         
+        protected int? _logicalSize; // For pooled tensors with oversized backing arrays
         private Action? _backward;
 
         public Tensor(float[] data, int[] shape, bool requiresGrad = false)
@@ -38,6 +39,30 @@ namespace SmallMind.Core.Core
             if (requiresGrad)
             {
                 Grad = new float[data.Length];
+            }
+        }
+        
+        /// <summary>
+        /// Protected constructor for pooled tensors that may have larger backing arrays.
+        /// Only the first 'size' elements of data will be used.
+        /// </summary>
+        protected Tensor(float[] data, int[] shape, int size, bool requiresGrad = false)
+        {
+            Guard.NotNull(data);
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+            
+            int expectedSize = ShapeToSize(shape);
+            Guard.GreaterThanOrEqualTo(size, expectedSize);
+            Guard.GreaterThanOrEqualTo(data.Length, size);
+            
+            Data = data;
+            Shape = shape;
+            _logicalSize = expectedSize; // Track logical size separately
+            RequiresGrad = requiresGrad;
+            if (requiresGrad)
+            {
+                Grad = new float[expectedSize];
             }
         }
 
@@ -68,7 +93,7 @@ namespace SmallMind.Core.Core
             return size;
         }
 
-        public int Size => Data.Length;
+        public int Size => _logicalSize ?? Data.Length;
 
         /// <summary>
         /// Initialize with random normal distribution (Xavier initialization)
@@ -477,9 +502,202 @@ namespace SmallMind.Core.Core
             return t;
         }
 
+        /// <summary>
+        /// Create a pooled tensor for temporary/scratch use. Must be returned via Dispose or TensorScope.
+        /// DO NOT use for model weights or long-lived tensors.
+        /// </summary>
+        public static PooledTensor CreatePooled(int[] shape, bool requiresGrad = false)
+        {
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+            
+            int size = ShapeToSize(shape);
+            var data = TensorPool.Shared.Rent(size, out int capacity);
+            
+            return new PooledTensor(data, shape, capacity, requiresGrad);
+        }
+
+        // In-place operations
+        
+        /// <summary>
+        /// Add another tensor to this tensor in-place. Shapes must match.
+        /// </summary>
+        public void AddInPlace(Tensor other)
+        {
+            Guard.NotNull(other);
+            if (!ShapesEqual(Shape, other.Shape))
+                throw new ArgumentException("Shapes must match for AddInPlace");
+            
+            Span<float> dataSpan = Data;
+            ReadOnlySpan<float> otherSpan = other.Data;
+            for (int i = 0; i < Size; i++)
+            {
+                dataSpan[i] += otherSpan[i];
+            }
+        }
+        
+        /// <summary>
+        /// Multiply this tensor by another tensor in-place. Shapes must match.
+        /// </summary>
+        public void MulInPlace(Tensor other)
+        {
+            Guard.NotNull(other);
+            if (!ShapesEqual(Shape, other.Shape))
+                throw new ArgumentException("Shapes must match for MulInPlace");
+            
+            Span<float> dataSpan = Data;
+            ReadOnlySpan<float> otherSpan = other.Data;
+            for (int i = 0; i < Size; i++)
+            {
+                dataSpan[i] *= otherSpan[i];
+            }
+        }
+        
+        /// <summary>
+        /// Scale this tensor by a scalar in-place.
+        /// </summary>
+        public void ScaleInPlace(float scalar)
+        {
+            Span<float> dataSpan = Data;
+            for (int i = 0; i < Size; i++)
+            {
+                dataSpan[i] *= scalar;
+            }
+        }
+        
+        /// <summary>
+        /// Add a scaled tensor to this tensor in-place: this += scale * other
+        /// </summary>
+        public void AddScaledInPlace(Tensor other, float scale)
+        {
+            Guard.NotNull(other);
+            if (!ShapesEqual(Shape, other.Shape))
+                throw new ArgumentException("Shapes must match for AddScaledInPlace");
+            
+            Span<float> dataSpan = Data;
+            ReadOnlySpan<float> otherSpan = other.Data;
+            for (int i = 0; i < Size; i++)
+            {
+                dataSpan[i] += scale * otherSpan[i];
+            }
+        }
+        
+        /// <summary>
+        /// Copy data from another tensor to this tensor.
+        /// </summary>
+        public void CopyFrom(Tensor source)
+        {
+            Guard.NotNull(source);
+            if (!ShapesEqual(Shape, source.Shape))
+                throw new ArgumentException("Shapes must match for CopyFrom");
+            
+            source.Data.CopyTo(Data, 0);
+        }
+        
+        // Functional overloads with optional destination parameter
+        
+        /// <summary>
+        /// Element-wise addition with optional destination tensor.
+        /// If dest is provided, result is written there (must have matching shape).
+        /// Otherwise, allocates a new tensor.
+        /// </summary>
+        public static Tensor Add(Tensor a, Tensor b, Tensor? dest = null, bool requiresGrad = false)
+        {
+            if (dest != null)
+            {
+                // Validate dest shape matches
+                if (!ShapesEqual(a.Shape, dest.Shape))
+                    throw new ArgumentException("Destination shape must match source shape");
+                
+                // Write result to dest
+                if (ShapesEqual(a.Shape, b.Shape))
+                {
+                    Span<float> destSpan = dest.Data;
+                    ReadOnlySpan<float> aSpan = a.Data;
+                    ReadOnlySpan<float> bSpan = b.Data;
+                    
+                    for (int i = 0; i < a.Size; i++)
+                    {
+                        destSpan[i] = aSpan[i] + bSpan[i];
+                    }
+                }
+                else
+                {
+                    // Broadcasting case
+                    BroadcastAdd(a, b, dest);
+                }
+                
+                // Setup backward if needed
+                if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))
+                {
+                    dest.SetBackward(() => BroadcastAddBackward(a, b, dest));
+                }
+                
+                return dest;
+            }
+            else
+            {
+                // Original allocation path
+                return Add(a, b, requiresGrad);
+            }
+        }
+
         public override string ToString()
         {
             return $"Tensor(shape=[{string.Join(", ", Shape)}], size={Size})";
+        }
+    }
+    
+    /// <summary>
+    /// A pooled tensor that returns its backing array to TensorPool when disposed.
+    /// Use for temporary/scratch tensors only. DO NOT use for model weights.
+    /// The backing array may be larger than the logical size to leverage pooling.
+    /// </summary>
+    public sealed class PooledTensor : Tensor, IDisposable
+    {
+        private readonly int _capacity;
+        private bool _disposed;
+        
+        internal PooledTensor(float[] data, int[] shape, int capacity, bool requiresGrad = false)
+            : base(data, shape, capacity, requiresGrad)
+        {
+            _capacity = capacity;
+        }
+        
+        public int Capacity => _capacity;
+        
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            
+            TensorPool.Shared.Return(Data, clearArray: true);
+        }
+    }
+    
+    /// <summary>
+    /// Scope helper for automatically returning pooled tensors.
+    /// Usage: using var scope = new TensorScope();
+    ///        var temp = scope.Rent(shape);
+    /// </summary>
+    public sealed class TensorScope : IDisposable
+    {
+        private readonly System.Collections.Generic.List<PooledTensor> _tensors = new();
+        
+        public PooledTensor Rent(int[] shape, bool requiresGrad = false)
+        {
+            var tensor = Tensor.CreatePooled(shape, requiresGrad);
+            _tensors.Add(tensor);
+            return tensor;
+        }
+        
+        public void Dispose()
+        {
+            foreach (var tensor in _tensors)
+            {
+                tensor.Dispose();
+            }
+            _tensors.Clear();
         }
     }
 }
