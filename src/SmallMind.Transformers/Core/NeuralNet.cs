@@ -262,8 +262,17 @@ namespace SmallMind.Transformers
 
         public override Tensor Forward(Tensor input)
         {
+            return Forward(input, dest: null);
+        }
+        
+        /// <summary>
+        /// Forward pass with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// </summary>
+        public Tensor Forward(Tensor input, Tensor? dest)
+        {
             // Use fused LayerNorm operations - no intermediate allocations
-            var output = new Tensor(input.Shape, requiresGrad: true);
+            Tensor output = dest ?? new Tensor(input.Shape, requiresGrad: true);
             
             if (input.Shape.Length == 2)
             {

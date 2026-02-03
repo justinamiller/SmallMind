@@ -275,18 +275,29 @@ namespace SmallMind.Transformers
         {
             // Pre-norm architecture with residual connections
             // x: (B, T, n_embd)
-            var attnOut = _attn.Forward(_ln1.Forward(x));
-            x = AddTensors(x, attnOut);
             
-            var mlpOut = _mlp.Forward(_ln2.Forward(x));
-            x = AddTensors(x, mlpOut);
+            // Use pooled tensors for intermediate results to reduce allocations
+            using var scope = new TensorScope();
             
-            return x;
+            // Allocate pooled tensors for LayerNorm outputs
+            var ln1Out = scope.Rent(x.Shape, requiresGrad: true);
+            _ln1.Forward(x, ln1Out);
+            
+            var attnOut = _attn.Forward(ln1Out);
+            var residual1 = AddTensors(x, attnOut, dest: null); // Result becomes new x
+            
+            var ln2Out = scope.Rent(residual1.Shape, requiresGrad: true);
+            _ln2.Forward(residual1, ln2Out);
+            
+            var mlpOut = _mlp.Forward(ln2Out);
+            var residual2 = AddTensors(residual1, mlpOut, dest: null);
+            
+            return residual2;
         }
 
-        private Tensor AddTensors(Tensor a, Tensor b)
+        private Tensor AddTensors(Tensor a, Tensor b, Tensor? dest = null)
         {
-            var result = new Tensor(a.Shape, requiresGrad: true);
+            var result = dest ?? new Tensor(a.Shape, requiresGrad: true);
             
             // SIMD-accelerated forward pass
             int vectorSize = Vector<float>.Count;
