@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-02-03 19:05:28",
+  "timestampUtc": "2026-02-03 19:05:28 UTC",
+  "environment": {
+    "osDescription": "Ubuntu 24.04.3 LTS",
+    "osVersion": "Unix 6.11.0.1018",
+    "processArchitecture": "X64",
+    "processorCount": 4,
+    "dotNetVersion": "10.0.2",
+    "runtimeDescription": ".NET 10.0.2",
+    "buildConfiguration": "Release",
+    "repoCommitHash": "48cfd767492131b95ea36922602e032141106f39",
+    "engineThreads": 4
+  },
+  "runConfig": {
+    "modelPath": "benchmark-model.smq",
+    "scenario": "all",
+    "iterations": 30,
+    "warmup": 5,
+    "concurrency": [
+      1
+    ],
+    "maxNewTokens": 256,
+    "promptProfile": "short",
+    "seed": 42,
+    "temperature": 1,
+    "topK": 1,
+    "topP": 1,
+    "threads": 0,
+    "coldStart": false
+  },
+  "scenarios": [
+    {
+      "name": "TTFT",
+      "aggregates": {
+        "ttft_ms": {
+          "min": 1.3113709999999998,
+          "p50": 1.5185995,
+          "p90": 1.723976,
+          "p95": 1.8186653499999998,
+          "p99": 1.92235942,
+          "max": 1.951708,
+          "mean": 1.5527240666666668,
+          "stdDev": 0.15266702517140057
+        },
+        "latency_ms": {
+          "min": 322.391864,
+          "p50": 331.4361065,
+          "p90": 345.3578009,
+          "p95": 347.09766394999997,
+          "p99": 348.25700195,
+          "max": 348.26006,
+          "mean": 333.95553393333336,
+          "stdDev": 7.719419057628529
+        }
+      },
+      "runtimeCounters": {
+        "cpuUsageAvg": 73.53358400272253,
+        "cpuUsagePeak": 74.36562735125314,
+        "workingSetAvgMB": 7.681171875000001E-05,
+        "workingSetPeakMB": 7.73359375E-05,
+        "gcHeapSizeAvgMB": 1.544733123779297E-05,
+        "gcHeapSizePeakMB": 2.601844787597656E-05,
+        "allocRateAvgMBPerSec": 1052.7288291931152,
+        "allocRatePeakMBPerSec": 1074.1762084960938,
+        "gen0GcCount": 45,
+        "gen1GcCount": 0,
+        "gen2GcCount": 0,
+        "timeInGcPercent": 0.8,
+        "threadPoolThreadCountAvg": 7,
+        "lockContentionCountAvg": 4.6
+      }
+    },
+    {
+      "name": "STEADY_TOKENS_PER_SEC",
+      "aggregates": {
+        "steady_tokens_per_sec": {
+          "min": 745.6574183956469,
+          "p50": 783.4120005131361,
+          "p90": 792.0758436290942,
+          "p95": 793.2885805952156,
+          "p99": 796.0995856546981,
+          "max": 796.9925265104405,
+          "mean": 777.7314658016692,
+          "stdDev": 15.324385289565692
+        },
+        "overall_tokens_per_sec": {
+          "min": 744.4853729155733,
+          "p50": 783.107466006034,
+          "p90": 791.7929647342762,
+          "p95": 792.963275872981,
+          "p99": 795.3434753754344,
+          "max": 796.0921775478856,
+          "mean": 777.1690396352183,
+          "stdDev": 15.477450315206932
+        }
+      },
+      "runtimeCounters": {
+        "cpuUsageAvg": 74.16711212958172,
+        "cpuUsagePeak": 74.99553430246681,
+        "workingSetAvgMB": 7.75234375E-05,
+        "workingSetPeakMB": 7.77109375E-05,
+        "gcHeapSizeAvgMB": 1.780060043334961E-05,
+        "gcHeapSizePeakMB": 2.4600379943847656E-05,
+        "allocRateAvgMBPerSec": 1072.728347015381,
+        "allocRatePeakMBPerSec": 1092.9090576171875,
+        "gen0GcCount": 46,
+        "gen1GcCount": 0,
+        "gen2GcCount": 0,
+        "timeInGcPercent": 0.3,
+        "threadPoolThreadCountAvg": 7,
+        "lockContentionCountAvg": 7.4
+      }
+    },
+    {
+      "name": "END_TO_END_LATENCY",
+      "aggregates": {
+        "latency_ms": {
+          "min": 320.7906,
+          "p50": 325.142551,
+          "p90": 331.1730836,
+          "p95": 336.5557073499999,
+          "p99": 343.68970663,
+          "max": 345.30438399999997,
+          "mean": 326.63253223333334,
+          "stdDev": 5.238090079984546
+        }
+      },
+      "runtimeCounters": {
+        "cpuUsageAvg": 74.18855823994373,
+        "cpuUsagePeak": 75.08763117857211,
+        "workingSetAvgMB": 7.78984375E-05,
+        "workingSetPeakMB": 7.79609375E-05,
+        "gcHeapSizeAvgMB": 1.6003489685058598E-05,
+        "gcHeapSizePeakMB": 2.5458442687988283E-05,
+        "allocRateAvgMBPerSec": 1080.6819778442382,
+        "allocRatePeakMBPerSec": 1091.0306015014648,
+        "gen0GcCount": 46,
+        "gen1GcCount": 0,
+        "gen2GcCount": 0,
+        "timeInGcPercent": 0.5,
+        "threadPoolThreadCountAvg": 7,
+        "lockContentionCountAvg": 4.9
+      }
+    },
+    {
+      "name": "MEMORY_FOOTPRINT",
+      "aggregates": {},
+      "memoryMetrics": {
+        "workingSetMinBytes": 82444288,
+        "workingSetMaxBytes": 86663168,
+        "workingSetAvgBytes": 85893939,
+        "privateMemoryMinBytes": 295706624,
+        "privateMemoryMaxBytes": 299700224,
+        "privateMemoryAvgBytes": 298989704,
+        "managedHeapMinBytes": 3041480,
+        "managedHeapMaxBytes": 26351736,
+        "managedHeapAvgBytes": 14625378
+      },
+      "runtimeCounters": {
+        "cpuUsageAvg": 73.78671936979171,
+        "cpuUsagePeak": 74.33671092452373,
+        "workingSetAvgMB": 8.199140625000002E-05,
+        "workingSetPeakMB": 8.26484375E-05,
+        "gcHeapSizeAvgMB": 1.2834295654296876E-05,
+        "gcHeapSizePeakMB": 2.6120407104492187E-05,
+        "allocRateAvgMBPerSec": 1081.5459617614747,
+        "allocRatePeakMBPerSec": 1091.420524597168,
+        "gen0GcCount": 46,
+        "gen1GcCount": 10,
+        "gen2GcCount": 0,
+        "timeInGcPercent": 0.2,
+        "threadPoolThreadCountAvg": 7,
+        "lockContentionCountAvg": 6.5
+      }
+    },
+    {
+      "name": "GC_AND_ALLOCATIONS",
+      "aggregates": {},
+      "gcMetrics": {
+        "gen0Collections": 446,
+        "gen1Collections": 103,
+        "gen2Collections": 0,
+        "totalAllocatedBytes": 11120888976,
+        "allocationsPerOperation": 370696299.2
+      },
+      "runtimeCounters": {
+        "cpuUsageAvg": 75.12115016115479,
+        "cpuUsagePeak": 75.97123766508554,
+        "workingSetAvgMB": 8.544375000000001E-05,
+        "workingSetPeakMB": 8.67734375E-05,
+        "gcHeapSizeAvgMB": 1.5579864501953125E-05,
+        "gcHeapSizePeakMB": 2.5118362426757814E-05,
+        "allocRateAvgMBPerSec": 1087.3638038635254,
+        "allocRatePeakMBPerSec": 1091.6169509887695,
+        "gen0GcCount": 45,
+        "gen1GcCount": 9,
+        "gen2GcCount": 0,
+        "timeInGcPercent": 0.4,
+        "threadPoolThreadCountAvg": 7,
+        "lockContentionCountAvg": 3.3
+      }
+    },
+    {
+      "name": "CONCURRENCY_THROUGHPUT_1",
+      "aggregates": {
+        "latency_ms": {
+          "min": 322.329059,
+          "p50": 325.971095,
+          "p90": 332.6745323,
+          "p95": 336.98116695,
+          "p99": 339.77344028,
+          "max": 340.599061,
+          "mean": 327.6565499999999,
+          "stdDev": 4.519894810021323
+        },
+        "requests_per_sec": {
+          "min": 0,
+          "p50": 0,
+          "p90": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 3.0508668469718327,
+          "stdDev": 0
+        },
+        "tokens_per_sec": {
+          "min": 0,
+          "p50": 0,
+          "p90": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 781.0219128247892,
+          "stdDev": 0
+        }
+      },
+      "runtimeCounters": {
+        "cpuUsageAvg": 75.61006822640178,
+        "cpuUsagePeak": 76.11702752523563,
+        "workingSetAvgMB": 8.519227430555554E-05,
+        "workingSetPeakMB": 8.538671875E-05,
+        "gcHeapSizeAvgMB": 1.29172125922309E-05,
+        "gcHeapSizePeakMB": 2.1714195251464843E-05,
+        "allocRateAvgMBPerSec": 1079.2531034681533,
+        "allocRatePeakMBPerSec": 1089.6237335205078,
+        "gen0GcCount": 45,
+        "gen1GcCount": 11,
+        "gen2GcCount": 0,
+        "timeInGcPercent": 0.5555555555555556,
+        "threadPoolThreadCountAvg": 7,
+        "lockContentionCountAvg": 2
+      }
+    }
+  ]
+}
