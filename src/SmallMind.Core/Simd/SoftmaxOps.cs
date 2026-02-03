@@ -43,30 +43,62 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// Applies softmax to a single row using array indexing (for parallel processing).
+        /// Optimized with SIMD for max finding and normalization.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void SoftmaxRowIndexed(float[] input, float[] output, int offset, int length)
         {
-            // Step 1: Find max
+            // Step 1: Find max with SIMD
+            int vectorSize = Vector<float>.Count;
+            var maxVec = new Vector<float>(float.NegativeInfinity);
+            int i = 0;
+            
+            // SIMD max finding
+            for (; i <= length - vectorSize; i += vectorSize)
+            {
+                var v = new Vector<float>(input, offset + i);
+                maxVec = Vector.Max(maxVec, v);
+            }
+            
+            // Horizontal max reduction
             float max = float.NegativeInfinity;
-            for (int i = 0; i < length; i++)
+            for (int j = 0; j < vectorSize; j++)
+            {
+                if (maxVec[j] > max)
+                    max = maxVec[j];
+            }
+            
+            // Scalar remainder for max
+            for (; i < length; i++)
             {
                 if (input[offset + i] > max)
                     max = input[offset + i];
             }
 
-            // Step 2: Compute exp(x - max) and sum
+            // Step 2: Compute exp(x - max) and sum (fused for cache efficiency)
+            // Note: exp() has no SIMD intrinsic, so this must be scalar
             float sum = 0f;
-            for (int i = 0; i < length; i++)
+            for (i = 0; i < length; i++)
             {
                 float exp = MathF.Exp(input[offset + i] - max);
                 output[offset + i] = exp;
                 sum += exp;
             }
 
-            // Step 3: Normalize by sum
+            // Step 3: Normalize by sum with SIMD
             float invSum = 1f / sum;
-            for (int i = 0; i < length; i++)
+            var invSumVec = new Vector<float>(invSum);
+            i = 0;
+            
+            // SIMD normalization
+            for (; i <= length - vectorSize; i += vectorSize)
+            {
+                var v = new Vector<float>(output, offset + i);
+                (v * invSumVec).CopyTo(output, offset + i);
+            }
+            
+            // Scalar remainder for normalization
+            for (; i < length; i++)
             {
                 output[offset + i] *= invSum;
             }

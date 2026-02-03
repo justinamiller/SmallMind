@@ -87,6 +87,7 @@ namespace SmallMind.Core.Simd
         /// <summary>
         /// AVX2 + FMA implementation (256-bit, 8 floats per vector)
         /// Uses cache-friendly ikj loop order with tiled blocking for better cache utilization.
+        /// For 512×512 matrices, always use tiling for optimal cache performance.
         /// </summary>
         private static void MatMulAvx2(
             float[] A, float[] B, float[] C,
@@ -95,8 +96,10 @@ namespace SmallMind.Core.Simd
             const int vecSize = 8; // AVX2 processes 8 floats
 
             // Use cache blocking for better L1/L2 cache utilization
-            // Process matrix in TILE_SIZE x TILE_SIZE blocks
-            if (M >= TILE_SIZE * 2 && K >= TILE_SIZE && N >= TILE_SIZE)
+            // Always use tiling for matrices >= 512, or when all dimensions are >= TILE_SIZE
+            // This ensures 512×512 matrices always get tiled multiplication
+            if ((M >= 512 && K >= 512 && N >= 512) || 
+                (M >= TILE_SIZE && K >= TILE_SIZE && N >= TILE_SIZE))
             {
                 MatMulAvx2Tiled(A, B, C, M, K, N, vecSize);
             }
@@ -296,6 +299,7 @@ namespace SmallMind.Core.Simd
         /// <summary>
         /// Vector&lt;T&gt; fallback implementation (portable SIMD)
         /// Uses cache-friendly tiled blocking for better cache utilization.
+        /// For 512×512 matrices, always use tiling for optimal cache performance.
         /// </summary>
         private static void MatMulVector(
             float[] A, float[] B, float[] C,
@@ -304,7 +308,9 @@ namespace SmallMind.Core.Simd
             int vectorSize = Vector<float>.Count;
 
             // Use cache blocking for better L1/L2 cache utilization
-            if (M >= TILE_SIZE * 2 && K >= TILE_SIZE && N >= TILE_SIZE)
+            // Always use tiling for matrices >= 512, or when all dimensions are >= TILE_SIZE
+            if ((M >= 512 && K >= 512 && N >= 512) || 
+                (M >= TILE_SIZE && K >= TILE_SIZE && N >= TILE_SIZE))
             {
                 MatMulVectorTiled(A, B, C, M, K, N, vectorSize);
             }
