@@ -10,7 +10,7 @@ namespace SmallMind.Core.Core
     /// Supports basic operations needed for neural networks.
     /// Now supports chunked storage for tensors exceeding int.MaxValue elements.
     /// </summary>
-    public class Tensor
+    public class Tensor : IDisposable
     {
         public float[] Data { get; private set; }
         public int[] Shape { get; private set; }
@@ -23,6 +23,7 @@ namespace SmallMind.Core.Core
         // Chunked storage support
         internal ITensorStorage? _storage; // When using chunked storage
         internal ITensorStorage? _gradStorage; // Chunked gradient storage
+        private bool _disposed;
 
         public Tensor(float[] data, int[] shape, bool requiresGrad = false)
         {
@@ -146,6 +147,59 @@ namespace SmallMind.Core.Core
             
             return tensor;
         }
+
+        /// <summary>
+        /// Creates a memory-mapped tensor that streams data from disk.
+        /// Ideal for very large models that don't fit in RAM (inference only).
+        /// </summary>
+        /// <param name="filePath">Path to the file containing tensor data.</param>
+        /// <param name="shape">Shape of the tensor.</param>
+        /// <param name="writable">Whether to allow write access (default: false).</param>
+        /// <returns>A new tensor with memory-mapped storage.</returns>
+        public static Tensor CreateMemoryMapped(string filePath, int[] shape, bool writable = false)
+        {
+            Guard.NotNullOrWhiteSpace(filePath);
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+
+            long totalElements = ShapeToSizeLong(shape);
+            
+            var tensor = new Tensor();
+            tensor.Shape = (int[])shape.Clone();
+            tensor.RequiresGrad = false; // Memory-mapped tensors don't support gradients
+            tensor._storage = new MemoryMappedTensorStorage(filePath, totalElements, writable);
+            tensor.Data = Array.Empty<float>();
+            
+            return tensor;
+        }
+
+        /// <summary>
+        /// Creates a new memory-mapped tensor file initialized with zeros.
+        /// </summary>
+        /// <param name="filePath">Path where the file will be created.</param>
+        /// <param name="shape">Shape of the tensor.</param>
+        /// <returns>A new tensor with memory-mapped storage.</returns>
+        public static Tensor CreateMemoryMappedFile(string filePath, int[] shape)
+        {
+            Guard.NotNullOrWhiteSpace(filePath);
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+
+            long totalElements = ShapeToSizeLong(shape);
+            
+            var tensor = new Tensor();
+            tensor.Shape = (int[])shape.Clone();
+            tensor.RequiresGrad = false;
+            tensor._storage = MemoryMappedTensorStorage.Create(filePath, totalElements);
+            tensor.Data = Array.Empty<float>();
+            
+            return tensor;
+        }
+
+        /// <summary>
+        /// Gets whether this tensor uses memory-mapped storage.
+        /// </summary>
+        public bool IsMemoryMapped => _storage is MemoryMappedTensorStorage;
 
         /// <summary>
         /// Protected parameterless constructor for CreateChunked factory method.
@@ -818,9 +872,35 @@ namespace SmallMind.Core.Core
 
         public override string ToString()
         {
+            if (IsMemoryMapped)
+            {
+                var mmStorage = (MemoryMappedTensorStorage)_storage!;
+                return $"Tensor(shape=[{string.Join(", ", Shape)}], memory-mapped, file={Path.GetFileName(mmStorage.FilePath)}, totalElements={TotalElements:N0})";
+            }
             if (IsChunked)
                 return $"Tensor(shape=[{string.Join(", ", Shape)}], chunked, totalElements={TotalElements:N0})";
             return $"Tensor(shape=[{string.Join(", ", Shape)}], size={Size})";
+        }
+
+        /// <summary>
+        /// Disposes resources used by this tensor (only for memory-mapped tensors).
+        /// Regular dense and chunked tensors don't need disposal (GC handles them).
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            
+            if (_storage is IDisposable disposableStorage)
+            {
+                disposableStorage.Dispose();
+            }
+            
+            if (_gradStorage is IDisposable disposableGradStorage)
+            {
+                disposableGradStorage.Dispose();
+            }
+            
+            _disposed = true;
         }
     }
     

@@ -331,7 +331,60 @@ public class Embedding : Module
 - ⚠️ Some operations (matmul) may need optimization for fully chunked workflows
 - ⚠️ Legacy code expecting `.Data` array won't work (use `.CopyTo()` instead)
 
-### 5.2 Native Interop
+### 5.2 Memory-Mapped Files (IMPLEMENTED!)
+
+**Update**: SmallMind now supports memory-mapped storage for models exceeding available RAM!
+
+```csharp
+// For models that don't fit in RAM, stream from disk
+string modelPath = "large_embedding.bin";
+int vocabSize = 200_000;
+int embeddingDim = 25_000;
+long totalElements = (long)vocabSize * embeddingDim; // 5B elements = ~18GB
+
+// Create a memory-mapped file
+using var mmTensor = Tensor.CreateMemoryMappedFile(
+    modelPath,
+    new int[] { vocabSize, embeddingDim }
+);
+
+Console.WriteLine($"Created {new FileInfo(modelPath).Length / (1024.0 * 1024 * 1024):F2} GB file");
+Console.WriteLine($"Is memory-mapped: {mmTensor.IsMemoryMapped}");
+
+// Access works on-demand (OS manages paging)
+int tokenId = 50_000;
+long offset = (long)tokenId * embeddingDim;
+var embedding = new float[embeddingDim];
+mmTensor.CopyTo(offset, embedding, embeddingDim);
+
+// Later: Load existing memory-mapped file
+using var loadedTensor = Tensor.CreateMemoryMapped(
+    modelPath,
+    new int[] { vocabSize, embeddingDim },
+    writable: false // Read-only for inference
+);
+```
+
+**Key benefits:**
+- Models larger than available RAM work seamlessly
+- Operating system manages memory paging automatically
+- Share model weights across multiple processes
+- Perfect for inference-only scenarios
+- Zero-copy access when data is in page cache
+
+**Trade-offs:**
+- **Much slower** than in-memory (disk I/O bottleneck)
+- Not suitable for training (too slow for gradient updates)
+- Requires fast SSD for acceptable performance
+- Read-only by default (writable mode requires careful management)
+- Best with sequential access patterns
+
+**When to use:**
+- ✅ Large pre-trained models for inference
+- ✅ Models that exceed available RAM
+- ✅ Multi-process serving scenarios
+- ❌ Training (use in-memory or chunked tensors)
+- ❌ Latency-sensitive applications
 
 Use native libraries via P/Invoke for >2B element tensors:
 
@@ -446,9 +499,9 @@ For SmallMind users:
 
 For SmallMind developers (future enhancements):
 
-1. ✅ **Tensor sharding implemented** - Embeddings can exceed 2B elements
-2. **Optimize MatMul for chunked weights** - Currently supports dense output only
-3. **Add memory-mapped file support** for streaming from disk (optional)
+1. ✅ **Tensor sharding implemented** - Embeddings can exceed 2B elements via ChunkedBuffer
+2. ✅ **Memory-mapped file support implemented** - Stream weights from disk for models > RAM
+3. **Optimize MatMul for chunked weights** - Currently supports dense output only
 4. **Explore native interop** for critical performance paths (if needed)
 5. **Add FP16 support** for 2x memory reduction (when .NET supports Half natively)
 

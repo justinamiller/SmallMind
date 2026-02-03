@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 
@@ -36,6 +37,9 @@ namespace SmallMind.Examples.ParameterLimits
 
             // 6. NEW: Chunked tensor support
             DemonstrateChunkedTensorSupport();
+
+            // 7. NEW: Memory-mapped tensor support
+            DemonstrateMemoryMappedSupport();
 
             Console.WriteLine("\n=== Demo Complete ===");
             Console.WriteLine("\nFor more information, see:");
@@ -119,6 +123,92 @@ namespace SmallMind.Examples.ParameterLimits
             Console.WriteLine("     • MatMul with chunked weights not yet optimized (use for embeddings)");
             Console.WriteLine("     • Chunked tensors cannot be used with legacy code expecting Data array");
             Console.WriteLine("     • Some operations may require copying data\n");
+
+            Console.WriteLine("7. MEMORY-MAPPED TENSORS (DISK STREAMING)");
+            Console.WriteLine("   -----------------------------------------");
+            Console.WriteLine("   For models that exceed available RAM, stream weights from disk\n");
+
+            var diskModelConfig = new
+            {
+                Name = "Disk-Streamed Model",
+                VocabSize = 200000,
+                EmbeddingDim = 25000
+            };
+
+            long diskTensorSize = (long)diskModelConfig.VocabSize * diskModelConfig.EmbeddingDim;
+            long memorySizeGB = diskTensorSize * sizeof(float) / (1024L * 1024 * 1024);
+
+            Console.WriteLine($"   {diskModelConfig.Name}:");
+            Console.WriteLine($"     Vocabulary Size: {diskModelConfig.VocabSize:N0}");
+            Console.WriteLine($"     Embedding Dimension: {diskModelConfig.EmbeddingDim:N0}");
+            Console.WriteLine($"     Embedding Table: {diskModelConfig.VocabSize:N0} × {diskModelConfig.EmbeddingDim:N0} = {diskTensorSize:N0}");
+            Console.WriteLine($"     Memory required: ~{memorySizeGB} GB\n");
+
+            Console.WriteLine("   Creating memory-mapped tensor (streams from disk)...");
+            try
+            {
+                string tempFile = Path.Combine(Path.GetTempPath(), "demo_embedding.bin");
+                
+                try
+                {
+                    // Create a small memory-mapped file for demonstration
+                    // (Creating 20GB file would be too slow for demo)
+                    int demoVocab = 10000;
+                    int demoEmbed = 5000;
+                    
+                    using (var mmTensor = Tensor.CreateMemoryMappedFile(
+                        tempFile,
+                        new int[] { demoVocab, demoEmbed }))
+                    {
+                        Console.WriteLine($"     ✓ Created memory-mapped tensor file");
+                        Console.WriteLine($"     File: {tempFile}");
+                        Console.WriteLine($"     Size: {new FileInfo(tempFile).Length / (1024.0 * 1024):F2} MB");
+                        Console.WriteLine($"     Is memory-mapped: {mmTensor.IsMemoryMapped}");
+                        Console.WriteLine($"     Total elements: {mmTensor.TotalElements:N0}\n");
+
+                        Console.WriteLine("   Writing test data to disk...");
+                        var testData = new float[100];
+                        for (int i = 0; i < 100; i++)
+                            testData[i] = i * 0.01f;
+                        mmTensor.CopyFrom(testData, 1000);
+                        Console.WriteLine("     ✓ Data written to memory-mapped file\n");
+
+                        Console.WriteLine("   Reading back from disk (on-demand)...");
+                        var readData = new float[100];
+                        mmTensor.CopyTo(1000, readData, 100);
+                        Console.WriteLine($"     ✓ Data read successfully");
+                        Console.WriteLine($"     First 5 values: [{readData[0]:F4}, {readData[1]:F4}, {readData[2]:F4}, {readData[3]:F4}, {readData[4]:F4}]\n");
+                    }
+
+                    // Clean up
+                    if (File.Exists(tempFile))
+                        File.Delete(tempFile);
+                }
+                catch
+                {
+                    // Clean up on error
+                    if (File.Exists(tempFile))
+                        File.Delete(tempFile);
+                    throw;
+                }
+
+                Console.WriteLine("   Key Benefits:");
+                Console.WriteLine("     • Models larger than available RAM");
+                Console.WriteLine("     • OS manages paging automatically");
+                Console.WriteLine("     • Share model weights across processes");
+                Console.WriteLine("     • Perfect for inference-only scenarios");
+                Console.WriteLine("     • No need to load entire model into memory\n");
+
+                Console.WriteLine("   Trade-offs:");
+                Console.WriteLine("     • Much slower than in-memory (disk I/O)");
+                Console.WriteLine("     • Not suitable for training (too slow)");
+                Console.WriteLine("     • Requires fast SSD for acceptable performance");
+                Console.WriteLine("     • Read-only by default\n");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"     ✗ Error: {ex.Message}\n");
+            }
         }
 
         static void DemonstrateCSharpLimit()
@@ -345,6 +435,95 @@ namespace SmallMind.Examples.ParameterLimits
             catch (ValidationException ex)
             {
                 Console.WriteLine($"     ✗ Validation failed: {ex.Message}\n");
+            }
+        }
+
+        static void DemonstrateMemoryMappedSupport()
+        {
+            Console.WriteLine("7. MEMORY-MAPPED TENSORS (DISK STREAMING)");
+            Console.WriteLine("   -----------------------------------------");
+            Console.WriteLine("   For models that exceed available RAM, stream weights from disk\n");
+
+            var diskModelConfig = new
+            {
+                Name = "Disk-Streamed Model",
+                VocabSize = 200000,
+                EmbeddingDim = 25000
+            };
+
+            long diskTensorSize = (long)diskModelConfig.VocabSize * diskModelConfig.EmbeddingDim;
+            long memorySizeGB = diskTensorSize * sizeof(float) / (1024L * 1024 * 1024);
+
+            Console.WriteLine($"   {diskModelConfig.Name}:");
+            Console.WriteLine($"     Vocabulary Size: {diskModelConfig.VocabSize:N0}");
+            Console.WriteLine($"     Embedding Dimension: {diskModelConfig.EmbeddingDim:N0}");
+            Console.WriteLine($"     Embedding Table: {diskModelConfig.VocabSize:N0} × {diskModelConfig.EmbeddingDim:N0} = {diskTensorSize:N0}");
+            Console.WriteLine($"     Memory required: ~{memorySizeGB} GB\n");
+
+            Console.WriteLine("   Creating memory-mapped tensor (streams from disk)...");
+            try
+            {
+                string tempFile = Path.Combine(Path.GetTempPath(), "demo_embedding.bin");
+                
+                try
+                {
+                    // Create a small memory-mapped file for demonstration
+                    // (Creating 20GB file would be too slow for demo)
+                    int demoVocab = 10000;
+                    int demoEmbed = 5000;
+                    
+                    using (var mmTensor = Tensor.CreateMemoryMappedFile(
+                        tempFile,
+                        new int[] { demoVocab, demoEmbed }))
+                    {
+                        Console.WriteLine($"     ✓ Created memory-mapped tensor file");
+                        Console.WriteLine($"     File: {tempFile}");
+                        Console.WriteLine($"     Size: {new FileInfo(tempFile).Length / (1024.0 * 1024):F2} MB");
+                        Console.WriteLine($"     Is memory-mapped: {mmTensor.IsMemoryMapped}");
+                        Console.WriteLine($"     Total elements: {mmTensor.TotalElements:N0}\n");
+
+                        Console.WriteLine("   Writing test data to disk...");
+                        var testData = new float[100];
+                        for (int i = 0; i < 100; i++)
+                            testData[i] = i * 0.01f;
+                        mmTensor.CopyFrom(testData, 1000);
+                        Console.WriteLine("     ✓ Data written to memory-mapped file\n");
+
+                        Console.WriteLine("   Reading back from disk (on-demand)...");
+                        var readData = new float[100];
+                        mmTensor.CopyTo(1000, readData, 100);
+                        Console.WriteLine($"     ✓ Data read successfully");
+                        Console.WriteLine($"     First 5 values: [{readData[0]:F4}, {readData[1]:F4}, {readData[2]:F4}, {readData[3]:F4}, {readData[4]:F4}]\n");
+                    }
+
+                    // Clean up
+                    if (File.Exists(tempFile))
+                        File.Delete(tempFile);
+                }
+                catch
+                {
+                    // Clean up on error
+                    if (File.Exists(tempFile))
+                        File.Delete(tempFile);
+                    throw;
+                }
+
+                Console.WriteLine("   Key Benefits:");
+                Console.WriteLine("     • Models larger than available RAM");
+                Console.WriteLine("     • OS manages paging automatically");
+                Console.WriteLine("     • Share model weights across processes");
+                Console.WriteLine("     • Perfect for inference-only scenarios");
+                Console.WriteLine("     • No need to load entire model into memory\n");
+
+                Console.WriteLine("   Trade-offs:");
+                Console.WriteLine("     • Much slower than in-memory (disk I/O)");
+                Console.WriteLine("     • Not suitable for training (too slow)");
+                Console.WriteLine("     • Requires fast SSD for acceptable performance");
+                Console.WriteLine("     • Read-only by default\n");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"     ✗ Error: {ex.Message}\n");
             }
         }
     }
