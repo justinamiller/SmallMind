@@ -4,31 +4,31 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET Version](https://img.shields.io/badge/.NET-10.0%2B-512BD4)](https://dotnet.microsoft.com/download)
 
-SmallMind is a **production-ready, open source, local, CPU-first LLM inference runtime** built entirely in C# (.NET 10+) with **NO 3rd party dependencies**. It provides a stable public API for running decoder-only Transformers (GPT-style) on your infrastructure.
+SmallMind is a **production-ready, open source, local, CPU-first LLM inference runtime** built entirely in C# (.NET 10+) with **NO 3rd party dependencies**. It provides a stable public API (`SmallMind.Public`) for running decoder-only Transformers (GPT-style) on your infrastructure.
 
 ## Project Intent
 
 **SmallMind is designed for production-grade local inference, not training at scale.**
 
-The **stable public API** (`SmallMind.Abstractions` + `SmallMind.Engine` facade) is the recommended adoption surface for:
+The **stable public API** (`SmallMind.Public` namespace) is the recommended adoption surface for:
 - Loading models for inference (`.smq`, `.gguf` import)
 - Text generation with streaming and cancellation
-- Multi-turn conversations with KV cache optimization
-- Resource governance (token/time/memory budgets)
+- Session-based inference with state management
+- Resource governance (token/time budgets)
 - Deterministic generation for testing and reproducibility
+- Observability through diagnostics hooks
 
-**Internals and experimental modules** (training, research utilities) may change between versions. The stable facade provides predictable, versioned access to the inference engine while keeping internal implementation transparent for learning and customization.
+**Internals and experimental modules** (training, research utilities) may change between versions. The stable public API provides predictable, versioned access to the inference engine while keeping internal implementation transparent for learning and customization.
 
-See [docs/stability-and-compatibility.md](docs/stability-and-compatibility.md) for detailed stability guarantees.
+See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guarantees and versioning policy.
 
 ## Why SmallMind?
 
 - ✅ **Zero Dependencies**: No black-box libraries - full control over your inference stack
 - ✅ **Local & Private**: Runs entirely on your infrastructure, no external API calls
-- ✅ **Stable Public API**: Semantic versioning with clear stability guarantees (no paid support)
+- ✅ **Stable Public API**: Semantic versioning with clear stability guarantees (`SmallMind.Public` namespace)
 - ✅ **Performance Optimized**: SIMD acceleration, quantization (Q8/Q4), KV caching
-- ✅ **Production Ready**: Resource governance, budgets, deterministic mode, safe loading
-- ✅ **RAG Built-in**: Document retrieval and citation-backed generation
+- ✅ **Production Ready**: Resource governance, budgets, deterministic mode, diagnostics
 - ✅ **Platform Native**: Pure .NET - runs on Windows, Linux, macOS, containers
 
 ## Installation
@@ -37,14 +37,12 @@ See [docs/stability-and-compatibility.md](docs/stability-and-compatibility.md) f
 
 ```bash
 # Stable public API (recommended for production)
-dotnet add package SmallMind.Engine
-dotnet add package SmallMind.Abstractions
+dotnet add package SmallMind.Public
 
 # Optional: Core libraries for advanced scenarios
 dotnet add package SmallMind.Core        # Tensor operations, SIMD
 dotnet add package SmallMind.Transformers # Model implementations
 dotnet add package SmallMind.Runtime     # Inference runtime
-dotnet add package SmallMind.Rag         # RAG capabilities
 ```
 
 ### From Source
@@ -58,51 +56,60 @@ dotnet build
 ## Quick Start (Stable API)
 
 ```csharp
-using SmallMind.Abstractions;
-using SmallMind.Engine;
+using SmallMind.Public;
 
-// Create engine
-using var engine = SmallMind.Create(new SmallMindOptions
+// Create engine with model loaded
+var options = new SmallMindOptions
 {
+    ModelPath = "model.smq",  // or .gguf file
+    MaxContextTokens = 2048,
     EnableKvCache = true,
-    EnableRag = true
-});
-
-// Load model (.smq or .gguf)
-using var model = await engine.LoadModelAsync(new ModelLoadRequest
-{
-    Path = "model.smq",
-    AllowGgufImport = true  // Auto-convert .gguf files
-});
-
-// Generate text with streaming
-var request = new GenerationRequest
-{
-    Prompt = "Once upon a time",
-    Options = new GenerationOptions
-    {
-        MaxNewTokens = 100,
-        Temperature = 0.8,
-        Mode = GenerationMode.Exploratory
-    }
+    AllowGgufImport = true
 };
 
-await foreach (var token in engine.GenerateStreamingAsync(model, request))
+using var engine = SmallMindFactory.Create(options);
+
+// Check capabilities
+var caps = engine.GetCapabilities();
+Console.WriteLine($"Max context: {caps.MaxContextTokens} tokens");
+Console.WriteLine($"Supports streaming: {caps.SupportsStreaming}");
+
+// Create a text generation session
+var sessionOptions = new TextGenerationOptions
 {
-    if (token.Kind == TokenEventKind.Token)
-        Console.Write(token.Text.ToString());
+    Temperature = 0.8f,
+    TopP = 0.95f,
+    MaxOutputTokens = 100
+};
+
+using var session = engine.CreateTextGenerationSession(sessionOptions);
+
+// Generate text (non-streaming)
+var request = new TextGenerationRequest
+{
+    Prompt = "Once upon a time".AsMemory()
+};
+
+var result = session.Generate(request);
+Console.WriteLine($"Generated: {result.Text}");
+Console.WriteLine($"Tokens: {result.Usage.CompletionTokens}");
+Console.WriteLine($"Speed: {result.Timings.TokensPerSecond:F2} tokens/sec");
+
+// Or stream tokens
+await foreach (var token in session.GenerateStreaming(request))
+{
+    Console.Write(token.TokenText);
 }
 ```
 
-**See [docs/quickstart.md](docs/quickstart.md) for complete examples.**
+**See [examples/GoldenPath](examples/GoldenPath) for a complete example showing all features.**
 
 ## Documentation
 
 ### Stable API & Compatibility
-- **[Stability and Compatibility](docs/stability-and-compatibility.md)** - What's stable, versioning policy, determinism, concurrency
+- **[API Stability Policy](docs/API_STABILITY.md)** - What's stable, versioning policy, upgrade guidance
+- **[Golden Path Example](examples/GoldenPath)** - Complete example showing all public API features
 - **[Compatibility Matrix](docs/compatibility-matrix.md)** - Model formats, quantization, tokenizers, runtime limits
-- **[API Contract](docs/api-contract.md)** - Public API stability guarantees and usage patterns
-- **[Operational Notes](docs/operational-notes.md)** - Exception handling, resource management, production deployment
 
 ### Getting Started
 - **[Quick Start Guide](docs/quickstart.md)** - Installation, first steps, basic examples
@@ -121,24 +128,27 @@ await foreach (var token in engine.GenerateStreamingAsync(model, request))
 
 ## Key Features
 
-### 🔒 Stable Public API
+### 🔒 Stable Public API (`SmallMind.Public`)
 
 Use the **stable contract** for production deployments:
-- **Single entry point**: `SmallMind.Create()`
-- **Clean interfaces**: `ISmallMindEngine`, `IModelHandle`, `IChatSession`, `IRagEngine`
-- **Typed exceptions**: Actionable error messages with remediation
-- **Semantic versioning**: Predictable API evolution
+- **Single entry point**: `SmallMindFactory.Create(options)`
+- **Session-based design**: Create sessions for isolated inference
+- **Clean interfaces**: `ISmallMindEngine`, `ITextGenerationSession`, `IEmbeddingSession`
+- **Typed exceptions**: `SmallMindException` hierarchy with actionable error codes
+- **Semantic versioning**: Predictable API evolution following SemVer 2.0
+- **Future-proof DTOs**: Request/response objects designed for extension
+- **Diagnostics hooks**: `ISmallMindDiagnosticsSink` for observability
 
-See [docs/api-contract.md](docs/api-contract.md) and [docs/stability-and-compatibility.md](docs/stability-and-compatibility.md) for detailed stability guarantees.
+See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guarantees.
 
 ### ⚡ Production Features
 
 - **Streaming**: Token-by-token output with cancellation support
-- **KV Cache**: 13x speedup for multi-turn conversations
-- **Batching**: 5x throughput for concurrent requests
-- **Resource Governance**: Hard budgets (tokens, time, memory)
+- **KV Cache**: Significant speedup for multi-turn conversations
+- **Resource Governance**: Timeouts and token limits
 - **Deterministic Mode**: Same seed + prompt = identical output
-- **Quantization**: Q8/Q4 for 4-7x memory reduction
+- **Quantization**: Q8/Q4 for memory reduction
+- **Capabilities Discovery**: Check what features are available before using them
 
 ### 📚 RAG (Retrieval-Augmented Generation)
 
