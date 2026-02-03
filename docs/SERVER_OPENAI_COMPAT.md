@@ -280,10 +280,10 @@ Configuration can be provided via:
 | `MaxConcurrentRequests` | int | `4` | Maximum concurrent inference requests |
 | `MaxQueueDepth` | int | `32` | Maximum queued requests (returns 429 when full) |
 | `RequestTimeoutMs` | int | `300000` | Request timeout in milliseconds |
-| `MaxContextTokens` | int | `2048` | Maximum context tokens |
-| `DefaultMaxTokens` | int | `512` | Default max tokens for generation |
-| `DefaultTemperature` | double | `0.7` | Default temperature |
-| `DefaultTopP` | double | `0.9` | Default top-p value |
+| `MaxContextTokens` | int | `4096` | Maximum context tokens |
+| `DefaultMaxTokens` | int | `100` | Default max tokens for generation |
+| `DefaultTemperature` | double | `0.8` | Default temperature |
+| `DefaultTopP` | double | `0.95` | Default top-p value |
 | `DefaultTopK` | int | `40` | Default top-k value |
 
 ### Example Configuration

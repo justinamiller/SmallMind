@@ -35,7 +35,14 @@ public sealed class ChatCompletionRequest
         if (Stop == null) return Array.Empty<string>();
         if (Stop is string str) return new[] { str };
         if (Stop is List<object> list)
-            return list.Select(o => o?.ToString() ?? string.Empty).ToArray();
+        {
+            var result = new string[list.Count];
+            for (int i = 0; i < list.Count; i++)
+            {
+                result[i] = list[i]?.ToString() ?? string.Empty;
+            }
+            return result;
+        }
         return Array.Empty<string>();
     }
 }
@@ -156,7 +163,14 @@ public sealed class CompletionRequest
         if (Stop == null) return Array.Empty<string>();
         if (Stop is string str) return new[] { str };
         if (Stop is List<object> list)
-            return list.Select(o => o?.ToString() ?? string.Empty).ToArray();
+        {
+            var result = new string[list.Count];
+            for (int i = 0; i < list.Count; i++)
+            {
+                result[i] = list[i]?.ToString() ?? string.Empty;
+            }
+            return result;
+        }
         return Array.Empty<string>();
     }
 }
@@ -210,7 +224,14 @@ public sealed class EmbeddingRequest
     {
         if (Input is string str) return new[] { str };
         if (Input is List<object> list)
-            return list.Select(o => o?.ToString() ?? string.Empty).ToArray();
+        {
+            var result = new string[list.Count];
+            for (int i = 0; i < list.Count; i++)
+            {
+                result[i] = list[i]?.ToString() ?? string.Empty;
+            }
+            return result;
+        }
         return Array.Empty<string>();
     }
 }

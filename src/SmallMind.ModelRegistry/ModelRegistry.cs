@@ -281,7 +281,27 @@ namespace SmallMind.ModelRegistry
             }
 
             // Sanitize filename for use as ID
-            fileName = new string(fileName.Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_').ToArray());
+            int validCount = 0;
+            for (int i = 0; i < fileName.Length; i++)
+            {
+                char c = fileName[i];
+                if (char.IsLetterOrDigit(c) || c == '-' || c == '_')
+                {
+                    validCount++;
+                }
+            }
+            
+            var buffer = new char[validCount];
+            int pos = 0;
+            for (int i = 0; i < fileName.Length; i++)
+            {
+                char c = fileName[i];
+                if (char.IsLetterOrDigit(c) || c == '-' || c == '_')
+                {
+                    buffer[pos++] = c;
+                }
+            }
+            fileName = new string(buffer);
 
             // Ensure uniqueness
             string baseId = fileName;
