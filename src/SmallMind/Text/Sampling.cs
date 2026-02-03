@@ -17,6 +17,11 @@ namespace SmallMind.Text
         
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
+        private List<int>? _contextCroppedBuffer;
+        private float[]? _contextDataBuffer;
+        private int[]? _tensorShapeBuffer;
+        private float[]? _logitsLastBuffer;
+        private float[]? _topKFilteredBuffer;
 
         public Sampling(TransformerModel model, ITokenizer tokenizer, int blockSize)
         {
@@ -117,6 +122,7 @@ namespace SmallMind.Text
                     : null;
 
                 // Crop context to last blockSize tokens (avoid LINQ allocation)
+                // Reuse buffer to eliminate per-token allocation
                 List<int> contextCropped;
                 if (context.Count <= _blockSize)
                 {
@@ -124,54 +130,83 @@ namespace SmallMind.Text
                 }
                 else
                 {
-                    // Manual copy of last blockSize tokens (faster than Skip().ToList())
-                    contextCropped = new List<int>(_blockSize);
+                    // Reuse buffer instead of allocating new List
+                    if (_contextCroppedBuffer == null)
+                    {
+                        _contextCroppedBuffer = new List<int>(_blockSize);
+                    }
+                    else
+                    {
+                        _contextCroppedBuffer.Clear();
+                    }
+                    
                     int startIdx = context.Count - _blockSize;
                     for (int idx = startIdx; idx < context.Count; idx++)
                     {
-                        contextCropped.Add(context[idx]);
+                        _contextCroppedBuffer.Add(context[idx]);
                     }
+                    contextCropped = _contextCroppedBuffer;
                 }
 
-                // Convert to tensor: (1, T)
-                var contextData = new float[contextCropped.Count];
-                for (int j = 0; j < contextCropped.Count; j++)
+                // Convert to tensor: (1, T) - reuse buffer
+                int contextSize = contextCropped.Count;
+                if (_contextDataBuffer == null || _contextDataBuffer.Length < contextSize)
                 {
-                    contextData[j] = contextCropped[j];
+                    _contextDataBuffer = new float[contextSize];
                 }
-                var contextTensor = new Tensor(contextData, new int[] { 1, contextCropped.Count });
+                for (int j = 0; j < contextSize; j++)
+                {
+                    _contextDataBuffer[j] = contextCropped[j];
+                }
+                
+                // Reuse shape buffer
+                if (_tensorShapeBuffer == null)
+                {
+                    _tensorShapeBuffer = new int[2];
+                }
+                _tensorShapeBuffer[0] = 1;
+                _tensorShapeBuffer[1] = contextSize;
+                
+                var contextTensor = new Tensor(_contextDataBuffer, _tensorShapeBuffer);
 
                 // Forward pass: (1, T, vocab_size)
                 var logits = _model.Forward(contextTensor);
 
                 // Get logits for the last position: (vocab_size,)
                 // logits shape: (1, T, vocab_size), we want position (0, T-1, :)
-                int T = contextCropped.Count;
+                int T = contextSize;
                 int vocabSize = logits.Shape[2];
-                var logitsLast = new float[vocabSize];
+                
+                // Reuse logitsLast buffer
+                if (_logitsLastBuffer == null || _logitsLastBuffer.Length < vocabSize)
+                {
+                    _logitsLastBuffer = new float[vocabSize];
+                }
+                
                 int lastPosOffset = (T - 1) * vocabSize; // Offset for last position in batch 0
                 for (int v = 0; v < vocabSize; v++)
                 {
-                    logitsLast[v] = logits.Data[lastPosOffset + v];
+                    _logitsLastBuffer[v] = logits.Data[lastPosOffset + v];
                 }
 
-                // Apply temperature
+                // Apply temperature - operate on buffer directly
                 if (temperature != 1.0)
                 {
                     for (int v = 0; v < vocabSize; v++)
                     {
-                        logitsLast[v] /= (float)temperature;
+                        _logitsLastBuffer[v] /= (float)temperature;
                     }
                 }
 
-                // Apply top-k filtering
+                // Apply top-k filtering - returns reference to buffer or filtered buffer
+                float[] logitsToSample = _logitsLastBuffer;
                 if (topK > 0)
                 {
-                    logitsLast = ApplyTopK(logitsLast, topK);
+                    logitsToSample = ApplyTopK(_logitsLastBuffer, vocabSize, topK);
                 }
 
                 // Convert to probabilities (softmax)
-                var probs = Softmax(logitsLast);
+                var probs = Softmax(logitsToSample, vocabSize);
 
                 // Sample from the distribution
                 var nextToken = SampleFromProbs(probs, random);
@@ -317,46 +352,63 @@ namespace SmallMind.Text
                 _model.NumHeads, 
                 _model.HeadDim);
 
-            // PREFILL PHASE: Process entire prompt
-            var contextData = new float[context.Count];
-            for (int j = 0; j < context.Count; j++)
+            // PREFILL PHASE: Process entire prompt - reuse buffers
+            int prefillContextSize = context.Count;
+            if (_contextDataBuffer == null || _contextDataBuffer.Length < prefillContextSize)
             {
-                contextData[j] = context[j];
+                _contextDataBuffer = new float[prefillContextSize];
             }
-            var contextTensor = new Tensor(contextData, new int[] { 1, context.Count });
+            for (int j = 0; j < prefillContextSize; j++)
+            {
+                _contextDataBuffer[j] = context[j];
+            }
+            
+            // Reuse shape buffer
+            if (_tensorShapeBuffer == null)
+            {
+                _tensorShapeBuffer = new int[2];
+            }
+            _tensorShapeBuffer[0] = 1;
+            _tensorShapeBuffer[1] = prefillContextSize;
+            
+            var contextTensor = new Tensor(_contextDataBuffer, _tensorShapeBuffer);
             
             // Forward pass for prefill - populates KV cache
             var logits = _model.Forward(contextTensor, session, isPrefill: true);
             
             prefillStopwatch.Stop();
             
-            // Get logits for the last position to start generation
-            int T = context.Count;
+            // Get logits for the last position to start generation - reuse buffer
+            int T = prefillContextSize;
             int vocabSize = logits.Shape[2];
-            var logitsLast = new float[vocabSize];
+            if (_logitsLastBuffer == null || _logitsLastBuffer.Length < vocabSize)
+            {
+                _logitsLastBuffer = new float[vocabSize];
+            }
             int lastPosOffset = (T - 1) * vocabSize;
             for (int v = 0; v < vocabSize; v++)
             {
-                logitsLast[v] = logits.Data[lastPosOffset + v];
+                _logitsLastBuffer[v] = logits.Data[lastPosOffset + v];
             }
 
-            // Apply temperature
+            // Apply temperature - operate on buffer directly
             if (temperature != 1.0)
             {
                 for (int v = 0; v < vocabSize; v++)
                 {
-                    logitsLast[v] /= (float)temperature;
+                    _logitsLastBuffer[v] /= (float)temperature;
                 }
             }
 
             // Apply top-k filtering
+            float[] logitsToSample = _logitsLastBuffer;
             if (topK > 0)
             {
-                logitsLast = ApplyTopK(logitsLast, topK);
+                logitsToSample = ApplyTopK(_logitsLastBuffer, vocabSize, topK);
             }
 
             // Convert to probabilities (softmax)
-            var probs = Softmax(logitsLast);
+            var probs = Softmax(logitsToSample, vocabSize);
 
             // Sample first new token
             var nextToken = SampleFromProbs(probs, random);
@@ -366,41 +418,60 @@ namespace SmallMind.Text
             // DECODE PHASE: Generate one token at a time using cache
             var decodeStopwatch = System.Diagnostics.Stopwatch.StartNew();
             
+            // Reusable buffers for decode loop
+            float[]? singleTokenDataBuffer = null;
+            int[]? singleTensorShapeBuffer = null;
+            
             for (int i = 1; i < maxNewTokens; i++)
             {
-                // Create tensor for single new token
-                var singleTokenData = new float[1] { nextToken };
-                var singleTokenTensor = new Tensor(singleTokenData, new int[] { 1, 1 });
+                // Reuse single token buffer
+                if (singleTokenDataBuffer == null)
+                {
+                    singleTokenDataBuffer = new float[1];
+                }
+                singleTokenDataBuffer[0] = nextToken;
+                
+                // Reuse shape buffer
+                if (singleTensorShapeBuffer == null)
+                {
+                    singleTensorShapeBuffer = new int[] { 1, 1 };
+                }
+                
+                var singleTokenTensor = new Tensor(singleTokenDataBuffer, singleTensorShapeBuffer);
 
                 // Forward pass for decode - uses KV cache
                 logits = _model.Forward(singleTokenTensor, session, isPrefill: false);
                 cacheHits++; // Each decode step is a cache hit
 
-                // Get logits for the single new position
+                // Get logits for the single new position - reuse buffer
                 vocabSize = logits.Shape[2];
-                logitsLast = new float[vocabSize];
+                if (_logitsLastBuffer == null || _logitsLastBuffer.Length < vocabSize)
+                {
+                    _logitsLastBuffer = new float[vocabSize];
+                }
                 for (int v = 0; v < vocabSize; v++)
                 {
-                    logitsLast[v] = logits.Data[v]; // Only one position now
+                    _logitsLastBuffer[v] = logits.Data[v]; // Only one position now
                 }
 
-                // Apply temperature
+                // Apply temperature - operate on buffer directly
                 if (temperature != 1.0)
                 {
                     for (int v = 0; v < vocabSize; v++)
                     {
-                        logitsLast[v] /= (float)temperature;
+                        _logitsLastBuffer[v] /= (float)temperature;
                     }
                 }
 
                 // Apply top-k filtering
+                logitsToSample = _logitsLastBuffer;
                 if (topK > 0)
                 {
-                    logitsLast = ApplyTopK(logitsLast, topK);
+                    logitsToSample = ApplyTopK(_logitsLastBuffer, vocabSize, topK);
                 }
 
                 // Convert to probabilities (softmax)
-                probs = Softmax(logitsLast);
+                probs = Softmax(logitsToSample, vocabSize);
 
                 // Sample from the distribution
                 nextToken = SampleFromProbs(probs, random);
@@ -447,11 +518,11 @@ namespace SmallMind.Text
         }
 
         /// <summary>
-        /// Apply top-k filtering to logits
+        /// Apply top-k filtering to logits (in-place when possible, using reusable buffer)
         /// </summary>
-        private float[] ApplyTopK(float[] logits, int k)
+        private float[] ApplyTopK(float[] logits, int logitsLength, int k)
         {
-            if (k >= logits.Length)
+            if (k >= logitsLength)
             {
                 return logits;
             }
@@ -460,22 +531,27 @@ namespace SmallMind.Text
             float[]? rentedBuffer = null;
             try
             {
-                rentedBuffer = System.Buffers.ArrayPool<float>.Shared.Rent(logits.Length);
-                Array.Copy(logits, rentedBuffer, logits.Length);
+                rentedBuffer = System.Buffers.ArrayPool<float>.Shared.Rent(logitsLength);
+                Array.Copy(logits, rentedBuffer, logitsLength);
                 
                 // Partial sort - only need to find k-th largest
-                Array.Sort(rentedBuffer, 0, logits.Length);
-                Array.Reverse(rentedBuffer, 0, logits.Length); // Now in descending order
-                float kthValue = rentedBuffer[Math.Min(k - 1, logits.Length - 1)];
+                Array.Sort(rentedBuffer, 0, logitsLength);
+                Array.Reverse(rentedBuffer, 0, logitsLength); // Now in descending order
+                float kthValue = rentedBuffer[Math.Min(k - 1, logitsLength - 1)];
 
-                // Set all values below k-th to -inf
-                var filtered = new float[logits.Length];
-                for (int i = 0; i < logits.Length; i++)
+                // Reuse filtered buffer instead of allocating new array
+                if (_topKFilteredBuffer == null || _topKFilteredBuffer.Length < logitsLength)
                 {
-                    filtered[i] = logits[i] >= kthValue ? logits[i] : float.NegativeInfinity;
+                    _topKFilteredBuffer = new float[logitsLength];
+                }
+                
+                // Set all values below k-th to -inf
+                for (int i = 0; i < logitsLength; i++)
+                {
+                    _topKFilteredBuffer[i] = logits[i] >= kthValue ? logits[i] : float.NegativeInfinity;
                 }
 
-                return filtered;
+                return _topKFilteredBuffer;
             }
             finally
             {
@@ -489,27 +565,27 @@ namespace SmallMind.Text
         /// <summary>
         /// Compute softmax over an array (reuses buffer for performance)
         /// </summary>
-        private float[] Softmax(float[] logits)
+        private float[] Softmax(float[] logits, int logitsLength)
         {
             // Reuse probability buffer to reduce allocations
-            if (_probabilityBuffer == null || _probabilityBuffer.Length != logits.Length)
+            if (_probabilityBuffer == null || _probabilityBuffer.Length < logitsLength)
             {
-                _probabilityBuffer = new float[logits.Length];
+                _probabilityBuffer = new float[logitsLength];
             }
             
             // Find max for numerical stability
             float max = float.NegativeInfinity;
-            foreach (var val in logits)
+            for (int i = 0; i < logitsLength; i++)
             {
-                if (val != float.NegativeInfinity)
+                if (logits[i] != float.NegativeInfinity)
                 {
-                    max = Math.Max(max, val);
+                    max = Math.Max(max, logits[i]);
                 }
             }
 
             // Compute exp and sum
             float sum = 0;
-            for (int i = 0; i < logits.Length; i++)
+            for (int i = 0; i < logitsLength; i++)
             {
                 if (logits[i] != float.NegativeInfinity)
                 {
@@ -525,7 +601,7 @@ namespace SmallMind.Text
             // Normalize
             if (sum > 0)
             {
-                for (int i = 0; i < _probabilityBuffer.Length; i++)
+                for (int i = 0; i < logitsLength; i++)
                 {
                     _probabilityBuffer[i] /= sum;
                 }
