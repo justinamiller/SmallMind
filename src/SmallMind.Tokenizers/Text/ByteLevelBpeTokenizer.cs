@@ -19,6 +19,9 @@ namespace SmallMind.Tokenizers
         private readonly Dictionary<int, string> _inverseVocab;
         private readonly Dictionary<(int, int), int> _mergeRanks;
         
+        // Cache for merged token strings to reduce allocations
+        private readonly Dictionary<(int, int), string> _mergedTokenCache = new Dictionary<(int, int), string>();
+        
         public int VocabSize => _vocab.Count;
         public TokenizerInfo Info { get; }
 
@@ -188,10 +191,15 @@ namespace SmallMind.Tokenizers
                         break;
 
                     // Apply merge: combine pair into single token
-                    // Need to look up merged token in vocab
-                    string tok1 = _inverseVocab.GetValueOrDefault(bestPair.Value.Item1, "");
-                    string tok2 = _inverseVocab.GetValueOrDefault(bestPair.Value.Item2, "");
-                    string merged = tok1 + tok2;
+                    // Use cache to avoid repeated string concatenations
+                    var pairKey = bestPair.Value;
+                    if (!_mergedTokenCache.TryGetValue(pairKey, out string? merged))
+                    {
+                        string tok1 = _inverseVocab.GetValueOrDefault(pairKey.Item1, "");
+                        string tok2 = _inverseVocab.GetValueOrDefault(pairKey.Item2, "");
+                        merged = tok1 + tok2;
+                        _mergedTokenCache[pairKey] = merged;
+                    }
 
                     if (_vocab.TryGetValue(merged, out int mergedId))
                     {

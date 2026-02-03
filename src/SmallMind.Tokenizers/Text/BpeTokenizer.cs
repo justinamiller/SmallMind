@@ -22,6 +22,21 @@ namespace SmallMind.Tokenizers
         private readonly Regex _preTokenizeRegex;
         private const string UnknownToken = "[UNK]";
         private const string EndOfTextToken = "[EOT]";
+        
+        // Reusable buffers to reduce allocations during encoding
+        private List<string>? _tokensBuffer;
+        
+        // Cache for single-character strings (ASCII range)
+        private static readonly string[] _charStringCache = new string[128];
+        
+        static BpeTokenizer()
+        {
+            // Pre-populate char string cache for ASCII characters
+            for (int i = 0; i < 128; i++)
+            {
+                _charStringCache[i] = ((char)i).ToString();
+            }
+        }
 
         public int VocabSize => _vocab.Count;
         
@@ -149,24 +164,46 @@ namespace SmallMind.Tokenizers
             {
                 string word = match.Value;
                 
-                // Convert word to character tokens
-                var tokens = new List<string>();
+                // Reuse tokens buffer to reduce allocations
+                if (_tokensBuffer == null)
+                {
+                    _tokensBuffer = new List<string>(word.Length);
+                }
+                else
+                {
+                    _tokensBuffer.Clear();
+                    if (_tokensBuffer.Capacity < word.Length)
+                    {
+                        _tokensBuffer.Capacity = word.Length;
+                    }
+                }
+                
+                // Convert word to character tokens - use cached strings for ASCII
                 foreach (char c in word)
                 {
-                    tokens.Add(c.ToString());
+                    string charStr;
+                    if (c < 128)
+                    {
+                        charStr = _charStringCache[c];
+                    }
+                    else
+                    {
+                        charStr = c.ToString();
+                    }
+                    _tokensBuffer.Add(charStr);
                 }
 
                 // Apply BPE merges
-                while (tokens.Count > 1)
+                while (_tokensBuffer.Count > 1)
                 {
                     // Find the pair with the lowest merge rank
                     (string, string)? bestPair = null;
                     int bestRank = int.MaxValue;
                     int bestIndex = -1;
 
-                    for (int i = 0; i < tokens.Count - 1; i++)
+                    for (int i = 0; i < _tokensBuffer.Count - 1; i++)
                     {
-                        var pair = (tokens[i], tokens[i + 1]);
+                        var pair = (_tokensBuffer[i], _tokensBuffer[i + 1]);
                         if (_mergeRanks.TryGetValue(pair, out int rank) && rank < bestRank)
                         {
                             bestPair = pair;
@@ -181,13 +218,14 @@ namespace SmallMind.Tokenizers
                         break;
                     }
 
-                    // Apply the merge
-                    tokens[bestIndex] = bestPair.Value.Item1 + bestPair.Value.Item2;
-                    tokens.RemoveAt(bestIndex + 1);
+                    // Apply the merge - use string concatenation (these are already interned in vocab)
+                    string merged = bestPair.Value.Item1 + bestPair.Value.Item2;
+                    _tokensBuffer[bestIndex] = merged;
+                    _tokensBuffer.RemoveAt(bestIndex + 1);
                 }
 
                 // Convert tokens to IDs
-                foreach (string token in tokens)
+                foreach (string token in _tokensBuffer)
                 {
                     if (_vocab.TryGetValue(token, out int id))
                     {

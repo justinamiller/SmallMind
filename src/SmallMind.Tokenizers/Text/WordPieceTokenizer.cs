@@ -99,33 +99,69 @@ namespace SmallMind.Tokenizers
                 // Greedy longest-match-first
                 bool isBad = false;
                 int start = 0;
+                
+                // Pre-allocate buffers outside loop to avoid potential stack overflow
+                Span<char> prefixBuffer = stackalloc char[2];
+                prefixBuffer[0] = '#';
+                prefixBuffer[1] = '#';
+                
+                // Max word length buffer for prefix concatenation (reasonable upper bound)
+                Span<char> workBuffer = stackalloc char[256];
 
                 while (start < word.Length)
                 {
                     int end = word.Length;
-                    string? subToken = null;
                     int subTokenId = -1;
 
                     // Find longest match
                     while (start < end)
                     {
-                        string substr = word.Substring(start, end - start);
+                        ReadOnlySpan<char> substr = word.AsSpan(start, end - start);
                         
-                        // Add ## prefix for continuation tokens (not first token)
+                        // For continuation tokens (not first token), try with ## prefix
                         if (start > 0)
-                            substr = "##" + substr;
-
-                        if (_vocab.TryGetValue(substr, out int tokenId))
                         {
-                            subToken = substr;
-                            subTokenId = tokenId;
-                            break;
+                            // Use pre-allocated work buffer for ## prefix concatenation
+                            int totalLen = substr.Length + 2;
+                            if (totalLen <= workBuffer.Length)
+                            {
+                                Span<char> withPrefix = workBuffer.Slice(0, totalLen);
+                                prefixBuffer.CopyTo(withPrefix);
+                                substr.CopyTo(withPrefix.Slice(2));
+                                
+                                string substrWithPrefix = new string(withPrefix);
+                                if (_vocab.TryGetValue(substrWithPrefix, out int tokenId))
+                                {
+                                    subTokenId = tokenId;
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                // Fallback for very long tokens (rare)
+                                string substrWithPrefix = "##" + substr.ToString();
+                                if (_vocab.TryGetValue(substrWithPrefix, out int tokenId))
+                                {
+                                    subTokenId = tokenId;
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // First token - no prefix needed
+                            string substrStr = substr.ToString();
+                            if (_vocab.TryGetValue(substrStr, out int tokenId))
+                            {
+                                subTokenId = tokenId;
+                                break;
+                            }
                         }
                         
                         end--;
                     }
 
-                    if (subToken == null)
+                    if (subTokenId == -1)
                     {
                         isBad = true;
                         break;
