@@ -760,7 +760,7 @@ namespace SmallMind.Core.Core
         /// </summary>
         /// <returns>The underlying chunked buffer.</returns>
         /// <exception cref="InvalidOperationException">If tensor is not chunked.</exception>
-        internal ChunkedBuffer GetChunkedBuffer()
+        public ChunkedBuffer GetChunkedBuffer()
         {
             if (_storage == null || !_storage.IsChunked)
                 throw new InvalidOperationException("Tensor does not use chunked storage.");
@@ -772,7 +772,7 @@ namespace SmallMind.Core.Core
         /// </summary>
         /// <returns>The underlying chunked gradient buffer.</returns>
         /// <exception cref="InvalidOperationException">If tensor is not chunked or doesn't have gradients.</exception>
-        internal ChunkedBuffer GetChunkedGradBuffer()
+        public ChunkedBuffer GetChunkedGradBuffer()
         {
             if (_gradStorage == null || !_gradStorage.IsChunked)
                 throw new InvalidOperationException("Tensor does not use chunked gradient storage.");
