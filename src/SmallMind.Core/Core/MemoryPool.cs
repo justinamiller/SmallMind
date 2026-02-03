@@ -81,12 +81,30 @@ namespace SmallMind.Core.Core
         }
         
         /// <summary>
-        /// Get statistics about pool usage
+        /// Clear all pooled arrays (for cleanup/testing).
+        /// Note: ArrayPool.Shared manages its own memory, so this is a no-op.
+        /// Statistics are reset instead.
         /// </summary>
-        public (long totalRents, long totalReturns, long outstanding) GetStats()
+        public void Clear()
+        {
+            Validation.Guard.NotDisposed(_disposed, nameof(TensorPool));
+            
+            // ArrayPool.Shared manages its own memory internally
+            // We can't force it to clear, but we can reset our statistics
+            Interlocked.Exchange(ref _totalRents, 0);
+            Interlocked.Exchange(ref _totalReturns, 0);
+        }
+        
+        /// <summary>
+        /// Get statistics about pool usage.
+        /// Note: ArrayPool doesn't track allocations separately, so totalAllocations is estimated.
+        /// </summary>
+        public (long totalRents, long totalReturns, long totalAllocations, long pooledBytes) GetStats()
         {
             long outstanding = _totalRents - _totalReturns;
-            return (_totalRents, _totalReturns, outstanding);
+            // ArrayPool.Shared manages its own memory, we can't accurately track pooledBytes
+            // Return 0 for pooledBytes since ArrayPool manages this internally
+            return (_totalRents, _totalReturns, outstanding, 0);
         }
         
         /// <summary>
