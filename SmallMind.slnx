@@ -10,6 +10,7 @@
     <Project Path="src/SmallMind.Console/SmallMind.Console.csproj" />
     <Project Path="src/SmallMind.Rag/SmallMind.Rag.csproj" />
     <Project Path="src/SmallMind.ModelRegistry/SmallMind.ModelRegistry.csproj" />
+    <Project Path="src/SmallMind.Public/SmallMind.Public.csproj" />
     <Project Path="src/SmallMind.Quantization/SmallMind.Quantization.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -21,5 +22,8 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/SmallMind.Rag.Cli/SmallMind.Rag.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/SmallMind.Server/SmallMind.Server.csproj" />
   </Folder>
 </Solution>
