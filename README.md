@@ -109,6 +109,13 @@ await foreach (var token in engine.GenerateStreamingAsync(model, request))
 - **[Pretrained Models](docs/pretrained-models.md)** - Using pretrained models and GGUF import
 - **[Configuration](docs/configuration.md)** - Engine options, generation parameters, tuning
 
+### Large Model Support 🆕
+- **[Billion-Parameter Models](docs/LARGE_MODEL_SUPPORT.md)** - Support for models up to 2B parameters
+  - Memory estimation and validation
+  - Quantization recommendations (Q8/Q4)
+  - Performance characteristics and hardware requirements
+  - Example configurations (GPT-2 124M, 350M, 774M; LLaMA-style 1B+)
+
 ## Key Features
 
 ### 🔒 Stable Public API

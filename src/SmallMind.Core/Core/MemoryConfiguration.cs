@@ -221,6 +221,7 @@ namespace SmallMind.Core.Core
 
         /// <summary>
         /// Estimate memory usage for a given model configuration.
+        /// Uses LargeModelSupport for billion-parameter model calculations.
         /// </summary>
         /// <param name="vocabSize">Vocabulary size.</param>
         /// <param name="embeddingDim">Embedding dimension.</param>
@@ -244,21 +245,13 @@ namespace SmallMind.Core.Core
             Guard.GreaterThan(batchSize, 0, nameof(batchSize));
             Guard.GreaterThan(seqLength, 0, nameof(seqLength));
 
-            long memory = 0;
-
-            // Model parameters (weights)
-            long embeddingParams = (long)vocabSize * embeddingDim + (long)seqLength * embeddingDim;
-            long attentionParamsPerLayer = (long)embeddingDim * embeddingDim * 4; // Q, K, V, proj
-            long mlpParamsPerLayer = (long)embeddingDim * embeddingDim * 8; // 4x expansion in MLP
-            long layerNormParams = embeddingDim * 2; // gamma, beta
-
-            long totalParams = embeddingParams +
-                              numLayers * (attentionParamsPerLayer + mlpParamsPerLayer + layerNormParams * 2) +
-                              (long)embeddingDim * vocabSize; // output head
+            // Calculate total parameters using large model support
+            long totalParams = LargeModelSupport.CalculateParameterCount(
+                vocabSize, seqLength, embeddingDim, numLayers, numHeads);
 
             // Model parameters in FP32 or FP16
             int bytesPerParam = _enableMixedPrecision ? 2 : 4;
-            memory += totalParams * bytesPerParam;
+            long memory = totalParams * bytesPerParam;
 
             // Activations during forward pass
             long activationsPerLayer = (long)batchSize * seqLength * embeddingDim;

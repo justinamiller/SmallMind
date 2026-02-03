@@ -84,13 +84,22 @@ namespace SmallMind.Core.Core
         {
             Guard.NotNull(shape);
             
-            int size = 1;
+            long size = 1;
             for (int i = 0; i < shape.Length; i++)
             {
                 Guard.GreaterThan(shape[i], 0);
                 size *= shape[i];
+                
+                // Check for overflow - critical for billion-parameter models
+                if (size > int.MaxValue)
+                {
+                    throw new Exceptions.ValidationException(
+                        $"Tensor size overflow: shape {string.Join("x", shape)} exceeds int.MaxValue ({int.MaxValue:N0}). " +
+                        $"For billion-parameter models, use model sharding or quantization.",
+                        nameof(shape));
+                }
             }
-            return size;
+            return (int)size;
         }
 
         public int Size => _logicalSize ?? Data.Length;

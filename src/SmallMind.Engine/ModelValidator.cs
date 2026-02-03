@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using SmallMind.Abstractions;
+using SmallMind.Core.Core;
 
 namespace SmallMind.Engine;
 
@@ -193,6 +194,47 @@ internal static class ModelValidator
                     $"Invalid rope_theta={ropeTheta}. Expected range: 0-{MaxRopeTheta}.{Environment.NewLine}" +
                     $"Remediation: The model file may have invalid RoPE parameters.");
             }
+        }
+
+        // Validate large model configuration using LargeModelSupport
+        var vocabSizeVal = GetMetadataInt(metadata, "vocab_size", 256);
+        var blockSizeVal = GetMetadataInt(metadata, "block_size", 128);
+        var embedDimVal = GetMetadataInt(metadata, "embed_dim", 384);
+        var numLayersVal = GetMetadataInt(metadata, "num_layers", 6);
+        var numHeadsVal = GetMetadataInt(metadata, "num_heads", 6);
+
+        try
+        {
+            // Calculate parameter count and validate configuration
+            long paramCount = LargeModelSupport.CalculateParameterCount(
+                vocabSizeVal, blockSizeVal, embedDimVal, numLayersVal, numHeadsVal);
+
+            // Check for potential tensor overflow
+            long maxTensorSize = (long)vocabSizeVal * embedDimVal;
+            if (maxTensorSize > int.MaxValue)
+            {
+                throw new UnsupportedModelException(
+                    modelPath,
+                    Path.GetExtension(modelPath),
+                    $"Model embedding tensor ({vocabSizeVal} × {embedDimVal} = {maxTensorSize:N0}) exceeds maximum tensor size ({int.MaxValue:N0}).{Environment.NewLine}" +
+                    $"Remediation: This model requires tensor sharding or a reduced vocabulary/embedding dimension. " +
+                    $"Consider using a specialized framework for models this large.");
+            }
+
+            // Provide recommendations for large models
+            if (paramCount >= LargeModelSupport.QUANTIZATION_THRESHOLD)
+            {
+                var recommendation = LargeModelSupport.GetRecommendation(paramCount);
+                Console.WriteLine($"\n{recommendation}\n");
+            }
+        }
+        catch (Exception ex) when (ex is not UnsupportedModelException)
+        {
+            // Validation failed - likely configuration issue
+            throw new UnsupportedModelException(
+                modelPath,
+                Path.GetExtension(modelPath),
+                $"Model configuration validation failed: {ex.Message}");
         }
     }
 
