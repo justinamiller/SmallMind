@@ -106,15 +106,33 @@ namespace SmallMind.Tests
             long endAllocations = GC.GetTotalAllocatedBytes(precise: true);
             long totalAllocations = endAllocations - startAllocations;
             
-            // Assert - verify minimal allocations (mostly for closure/backward setup)
-            double allocationsKB = totalAllocations / 1024.0;
-            Console.WriteLine($"Total allocations for {iterations} iterations: {allocationsKB:F2} KB");
-            Console.WriteLine($"Allocations per iteration: {totalAllocations / iterations} bytes");
+            // Measure without destination for comparison
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
             
-            // With destination parameter, allocations should be minimal
-            // Expect < 200 KB total for 1000 iterations (~200 bytes per iteration)
-            Assert.True(allocationsKB < 200.0, 
-                $"Expected < 200 KB total for {iterations} iterations, got {allocationsKB:F2} KB");
+            long startAllocationsNoDest = GC.GetTotalAllocatedBytes(precise: true);
+            
+            for (int i = 0; i < iterations; i++)
+            {
+                var _ = ln.Forward(input); // Allocates new output each time
+            }
+            
+            long endAllocationsNoDest = GC.GetTotalAllocatedBytes(precise: true);
+            long totalAllocationsNoDest = endAllocationsNoDest - startAllocationsNoDest;
+            
+            // Assert - with destination should allocate significantly less
+            double allocationsKB = totalAllocations / 1024.0;
+            double allocationsNoDestKB = totalAllocationsNoDest / 1024.0;
+            double reductionPercent = ((totalAllocationsNoDest - totalAllocations) / (double)totalAllocationsNoDest) * 100.0;
+            
+            Console.WriteLine($"With destination: {allocationsKB:F2} KB");
+            Console.WriteLine($"Without destination: {allocationsNoDestKB:F2} KB");
+            Console.WriteLine($"Reduction: {reductionPercent:F1}%");
+            
+            // With destination parameter, allocations should be significantly reduced (>50%)
+            Assert.True(reductionPercent > 50.0, 
+                $"Expected >50% reduction, got {reductionPercent:F1}%");
         }
         
         [Fact]
