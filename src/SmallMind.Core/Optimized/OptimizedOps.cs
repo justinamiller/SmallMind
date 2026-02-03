@@ -89,7 +89,7 @@ namespace SmallMind.Core.Optimized
         /// </summary>
         public static void FusedScaleMaskSoftmax(float[] scores, float scale, float[] output, int seqLen)
         {
-            FusedScaleMaskSoftmax(scores, 0, scale, output, 0, seqLen);
+            FusedScaleMaskSoftmax(scores, 0, scale, output, 0, seqLen, seqLen, 0);
         }
         
         /// <summary>
@@ -98,10 +98,22 @@ namespace SmallMind.Core.Optimized
         /// </summary>
         public static void FusedScaleMaskSoftmax(float[] scores, int scoresOffset, float scale, float[] output, int outputOffset, int seqLen)
         {
+            FusedScaleMaskSoftmax(scores, scoresOffset, scale, output, outputOffset, seqLen, seqLen, 0);
+        }
+        
+        /// <summary>
+        /// Fused scale + causal mask + softmax with KV-cache support.
+        /// For KV-cache, kSeqLen may be larger than seqLen (includes cached past).
+        /// cacheOffset is the position offset in the cache (how many past tokens are cached).
+        /// </summary>
+        public static void FusedScaleMaskSoftmax(float[] scores, int scoresOffset, float scale, float[] output, int outputOffset, int seqLen, int kSeqLen, int cacheOffset)
+        {
             for (int i = 0; i < seqLen; i++)
             {
-                int rowOffset = i * seqLen;
-                int validCols = i + 1; // Causal mask
+                int rowOffset = i * kSeqLen;
+                // For KV-cache: position in full sequence is cacheOffset + i
+                // Can attend to positions 0..(cacheOffset + i)
+                int validCols = cacheOffset + i + 1; // Causal mask with cache offset
                 
                 float maxVal = float.NegativeInfinity;
                 for (int j = 0; j < validCols; j++)
@@ -122,7 +134,7 @@ namespace SmallMind.Core.Optimized
                 for (int j = 0; j < validCols; j++)
                     output[outputOffset + rowOffset + j] *= invSum;
                 
-                for (int j = validCols; j < seqLen; j++)
+                for (int j = validCols; j < kSeqLen; j++)
                     output[outputOffset + rowOffset + j] = 0;
             }
         }
