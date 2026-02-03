@@ -63,12 +63,6 @@ builder.Services.AddSingleton<ISmallMindEngine>(sp =>
 
 var app = builder.Build();
 
-var jsonOptions = new JsonSerializerOptions
-{
-    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-};
-
 string GetModelName(ServerOptions opts)
 {
     return opts.ModelId ?? Path.GetFileName(opts.ModelPath ?? "smallmind");
@@ -173,7 +167,7 @@ app.MapPost("/v1/chat/completions", async (
         
         if (request.Stream)
         {
-            return await StreamChatCompletionAsync(session, genRequest, request.Model, GetModelName(opts), 
+            return await StreamChatCompletionAsync(session, genRequest, GetModelName(opts), 
                 metrics, sw, cancellationToken);
         }
         else
@@ -429,7 +423,6 @@ app.Run($"http://{serverOptions.Host}:{serverOptions.Port}");
 static async Task<IResult> StreamChatCompletionAsync(
     ITextGenerationSession session,
     TextGenerationRequest request,
-    string requestModel,
     string modelName,
     ServerMetrics metrics,
     Stopwatch sw,
