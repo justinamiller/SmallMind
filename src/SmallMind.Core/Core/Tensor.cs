@@ -16,6 +16,7 @@ namespace SmallMind.Core.Core
         public float[]? Grad { get; set; }
         public bool RequiresGrad { get; set; }
         
+        protected int? _logicalSize; // For pooled tensors with oversized backing arrays
         private Action? _backward;
 
         public Tensor(float[] data, int[] shape, bool requiresGrad = false)
@@ -38,6 +39,30 @@ namespace SmallMind.Core.Core
             if (requiresGrad)
             {
                 Grad = new float[data.Length];
+            }
+        }
+        
+        /// <summary>
+        /// Protected constructor for pooled tensors that may have larger backing arrays.
+        /// Only the first 'size' elements of data will be used.
+        /// </summary>
+        protected Tensor(float[] data, int[] shape, int size, bool requiresGrad = false)
+        {
+            Guard.NotNull(data);
+            Guard.NotNull(shape);
+            Guard.NotNullOrEmpty(shape);
+            
+            int expectedSize = ShapeToSize(shape);
+            Guard.GreaterThanOrEqualTo(size, expectedSize);
+            Guard.GreaterThanOrEqualTo(data.Length, size);
+            
+            Data = data;
+            Shape = shape;
+            _logicalSize = expectedSize; // Track logical size separately
+            RequiresGrad = requiresGrad;
+            if (requiresGrad)
+            {
+                Grad = new float[expectedSize];
             }
         }
 
@@ -68,7 +93,7 @@ namespace SmallMind.Core.Core
             return size;
         }
 
-        public int Size => Data.Length;
+        public int Size => _logicalSize ?? Data.Length;
 
         /// <summary>
         /// Initialize with random normal distribution (Xavier initialization)
@@ -626,6 +651,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// A pooled tensor that returns its backing array to TensorPool when disposed.
     /// Use for temporary/scratch tensors only. DO NOT use for model weights.
+    /// The backing array may be larger than the logical size to leverage pooling.
     /// </summary>
     public sealed class PooledTensor : Tensor, IDisposable
     {
@@ -633,7 +659,7 @@ namespace SmallMind.Core.Core
         private bool _disposed;
         
         internal PooledTensor(float[] data, int[] shape, int capacity, bool requiresGrad = false)
-            : base(data, shape, requiresGrad)
+            : base(data, shape, capacity, requiresGrad)
         {
             _capacity = capacity;
         }
