@@ -482,6 +482,7 @@ namespace SmallMind.Transformers
         private Tensor? _vWorkspace;
         private Tensor? _scoresWorkspace;
         private Tensor? _attnOutputWorkspace;
+        private Tensor? _reshapedOutputWorkspace;  // Added for ReshapeAttentionOutput
         
         private bool _isTraining = true;
 
@@ -584,8 +585,10 @@ namespace SmallMind.Transformers
             ApplyAttentionInPlace(att, v, y, B, T);
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
-            // This still allocates, but it's the final output
-            var yReshaped = ReshapeAttentionOutput(y, B, T);
+            // Use workspace to avoid allocation
+            var reshapedShape = new int[] { B, T, _nEmbd };
+            var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, reshapedShape);
+            ReshapeAttentionOutputInPlace(y, yReshaped, B, T);
 
             // Final projection and dropout
             var output = _proj.Forward(yReshaped);
@@ -995,6 +998,36 @@ namespace SmallMind.Transformers
             }
             
             return output;
+        }
+        
+        /// <summary>
+        /// In-place version of ReshapeAttentionOutput that writes to a pre-allocated tensor.
+        /// Reshapes from (B, nHead, T, headSize) to (B, T, n_embd).
+        /// </summary>
+        private void ReshapeAttentionOutputInPlace(Tensor y, Tensor output, int B, int T)
+        {
+            // y: (B, nHead, T, headSize) -> output: (B, T, n_embd)
+            
+            // Optimized version: process by head chunks with Array.Copy
+            for (int b = 0; b < B; b++)
+            {
+                int batchInOffset = b * _nHead * T * _headSize;
+                int batchOutOffset = b * T * _nEmbd;
+                
+                for (int t = 0; t < T; t++)
+                {
+                    int timeOutOffset = batchOutOffset + t * _nEmbd;
+                    
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int srcIdx = batchInOffset + h * T * _headSize + t * _headSize;
+                        int dstIdx = timeOutOffset + h * _headSize;
+                        
+                        // Copy entire head dimension at once
+                        Array.Copy(y.Data, srcIdx, output.Data, dstIdx, _headSize);
+                    }
+                }
+            }
         }
         
         /// <summary>
