@@ -108,6 +108,7 @@ await foreach (var token in engine.GenerateStreamingAsync(model, request))
 - **[Quick Start Guide](docs/quickstart.md)** - Installation, first steps, basic examples
 - **[Pretrained Models](docs/pretrained-models.md)** - Using pretrained models and GGUF import
 - **[Configuration](docs/configuration.md)** - Engine options, generation parameters, tuning
+- **[FAQ](docs/FAQ.md)** - Frequently asked questions including parameter limits
 
 ### Large Model Support 🆕
 - **[Billion-Parameter Models](docs/LARGE_MODEL_SUPPORT.md)** - Support for models up to 2B parameters
@@ -115,6 +116,8 @@ await foreach (var token in engine.GenerateStreamingAsync(model, request))
   - Quantization recommendations (Q8/Q4)
   - Performance characteristics and hardware requirements
   - Example configurations (GPT-2 124M, 350M, 774M; LLaMA-style 1B+)
+- **[C# Limitations Reference](docs/CSHARP_LIMITATIONS.md)** - Technical details on .NET array limits and workarounds
+- **[FAQ: Max Parameters](docs/FAQ.md#q-based-on-c-limitations-what-is-the-max-number-of-parameters-i-can-support-in-a-model)** - Direct answer to "how many parameters can I support?"
 
 ## Key Features
 
