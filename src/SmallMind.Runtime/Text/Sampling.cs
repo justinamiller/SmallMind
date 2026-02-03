@@ -19,10 +19,9 @@ namespace SmallMind.Runtime
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
         private List<int>? _contextCroppedBuffer;
-        private float[]? _contextDataBuffer;
-        private int[]? _tensorShapeBuffer;
         private float[]? _logitsLastBuffer;
         private float[]? _topKFilteredBuffer;
+        // Note: Cannot reuse contextData or shape buffers as Tensor validates exact sizing and holds references
 
         public Sampling(TransformerModel model, ITokenizer tokenizer, int blockSize)
         {
@@ -132,26 +131,18 @@ namespace SmallMind.Runtime
                     contextCropped = _contextCroppedBuffer;
                 }
 
-                // Convert to tensor: (1, T) - reuse buffer
+                // Convert to tensor: (1, T)
+                // Allocate exact-size array (Tensor validates data.Length == shape size)
                 int contextSize = contextCropped.Count;
-                if (_contextDataBuffer == null || _contextDataBuffer.Length < contextSize)
-                {
-                    _contextDataBuffer = new float[contextSize];
-                }
+                var contextData = new float[contextSize];
                 for (int j = 0; j < contextSize; j++)
                 {
-                    _contextDataBuffer[j] = contextCropped[j];
+                    contextData[j] = contextCropped[j];
                 }
                 
-                // Reuse shape buffer
-                if (_tensorShapeBuffer == null)
-                {
-                    _tensorShapeBuffer = new int[2];
-                }
-                _tensorShapeBuffer[0] = 1;
-                _tensorShapeBuffer[1] = contextSize;
-                
-                var contextTensor = new Tensor(_contextDataBuffer, _tensorShapeBuffer);
+                // Note: Cannot reuse shape buffer as Tensor holds reference to it
+                // These are small allocations (int[] and float[]) but unavoidable due to Tensor API design
+                var contextTensor = new Tensor(contextData, new int[] { 1, contextSize });
 
                 // Forward pass: (1, T, vocab_size)
                 var logits = _model.Forward(contextTensor);

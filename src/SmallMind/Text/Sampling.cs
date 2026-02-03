@@ -18,10 +18,10 @@ namespace SmallMind.Text
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
         private List<int>? _contextCroppedBuffer;
-        private float[]? _contextDataBuffer;
-        private int[]? _tensorShapeBuffer;
         private float[]? _logitsLastBuffer;
         private float[]? _topKFilteredBuffer;
+        private List<int>? _singleTokenBuffer; // For Decode calls in explainability
+        // Note: Cannot reuse contextData or shape buffers as Tensor validates exact sizing and holds references
 
         public Sampling(TransformerModel model, ITokenizer tokenizer, int blockSize)
         {
@@ -148,26 +148,18 @@ namespace SmallMind.Text
                     contextCropped = _contextCroppedBuffer;
                 }
 
-                // Convert to tensor: (1, T) - reuse buffer
+                // Convert to tensor: (1, T)
+                // Allocate exact-size array (Tensor validates data.Length == shape size)
                 int contextSize = contextCropped.Count;
-                if (_contextDataBuffer == null || _contextDataBuffer.Length < contextSize)
-                {
-                    _contextDataBuffer = new float[contextSize];
-                }
+                var contextData = new float[contextSize];
                 for (int j = 0; j < contextSize; j++)
                 {
-                    _contextDataBuffer[j] = contextCropped[j];
+                    contextData[j] = contextCropped[j];
                 }
                 
-                // Reuse shape buffer
-                if (_tensorShapeBuffer == null)
-                {
-                    _tensorShapeBuffer = new int[2];
-                }
-                _tensorShapeBuffer[0] = 1;
-                _tensorShapeBuffer[1] = contextSize;
-                
-                var contextTensor = new Tensor(_contextDataBuffer, _tensorShapeBuffer);
+                // Note: Cannot reuse shape buffer as Tensor holds reference to it
+                // These are small allocations (int[] and float[]) but unavoidable due to Tensor API design
+                var contextTensor = new Tensor(contextData, new int[] { 1, contextSize });
 
                 // Forward pass: (1, T, vocab_size)
                 var logits = _model.Forward(contextTensor);
@@ -352,26 +344,16 @@ namespace SmallMind.Text
                 _model.NumHeads, 
                 _model.HeadDim);
 
-            // PREFILL PHASE: Process entire prompt - reuse buffers
+            // PREFILL PHASE: Process entire prompt
             int prefillContextSize = context.Count;
-            if (_contextDataBuffer == null || _contextDataBuffer.Length < prefillContextSize)
-            {
-                _contextDataBuffer = new float[prefillContextSize];
-            }
+            var contextData = new float[prefillContextSize];
             for (int j = 0; j < prefillContextSize; j++)
             {
-                _contextDataBuffer[j] = context[j];
+                contextData[j] = context[j];
             }
             
-            // Reuse shape buffer
-            if (_tensorShapeBuffer == null)
-            {
-                _tensorShapeBuffer = new int[2];
-            }
-            _tensorShapeBuffer[0] = 1;
-            _tensorShapeBuffer[1] = prefillContextSize;
-            
-            var contextTensor = new Tensor(_contextDataBuffer, _tensorShapeBuffer);
+            // Note: Cannot reuse shape buffer as Tensor holds reference to it
+            var contextTensor = new Tensor(contextData, new int[] { 1, prefillContextSize });
             
             // Forward pass for prefill - populates KV cache
             var logits = _model.Forward(contextTensor, session, isPrefill: true);
@@ -651,10 +633,21 @@ namespace SmallMind.Text
             if (k == 0)
             {
                 // No alternatives requested, just record the selected token
+                // Reuse buffer for Decode call
+                if (_singleTokenBuffer == null)
+                {
+                    _singleTokenBuffer = new List<int>(1);
+                }
+                else
+                {
+                    _singleTokenBuffer.Clear();
+                }
+                _singleTokenBuffer.Add(selectedTokenId);
+                
                 var stepData = new TokenStepData(
                     stepIndex,
                     selectedTokenId,
-                    _tokenizer.Decode(new List<int> { selectedTokenId }),
+                    _tokenizer.Decode(_singleTokenBuffer),
                     selectedProb,
                     Array.Empty<int>(),
                     Array.Empty<string>(),
@@ -672,12 +665,22 @@ namespace SmallMind.Text
             var tokenIds = new int[topK.Count];
             var tokenTexts = new string[topK.Count];
             var tokenProbs = new double[topK.Count];
+            
+            // Reuse single token buffer for Decode calls
+            if (_singleTokenBuffer == null)
+            {
+                _singleTokenBuffer = new List<int>(1);
+            }
 
             for (int i = 0; i < topK.Count; i++)
             {
                 tokenIds[i] = topK[i].Index;
                 tokenProbs[i] = topK[i].Prob;
-                tokenTexts[i] = _tokenizer.Decode(new List<int> { topK[i].Index });
+                
+                // Reuse buffer instead of allocating new List
+                _singleTokenBuffer.Clear();
+                _singleTokenBuffer.Add(topK[i].Index);
+                tokenTexts[i] = _tokenizer.Decode(_singleTokenBuffer);
             }
 
             // Compute entropy if requested (Standard or Detailed level)
@@ -686,11 +689,16 @@ namespace SmallMind.Text
             {
                 entropy = ComputeEntropy(probs);
             }
+            
+            // Decode selected token (reuse buffer)
+            _singleTokenBuffer.Clear();
+            _singleTokenBuffer.Add(selectedTokenId);
+            string selectedTokenText = _tokenizer.Decode(_singleTokenBuffer);
 
             var stepDataFull = new TokenStepData(
                 stepIndex,
                 selectedTokenId,
-                _tokenizer.Decode(new List<int> { selectedTokenId }),
+                selectedTokenText,
                 selectedProb,
                 tokenIds,
                 tokenTexts,
@@ -702,14 +710,17 @@ namespace SmallMind.Text
         }
 
         /// <summary>
-        /// Efficiently extracts top-k probabilities using a min-heap.
+        /// Efficiently extracts top-k probabilities using insertion into array.
         /// Returns indices and probabilities sorted by descending probability.
+        /// Optimized to avoid List.Insert allocations.
         /// </summary>
         private List<(int Index, double Prob)> ExtractTopK(float[] probs, int k)
         {
             // Use a simple O(n*k) approach for small k (which is typical: k <= 50)
             // For small k, this is faster than heap-based approaches due to better cache locality
-            var topK = new List<(int Index, double Prob)>(k);
+            // Pre-allocate array to avoid List.Insert allocations
+            var topKArray = new (int Index, double Prob)[k];
+            int count = 0;
 
             for (int i = 0; i < probs.Length; i++)
             {
@@ -719,34 +730,41 @@ namespace SmallMind.Text
                 if (prob <= 0)
                     continue;
 
-                // Insert into top-k list, maintaining sorted order
-                if (topK.Count < k)
+                // Insert into top-k array, maintaining sorted order
+                if (count < k)
                 {
-                    // List not full yet, insert in sorted position
-                    int insertPos = topK.Count;
-                    for (int j = 0; j < topK.Count; j++)
+                    // Array not full yet, insert in sorted position
+                    int insertPos = count;
+                    for (int j = 0; j < count; j++)
                     {
-                        if (prob > topK[j].Prob)
+                        if (prob > topKArray[j].Prob)
                         {
                             insertPos = j;
                             break;
                         }
                     }
-                    topK.Insert(insertPos, (i, prob));
+                    
+                    // Shift elements to make room (faster than List.Insert)
+                    for (int j = count; j > insertPos; j--)
+                    {
+                        topKArray[j] = topKArray[j - 1];
+                    }
+                    topKArray[insertPos] = (i, prob);
+                    count++;
                 }
-                else if (prob > topK[k - 1].Prob)
+                else if (prob > topKArray[k - 1].Prob)
                 {
                     // Replace smallest element and bubble up
-                    topK[k - 1] = (i, prob);
+                    topKArray[k - 1] = (i, prob);
                     
                     // Bubble the new element up to maintain sorted order
                     for (int j = k - 2; j >= 0; j--)
                     {
-                        if (topK[j + 1].Prob > topK[j].Prob)
+                        if (topKArray[j + 1].Prob > topKArray[j].Prob)
                         {
-                            var tmp = topK[j];
-                            topK[j] = topK[j + 1];
-                            topK[j + 1] = tmp;
+                            var tmp = topKArray[j];
+                            topKArray[j] = topKArray[j + 1];
+                            topKArray[j + 1] = tmp;
                         }
                         else
                         {
@@ -756,8 +774,14 @@ namespace SmallMind.Text
                 }
             }
 
-            // List is already sorted, no need for final sort
-            return topK;
+            // Convert array to list (single allocation)
+            var result = new List<(int Index, double Prob)>(count);
+            for (int i = 0; i < count; i++)
+            {
+                result.Add(topKArray[i]);
+            }
+            
+            return result;
         }
 
         /// <summary>
