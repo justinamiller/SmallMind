@@ -89,6 +89,15 @@ namespace SmallMind.Core.Optimized
         /// </summary>
         public static void FusedScaleMaskSoftmax(float[] scores, float scale, float[] output, int seqLen)
         {
+            FusedScaleMaskSoftmax(scores, 0, scale, output, 0, seqLen);
+        }
+        
+        /// <summary>
+        /// Fused scale + causal mask + softmax with offset support.
+        /// Reduces memory bandwidth by combining multiple operations.
+        /// </summary>
+        public static void FusedScaleMaskSoftmax(float[] scores, int scoresOffset, float scale, float[] output, int outputOffset, int seqLen)
+        {
             for (int i = 0; i < seqLen; i++)
             {
                 int rowOffset = i * seqLen;
@@ -97,24 +106,24 @@ namespace SmallMind.Core.Optimized
                 float maxVal = float.NegativeInfinity;
                 for (int j = 0; j < validCols; j++)
                 {
-                    float s = scores[rowOffset + j] * scale;
+                    float s = scores[scoresOffset + rowOffset + j] * scale;
                     if (s > maxVal) maxVal = s;
                 }
                 
                 float sum = 0;
                 for (int j = 0; j < validCols; j++)
                 {
-                    float e = MathF.Exp(scores[rowOffset + j] * scale - maxVal);
-                    output[rowOffset + j] = e;
+                    float e = MathF.Exp(scores[scoresOffset + rowOffset + j] * scale - maxVal);
+                    output[outputOffset + rowOffset + j] = e;
                     sum += e;
                 }
                 
                 float invSum = 1f / sum;
                 for (int j = 0; j < validCols; j++)
-                    output[rowOffset + j] *= invSum;
+                    output[outputOffset + rowOffset + j] *= invSum;
                 
                 for (int j = validCols; j < seqLen; j++)
-                    output[rowOffset + j] = 0;
+                    output[outputOffset + rowOffset + j] = 0;
             }
         }
         
@@ -206,15 +215,15 @@ namespace SmallMind.Core.Optimized
     }
     
     /// <summary>
-    /// Object pool for tensors to reduce GC pressure.
-    /// Implements power-of-2 pooling strategy for efficient memory reuse.
+    /// Optimized object pool for float arrays with power-of-2 sizing.
+    /// Reduces GC pressure through array reuse.
     /// </summary>
-    public sealed class TensorPool
+    public sealed class OptimizedArrayPool
     {
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, 
             System.Collections.Concurrent.ConcurrentBag<float[]>> _pools = new();
         
-        public static TensorPool Shared { get; } = new();
+        public static OptimizedArrayPool Shared { get; } = new();
         
         public float[] Rent(int size)
         {

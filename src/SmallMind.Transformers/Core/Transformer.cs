@@ -1,6 +1,7 @@
 using SmallMind.Core.Exceptions;
 using SmallMind.Core.Core;
 using SmallMind.Core.Simd;
+using SmallMind.Core.Optimized;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
@@ -999,6 +1000,7 @@ namespace SmallMind.Transformers
         /// <summary>
         /// In-place version of ComputeAttentionScores that writes to a pre-allocated tensor.
         /// Computes Q * K^T / sqrt(d_k) with causal masking and softmax.
+        /// Uses fused scale+mask+softmax operation for better performance.
         /// </summary>
         private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T)
         {
@@ -1017,6 +1019,7 @@ namespace SmallMind.Transformers
                     int bhOffset = (b * _nHead + h) * T * _headSize;
                     int scoreOffset = (b * _nHead + h) * T * T;
                     
+                    // Step 1: Compute UNSCALED dot products (Q * K^T)
                     for (int i = 0; i < T; i++)
                     {
                         int qOffset = bhOffset + i * _headSize;
@@ -1030,15 +1033,19 @@ namespace SmallMind.Transformers
                                 new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
                                 new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
                             );
-                            scores.Data[scoreRowOffset + j] = sum * scale;
+                            scores.Data[scoreRowOffset + j] = sum;  // Store UNSCALED
                         }
                         
-                        // Set masked positions to NegativeInfinity for softmax
+                        // Set masked positions to zero (will be handled by FusedScaleMaskSoftmax)
                         for (int j = i + 1; j < T; j++)
                         {
-                            scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
+                            scores.Data[scoreRowOffset + j] = 0;
                         }
                     }
+                    
+                    // Step 2: Apply fused scale+mask+softmax
+                    // This operates on a T×T matrix for this (batch, head) combination
+                    OptimizedOps.FusedScaleMaskSoftmax(scores.Data, scoreOffset, scale, scores.Data, scoreOffset, T);
                 });
             }
             else
@@ -1050,6 +1057,7 @@ namespace SmallMind.Transformers
                         int bhOffset = (b * _nHead + h) * T * _headSize;
                         int scoreOffset = (b * _nHead + h) * T * T;
                         
+                        // Step 1: Compute UNSCALED dot products
                         for (int i = 0; i < T; i++)
                         {
                             int qOffset = bhOffset + i * _headSize;
@@ -1062,20 +1070,20 @@ namespace SmallMind.Transformers
                                     new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
                                     new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
                                 );
-                                scores.Data[scoreRowOffset + j] = sum * scale;
+                                scores.Data[scoreRowOffset + j] = sum;  // Store UNSCALED
                             }
                             
                             for (int j = i + 1; j < T; j++)
                             {
-                                scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
+                                scores.Data[scoreRowOffset + j] = 0;
                             }
                         }
+                        
+                        // Step 2: Apply fused scale+mask+softmax for this (batch, head)
+                        OptimizedOps.FusedScaleMaskSoftmax(scores.Data, scoreOffset, scale, scores.Data, scoreOffset, T);
                     }
                 }
             }
-            
-            // Apply softmax in-place
-            ApplySoftmaxInPlace(scores, B, T);
             
             // Apply dropout if in training mode
             // Note: Since we're using in-place operations, we modify scores directly
