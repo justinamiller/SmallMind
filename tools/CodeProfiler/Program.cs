@@ -29,8 +29,8 @@ else if (args.Length > 0 && (args[0] == "--model-compare" || args[0] == "-m"))
 
 string outputPath = mode == "enhanced" ? "enhanced-profile-report.md" : 
                    (args.Length > 0 && !args[0].StartsWith("--") ? args[0] : "profile-report.md");
-int numInferences = args.Length > 1 ? int.Parse(args[1]) : 3;
-int maxTokens = args.Length > 2 ? int.Parse(args[2]) : 50;
+int numInferences = (mode != "compare" && mode != "model-compare" && args.Length > 1) ? int.Parse(args[1]) : 3;
+int maxTokens = (mode != "compare" && mode != "model-compare" && args.Length > 2) ? int.Parse(args[2]) : 50;
 bool deepProfile = mode == "deep";
 
 Console.WriteLine($"Mode: {mode}");
