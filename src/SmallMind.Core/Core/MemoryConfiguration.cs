@@ -315,7 +315,15 @@ namespace SmallMind.Core.Core
 
         /// <summary>
         /// Estimate memory usage for a given model configuration (legacy method).
+        /// Returns total estimated memory in bytes.
+        /// For detailed breakdown, use EstimateMemoryBreakdown instead.
         /// </summary>
+        /// <param name="vocabSize">Vocabulary size.</param>
+        /// <param name="embeddingDim">Embedding dimension.</param>
+        /// <param name="numLayers">Number of transformer layers.</param>
+        /// <param name="numHeads">Number of attention heads.</param>
+        /// <param name="batchSize">Batch size.</param>
+        /// <param name="seqLength">Sequence length.</param>
         /// <returns>Total estimated memory in bytes.</returns>
         public long EstimateMemoryUsage(
             int vocabSize,

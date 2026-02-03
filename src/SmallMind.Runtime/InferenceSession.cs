@@ -47,6 +47,11 @@ namespace SmallMind.Runtime
         /// Gets the current schedule (if schedule tracking is enabled).
         /// </summary>
         public TokenScheduleResult? CurrentSchedule => _currentSchedule;
+
+        /// <summary>
+        /// Gets the options used for this session.
+        /// </summary>
+        public ProductionInferenceOptions Options => _options;
         
         /// <summary>
         /// Creates a new inference session.

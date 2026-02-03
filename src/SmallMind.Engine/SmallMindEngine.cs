@@ -334,12 +334,13 @@ namespace SmallMind.Engine
             }
             else
             {
-                // Legacy path: estimate memory without strict budgeting
+                // Legacy path: estimate memory without strict budgeting (advisory only)
+                // Operation proceeds even if estimated memory exceeds available memory
                 var estimatedBytes = ModelValidator.EstimateMemoryRequirementBytes(
                     metadata.Metadata,
                     quantizationBits: 8); // Assume Q8 for SMQ files
 
-                // No rejection, just warning (backward compatible)
+                // No rejection in legacy mode - just proceed (backward compatible behavior)
             }
 
             // For now, we create a placeholder FP32 model structure

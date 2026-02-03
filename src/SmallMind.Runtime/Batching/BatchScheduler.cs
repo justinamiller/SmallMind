@@ -257,29 +257,28 @@ namespace SmallMind.Runtime.Batching
         /// <summary>
         /// Apply deterministic scheduling to a batch of requests.
         /// This ensures reproducible ordering and resource allocation.
+        /// 
+        /// NOTE: Current implementation uses placeholder token counts due to
+        /// InferenceRequest not exposing prompt tokens. Future enhancement should
+        /// add token information to InferenceRequest for accurate scheduling.
         /// </summary>
         private void ApplyDeterministicScheduling(List<InferenceRequest> batch)
         {
             if (_deterministicScheduler == null || batch.Count == 0)
                 return;
 
-            // For now, we schedule the first request in the batch
-            // In a more advanced implementation, this could schedule all requests
-            var firstRequest = batch[0];
-            
-            // Create schedule for the first request's tokens
-            // Note: InferenceRequest doesn't expose prompt tokens directly,
-            // so we use a placeholder array for scheduling purposes
-            var placeholderTokens = new int[10]; // Placeholder
+            // TODO: Enhance InferenceRequest to expose prompt tokens for accurate scheduling
+            // For now, we create a schedule to establish reproducible ordering infrastructure
+            var placeholderTokens = new int[10]; // Placeholder until request exposes tokens
             
             var schedule = _deterministicScheduler.Schedule(
                 placeholderTokens,
-                maxNewTokens: 100, // Default, should come from request
+                maxNewTokens: 100, // Placeholder until request exposes max tokens config
                 _options.SchedulingPolicy,
                 _options.DeterministicSeed);
 
             // Store schedule ID in metrics or request metadata for auditing
-            // Future: Attach schedule to request for downstream use
+            // Future: Attach schedule to request for downstream use when InferenceRequest supports it
         }
 
         /// <summary>
