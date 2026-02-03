@@ -1,8 +1,8 @@
 # Performance Profile Report
 
-**Generated:** 2026-02-03 00:19:25
-**Total Runtime:** 7879.27 ms
-**Total Allocations:** 7579.28 MB
+**Generated:** 2026-02-03 03:00:08
+**Total Runtime:** 7468.95 ms
+**Total Allocations:** 7065.80 MB
 **Methods Profiled:** 8
 
 ## System Information
@@ -19,14 +19,14 @@ Methods consuming the most CPU time:
 
 | Rank | Method | Total Time (ms) | % of Total | Calls | Avg Time (ms) | Min (ms) | Max (ms) |
 |------|--------|----------------|-----------|-------|---------------|----------|----------|
-| 1 | `Inference` | 7617.359 | 96.68% | 3 | 2539.120 | 2046.551 | 3470.340 |
-| 2 | `GenerateToken` | 7617.020 | 96.67% | 150 | 50.780 | 26.530 | 159.045 |
-| 3 | `Transformer_Forward` | 7613.678 | 96.63% | 150 | 50.758 | 26.527 | 156.902 |
-| 4 | `MatMul_Iteration` | 137.714 | 1.75% | 9 | 15.302 | 2.403 | 35.520 |
-| 5 | `MatMul_512x512` | 86.950 | 1.10% | 1 | 86.950 | 86.950 | 86.950 |
-| 6 | `Transformer_ModelCreation` | 84.443 | 1.07% | 1 | 84.443 | 84.445 | 84.445 |
-| 7 | `MatMul_128x128` | 29.817 | 0.38% | 1 | 29.817 | 29.818 | 29.817 |
-| 8 | `MatMul_256x256` | 22.637 | 0.29% | 1 | 22.637 | 22.637 | 22.637 |
+| 1 | `Inference` | 7208.594 | 96.51% | 3 | 2402.865 | 1805.931 | 3381.563 |
+| 2 | `GenerateToken` | 7208.258 | 96.51% | 150 | 48.055 | 24.343 | 156.628 |
+| 3 | `Transformer_Forward` | 7205.062 | 96.47% | 150 | 48.034 | 24.341 | 154.821 |
+| 4 | `MatMul_Iteration` | 131.371 | 1.76% | 9 | 14.597 | 2.258 | 32.092 |
+| 5 | `Transformer_ModelCreation` | 91.810 | 1.23% | 1 | 91.810 | 91.812 | 91.812 |
+| 6 | `MatMul_512x512` | 83.531 | 1.12% | 1 | 83.531 | 83.531 | 83.531 |
+| 7 | `MatMul_128x128` | 27.568 | 0.37% | 1 | 27.568 | 27.568 | 27.568 |
+| 8 | `MatMul_256x256` | 21.751 | 0.29% | 1 | 21.751 | 21.751 | 21.751 |
 
 ## 💾 Top Allocators (by Memory)
 
@@ -34,14 +34,14 @@ Methods allocating the most memory:
 
 | Rank | Method | Total Alloc (MB) | % of Total | Calls | Avg Alloc (KB) |
 |------|--------|------------------|-----------|-------|----------------|
-| 1 | `Inference` | 7548.852 | 99.60% | 3 | 2576674.732 |
-| 2 | `GenerateToken` | 7548.852 | 99.60% | 150 | 51533.495 |
-| 3 | `Transformer_Forward` | 7548.852 | 99.60% | 150 | 51533.495 |
-| 4 | `Transformer_ModelCreation` | 26.406 | 0.35% | 1 | 27040.156 |
-| 5 | `MatMul_Iteration` | 0.088 | 0.00% | 9 | 10.000 |
-| 6 | `MatMul_128x128` | 0.080 | 0.00% | 1 | 81.992 |
-| 7 | `MatMul_512x512` | 0.008 | 0.00% | 1 | 8.008 |
-| 8 | `MatMul_256x256` | 0.000 | 0.00% | 1 | 0.000 |
+| 1 | `Inference` | 7035.370 | 99.57% | 3 | 2401406.318 |
+| 2 | `GenerateToken` | 7035.370 | 99.57% | 150 | 48028.126 |
+| 3 | `Transformer_Forward` | 7035.352 | 99.57% | 150 | 48028.003 |
+| 4 | `Transformer_ModelCreation` | 26.400 | 0.37% | 1 | 27033.758 |
+| 5 | `MatMul_Iteration` | 0.095 | 0.00% | 9 | 10.863 |
+| 6 | `MatMul_128x128` | 0.072 | 0.00% | 1 | 73.914 |
+| 7 | `MatMul_512x512` | 0.015 | 0.00% | 1 | 15.844 |
+| 8 | `MatMul_256x256` | 0.008 | 0.00% | 1 | 8.008 |
 
 ## 📞 Most Called Methods
 
@@ -49,14 +49,14 @@ Methods called most frequently:
 
 | Rank | Method | Calls | Total Time (ms) | Avg Time (μs) |
 |------|--------|-------|----------------|---------------|
-| 1 | `GenerateToken` | 150 | 7617.020 | 50780.136 |
-| 2 | `Transformer_Forward` | 150 | 7613.678 | 50757.857 |
-| 3 | `MatMul_Iteration` | 9 | 137.714 | 15301.567 |
-| 4 | `Inference` | 3 | 7617.359 | 2539119.575 |
-| 5 | `MatMul_128x128` | 1 | 29.817 | 29817.368 |
-| 6 | `MatMul_256x256` | 1 | 22.637 | 22637.025 |
-| 7 | `MatMul_512x512` | 1 | 86.950 | 86950.141 |
-| 8 | `Transformer_ModelCreation` | 1 | 84.443 | 84443.304 |
+| 1 | `GenerateToken` | 150 | 7208.258 | 48055.052 |
+| 2 | `Transformer_Forward` | 150 | 7205.062 | 48033.747 |
+| 3 | `MatMul_Iteration` | 9 | 131.371 | 14596.823 |
+| 4 | `Inference` | 3 | 7208.594 | 2402864.547 |
+| 5 | `MatMul_128x128` | 1 | 27.568 | 27568.004 |
+| 6 | `MatMul_256x256` | 1 | 21.751 | 21751.290 |
+| 7 | `MatMul_512x512` | 1 | 83.531 | 83530.992 |
+| 8 | `Transformer_ModelCreation` | 1 | 91.810 | 91810.414 |
 
 ## 🌲 Call Hierarchy
 
@@ -83,7 +83,7 @@ Parent-child relationships for hot paths:
 - `MatMul_256x256` (3 times)
 - `MatMul_512x512` (3 times)
 
-### `MatMul_512x512`
+### `Transformer_ModelCreation`
 
 *Entry point method*
 
