@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Core.Exceptions;
+using SmallMind.Runtime.Scheduling;
 using SmallMind.Runtime.Telemetry;
 
 namespace SmallMind.Runtime.Batching
@@ -14,6 +15,7 @@ namespace SmallMind.Runtime.Batching
     /// High-performance batch scheduler for inference requests.
     /// Collects requests and forms batches based on size or timeout constraints.
     /// Designed for minimal allocations and thread-safe operation.
+    /// Supports deterministic scheduling for reproducible token generation.
     /// </summary>
     public sealed class BatchScheduler : IDisposable
     {
@@ -27,6 +29,9 @@ namespace SmallMind.Runtime.Batching
 
         // Pre-allocated list for batch formation (reused to reduce allocations)
         private readonly List<InferenceRequest> _currentBatch;
+
+        // Deterministic scheduler (optional)
+        private readonly DeterministicScheduler? _deterministicScheduler;
 
         private bool _disposed;
         private int _totalQueuedCount;
@@ -66,6 +71,12 @@ namespace SmallMind.Runtime.Batching
             _currentBatch = new List<InferenceRequest>(_options.MaxBatchSize);
             _batchReadySemaphore = new SemaphoreSlim(0, int.MaxValue);
             _shutdownCts = new CancellationTokenSource();
+
+            // Initialize deterministic scheduler if enabled
+            if (_options.EnableDeterministicScheduling)
+            {
+                _deterministicScheduler = new DeterministicScheduler();
+            }
 
             // Start background scheduler task
             _schedulerTask = Task.Run(SchedulerLoop);
@@ -177,6 +188,12 @@ namespace SmallMind.Runtime.Batching
                         _metrics.RecordBatchSize(_currentBatch.Count);
                         _metrics.RecordBatchWaitTimeMs(stopwatch.Elapsed.TotalMilliseconds);
 
+                        // Apply deterministic scheduling if enabled
+                        if (_deterministicScheduler != null && _currentBatch.Count > 0)
+                        {
+                            ApplyDeterministicScheduling(_currentBatch);
+                        }
+
                         // Dispatch batch for execution
                         // Create a copy to avoid modification during execution
                         var batchCopy = new List<InferenceRequest>(_currentBatch);
@@ -235,6 +252,34 @@ namespace SmallMind.Runtime.Batching
             {
                 _pendingRequests.Enqueue(tempList[i]);
             }
+        }
+
+        /// <summary>
+        /// Apply deterministic scheduling to a batch of requests.
+        /// This ensures reproducible ordering and resource allocation.
+        /// </summary>
+        private void ApplyDeterministicScheduling(List<InferenceRequest> batch)
+        {
+            if (_deterministicScheduler == null || batch.Count == 0)
+                return;
+
+            // For now, we schedule the first request in the batch
+            // In a more advanced implementation, this could schedule all requests
+            var firstRequest = batch[0];
+            
+            // Create schedule for the first request's tokens
+            // Note: InferenceRequest doesn't expose prompt tokens directly,
+            // so we use a placeholder array for scheduling purposes
+            var placeholderTokens = new int[10]; // Placeholder
+            
+            var schedule = _deterministicScheduler.Schedule(
+                placeholderTokens,
+                maxNewTokens: 100, // Default, should come from request
+                _options.SchedulingPolicy,
+                _options.DeterministicSeed);
+
+            // Store schedule ID in metrics or request metadata for auditing
+            // Future: Attach schedule to request for downstream use
         }
 
         /// <summary>

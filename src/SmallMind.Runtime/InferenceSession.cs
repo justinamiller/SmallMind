@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 using SmallMind.Core.Rng;
+using SmallMind.Runtime.Scheduling;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
 
@@ -17,6 +18,7 @@ namespace SmallMind.Runtime
     /// Isolated inference session with bounded resources and thread-safe state management.
     /// Each session maintains its own KV cache and generation state.
     /// Safe for concurrent execution across multiple sessions.
+    /// Supports deterministic token scheduling for reproducibility.
     /// </summary>
     public sealed class InferenceSession : IDisposable
     {
@@ -29,6 +31,11 @@ namespace SmallMind.Runtime
         
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
+        
+        // Deterministic scheduler (optional)
+        private readonly DeterministicScheduler? _scheduler;
+        private TokenScheduleResult? _currentSchedule;
+        
         private bool _disposed;
         
         /// <summary>
@@ -37,9 +44,9 @@ namespace SmallMind.Runtime
         public string SessionId { get; }
         
         /// <summary>
-        /// Gets the options used for this session.
+        /// Gets the current schedule (if schedule tracking is enabled).
         /// </summary>
-        public ProductionInferenceOptions Options => _options;
+        public TokenScheduleResult? CurrentSchedule => _currentSchedule;
         
         /// <summary>
         /// Creates a new inference session.
@@ -73,6 +80,12 @@ namespace SmallMind.Runtime
             else
             {
                 _random = new System.Random();
+            }
+            
+            // Initialize scheduler if schedule tracking is enabled
+            if (_options.EnableScheduleTracking)
+            {
+                _scheduler = new DeterministicScheduler();
             }
             
             SessionId = sessionId ?? Guid.NewGuid().ToString("N");
@@ -114,6 +127,17 @@ namespace SmallMind.Runtime
                 
                 int inputTokens = context.Count;
                 int requestId = -1;
+                
+                // Create schedule if tracking is enabled
+                if (_scheduler != null)
+                {
+                    var promptArray = context.ToArray();
+                    _currentSchedule = _scheduler.Schedule(
+                        promptArray,
+                        _options.MaxNewTokens,
+                        _options.SchedulingPolicy,
+                        _options.Seed.HasValue ? (uint)_options.Seed.Value : null);
+                }
                 
                 // Start metrics tracking
                 if (metrics != null)
@@ -196,6 +220,17 @@ namespace SmallMind.Runtime
             
             int inputTokens = context.Count;
             int requestId = -1;
+            
+            // Create schedule if tracking is enabled
+            if (_scheduler != null)
+            {
+                var promptArray = context.ToArray();
+                _currentSchedule = _scheduler.Schedule(
+                    promptArray,
+                    _options.MaxNewTokens,
+                    _options.SchedulingPolicy,
+                    _options.Seed.HasValue ? (uint)_options.Seed.Value : null);
+            }
             
             // Start metrics tracking
             if (metrics != null)

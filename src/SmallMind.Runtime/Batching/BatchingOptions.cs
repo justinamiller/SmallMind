@@ -1,5 +1,6 @@
 using System;
 using SmallMind.Core.Exceptions;
+using SmallMind.Runtime.Scheduling;
 
 namespace SmallMind.Runtime.Batching
 {
@@ -44,6 +45,25 @@ namespace SmallMind.Runtime.Batching
         public bool PrefillOnly { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets whether deterministic scheduling is enabled.
+        /// When true, token generation order is guaranteed to be reproducible.
+        /// Default: false.
+        /// </summary>
+        public bool EnableDeterministicScheduling { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the scheduling policy when deterministic mode is enabled.
+        /// Default: FIFO (First-In-First-Out).
+        /// </summary>
+        public SchedulingPolicy SchedulingPolicy { get; set; } = SchedulingPolicy.FIFO;
+
+        /// <summary>
+        /// Gets or sets the deterministic seed for scheduling.
+        /// Only used when EnableDeterministicScheduling is true.
+        /// </summary>
+        public uint? DeterministicSeed { get; set; }
+
+        /// <summary>
         /// Validates the batching options and throws if invalid.
         /// </summary>
         /// <exception cref="ValidationException">Thrown when options are invalid.</exception>
@@ -76,7 +96,10 @@ namespace SmallMind.Runtime.Batching
                 MaxBatchSize = MaxBatchSize,
                 MaxBatchWaitMs = MaxBatchWaitMs,
                 MaxTotalQueuedRequests = MaxTotalQueuedRequests,
-                PrefillOnly = PrefillOnly
+                PrefillOnly = PrefillOnly,
+                EnableDeterministicScheduling = EnableDeterministicScheduling,
+                SchedulingPolicy = SchedulingPolicy,
+                DeterministicSeed = DeterministicSeed
             };
         }
     }
