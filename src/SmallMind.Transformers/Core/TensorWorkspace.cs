@@ -24,6 +24,10 @@ namespace SmallMind.Transformers
         /// If a tensor with the same key exists and matches the shape, it is reused.
         /// Otherwise, a new tensor is allocated and stored.
         /// </summary>
+        /// <param name="key">Unique identifier for the tensor</param>
+        /// <param name="shape">Shape of the tensor</param>
+        /// <param name="requiresGrad">Whether the tensor requires gradient</param>
+        /// <returns>A tensor ready for use (with cleared data if reused)</returns>
         public Tensor GetOrCreate(string key, int[] shape, bool requiresGrad = false)
         {
             if (_tensors.TryGetValue(key, out var existing))
@@ -31,7 +35,9 @@ namespace SmallMind.Transformers
                 // Check if shape matches
                 if (ShapeMatches(existing.Shape, shape))
                 {
-                    // Clear the data for reuse
+                    // Clear the data for reuse to ensure no contamination from previous use
+                    // This is necessary because operations like LayerNorm write to specific
+                    // positions and may not overwrite all elements
                     Array.Clear(existing.Data, 0, existing.Size);
                     return existing;
                 }

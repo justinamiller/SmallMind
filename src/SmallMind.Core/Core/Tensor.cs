@@ -414,7 +414,9 @@ namespace SmallMind.Core.Core
             if (dest != null)
             {
                 // Validate dest shape
-                if (dest.Shape.Length != 2 || dest.Shape[0] != M || dest.Shape[1] != N)
+                if (dest.Shape.Length != 2)
+                    throw new ArgumentException($"Destination shape must be 2D, got {dest.Shape.Length}D");
+                if (dest.Shape[0] != M || dest.Shape[1] != N)
                     throw new ArgumentException($"Destination shape must be ({M}, {N}), got ({dest.Shape[0]}, {dest.Shape[1]})");
                 result = dest;
             }
