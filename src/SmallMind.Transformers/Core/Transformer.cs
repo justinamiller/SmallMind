@@ -275,6 +275,9 @@ namespace SmallMind.Transformers
         {
             // Pre-norm architecture with residual connections
             // x: (B, T, n_embd)
+            
+            // LayerNorm outputs are allocated but operations are fused
+            // TODO: Pool LayerNorm outputs once all downstream ops handle pooled tensors correctly
             var attnOut = _attn.Forward(_ln1.Forward(x));
             x = AddTensors(x, attnOut);
             
@@ -284,9 +287,9 @@ namespace SmallMind.Transformers
             return x;
         }
 
-        private Tensor AddTensors(Tensor a, Tensor b)
+        private Tensor AddTensors(Tensor a, Tensor b, Tensor? dest = null)
         {
-            var result = new Tensor(a.Shape, requiresGrad: true);
+            var result = dest ?? new Tensor(a.Shape, requiresGrad: true);
             
             // SIMD-accelerated forward pass
             int vectorSize = Vector<float>.Count;
