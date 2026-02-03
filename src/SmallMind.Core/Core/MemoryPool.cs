@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Threading;
 
@@ -6,17 +7,16 @@ namespace SmallMind.Core.Core
 {
     /// <summary>
     /// Object pooling for tensor arrays to reduce GC pressure.
-    /// Implements bucketed pooling for common tensor sizes.
+    /// Uses ArrayPool for efficient memory management with automatic size bucketing.
     /// </summary>
     public sealed class TensorPool : IDisposable
     {
-        private readonly ConcurrentBag<float[]>[] _pools;
-        private static readonly int[] _sizes = { 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288 };
-        private static readonly int[] _capacities = { 32, 32, 32, 32, 16, 16, 8, 8, 4, 4, 2, 2, 1, 1 }; // Capacity per bucket
-        private readonly int[] _counts; // Track count per bucket
+        // Use ArrayPool.Shared for backing storage - provides automatic bucketing and thread-safety
+        private readonly ArrayPool<float> _arrayPool;
+        
+        // Track statistics for monitoring pool effectiveness
         private long _totalRents;
         private long _totalReturns;
-        private long _totalAllocations;
         private bool _disposed;
         
         // Singleton instance
@@ -25,17 +25,14 @@ namespace SmallMind.Core.Core
         
         public TensorPool()
         {
-            _pools = new ConcurrentBag<float[]>[_sizes.Length];
-            _counts = new int[_sizes.Length];
-            for (int i = 0; i < _pools.Length; i++)
-            {
-                _pools[i] = new ConcurrentBag<float[]>();
-            }
+            // Use the shared ArrayPool for efficient memory management
+            _arrayPool = ArrayPool<float>.Shared;
         }
         
         /// <summary>
         /// Rent an array of at least the requested size from the pool.
         /// Returns a pooled array if available, otherwise allocates new.
+        /// The returned array may be larger than requested for efficient pooling.
         /// </summary>
         /// <param name="minSize">Minimum size of array needed.</param>
         /// <returns>A float array of at least the requested size.</returns>
@@ -47,18 +44,8 @@ namespace SmallMind.Core.Core
             
             Interlocked.Increment(ref _totalRents);
             
-            int bucketIndex = GetBucketIndex(minSize);
-            
-            if (bucketIndex >= 0 && _pools[bucketIndex].TryTake(out var array))
-            {
-                Interlocked.Decrement(ref _counts[bucketIndex]);
-                return array;
-            }
-            
-            // Allocate new with the bucket size (or exact size if too large)
-            int actualSize = bucketIndex >= 0 ? _sizes[bucketIndex] : minSize;
-            Interlocked.Increment(ref _totalAllocations);
-            return new float[actualSize];
+            // ArrayPool automatically handles size bucketing and returns appropriately sized arrays
+            return _arrayPool.Rent(minSize);
         }
         
         /// <summary>
@@ -89,82 +76,28 @@ namespace SmallMind.Core.Core
             
             Interlocked.Increment(ref _totalReturns);
             
-            int bucketIndex = GetBucketIndex(array.Length);
-            
-            // Only pool if it matches a bucket size exactly and bucket is not full
-            if (bucketIndex >= 0 && array.Length == _sizes[bucketIndex])
-            {
-                int currentCount = _counts[bucketIndex];
-                int capacity = _capacities[bucketIndex];
-                
-                // Only add if under capacity
-                if (currentCount < capacity)
-                {
-                    if (clearArray)
-                    {
-                        Array.Clear(array);
-                    }
-                    _pools[bucketIndex].Add(array);
-                    Interlocked.Increment(ref _counts[bucketIndex]);
-                }
-                // Otherwise, let GC handle it (trim excess)
-            }
-            // Otherwise, let GC handle it
-        }
-        
-        private int GetBucketIndex(int size)
-        {
-            // Find the smallest bucket that fits the requested size
-            for (int i = 0; i < _sizes.Length; i++)
-            {
-                if (size <= _sizes[i])
-                {
-                    return i;
-                }
-            }
-            return -1; // Size too large for pooling
-        }
-        
-        /// <summary>
-        /// Clear all pooled arrays (for cleanup/testing)
-        /// </summary>
-        public void Clear()
-        {
-            Validation.Guard.NotDisposed(_disposed, nameof(TensorPool));
-            
-            for (int i = 0; i < _pools.Length; i++)
-            {
-                _pools[i].Clear();
-                _counts[i] = 0;
-            }
+            // ArrayPool.Return handles pooling logic automatically
+            _arrayPool.Return(array, clearArray);
         }
         
         /// <summary>
         /// Get statistics about pool usage
         /// </summary>
-        public (long totalRents, long totalReturns, long totalAllocations, long pooledBytes) GetStats()
+        public (long totalRents, long totalReturns, long outstanding) GetStats()
         {
-            long pooledBytes = 0;
-            for (int i = 0; i < _sizes.Length; i++)
-            {
-                pooledBytes += _counts[i] * _sizes[i] * sizeof(float);
-            }
-            return (_totalRents, _totalReturns, _totalAllocations, pooledBytes);
+            long outstanding = _totalRents - _totalReturns;
+            return (_totalRents, _totalReturns, outstanding);
         }
         
         /// <summary>
-        /// Disposes the tensor pool, clearing all pooled arrays.
+        /// Disposes the tensor pool.
+        /// Note: ArrayPool.Shared is a singleton and doesn't need disposal.
         /// </summary>
         public void Dispose()
         {
             if (_disposed) return;
-            
-            for (int i = 0; i < _pools.Length; i++)
-            {
-                _pools[i].Clear();
-            }
-            
             _disposed = true;
+            // ArrayPool.Shared is a singleton and doesn't need disposal
         }
     }
 }

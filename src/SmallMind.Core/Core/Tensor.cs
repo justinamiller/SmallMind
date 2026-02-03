@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using SmallMind.Core.Validation;
 using SmallMind.Core.Simd;
+using ElementWiseOps = SmallMind.Core.Simd.ElementWiseOps;
 
 namespace SmallMind.Core.Core
 {
@@ -471,17 +472,15 @@ namespace SmallMind.Core.Core
 
             var result = new Tensor(a.Shape, requiresGrad);
 
-            // Simple case: same shape - use Span<T> for better performance
+            // Simple case: same shape - use SIMD vectorization for better performance
             if (ShapesEqual(a.Shape, b.Shape))
             {
-                Span<float> resultSpan = result.Data;
                 ReadOnlySpan<float> aSpan = a.Data;
                 ReadOnlySpan<float> bSpan = b.Data;
+                Span<float> resultSpan = result.Data;
                 
-                for (int i = 0; i < a.Size; i++)
-                {
-                    resultSpan[i] = aSpan[i] + bSpan[i];
-                }
+                // Use SIMD-optimized addition from ElementWiseOps
+                ElementWiseOps.Add(aSpan, bSpan, resultSpan);
 
                 if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))
                 {
@@ -491,15 +490,15 @@ namespace SmallMind.Core.Core
                         {
                             Span<float> aGradSpan = a.Grad;
                             ReadOnlySpan<float> resultGradSpan = result.Grad;
-                            for (int i = 0; i < a.Size; i++)
-                                aGradSpan[i] += resultGradSpan[i];
+                            // Use SIMD-optimized in-place addition
+                            ElementWiseOps.AddInPlace(aGradSpan, resultGradSpan);
                         }
                         if (b.RequiresGrad)
                         {
                             Span<float> bGradSpan = b.Grad;
                             ReadOnlySpan<float> resultGradSpan = result.Grad;
-                            for (int i = 0; i < b.Size; i++)
-                                bGradSpan[i] += resultGradSpan[i];
+                            // Use SIMD-optimized in-place addition
+                            ElementWiseOps.AddInPlace(bGradSpan, resultGradSpan);
                         }
                     });
                 }
@@ -860,14 +859,12 @@ namespace SmallMind.Core.Core
                 // Write result to dest
                 if (ShapesEqual(a.Shape, b.Shape))
                 {
-                    Span<float> destSpan = dest.Data;
                     ReadOnlySpan<float> aSpan = a.Data;
                     ReadOnlySpan<float> bSpan = b.Data;
+                    Span<float> destSpan = dest.Data;
                     
-                    for (int i = 0; i < a.Size; i++)
-                    {
-                        destSpan[i] = aSpan[i] + bSpan[i];
-                    }
+                    // Use SIMD-optimized addition from ElementWiseOps
+                    ElementWiseOps.Add(aSpan, bSpan, destSpan);
                 }
                 else
                 {

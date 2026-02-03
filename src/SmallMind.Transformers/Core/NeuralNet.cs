@@ -1,5 +1,6 @@
 using SmallMind.Core.Exceptions;
 using SmallMind.Core.Core;
+using SmallMind.Core.Simd;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -653,71 +654,16 @@ namespace SmallMind.Transformers
         {
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
             
-            // Fast GELU approximation using polynomial/rational approximation
-            // This is much faster than using MathF.Tanh while maintaining accuracy
+            // Use optimized fast GELU approximation from ActivationOps
             // Based on the sigmoid approximation: GELU(x) ≈ x * σ(1.702 * x)
-            // where σ is the sigmoid function
-            
-            int vectorSize = System.Numerics.Vector<float>.Count;
-            int i = 0;
-            
-            // SIMD vectorized loop
-            if (System.Numerics.Vector.IsHardwareAccelerated && input.Size >= vectorSize)
-            {
-                var vScale = new System.Numerics.Vector<float>(1.702f);
-                var vOne = System.Numerics.Vector<float>.One;
-                
-                for (; i <= input.Size - vectorSize; i += vectorSize)
-                {
-                    var vx = new System.Numerics.Vector<float>(input.Data, i);
-                    
-                    // Fast sigmoid approximation: σ(x) ≈ 1 / (1 + exp(-x))
-                    // Using rational approximation for exp(-x) when x is in reasonable range
-                    var vScaledX = vx * vScale;
-                    
-                    // Approximate sigmoid using polynomial: σ(x) ≈ 0.5 + 0.5 * tanh(x/2)
-                    // Further approximate tanh(x) ≈ x / (1 + |x|) for faster computation
-                    var vAbs = System.Numerics.Vector.Abs(vScaledX);
-                    var vTanh = vScaledX / (vOne + vAbs);
-                    var vSigmoid = (vOne + vTanh) * new System.Numerics.Vector<float>(0.5f);
-                    
-                    var vResult = vx * vSigmoid;
-                    vResult.CopyTo(output.Data, i);
-                }
-            }
-            
-            // Scalar remainder
-            for (; i < input.Size; i++)
-            {
-                float x = input.Data[i];
-                // Fast GELU: x * σ(1.702 * x) with fast sigmoid approximation
-                float scaledX = 1.702f * x;
-                // Fast sigmoid using tanh approximation: σ(x) ≈ 0.5 + 0.5 * tanh(x/2)
-                // Fast tanh approximation: tanh(x) ≈ x / (1 + |x|)
-                float tanhApprox = scaledX / (1.0f + MathF.Abs(scaledX));
-                float sigmoid = 0.5f + 0.5f * tanhApprox;
-                output.Data[i] = x * sigmoid;
-            }
+            ActivationOps.GELU(input.Data, output.Data);
             
             if (input.RequiresGrad)
             {
                 output.SetBackward(() =>
                 {
-                    // GELU derivative approximation
-                    for (int i = 0; i < input.Size; i++)
-                    {
-                        float x = input.Data[i];
-                        float scaledX = 1.702f * x;
-                        float tanhApprox = scaledX / (1.0f + MathF.Abs(scaledX));
-                        float sigmoid = 0.5f + 0.5f * tanhApprox;
-                        
-                        // d/dx[x * σ(1.702x)] ≈ σ(1.702x) + 1.702x * σ'(1.702x)
-                        // σ'(x) ≈ σ(x) * (1 - σ(x))
-                        float sigmoidDeriv = sigmoid * (1.0f - sigmoid);
-                        float geluDeriv = sigmoid + 1.702f * x * sigmoidDeriv;
-                        
-                        input.Grad[i] += output.Grad[i] * geluDeriv;
-                    }
+                    // Use optimized GELU backward pass from ActivationOps
+                    ActivationOps.GELUBackward(input.Data, output.Grad, input.Grad);
                 });
             }
             
