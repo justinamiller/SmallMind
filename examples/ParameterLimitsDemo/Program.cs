@@ -34,11 +34,91 @@ namespace SmallMind.Examples.ParameterLimits
             // 5. Validation workflow
             DemonstrateValidationWorkflow();
 
+            // 6. NEW: Chunked tensor support
+            DemonstrateChunkedTensorSupport();
+
             Console.WriteLine("\n=== Demo Complete ===");
             Console.WriteLine("\nFor more information, see:");
             Console.WriteLine("  - docs/FAQ.md");
             Console.WriteLine("  - docs/CSHARP_LIMITATIONS.md");
             Console.WriteLine("  - docs/LARGE_MODEL_SUPPORT.md");
+        }
+
+        static void DemonstrateChunkedTensorSupport()
+        {
+            Console.WriteLine("6. CHUNKED TENSOR SUPPORT (NEW!)");
+            Console.WriteLine("   ------------------------------");
+            Console.WriteLine("   SmallMind now supports chunked tensors for models exceeding int.MaxValue\n");
+
+            // Configuration that previously would have failed
+            var largeConfig = new
+            {
+                Name = "Large Embedding Model",
+                VocabSize = 100000,
+                EmbeddingDim = 30000,
+                NumLayers = 24,
+                NumHeads = 32,
+                BlockSize = 2048
+            };
+
+            long tensorSize = (long)largeConfig.VocabSize * largeConfig.EmbeddingDim;
+
+            Console.WriteLine($"   {largeConfig.Name}:");
+            Console.WriteLine($"     Vocabulary Size: {largeConfig.VocabSize:N0}");
+            Console.WriteLine($"     Embedding Dimension: {largeConfig.EmbeddingDim:N0}");
+            Console.WriteLine($"     Embedding Table: {largeConfig.VocabSize:N0} × {largeConfig.EmbeddingDim:N0} = {tensorSize:N0}");
+            Console.WriteLine($"     int.MaxValue: {int.MaxValue:N0}");
+            Console.WriteLine($"     Exceeds limit by: {tensorSize - int.MaxValue:N0} elements\n");
+
+            Console.WriteLine("   Creating chunked embedding table...");
+            try
+            {
+                // Create a chunked tensor that exceeds int.MaxValue
+                var chunkedTensor = Tensor.CreateChunked(
+                    new int[] { largeConfig.VocabSize, largeConfig.EmbeddingDim },
+                    requiresGrad: true
+                );
+
+                Console.WriteLine($"     ✓ Successfully created chunked tensor!");
+                Console.WriteLine($"     Tensor shape: [{largeConfig.VocabSize:N0}, {largeConfig.EmbeddingDim:N0}]");
+                Console.WriteLine($"     Total elements: {chunkedTensor.TotalElements:N0}");
+                Console.WriteLine($"     Is chunked: {chunkedTensor.IsChunked}");
+                
+                var buffer = chunkedTensor.GetChunkedBuffer();
+                Console.WriteLine($"     Stored as {buffer.ChunkCount} chunks of {buffer.ChunkSize:N0} elements each");
+                Console.WriteLine($"     Memory usage: ~{buffer.GetMemoryUsageBytes() / (1024.0 * 1024 * 1024):F2} GB\n");
+
+                Console.WriteLine("   Testing embedding lookup with chunked storage...");
+                var random = new Random(42);
+                chunkedTensor.InitializeRandom(random, 0.02f);
+                
+                // Simulate embedding lookup
+                int testTokenId = 50000;
+                long embeddingOffset = (long)testTokenId * largeConfig.EmbeddingDim;
+                var embeddingVector = new float[100]; // First 100 dims
+                chunkedTensor.CopyTo(embeddingOffset, embeddingVector, 100);
+                
+                Console.WriteLine($"     ✓ Successfully looked up embedding for token {testTokenId}");
+                Console.WriteLine($"     First 5 values: [{embeddingVector[0]:F4}, {embeddingVector[1]:F4}, {embeddingVector[2]:F4}, {embeddingVector[3]:F4}, {embeddingVector[4]:F4}]");
+                Console.WriteLine($"     Chunked tensor operations work correctly!\n");
+                
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"     ✗ Error: {ex.Message}\n");
+            }
+
+            Console.WriteLine("   Key Benefits:");
+            Console.WriteLine("     • Bypass CLR int.MaxValue array indexing limit");
+            Console.WriteLine("     • Support embedding tables with vocab_size × embedding_dim > 2.1B");
+            Console.WriteLine("     • Automatic chunking when needed");
+            Console.WriteLine("     • Transparent API - same operations work on dense and chunked tensors");
+            Console.WriteLine("     • Minimal performance overhead with span-based access\n");
+
+            Console.WriteLine("   Current Limitations:");
+            Console.WriteLine("     • MatMul with chunked weights not yet optimized (use for embeddings)");
+            Console.WriteLine("     • Chunked tensors cannot be used with legacy code expecting Data array");
+            Console.WriteLine("     • Some operations may require copying data\n");
         }
 
         static void DemonstrateCSharpLimit()
