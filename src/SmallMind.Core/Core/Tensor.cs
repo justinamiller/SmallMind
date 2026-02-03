@@ -396,6 +396,72 @@ namespace SmallMind.Core.Core
         }
 
         /// <summary>
+        /// Matrix multiplication with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// </summary>
+        public static Tensor MatMul(Tensor a, Tensor b, Tensor? dest, bool requiresGrad = false)
+        {
+            if (a.Shape.Length != 2 || b.Shape.Length != 2)
+                throw new ArgumentException("MatMul requires 2D tensors");
+            if (a.Shape[1] != b.Shape[0])
+                throw new ArgumentException($"Incompatible shapes for matmul: ({a.Shape[0]}, {a.Shape[1]}) and ({b.Shape[0]}, {b.Shape[1]})");
+
+            int M = a.Shape[0];
+            int K = a.Shape[1];
+            int N = b.Shape[1];
+
+            Tensor result;
+            if (dest != null)
+            {
+                // Validate dest shape
+                if (dest.Shape.Length != 2)
+                    throw new ArgumentException($"Destination shape must be 2D, got {dest.Shape.Length}D");
+                if (dest.Shape[0] != M || dest.Shape[1] != N)
+                    throw new ArgumentException($"Destination shape must be ({M}, {N}), got ({dest.Shape[0]}, {dest.Shape[1]})");
+                result = dest;
+            }
+            else
+            {
+                result = new Tensor(new int[] { M, N }, requiresGrad);
+            }
+
+            // Use SIMD-optimized matrix multiplication
+            MatMulOps.MatMul(a.Data, b.Data, result.Data, M, K, N);
+
+            // Setup backward pass
+            if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))
+            {
+                result.SetBackward(() =>
+                {
+                    if (a.RequiresGrad)
+                    {
+                        // grad_a = grad_output @ b^T
+                        float[] tempGradA = new float[M * K];
+                        MatrixOps.MatMulTransposeB(result.Grad, b.Data, tempGradA, M, N, K);
+                        
+                        for (int i = 0; i < M * K; i++)
+                        {
+                            a.Grad[i] += tempGradA[i];
+                        }
+                    }
+                    if (b.RequiresGrad)
+                    {
+                        // grad_b = a^T @ grad_output
+                        float[] tempGradB = new float[K * N];
+                        MatrixOps.MatMulTransposeA(a.Data, result.Grad, tempGradB, K, M, N);
+                        
+                        for (int i = 0; i < K * N; i++)
+                        {
+                            b.Grad[i] += tempGradB[i];
+                        }
+                    }
+                });
+            }
+
+            return result;
+        }
+
+        /// <summary>
         /// Element-wise addition
         /// </summary>
         public static Tensor Add(Tensor a, Tensor b, bool requiresGrad = false)
@@ -681,7 +747,22 @@ namespace SmallMind.Core.Core
             int size = ShapeToSize(shape);
             var data = TensorPool.Shared.Rent(size, out int capacity);
             
-            return new PooledTensor(data, shape, capacity, requiresGrad);
+            float[]? grad = null;
+            bool pooledGrad = false;
+            if (requiresGrad)
+            {
+                grad = TensorPool.Shared.Rent(size, out _);
+                Array.Clear(grad, 0, size); // Zero out gradient
+                pooledGrad = true;
+            }
+            
+            var tensor = new PooledTensor(data, shape, capacity, requiresGrad, pooledGrad);
+            if (grad != null)
+            {
+                tensor.Grad = grad;
+            }
+            
+            return tensor;
         }
 
         // In-place operations
@@ -913,21 +994,32 @@ namespace SmallMind.Core.Core
     {
         private readonly int _capacity;
         private bool _disposed;
+        private readonly bool _pooledGrad; // Track if gradient is also pooled
         
-        internal PooledTensor(float[] data, int[] shape, int capacity, bool requiresGrad = false)
+        internal PooledTensor(float[] data, int[] shape, int capacity, bool requiresGrad = false, bool pooledGrad = false)
             : base(data, shape, capacity, requiresGrad)
         {
             _capacity = capacity;
+            _pooledGrad = pooledGrad;
         }
         
         public int Capacity => _capacity;
         
-        public void Dispose()
+        public new void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
             
             TensorPool.Shared.Return(Data, clearArray: true);
+            
+            // Return gradient to pool if it was also pooled
+            if (_pooledGrad && Grad != null)
+            {
+                TensorPool.Shared.Return(Grad, clearArray: true);
+            }
+            
+            // Call base dispose in case the tensor also uses memory-mapped storage
+            base.Dispose();
         }
     }
     

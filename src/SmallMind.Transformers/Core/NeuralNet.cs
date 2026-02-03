@@ -13,6 +13,11 @@ namespace SmallMind.Transformers
     {
         public List<Tensor> Parameters { get; protected set; } = new List<Tensor>();
         
+        /// <summary>
+        /// Whether the module is in training mode (affects gradient computation and dropout).
+        /// </summary>
+        protected bool IsTraining { get; private set; } = true;
+        
         public abstract Tensor Forward(Tensor input);
 
         public void ZeroGrad()
@@ -23,8 +28,15 @@ namespace SmallMind.Transformers
             }
         }
 
-        public virtual void Train() { }
-        public virtual void Eval() { }
+        public virtual void Train() 
+        { 
+            IsTraining = true;
+        }
+        
+        public virtual void Eval() 
+        { 
+            IsTraining = false;
+        }
     }
 
     /// <summary>
@@ -54,6 +66,16 @@ namespace SmallMind.Transformers
 
         public override Tensor Forward(Tensor input)
         {
+            return Forward(input, dest: null);
+        }
+        
+        /// <summary>
+        /// Forward pass with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// Note: For 3D inputs, dest must have the final reshaped shape (batch, seq, outFeatures)
+        /// </summary>
+        public Tensor Forward(Tensor input, Tensor? dest)
+        {
             // input: (batch, inFeatures) or (batch, seq, inFeatures)
             // weight: (outFeatures, inFeatures)
             // output: (batch, outFeatures) or (batch, seq, outFeatures)
@@ -61,10 +83,11 @@ namespace SmallMind.Transformers
             if (input.Shape.Length == 2)
             {
                 // (batch, in) @ (in, out)^T = (batch, out)
-                var output = Tensor.MatMul(input, Weight.Transpose(), requiresGrad: true);
+                var output = Tensor.MatMul(input, Weight.Transpose(), dest, requiresGrad: IsTraining);
                 if (Bias != null)
                 {
-                    output = Tensor.Add(output, Bias, requiresGrad: true);
+                    // Add bias in-place to output
+                    output = Tensor.Add(output, Bias, output, requiresGrad: IsTraining);
                 }
                 return output;
             }
@@ -76,13 +99,17 @@ namespace SmallMind.Transformers
                 int inFeatures = input.Shape[2];
                 
                 var reshaped = input.Reshape(new int[] { batch * seq, inFeatures });
-                var output = Tensor.MatMul(reshaped, Weight.Transpose(), requiresGrad: true);
+                
+                // For 3D case, we can't use dest directly because we need to reshape
+                // So we always allocate for the intermediate result
+                var output = Tensor.MatMul(reshaped, Weight.Transpose(), null, requiresGrad: IsTraining);
                 
                 if (Bias != null)
                 {
-                    output = Tensor.Add(output, Bias, requiresGrad: true);
+                    output = Tensor.Add(output, Bias, output, requiresGrad: IsTraining);
                 }
                 
+                // Reshape the output to 3D
                 return output.Reshape(new int[] { batch, seq, Weight.Shape[0] });
             }
             
@@ -128,25 +155,34 @@ namespace SmallMind.Transformers
 
         public override Tensor Forward(Tensor input)
         {
+            return Forward(input, dest: null);
+        }
+        
+        /// <summary>
+        /// Forward pass with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// </summary>
+        public Tensor Forward(Tensor input, Tensor? dest)
+        {
             // input: indices (batch,) or (batch, seq)
             // output: (batch, embDim) or (batch, seq, embDim)
             
             if (input.Shape.Length == 1)
             {
-                return ForwardBatch(input);
+                return ForwardBatch(input, dest);
             }
             else if (input.Shape.Length == 2)
             {
-                return ForwardBatchSeq(input);
+                return ForwardBatchSeq(input, dest);
             }
             
             throw new ArgumentException("Embedding input must be 1D or 2D");
         }
 
-        private Tensor ForwardBatch(Tensor input)
+        private Tensor ForwardBatch(Tensor input, Tensor? dest = null)
         {
             int batch = input.Shape[0];
-            var output = new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: true);
+            var output = dest ?? new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: IsTraining);
             
             if (Weight.IsChunked)
             {
@@ -225,11 +261,11 @@ namespace SmallMind.Transformers
             return output;
         }
 
-        private Tensor ForwardBatchSeq(Tensor input)
+        private Tensor ForwardBatchSeq(Tensor input, Tensor? dest = null)
         {
             int batch = input.Shape[0];
             int seq = input.Shape[1];
-            var output = new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: true);
+            var output = dest ?? new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: IsTraining);
             
             if (Weight.IsChunked)
             {
@@ -442,7 +478,7 @@ namespace SmallMind.Transformers
         public Tensor Forward(Tensor input, Tensor? dest)
         {
             // Use fused LayerNorm operations - no intermediate allocations
-            Tensor output = dest ?? new Tensor(input.Shape, requiresGrad: true);
+            Tensor output = dest ?? new Tensor(input.Shape, requiresGrad: IsTraining);
             
             if (input.Shape.Length == 2)
             {

@@ -273,6 +273,7 @@ namespace CodeProfiler
                     .WithDropout(0.0f)
                     .WithSeed(42)
                     .Build();
+                model.Eval(); // Set to evaluation mode (disables dropout)
                 Console.WriteLine($"✓ ({model.Parameters.Count} tensors)");
             }
 
