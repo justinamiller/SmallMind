@@ -1,9 +1,9 @@
 # Performance Profile Report
 
-**Generated:** 2026-02-02 18:01:33
-**Total Runtime:** 2050.20 ms
-**Total Allocations:** 1081.96 MB
-**Methods Profiled:** 10
+**Generated:** 2026-02-03 00:19:25
+**Total Runtime:** 7879.27 ms
+**Total Allocations:** 7579.28 MB
+**Methods Profiled:** 8
 
 ## System Information
 
@@ -19,16 +19,14 @@ Methods consuming the most CPU time:
 
 | Rank | Method | Total Time (ms) | % of Total | Calls | Avg Time (ms) | Min (ms) | Max (ms) |
 |------|--------|----------------|-----------|-------|---------------|----------|----------|
-| 1 | `InferenceComplete` | 2024.904 | 98.77% | 3 | 674.968 | 424.083 | 1051.621 |
-| 2 | `GenerateToken` | 2024.093 | 98.73% | 150 | 13.494 | 3.470 | 81.093 |
-| 3 | `ForwardPass` | 1953.875 | 95.30% | 150 | 13.026 | 3.434 | 49.923 |
-| 4 | `SampleToken` | 69.269 | 3.38% | 150 | 0.462 | 0.005 | 63.422 |
-| 5 | `ModelCreation` | 20.637 | 1.01% | 1 | 20.637 | 20.638 | 20.638 |
-| 6 | `BuilderSetup` | 19.004 | 0.93% | 1 | 19.004 | 19.228 | 19.178 |
-| 7 | `Softmax` | 3.780 | 0.18% | 150 | 0.025 | 0.002 | 1.537 |
-| 8 | `ApplyTemperature` | 0.600 | 0.03% | 150 | 0.004 | 0.001 | 0.026 |
-| 9 | `MultinomialSample` | 0.403 | 0.02% | 150 | 0.003 | 0.000 | 0.006 |
-| 10 | `PrepareInput` | 0.175 | 0.01% | 3 | 0.058 | 0.005 | 0.165 |
+| 1 | `Inference` | 7617.359 | 96.68% | 3 | 2539.120 | 2046.551 | 3470.340 |
+| 2 | `GenerateToken` | 7617.020 | 96.67% | 150 | 50.780 | 26.530 | 159.045 |
+| 3 | `Transformer_Forward` | 7613.678 | 96.63% | 150 | 50.758 | 26.527 | 156.902 |
+| 4 | `MatMul_Iteration` | 137.714 | 1.75% | 9 | 15.302 | 2.403 | 35.520 |
+| 5 | `MatMul_512x512` | 86.950 | 1.10% | 1 | 86.950 | 86.950 | 86.950 |
+| 6 | `Transformer_ModelCreation` | 84.443 | 1.07% | 1 | 84.443 | 84.445 | 84.445 |
+| 7 | `MatMul_128x128` | 29.817 | 0.38% | 1 | 29.817 | 29.818 | 29.817 |
+| 8 | `MatMul_256x256` | 22.637 | 0.29% | 1 | 22.637 | 22.637 | 22.637 |
 
 ## 💾 Top Allocators (by Memory)
 
@@ -36,16 +34,14 @@ Methods allocating the most memory:
 
 | Rank | Method | Total Alloc (MB) | % of Total | Calls | Avg Alloc (KB) |
 |------|--------|------------------|-----------|-------|----------------|
-| 1 | `InferenceComplete` | 1078.346 | 99.67% | 3 | 368075.417 |
-| 2 | `GenerateToken` | 1078.346 | 99.67% | 150 | 7361.508 |
-| 3 | `ForwardPass` | 1078.315 | 99.66% | 150 | 7361.295 |
-| 4 | `ModelCreation` | 3.618 | 0.33% | 1 | 3704.320 |
-| 5 | `BuilderSetup` | 3.618 | 0.33% | 1 | 3704.320 |
-| 6 | `SampleToken` | 0.031 | 0.00% | 150 | 0.214 |
-| 7 | `PrepareInput` | 0.000 | 0.00% | 3 | 0.000 |
-| 8 | `ApplyTemperature` | 0.000 | 0.00% | 150 | 0.000 |
-| 9 | `Softmax` | 0.000 | 0.00% | 150 | 0.000 |
-| 10 | `MultinomialSample` | 0.000 | 0.00% | 150 | 0.000 |
+| 1 | `Inference` | 7548.852 | 99.60% | 3 | 2576674.732 |
+| 2 | `GenerateToken` | 7548.852 | 99.60% | 150 | 51533.495 |
+| 3 | `Transformer_Forward` | 7548.852 | 99.60% | 150 | 51533.495 |
+| 4 | `Transformer_ModelCreation` | 26.406 | 0.35% | 1 | 27040.156 |
+| 5 | `MatMul_Iteration` | 0.088 | 0.00% | 9 | 10.000 |
+| 6 | `MatMul_128x128` | 0.080 | 0.00% | 1 | 81.992 |
+| 7 | `MatMul_512x512` | 0.008 | 0.00% | 1 | 8.008 |
+| 8 | `MatMul_256x256` | 0.000 | 0.00% | 1 | 0.000 |
 
 ## 📞 Most Called Methods
 
@@ -53,46 +49,46 @@ Methods called most frequently:
 
 | Rank | Method | Calls | Total Time (ms) | Avg Time (μs) |
 |------|--------|-------|----------------|---------------|
-| 1 | `GenerateToken` | 150 | 2024.093 | 13493.956 |
-| 2 | `ForwardPass` | 150 | 1953.875 | 13025.835 |
-| 3 | `SampleToken` | 150 | 69.269 | 461.792 |
-| 4 | `ApplyTemperature` | 150 | 0.600 | 3.997 |
-| 5 | `Softmax` | 150 | 3.780 | 25.197 |
-| 6 | `MultinomialSample` | 150 | 0.403 | 2.687 |
-| 7 | `InferenceComplete` | 3 | 2024.904 | 674967.962 |
-| 8 | `PrepareInput` | 3 | 0.175 | 58.288 |
-| 9 | `ModelCreation` | 1 | 20.637 | 20637.176 |
-| 10 | `BuilderSetup` | 1 | 19.004 | 19004.284 |
+| 1 | `GenerateToken` | 150 | 7617.020 | 50780.136 |
+| 2 | `Transformer_Forward` | 150 | 7613.678 | 50757.857 |
+| 3 | `MatMul_Iteration` | 9 | 137.714 | 15301.567 |
+| 4 | `Inference` | 3 | 7617.359 | 2539119.575 |
+| 5 | `MatMul_128x128` | 1 | 29.817 | 29817.368 |
+| 6 | `MatMul_256x256` | 1 | 22.637 | 22637.025 |
+| 7 | `MatMul_512x512` | 1 | 86.950 | 86950.141 |
+| 8 | `Transformer_ModelCreation` | 1 | 84.443 | 84443.304 |
 
 ## 🌲 Call Hierarchy
 
 Parent-child relationships for hot paths:
 
-### `InferenceComplete`
+### `Inference`
 
 *Entry point method*
 
 ### `GenerateToken`
 
 **Called by:**
-- `InferenceComplete` (150 times)
+- `Inference` (150 times)
 
-### `ForwardPass`
-
-**Called by:**
-- `GenerateToken` (150 times)
-
-### `SampleToken`
+### `Transformer_Forward`
 
 **Called by:**
 - `GenerateToken` (150 times)
 
-### `ModelCreation`
+### `MatMul_Iteration`
+
+**Called by:**
+- `MatMul_128x128` (3 times)
+- `MatMul_256x256` (3 times)
+- `MatMul_512x512` (3 times)
+
+### `MatMul_512x512`
 
 *Entry point method*
 
 ## 💡 Performance Insights
 
 - **Top 5 methods** include nested operations (some time is counted in multiple scopes)
-- **5 methods** allocate more than 1 MB per call on average
+- **4 methods** allocate more than 1 MB per call on average
 
