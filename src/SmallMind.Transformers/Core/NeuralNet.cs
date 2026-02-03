@@ -72,6 +72,7 @@ namespace SmallMind.Transformers
         /// <summary>
         /// Forward pass with optional destination tensor to avoid allocation.
         /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// Note: For 3D inputs, dest must have the final reshaped shape (batch, seq, outFeatures)
         /// </summary>
         public Tensor Forward(Tensor input, Tensor? dest)
         {
@@ -98,13 +99,17 @@ namespace SmallMind.Transformers
                 int inFeatures = input.Shape[2];
                 
                 var reshaped = input.Reshape(new int[] { batch * seq, inFeatures });
-                var output = Tensor.MatMul(reshaped, Weight.Transpose(), dest, requiresGrad: IsTraining);
+                
+                // For 3D case, we can't use dest directly because we need to reshape
+                // So we always allocate for the intermediate result
+                var output = Tensor.MatMul(reshaped, Weight.Transpose(), null, requiresGrad: IsTraining);
                 
                 if (Bias != null)
                 {
                     output = Tensor.Add(output, Bias, output, requiresGrad: IsTraining);
                 }
                 
+                // Reshape the output to 3D
                 return output.Reshape(new int[] { batch, seq, Weight.Shape[0] });
             }
             
