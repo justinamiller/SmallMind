@@ -253,7 +253,8 @@ namespace SmallMind.Tests
         public void Rent_ForVeryLargeSize_AllocatesExactSize()
         {
             // Arrange
-            int veryLargeSize = 100000;
+            // Use a size larger than the largest bucket (524288) to ensure exact allocation
+            int veryLargeSize = 1000000;
 
             // Act
             var array = _pool.Rent(veryLargeSize);
