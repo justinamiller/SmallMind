@@ -290,7 +290,8 @@ namespace SmallMind.Runtime
         private float[] Softmax(float[] logits, int logitsLength)
         {
             // Reuse probability buffer to reduce allocations
-            if (_probabilityBuffer == null || _probabilityBuffer.Length < logitsLength)
+            // Allocate new buffer if size doesn't match to avoid stale data
+            if (_probabilityBuffer == null || _probabilityBuffer.Length != logitsLength)
             {
                 _probabilityBuffer = new float[logitsLength];
             }

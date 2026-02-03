@@ -21,6 +21,7 @@ namespace SmallMind.Text
         private float[]? _logitsLastBuffer;
         private float[]? _topKFilteredBuffer;
         private List<int>? _singleTokenBuffer; // For Decode calls in explainability
+        private (int Index, double Prob)[]? _topKArrayBuffer; // For ExtractTopK
         // Note: Cannot reuse contextData or shape buffers as Tensor validates exact sizing and holds references
 
         public Sampling(TransformerModel model, ITokenizer tokenizer, int blockSize)
@@ -550,7 +551,8 @@ namespace SmallMind.Text
         private float[] Softmax(float[] logits, int logitsLength)
         {
             // Reuse probability buffer to reduce allocations
-            if (_probabilityBuffer == null || _probabilityBuffer.Length < logitsLength)
+            // Allocate new buffer if size doesn't match to avoid stale data
+            if (_probabilityBuffer == null || _probabilityBuffer.Length != logitsLength)
             {
                 _probabilityBuffer = new float[logitsLength];
             }
@@ -718,8 +720,12 @@ namespace SmallMind.Text
         {
             // Use a simple O(n*k) approach for small k (which is typical: k <= 50)
             // For small k, this is faster than heap-based approaches due to better cache locality
-            // Pre-allocate array to avoid List.Insert allocations
-            var topKArray = new (int Index, double Prob)[k];
+            // Reuse pre-allocated array to avoid allocations
+            if (_topKArrayBuffer == null || _topKArrayBuffer.Length < k)
+            {
+                _topKArrayBuffer = new (int Index, double Prob)[k];
+            }
+            
             int count = 0;
 
             for (int i = 0; i < probs.Length; i++)
@@ -737,7 +743,7 @@ namespace SmallMind.Text
                     int insertPos = count;
                     for (int j = 0; j < count; j++)
                     {
-                        if (prob > topKArray[j].Prob)
+                        if (prob > _topKArrayBuffer[j].Prob)
                         {
                             insertPos = j;
                             break;
@@ -747,24 +753,24 @@ namespace SmallMind.Text
                     // Shift elements to make room (faster than List.Insert)
                     for (int j = count; j > insertPos; j--)
                     {
-                        topKArray[j] = topKArray[j - 1];
+                        _topKArrayBuffer[j] = _topKArrayBuffer[j - 1];
                     }
-                    topKArray[insertPos] = (i, prob);
+                    _topKArrayBuffer[insertPos] = (i, prob);
                     count++;
                 }
-                else if (prob > topKArray[k - 1].Prob)
+                else if (prob > _topKArrayBuffer[k - 1].Prob)
                 {
                     // Replace smallest element and bubble up
-                    topKArray[k - 1] = (i, prob);
+                    _topKArrayBuffer[k - 1] = (i, prob);
                     
                     // Bubble the new element up to maintain sorted order
                     for (int j = k - 2; j >= 0; j--)
                     {
-                        if (topKArray[j + 1].Prob > topKArray[j].Prob)
+                        if (_topKArrayBuffer[j + 1].Prob > _topKArrayBuffer[j].Prob)
                         {
-                            var tmp = topKArray[j];
-                            topKArray[j] = topKArray[j + 1];
-                            topKArray[j + 1] = tmp;
+                            var tmp = _topKArrayBuffer[j];
+                            _topKArrayBuffer[j] = _topKArrayBuffer[j + 1];
+                            _topKArrayBuffer[j + 1] = tmp;
                         }
                         else
                         {
@@ -778,7 +784,7 @@ namespace SmallMind.Text
             var result = new List<(int Index, double Prob)>(count);
             for (int i = 0; i < count; i++)
             {
-                result.Add(topKArray[i]);
+                result.Add(_topKArrayBuffer[i]);
             }
             
             return result;

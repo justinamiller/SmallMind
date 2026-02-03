@@ -101,12 +101,14 @@ namespace SmallMind.Tokenizers
                 int start = 0;
                 
                 // Pre-allocate buffers outside loop to avoid potential stack overflow
+                // Initialize prefix buffer once (never changes)
                 Span<char> prefixBuffer = stackalloc char[2];
                 prefixBuffer[0] = '#';
                 prefixBuffer[1] = '#';
                 
                 // Max word length buffer for prefix concatenation (reasonable upper bound)
-                Span<char> workBuffer = stackalloc char[256];
+                const int MaxTokenLength = 256;
+                Span<char> workBuffer = stackalloc char[MaxTokenLength];
 
                 while (start < word.Length)
                 {
