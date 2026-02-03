@@ -482,6 +482,13 @@ namespace SmallMind.Transformers
         private Tensor? _vWorkspace;
         private Tensor? _scoresWorkspace;
         private Tensor? _attnOutputWorkspace;
+        private Tensor? _reshapedOutputWorkspace;  // Added for ReshapeAttentionOutput
+        
+        // KV-Cache support for efficient autoregressive generation
+        private Tensor? _cachedKeys;    // Cached keys from previous tokens
+        private Tensor? _cachedValues;  // Cached values from previous tokens
+        private int _cachePosition;     // Current position in the cache
+        private bool _useKVCache;       // Whether to use KV-cache (inference mode)
         
         private bool _isTraining = true;
 
@@ -493,6 +500,8 @@ namespace SmallMind.Transformers
             _nHead = nHead;
             _headSize = nEmbd / nHead;
             _blockSize = blockSize;
+            _useKVCache = false;
+            _cachePosition = 0;
 
             if (_nEmbd % _nHead != 0)
             {
@@ -518,6 +527,36 @@ namespace SmallMind.Transformers
             Parameters = new List<Tensor>();
             Parameters.AddRange(_qkv.Parameters);
             Parameters.AddRange(_proj.Parameters);
+        }
+        
+        /// <summary>
+        /// Enable KV-cache for efficient autoregressive generation.
+        /// Call this before inference to reuse past key/value computations.
+        /// </summary>
+        public void EnableKVCache()
+        {
+            _useKVCache = true;
+            _cachePosition = 0;
+        }
+        
+        /// <summary>
+        /// Disable KV-cache and reset cache state.
+        /// </summary>
+        public void DisableKVCache()
+        {
+            _useKVCache = false;
+            _cachePosition = 0;
+            _cachedKeys = null;
+            _cachedValues = null;
+        }
+        
+        /// <summary>
+        /// Reset KV-cache position to start a new sequence.
+        /// Keeps the cache allocated but resets the position counter.
+        /// </summary>
+        public void ResetKVCache()
+        {
+            _cachePosition = 0;
         }
         
         /// <summary>
@@ -574,18 +613,65 @@ namespace SmallMind.Transformers
             ExtractAndReshapeQKVInPlace(qkv, k, 1, B, T);
             ExtractAndReshapeQKVInPlace(qkv, v, 2, B, T);
 
+            // KV-Cache: Use cached keys/values if available
+            Tensor kFull, vFull;
+            int fullSeqLen;
+            
+            if (_useKVCache && !_isTraining)
+            {
+                // Initialize cache on first use
+                if (_cachedKeys == null)
+                {
+                    var cacheShape = new int[] { B, _nHead, _blockSize, _headSize };
+                    _cachedKeys = new Tensor(cacheShape, requiresGrad: false);
+                    _cachedValues = new Tensor(cacheShape, requiresGrad: false);
+                }
+                
+                // Append new K, V to cache
+                int cacheOffset = _cachePosition * _headSize;
+                for (int b = 0; b < B; b++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int bhOffset = (b * _nHead + h) * T * _headSize;
+                        int cacheIndex = (b * _nHead + h) * _blockSize * _headSize + cacheOffset;
+                        
+                        // Copy new keys and values to cache
+                        Array.Copy(k.Data, bhOffset, _cachedKeys.Data, cacheIndex, T * _headSize);
+                        Array.Copy(v.Data, bhOffset, _cachedValues.Data, cacheIndex, T * _headSize);
+                    }
+                }
+                
+                // Use full cache (past + current)
+                fullSeqLen = _cachePosition + T;
+                kFull = _cachedKeys;
+                vFull = _cachedValues;
+                
+                // Increment cache position for next forward pass
+                _cachePosition += T;
+            }
+            else
+            {
+                // No caching: use current K, V
+                kFull = k;
+                vFull = v;
+                fullSeqLen = T;
+            }
+
             // Use workspace for attention scores
-            var scoresShape = new int[] { B, _nHead, T, T };
+            var scoresShape = new int[] { B, _nHead, T, fullSeqLen };
             var att = GetOrAllocateWorkspace(ref _scoresWorkspace, scoresShape);
-            ComputeAttentionScoresInPlace(q, k, att, B, T);
+            ComputeAttentionScoresInPlace(q, kFull, att, B, T, fullSeqLen);
 
             // Use workspace for attention output
             var y = GetOrAllocateWorkspace(ref _attnOutputWorkspace, qShape);
-            ApplyAttentionInPlace(att, v, y, B, T);
+            ApplyAttentionInPlace(att, vFull, y, B, T, fullSeqLen);
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
-            // This still allocates, but it's the final output
-            var yReshaped = ReshapeAttentionOutput(y, B, T);
+            // Use workspace to avoid allocation
+            var reshapedShape = new int[] { B, T, _nEmbd };
+            var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, reshapedShape);
+            ReshapeAttentionOutputInPlace(y, yReshaped, B, T);
 
             // Final projection and dropout
             var output = _proj.Forward(yReshaped);
@@ -998,14 +1084,46 @@ namespace SmallMind.Transformers
         }
         
         /// <summary>
+        /// In-place version of ReshapeAttentionOutput that writes to a pre-allocated tensor.
+        /// Reshapes from (B, nHead, T, headSize) to (B, T, n_embd).
+        /// </summary>
+        private void ReshapeAttentionOutputInPlace(Tensor y, Tensor output, int B, int T)
+        {
+            // y: (B, nHead, T, headSize) -> output: (B, T, n_embd)
+            
+            // Optimized version: process by head chunks with Array.Copy
+            for (int b = 0; b < B; b++)
+            {
+                int batchInOffset = b * _nHead * T * _headSize;
+                int batchOutOffset = b * T * _nEmbd;
+                
+                for (int t = 0; t < T; t++)
+                {
+                    int timeOutOffset = batchOutOffset + t * _nEmbd;
+                    
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int srcIdx = batchInOffset + h * T * _headSize + t * _headSize;
+                        int dstIdx = timeOutOffset + h * _headSize;
+                        
+                        // Copy entire head dimension at once
+                        Array.Copy(y.Data, srcIdx, output.Data, dstIdx, _headSize);
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
         /// In-place version of ComputeAttentionScores that writes to a pre-allocated tensor.
         /// Computes Q * K^T / sqrt(d_k) with causal masking and softmax.
         /// Uses fused scale+mask+softmax operation for better performance.
+        /// Supports KV-cache where K may have more positions than Q.
         /// </summary>
-        private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T)
+        private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T, int kSeqLen)
         {
-            // q, k: (B, nHead, T, headSize)
-            // scores: (B, nHead, T, T) - pre-allocated, will be modified in-place
+            // q: (B, nHead, T, headSize) - query for current tokens
+            // k: (B, nHead, kSeqLen, headSize) - keys (may include cached past)
+            // scores: (B, nHead, T, kSeqLen) - pre-allocated, will be modified in-place
             
             float scale = 1.0f / MathF.Sqrt(_headSize);
             
@@ -1016,36 +1134,22 @@ namespace SmallMind.Transformers
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
-                    int bhOffset = (b * _nHead + h) * T * _headSize;
-                    int scoreOffset = (b * _nHead + h) * T * T;
+                    int qOffset = (b * _nHead + h) * T * _headSize;
+                    int kOffset = (b * _nHead + h) * kSeqLen * _headSize;
+                    int scoreOffset = (b * _nHead + h) * T * kSeqLen;
                     
-                    // Step 1: Compute UNSCALED dot products (Q * K^T)
-                    for (int i = 0; i < T; i++)
-                    {
-                        int qOffset = bhOffset + i * _headSize;
-                        int scoreRowOffset = scoreOffset + i * T;
-                        
-                        // Compute scores for valid positions (causal mask: j <= i)
-                        for (int j = 0; j <= i; j++)
-                        {
-                            int kOffset = bhOffset + j * _headSize;
-                            float sum = MatMulOps.DotProduct(
-                                new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
-                                new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
-                            );
-                            scores.Data[scoreRowOffset + j] = sum;  // Store UNSCALED
-                        }
-                        
-                        // Set masked positions to zero (will be handled by FusedScaleMaskSoftmax)
-                        for (int j = i + 1; j < T; j++)
-                        {
-                            scores.Data[scoreRowOffset + j] = 0;
-                        }
-                    }
+                    // Step 1: Batched matrix multiplication Q @ K^T
+                    ReadOnlySpan<float> qMatrix = new ReadOnlySpan<float>(q.Data, qOffset, T * _headSize);
+                    ReadOnlySpan<float> kMatrix = new ReadOnlySpan<float>(k.Data, kOffset, kSeqLen * _headSize);
+                    Span<float> scoresMatrix = new Span<float>(scores.Data, scoreOffset, T * kSeqLen);
+                    
+                    // Compute Q @ K^T using optimized batched MatMul
+                    MatMulOps.MatMulTransposeB(qMatrix, kMatrix, scoresMatrix, T, _headSize, kSeqLen);
                     
                     // Step 2: Apply fused scale+mask+softmax
-                    // This operates on a T×T matrix for this (batch, head) combination
-                    OptimizedOps.FusedScaleMaskSoftmax(scores.Data, scoreOffset, scale, scores.Data, scoreOffset, T);
+                    // For KV-cache, the causal mask needs to account for cache offset
+                    int cacheOffset = kSeqLen - T;
+                    OptimizedOps.FusedScaleMaskSoftmax(scores.Data, scoreOffset, scale, scores.Data, scoreOffset, T, kSeqLen, cacheOffset);
                 });
             }
             else
@@ -1054,33 +1158,20 @@ namespace SmallMind.Transformers
                 {
                     for (int h = 0; h < _nHead; h++)
                     {
-                        int bhOffset = (b * _nHead + h) * T * _headSize;
-                        int scoreOffset = (b * _nHead + h) * T * T;
+                        int qOffset = (b * _nHead + h) * T * _headSize;
+                        int kOffset = (b * _nHead + h) * kSeqLen * _headSize;
+                        int scoreOffset = (b * _nHead + h) * T * kSeqLen;
                         
-                        // Step 1: Compute UNSCALED dot products
-                        for (int i = 0; i < T; i++)
-                        {
-                            int qOffset = bhOffset + i * _headSize;
-                            int scoreRowOffset = scoreOffset + i * T;
-                            
-                            for (int j = 0; j <= i; j++)
-                            {
-                                int kOffset = bhOffset + j * _headSize;
-                                float sum = MatMulOps.DotProduct(
-                                    new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
-                                    new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
-                                );
-                                scores.Data[scoreRowOffset + j] = sum;  // Store UNSCALED
-                            }
-                            
-                            for (int j = i + 1; j < T; j++)
-                            {
-                                scores.Data[scoreRowOffset + j] = 0;
-                            }
-                        }
+                        // Step 1: Batched matrix multiplication Q @ K^T
+                        ReadOnlySpan<float> qMatrix = new ReadOnlySpan<float>(q.Data, qOffset, T * _headSize);
+                        ReadOnlySpan<float> kMatrix = new ReadOnlySpan<float>(k.Data, kOffset, kSeqLen * _headSize);
+                        Span<float> scoresMatrix = new Span<float>(scores.Data, scoreOffset, T * kSeqLen);
+                        
+                        MatMulOps.MatMulTransposeB(qMatrix, kMatrix, scoresMatrix, T, _headSize, kSeqLen);
                         
                         // Step 2: Apply fused scale+mask+softmax for this (batch, head)
-                        OptimizedOps.FusedScaleMaskSoftmax(scores.Data, scoreOffset, scale, scores.Data, scoreOffset, T);
+                        int cacheOffset = kSeqLen - T;
+                        OptimizedOps.FusedScaleMaskSoftmax(scores.Data, scoreOffset, scale, scores.Data, scoreOffset, T, kSeqLen, cacheOffset);
                     }
                 }
             }
@@ -1088,6 +1179,12 @@ namespace SmallMind.Transformers
             // Apply dropout if in training mode
             // Note: Since we're using in-place operations, we modify scores directly
             // The dropout is applied to the tensor passed in, which is the workspace
+        }
+        
+        // Overload for backward compatibility (no KV-cache)
+        private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T)
+        {
+            ComputeAttentionScoresInPlace(q, k, scores, B, T, T);
         }
         
         /// <summary>
@@ -1189,11 +1286,12 @@ namespace SmallMind.Transformers
         /// <summary>
         /// In-place version of ApplyAttention that writes to a pre-allocated tensor.
         /// Computes attention_weights * V.
+        /// Supports KV-cache where V may have more positions than output.
         /// </summary>
-        private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T)
+        private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T, int vSeqLen)
         {
-            // att: (B, nHead, T, T)
-            // v: (B, nHead, T, headSize)
+            // att: (B, nHead, T, vSeqLen) - attention weights
+            // v: (B, nHead, vSeqLen, headSize) - values (may include cached past)
             // output: (B, nHead, T, headSize) - pre-allocated
             
             int totalParallelWork = B * _nHead;
@@ -1209,10 +1307,10 @@ namespace SmallMind.Transformers
                         for (int d = 0; d < _headSize; d++)
                         {
                             float sum = 0;
-                            for (int j = 0; j < T; j++)
+                            for (int j = 0; j < vSeqLen; j++)
                             {
-                                int attIdx = ((b * _nHead + h) * T + i) * T + j;
-                                int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                                int attIdx = ((b * _nHead + h) * T + i) * vSeqLen + j;
+                                int vIdx = ((b * _nHead + h) * vSeqLen + j) * _headSize + d;
                                 sum += att.Data[attIdx] * v.Data[vIdx];
                             }
                             int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
@@ -1232,10 +1330,10 @@ namespace SmallMind.Transformers
                             for (int d = 0; d < _headSize; d++)
                             {
                                 float sum = 0;
-                                for (int j = 0; j < T; j++)
+                                for (int j = 0; j < vSeqLen; j++)
                                 {
-                                    int attIdx = ((b * _nHead + h) * T + i) * T + j;
-                                    int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                                    int attIdx = ((b * _nHead + h) * T + i) * vSeqLen + j;
+                                    int vIdx = ((b * _nHead + h) * vSeqLen + j) * _headSize + d;
                                     sum += att.Data[attIdx] * v.Data[vIdx];
                                 }
                                 int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
@@ -1245,6 +1343,12 @@ namespace SmallMind.Transformers
                     }
                 }
             }
+        }
+        
+        // Overload for backward compatibility (no KV-cache)
+        private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T)
+        {
+            ApplyAttentionInPlace(att, v, output, B, T, T);
         }
 
         public void Train()
