@@ -4,7 +4,7 @@ namespace SmallMind.Public
     /// Single entry point for creating a SmallMind inference engine.
     /// This is the only public factory - all consumers must use this.
     /// </summary>
-    public static class SmallMind
+    public static class SmallMindFactory
     {
         /// <summary>
         /// Creates a new SmallMind inference engine with the specified options.
