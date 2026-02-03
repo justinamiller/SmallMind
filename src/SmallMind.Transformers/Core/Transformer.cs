@@ -424,12 +424,13 @@ namespace SmallMind.Transformers
         private readonly int _blockSize;
         
         // Workspace tensors for reuse in forward pass (avoid allocations)
-        // These are sized for max sequence length and reused
-        private PooledTensor? _qWorkspace;
-        private PooledTensor? _kWorkspace;
-        private PooledTensor? _vWorkspace;
-        private PooledTensor? _scoresWorkspace;
-        private PooledTensor? _attnOutputWorkspace;
+        // These persist across forward passes and are sized dynamically
+        // They use regular Tensor (not PooledTensor) to avoid premature disposal
+        private Tensor? _qWorkspace;
+        private Tensor? _kWorkspace;
+        private Tensor? _vWorkspace;
+        private Tensor? _scoresWorkspace;
+        private Tensor? _attnOutputWorkspace;
 
         public List<Tensor> Parameters { get; private set; }
 
@@ -469,8 +470,9 @@ namespace SmallMind.Transformers
         /// <summary>
         /// Get or allocate workspace tensor for the given shape.
         /// Reuses existing workspace if shape matches, otherwise allocates new one.
+        /// Uses regular Tensor (not PooledTensor) because these workspaces persist across forward passes.
         /// </summary>
-        private PooledTensor GetOrAllocateWorkspace(ref PooledTensor? workspace, int[] shape)
+        private Tensor GetOrAllocateWorkspace(ref Tensor? workspace, int[] shape)
         {
             // Check if we can reuse existing workspace
             if (workspace != null && workspace.Shape.Length == shape.Length)
@@ -491,16 +493,11 @@ namespace SmallMind.Transformers
                     Array.Clear(workspace.Data, 0, workspace.Size);
                     return workspace;
                 }
-                else
-                {
-                    // Dispose old workspace and allocate new one
-                    workspace.Dispose();
-                    workspace = null;
-                }
             }
             
-            // Allocate new workspace
-            workspace = Tensor.CreatePooled(shape, requiresGrad: true);
+            // Allocate new workspace (use regular Tensor, not PooledTensor)
+            // These persist across forward passes so we don't want them returned to pool
+            workspace = new Tensor(shape, requiresGrad: true);
             return workspace;
         }
 
