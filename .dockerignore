@@ -1,0 +1,53 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Test results
+**/TestResults/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Benchmarks and profiling
+benchmarks/
+benchmark-results*/
+profile-*.md
+*.json
+!appsettings.json
+
+# Data and models (add them via volume mounts)
+data/
+data.txt
+*.smq
+*.gguf
+checkpoints/
+sessions/
+
+# CI/CD
+.github/
+
+# Examples and samples
+examples/
+samples/
+tools/CodeProfiler/
+tools/CreateBenchmarkModel/
+tools/SmallMind.Benchmarks/
+
+# Scripts
+*.sh
+*.bat

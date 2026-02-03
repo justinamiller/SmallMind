@@ -124,13 +124,27 @@ namespace SmallMind.ConsoleApp
 
         static void Main(string[] args)
         {
-            // Check for quantization commands first
+            // Check for commands first
             if (args.Length > 0)
             {
                 var router = new CommandRouter();
+                
+                // Try two-word command first (e.g., "model add")
+                if (args.Length >= 2)
+                {
+                    string twoWordCommand = $"{args[0]} {args[1]}";
+                    if (router.HasCommand(twoWordCommand))
+                    {
+                        var commandArgs = args.Length > 2 ? args[2..] : Array.Empty<string>();
+                        var exitCode = router.ExecuteAsync(twoWordCommand, commandArgs).GetAwaiter().GetResult();
+                        Environment.Exit(exitCode);
+                        return;
+                    }
+                }
+                
+                // Try single-word command
                 if (router.HasCommand(args[0]))
                 {
-                    // Route to quantization command
                     var commandArgs = args.Length > 1 ? args[1..] : Array.Empty<string>();
                     var exitCode = router.ExecuteAsync(args[0], commandArgs).GetAwaiter().GetResult();
                     Environment.Exit(exitCode);
