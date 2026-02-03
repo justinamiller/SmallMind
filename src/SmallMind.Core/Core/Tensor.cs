@@ -951,6 +951,9 @@ namespace SmallMind.Core.Core
             {
                 TensorPool.Shared.Return(Grad, clearArray: true);
             }
+            
+            // Call base dispose in case the tensor also uses memory-mapped storage
+            base.Dispose();
         }
     }
     
