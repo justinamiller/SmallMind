@@ -41,6 +41,8 @@ namespace SmallMind.Core.Core
             if (beta.Length != features)
                 throw new Exceptions.ValidationException($"Beta length {beta.Length} must equal features ({features})", nameof(beta));
             
+            int vectorSize = System.Numerics.Vector<float>.Count;
+            
             for (int b = 0; b < batch; b++)
             {
                 int offset = b * features;
@@ -49,11 +51,11 @@ namespace SmallMind.Core.Core
                 float mean = 0f;
                 float m2 = 0f;
                 
-                for (int f = 0; f < features; f++)
+                for (int i = 0; i < features; i++)
                 {
-                    float val = input[offset + f];
+                    float val = input[offset + i];
                     float delta = val - mean;
-                    mean += delta / (f + 1);
+                    mean += delta / (i + 1);
                     float delta2 = val - mean;
                     m2 += delta * delta2;
                 }
@@ -61,8 +63,34 @@ namespace SmallMind.Core.Core
                 float variance = m2 / features;
                 float invStd = 1f / MathF.Sqrt(variance + eps);
                 
-                // Pass 2: Normalize and apply affine transformation
-                for (int f = 0; f < features; f++)
+                // Pass 2: Normalize and apply affine transformation (SIMD optimized)
+                int f = 0;
+                
+                if (System.Numerics.Vector.IsHardwareAccelerated && features >= vectorSize)
+                {
+                    var vMean = new System.Numerics.Vector<float>(mean);
+                    var vInvStd = new System.Numerics.Vector<float>(invStd);
+                    
+                    // SIMD loop for normalization and affine transform
+                    for (; f <= features - vectorSize; f += vectorSize)
+                    {
+                        // Load input, gamma, beta
+                        var vInput = new System.Numerics.Vector<float>(input.Slice(offset + f, vectorSize));
+                        var vGamma = new System.Numerics.Vector<float>(gamma.Slice(f, vectorSize));
+                        var vBeta = new System.Numerics.Vector<float>(beta.Slice(f, vectorSize));
+                        
+                        // Normalize: (input - mean) * invStd
+                        var vNormalized = (vInput - vMean) * vInvStd;
+                        
+                        // Affine: gamma * normalized + beta
+                        var vResult = vGamma * vNormalized + vBeta;
+                        
+                        vResult.CopyTo(output.Slice(offset + f, vectorSize));
+                    }
+                }
+                
+                // Scalar remainder
+                for (; f < features; f++)
                 {
                     float normalized = (input[offset + f] - mean) * invStd;
                     output[offset + f] = gamma[f] * normalized + beta[f];
