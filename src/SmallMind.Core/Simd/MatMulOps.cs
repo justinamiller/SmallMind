@@ -86,7 +86,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// AVX2 + FMA implementation (256-bit, 8 floats per vector)
-        /// Uses cache-friendly ikj loop order for better performance.
+        /// Uses cache-friendly ikj loop order with tiled blocking for better cache utilization.
         /// </summary>
         private static void MatMulAvx2(
             float[] A, float[] B, float[] C,
@@ -94,7 +94,13 @@ namespace SmallMind.Core.Simd
         {
             const int vecSize = 8; // AVX2 processes 8 floats
 
-            if (M >= PARALLEL_THRESHOLD)
+            // Use cache blocking for better L1/L2 cache utilization
+            // Process matrix in TILE_SIZE x TILE_SIZE blocks
+            if (M >= TILE_SIZE * 2 && K >= TILE_SIZE && N >= TILE_SIZE)
+            {
+                MatMulAvx2Tiled(A, B, C, M, K, N, vecSize);
+            }
+            else if (M >= PARALLEL_THRESHOLD)
             {
                 Parallel.For(0, M, i =>
                 {
@@ -106,6 +112,65 @@ namespace SmallMind.Core.Simd
                 for (int i = 0; i < M; i++)
                 {
                     MatMulAvx2Row(A, B, C, i, M, K, N, vecSize);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Cache-blocked (tiled) AVX2 matrix multiplication for better cache utilization.
+        /// Processes the matrix in TILE_SIZE x TILE_SIZE blocks to maximize L1 cache hits.
+        /// </summary>
+        private static unsafe void MatMulAvx2Tiled(
+            float[] A, float[] B, float[] C,
+            int M, int K, int N, int vecSize)
+        {
+            fixed (float* pA = A, pB = B, pC = C)
+            {
+                // Iterate over tiles in row-major order
+                for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
+                {
+                    int iMax = Math.Min(i0 + TILE_SIZE, M);
+                    
+                    for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
+                    {
+                        int kMax = Math.Min(k0 + TILE_SIZE, K);
+                        
+                        for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
+                        {
+                            int jMax = Math.Min(j0 + TILE_SIZE, N);
+                            
+                            // Process this tile
+                            for (int i = i0; i < iMax; i++)
+                            {
+                                int aRowStart = i * K;
+                                int cRowStart = i * N;
+                                
+                                for (int k = k0; k < kMax; k++)
+                                {
+                                    Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
+                                    int bRowStart = k * N;
+                                    
+                                    int j = j0;
+                                    
+                                    // SIMD loop within tile
+                                    for (; j <= jMax - vecSize; j += vecSize)
+                                    {
+                                        Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
+                                        Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
+                                        vC = Fma.MultiplyAdd(vA, vB, vC);
+                                        Avx.Store(pC + cRowStart + j, vC);
+                                    }
+                                    
+                                    // Scalar remainder within tile
+                                    float aVal = pA[aRowStart + k];
+                                    for (; j < jMax; j++)
+                                    {
+                                        pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -230,6 +295,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// Vector&lt;T&gt; fallback implementation (portable SIMD)
+        /// Uses cache-friendly tiled blocking for better cache utilization.
         /// </summary>
         private static void MatMulVector(
             float[] A, float[] B, float[] C,
@@ -237,7 +303,12 @@ namespace SmallMind.Core.Simd
         {
             int vectorSize = Vector<float>.Count;
 
-            if (M >= PARALLEL_THRESHOLD)
+            // Use cache blocking for better L1/L2 cache utilization
+            if (M >= TILE_SIZE * 2 && K >= TILE_SIZE && N >= TILE_SIZE)
+            {
+                MatMulVectorTiled(A, B, C, M, K, N, vectorSize);
+            }
+            else if (M >= PARALLEL_THRESHOLD)
             {
                 Parallel.For(0, M, i =>
                 {
@@ -249,6 +320,64 @@ namespace SmallMind.Core.Simd
                 for (int i = 0; i < M; i++)
                 {
                     MatMulVectorRow(A, B, C, i, K, N, vectorSize);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Cache-blocked (tiled) Vector implementation for better cache utilization.
+        /// </summary>
+        private static void MatMulVectorTiled(
+            float[] A, float[] B, float[] C,
+            int M, int K, int N, int vectorSize)
+        {
+            ReadOnlySpan<float> ASpan = A;
+            ReadOnlySpan<float> BSpan = B;
+            Span<float> CSpan = C;
+
+            // Iterate over tiles
+            for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
+            {
+                int iMax = Math.Min(i0 + TILE_SIZE, M);
+                
+                for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
+                {
+                    int kMax = Math.Min(k0 + TILE_SIZE, K);
+                    
+                    for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
+                    {
+                        int jMax = Math.Min(j0 + TILE_SIZE, N);
+                        
+                        // Process this tile
+                        for (int i = i0; i < iMax; i++)
+                        {
+                            int aRowStart = i * K;
+                            int cRowStart = i * N;
+                            
+                            for (int k = k0; k < kMax; k++)
+                            {
+                                float aVal = ASpan[aRowStart + k];
+                                var vA = new Vector<float>(aVal);
+                                int bRowStart = k * N;
+                                
+                                int j = j0;
+                                
+                                // SIMD loop within tile
+                                for (; j <= jMax - vectorSize; j += vectorSize)
+                                {
+                                    var vB = new Vector<float>(BSpan.Slice(bRowStart + j));
+                                    var vC = new Vector<float>(CSpan.Slice(cRowStart + j));
+                                    (vC + vA * vB).CopyTo(CSpan.Slice(cRowStart + j));
+                                }
+                                
+                                // Scalar remainder within tile
+                                for (; j < jMax; j++)
+                                {
+                                    CSpan[cRowStart + j] += aVal * BSpan[bRowStart + j];
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
