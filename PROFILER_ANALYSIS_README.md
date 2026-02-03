@@ -67,7 +67,7 @@ A comprehensive performance profiling session was conducted on SmallMind to:
 | **P1** | Tensor memory pooling | 2550 MB | <500 MB | ~2000 MB | Medium |
 | **P1** | Fused Softmax | 6.22 ms | <2 ms | ~4 ms | Low |
 
-**Total Expected Improvement:** -24% runtime, -80% memory
+**Total Expected Improvement:** -2% runtime, -80% memory
 
 ---
 

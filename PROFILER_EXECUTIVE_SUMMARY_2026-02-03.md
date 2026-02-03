@@ -88,17 +88,17 @@ Scaling Efficiency:          2.26× time for 7.34× parameters (excellent)
 
 ### This Week (P0)
 - [ ] Fix TensorAdd/BroadcastAdd regression → **-8ms**
-- [ ] Implement blocked matmul for 512×512 → **-100ms**
-- [ ] Optimize GELU activation → **-60ms**
+- [ ] Implement blocked matmul for 512×512 → **-70ms**
+- [ ] Optimize GELU activation → **-50ms**
 
-**Total Expected Gain:** ~170ms (-3% overall runtime)
+**Total Expected Gain:** ~128ms (-2.2% overall runtime)
 
 ### Next 2 Weeks (P1)
-- [ ] Add tensor memory pooling → **-80% allocations**
+- [ ] Add tensor memory pooling → **-2000MB allocations**
 - [ ] Improve Softmax performance → **-4ms**
 - [ ] Investigate model creation slowdown → **-19ms**
 
-**Total Expected Gain:** ~200ms + 2000MB (-7% runtime, -80% memory)
+**Total Expected Gain:** ~23ms + 2000MB (-0.4% runtime, -80% memory)
 
 ### Next Month (P2)
 - [ ] Optional BLAS integration (Intel MKL/OpenBLAS)

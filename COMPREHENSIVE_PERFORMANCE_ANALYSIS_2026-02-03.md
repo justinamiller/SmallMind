@@ -227,7 +227,7 @@ for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
     }
 }
 ```
-**Expected Gain:** 2-3× improvement = ~100-120ms savings
+**Expected Gain:** 2-3× improvement = ~80-100ms savings
 
 ### 4.2 High Priority (P1) - Near-term Focus
 
@@ -269,7 +269,7 @@ public void GELUBatchSIMD(Span<float> x)
     }
 }
 ```
-**Expected Gain:** 2-3× speedup = ~60ms savings
+**Expected Gain:** 2-3× speedup = ~50-65ms savings
 
 #### 5. **Improve Softmax for Large Sequences**
 **Problem:** Softmax_2048 regressed 210% (2.01ms → 6.22ms)  

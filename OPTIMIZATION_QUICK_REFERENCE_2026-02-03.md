@@ -38,7 +38,7 @@ for (int i = 0; i <= length - vectorSize; i += vectorSize)
 ```
 Current:   172.11 ms for 512×512 (regressed +44%)
 Target:    <100 ms
-Est. Gain: ~70 ms per large matmul
+Est. Gain: ~70-80 ms per large matmul
 Impact:    HIGH - Bottleneck for larger models
 ```
 
@@ -77,7 +77,7 @@ for (int i0 = 0; i0 < M; i0 += TILE)
 ```
 Current:   100.60 ms for 1M elements (regressed +70%)
 Target:    <50 ms
-Est. Gain: ~50 ms per large activation
+Est. Gain: ~50-60 ms per large activation
 Impact:    MEDIUM - Used in every transformer block
 ```
 
@@ -224,10 +224,14 @@ public void SoftmaxInPlace(Span<float> logits)
 
 Implementing all P0 optimizations:
 ```
-Runtime:   5927 ms → ~4500 ms (-24%)
+Runtime:   5927 ms → ~5800 ms (-2%)
 Memory:    2550 MB → ~500 MB (-80%)
-Throughput: +30-40%
+Throughput: +2-5%
 ```
+
+Note: The primary bottleneck is the model inference itself (87% of runtime), 
+not the individual operations. Significant speedup requires optimizing the 
+forward pass as a whole, including KV-caching and attention optimization.
 
 ---
 

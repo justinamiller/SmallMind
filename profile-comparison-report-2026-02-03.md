@@ -13,7 +13,7 @@
 
 ### 🎯 Performance Verdict
 
-➡️ **STABLE**: Performance remained within 10% tolerance (+F1%)
+➡️ **STABLE**: Performance remained within 10% tolerance (+6.0%)
 
 ## 🚀 Top 10 Improvements
 
