@@ -239,7 +239,7 @@ Our ArrayPool optimization compounds with these improvements.
 - ✅ All existing tests pass
 
 ### Technical Debt
-- ⚠️ 5 unit tests failing in `TensorPoolTests` 
+- ⚠️ 4 unit tests failing in `TensorPoolTests` 
   - These tests verify custom pool implementation details
   - We're using `ArrayPool.Shared` which has different behavior
   - Tests should be updated or removed (not critical for functionality)
