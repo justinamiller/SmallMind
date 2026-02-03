@@ -276,23 +276,15 @@ namespace SmallMind.Transformers
             // Pre-norm architecture with residual connections
             // x: (B, T, n_embd)
             
-            // Use pooled tensors for intermediate results to reduce allocations
-            using var scope = new TensorScope();
+            // LayerNorm outputs are allocated but operations are fused
+            // TODO: Pool LayerNorm outputs once all downstream ops handle pooled tensors correctly
+            var attnOut = _attn.Forward(_ln1.Forward(x));
+            x = AddTensors(x, attnOut);
             
-            // Allocate pooled tensors for LayerNorm outputs
-            var ln1Out = scope.Rent(x.Shape, requiresGrad: true);
-            _ln1.Forward(x, ln1Out);
+            var mlpOut = _mlp.Forward(_ln2.Forward(x));
+            x = AddTensors(x, mlpOut);
             
-            var attnOut = _attn.Forward(ln1Out);
-            var residual1 = AddTensors(x, attnOut, dest: null); // Result becomes new x
-            
-            var ln2Out = scope.Rent(residual1.Shape, requiresGrad: true);
-            _ln2.Forward(residual1, ln2Out);
-            
-            var mlpOut = _mlp.Forward(ln2Out);
-            var residual2 = AddTensors(residual1, mlpOut, dest: null);
-            
-            return residual2;
+            return x;
         }
 
         private Tensor AddTensors(Tensor a, Tensor b, Tensor? dest = null)

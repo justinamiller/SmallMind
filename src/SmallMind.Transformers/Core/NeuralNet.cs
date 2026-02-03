@@ -278,13 +278,15 @@ namespace SmallMind.Transformers
             {
                 int batch = input.Shape[0];
                 int features = input.Shape[1];
+                int expectedSize = batch * features;
                 
                 // Fused two-pass LayerNorm
+                // Use AsSpan to handle pooled tensors with oversized backing arrays
                 SmallMind.Core.Core.LayerNormOps.LayerNorm(
-                    input.Data,
+                    input.Data.AsSpan(0, expectedSize),
                     Gamma.Data,
                     Beta.Data,
-                    output.Data,
+                    output.Data.AsSpan(0, expectedSize),
                     batch,
                     features,
                     _eps);
@@ -294,13 +296,15 @@ namespace SmallMind.Transformers
                 int batch = input.Shape[0];
                 int seq = input.Shape[1];
                 int features = input.Shape[2];
+                int expectedSize = batch * seq * features;
                 
                 // Fused LayerNorm for 3D tensors
+                // Use AsSpan to handle pooled tensors with oversized backing arrays
                 SmallMind.Core.Core.LayerNormOps.LayerNorm3D(
-                    input.Data,
+                    input.Data.AsSpan(0, expectedSize),
                     Gamma.Data,
                     Beta.Data,
-                    output.Data,
+                    output.Data.AsSpan(0, expectedSize),
                     batch,
                     seq,
                     features,

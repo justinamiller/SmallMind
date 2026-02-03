@@ -106,34 +106,25 @@ This document presents the memory optimization implementation for SmallMind's tr
 - ✅ **>95% reduction** compared to allocating output tensors
 - ✅ Backward compatible API (destination parameter is optional)
 
-### 5. TransformerBlock Forward Pass Integration
+### 5. TransformerBlock Integration
 
-**Test Configuration**:
-- TransformerBlock with:
-  - Embedding dimension: 64
-  - Attention heads: 4
-  - Sequence length: 8
-  - Batch size: 2
-- 10 forward passes
+**Status**: Partial integration (fused LayerNorm only)
+
+**What Works**:
+- LayerNorm operations use fused implementation (no intermediate allocations)
+- LayerNorm supports destination parameter for zero-allocation reuse
+- Pooled tensors can be used as LayerNorm destinations via AsSpan slicing
+
+**Current Limitation**:
+- TransformerBlock does not yet use pooled tensors for LayerNorm outputs
+- Reason: Downstream operations (Attention, MLP) expect exact tensor sizes
+- PooledTensor backing arrays may be larger than logical size
+- Would require updating all downstream ops to use tensor.Size instead of Data.Length
 
 **Results**:
-
-| Metric | Value |
-|--------|-------|
-| Pooled tensor rentals | 20 |
-| Pooled tensor returns | 20 (100% return rate) |
-| Allocations per forward pass | ~794 KB |
-
-**Key Findings**:
-- ✅ **Perfect pooling discipline** (100% return rate)
-- ✅ LayerNorm output tensors pooled via `TensorScope`
-- ✅ ~**34% allocation reduction** vs non-pooled (estimated 1.2 MB → 794 KB)
-- ✅ Result tensors still allocated (by design - they're function return values)
-- ✅ All temporary intermediate tensors reused across calls
-
-**Before vs After**:
-- **Before**: Each forward pass allocated all intermediate tensors
-- **After**: Only result tensors allocated; temps pooled and reused
+- LayerNorm operations: Near-zero allocations (fused)
+- Destination parameter: **99.4% reduction** when reusing dest tensor
+- Full integration deferred to future PR
 
 ## Implementation Details
 
@@ -260,49 +251,38 @@ public class LayerNorm : Module
 
 **Location**: `src/SmallMind.Transformers/Core/Transformer.cs`
 
-**Before**:
+**Current State**:
 ```csharp
 public Tensor Forward(Tensor x)
 {
-    var attnOut = _attn.Forward(_ln1.Forward(x));  // LN output allocated
-    x = AddTensors(x, attnOut);                     // Result allocated
+    // Pre-norm architecture with residual connections
+    // LayerNorm operations are fused (no intermediate allocations)
+    var attnOut = _attn.Forward(_ln1.Forward(x));
+    x = AddTensors(x, attnOut);
     
-    var mlpOut = _mlp.Forward(_ln2.Forward(x));     // LN output allocated
-    x = AddTensors(x, mlpOut);                      // Result allocated
+    var mlpOut = _mlp.Forward(_ln2.Forward(x));
+    x = AddTensors(x, mlpOut);
     
     return x;
 }
 ```
 
-**After**:
-```csharp
-public Tensor Forward(Tensor x)
-{
-    using var scope = new TensorScope();
-    
-    // Rent pooled tensors for LayerNorm outputs
-    var ln1Out = scope.Rent(x.Shape, requiresGrad: true);
-    _ln1.Forward(x, ln1Out);
-    
-    var attnOut = _attn.Forward(ln1Out);
-    var residual1 = AddTensors(x, attnOut, dest: null);
-    
-    var ln2Out = scope.Rent(residual1.Shape, requiresGrad: true);
-    _ln2.Forward(residual1, ln2Out);
-    
-    var mlpOut = _mlp.Forward(ln2Out);
-    var residual2 = AddTensors(residual1, mlpOut, dest: null);
-    
-    return residual2;
-    // ln1Out and ln2Out automatically returned to pool
-}
-```
+**What's Optimized**:
+- ✅ LayerNorm operations use fused LayerNormOps (near-zero allocations)
+- ✅ LayerNorm supports destination parameter for reuse
+- ✅ AsSpan slicing handles pooled tensors with oversized backing arrays
 
-**Impact**:
-- LayerNorm output tensors now pooled (2 per block per forward pass)
-- Automatic cleanup via TensorScope
-- Result tensors still allocated (returned from function)
-- 20 pool operations per 10 forward passes (2 per pass)
+**Not Yet Integrated**:
+- ❌ TransformerBlock does not use TensorScope for LayerNorm outputs
+- ❌ Reason: Downstream ops (Attention, MLP) expect Data.Length == logical size
+- ❌ PooledTensor backing arrays are larger (bucket sizing)
+
+**Future Work**:
+To fully integrate pooling in TransformerBlock, we need to:
+1. Update all operations to use tensor.Size instead of Data.Length
+2. Ensure all ops handle Span slicing correctly
+3. Add comprehensive tests for pooled tensor propagation
+4. This is deferred to a future PR to keep changes minimal
 
 ## Tests
 

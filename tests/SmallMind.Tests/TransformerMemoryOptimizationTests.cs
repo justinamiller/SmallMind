@@ -12,7 +12,7 @@ namespace SmallMind.Tests
     public class TransformerMemoryOptimizationTests
     {
         [Fact]
-        public void TransformerBlock_Forward_ReducesAllocations()
+        public void TransformerBlock_Forward_WithFusedLayerNorm()
         {
             // Arrange
             int nEmbd = 64;
@@ -31,43 +31,22 @@ namespace SmallMind.Tests
             for (int i = 0; i < input.Size; i++)
                 input.Data[i] = (float)random.NextDouble();
             
-            // Warmup
-            for (int i = 0; i < 5; i++)
+            // Act - Run forward pass
+            var output = block.Forward(input);
+            
+            // Assert - Verify output is produced correctly
+            Assert.NotNull(output);
+            Assert.Equal(3, output.Shape.Length);
+            Assert.Equal(batchSize, output.Shape[0]);
+            Assert.Equal(seqLen, output.Shape[1]);
+            Assert.Equal(nEmbd, output.Shape[2]);
+            
+            // Verify output contains finite values (not NaN/Inf)
+            for (int i = 0; i < Math.Min(100, output.Size); i++)
             {
-                var _ = block.Forward(input);
+                Assert.True(float.IsFinite(output.Data[i]), 
+                    $"Output[{i}] should be finite, got {output.Data[i]}");
             }
-            
-            // Measure allocations
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-            
-            long startAllocations = GC.GetTotalAllocatedBytes(precise: true);
-            int iterations = 100;
-            
-            // Act
-            for (int i = 0; i < iterations; i++)
-            {
-                var output = block.Forward(input);
-                // Use output to prevent optimization
-                _ = output.Data[0];
-            }
-            
-            long endAllocations = GC.GetTotalAllocatedBytes(precise: true);
-            long totalAllocations = endAllocations - startAllocations;
-            double allocationsPerIteration = totalAllocations / (double)iterations;
-            
-            // Assert
-            // With pooling, allocations should be significantly reduced
-            // We still allocate result tensors, but pooled temps (LayerNorm outputs) should be reused
-            double allocationsKB = allocationsPerIteration / 1024.0;
-            
-            // Log results for documentation
-            Console.WriteLine($"Allocations per forward pass: {allocationsKB:F2} KB");
-            
-            // Verify pooled tensors are being used and returned
-            // The test passes if pooling is working (checked separately)
-            Assert.True(allocationsKB > 0, "Some allocations expected for result tensors");
         }
         
         [Fact]
@@ -166,44 +145,36 @@ namespace SmallMind.Tests
         }
         
         [Fact]
-        public void PooledTensors_InTransformerForward_AreReused()
+        public void PooledTensors_WorkCorrectlyWithLayerNorm()
         {
-            // Arrange
-            var pool = TensorPool.Shared;
-            var statsBefore = pool.GetStats();
+            // Arrange - test that LayerNorm can use pooled tensors as destination
+            using var scope = new TensorScope();
             
-            int nEmbd = 32;
-            int nHead = 2;
-            int blockSize = 8;
-            float dropout = 0.0f;
-            var random = new Random(42);
+            int features = 128;
+            var ln = new LayerNorm(features);
             
-            var block = new TransformerBlock(nEmbd, nHead, blockSize, dropout, random);
-            block.Eval();
-            
-            var input = new Tensor(new int[] { 1, 4, nEmbd });
+            var input = new Tensor(new int[] { 2, features });
             for (int i = 0; i < input.Size; i++)
-                input.Data[i] = (float)random.NextDouble();
+                input.Data[i] = (float)(i % 100);
             
-            // Act - run multiple forward passes
-            for (int i = 0; i < 10; i++)
-            {
-                var output = block.Forward(input);
-                _ = output.Data[0];
-            }
+            // Rent a pooled tensor for destination
+            var dest = scope.Rent(new int[] { 2, features }, requiresGrad: true);
             
-            var statsAfter = pool.GetStats();
+            // Act - Use pooled tensor as destination
+            var output = ln.Forward(input, dest);
             
-            // Assert - pool should show rents and returns
-            long totalRents = statsAfter.totalRents - statsBefore.totalRents;
-            long totalReturns = statsAfter.totalReturns - statsBefore.totalReturns;
+            // Assert
+            Assert.Same(dest, output); // Should return the dest tensor
+            Assert.NotNull(output.Data);
+            Assert.Equal(256, output.Size); // Logical size
             
-            Console.WriteLine($"Total rents: {totalRents}");
-            Console.WriteLine($"Total returns: {totalReturns}");
+            // Verify the output is normalized (mean ≈ 0)
+            float mean = 0f;
+            for (int i = 0; i < features; i++)
+                mean += output.Data[i];
+            mean /= features;
             
-            // Should have rented and returned pooled tensors
-            Assert.True(totalRents > 0, "Expected some tensor rentals");
-            Assert.True(totalReturns > 0, "Expected some tensor returns");
+            Assert.True(Math.Abs(mean) < 0.01f, $"Expected normalized mean near 0, got {mean}");
         }
     }
 }
