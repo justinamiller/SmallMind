@@ -1019,29 +1019,15 @@ namespace SmallMind.Transformers
                     int bhOffset = (b * _nHead + h) * T * _headSize;
                     int scoreOffset = (b * _nHead + h) * T * T;
                     
-                    // Step 1: Compute UNSCALED dot products (Q * K^T)
-                    for (int i = 0; i < T; i++)
-                    {
-                        int qOffset = bhOffset + i * _headSize;
-                        int scoreRowOffset = scoreOffset + i * T;
-                        
-                        // Compute scores for valid positions (causal mask: j <= i)
-                        for (int j = 0; j <= i; j++)
-                        {
-                            int kOffset = bhOffset + j * _headSize;
-                            float sum = MatMulOps.DotProduct(
-                                new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
-                                new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
-                            );
-                            scores.Data[scoreRowOffset + j] = sum;  // Store UNSCALED
-                        }
-                        
-                        // Set masked positions to zero (will be handled by FusedScaleMaskSoftmax)
-                        for (int j = i + 1; j < T; j++)
-                        {
-                            scores.Data[scoreRowOffset + j] = 0;
-                        }
-                    }
+                    // Step 1: Batched matrix multiplication Q @ K^T
+                    // Q and K are both (T × headSize) matrices for this (batch, head)
+                    // Result is (T × T) attention scores
+                    ReadOnlySpan<float> qMatrix = new ReadOnlySpan<float>(q.Data, bhOffset, T * _headSize);
+                    ReadOnlySpan<float> kMatrix = new ReadOnlySpan<float>(k.Data, bhOffset, T * _headSize);
+                    Span<float> scoresMatrix = new Span<float>(scores.Data, scoreOffset, T * T);
+                    
+                    // Compute Q @ K^T using optimized batched MatMul
+                    MatMulOps.MatMulTransposeB(qMatrix, kMatrix, scoresMatrix, T, _headSize, T);
                     
                     // Step 2: Apply fused scale+mask+softmax
                     // This operates on a T×T matrix for this (batch, head) combination
@@ -1057,27 +1043,12 @@ namespace SmallMind.Transformers
                         int bhOffset = (b * _nHead + h) * T * _headSize;
                         int scoreOffset = (b * _nHead + h) * T * T;
                         
-                        // Step 1: Compute UNSCALED dot products
-                        for (int i = 0; i < T; i++)
-                        {
-                            int qOffset = bhOffset + i * _headSize;
-                            int scoreRowOffset = scoreOffset + i * T;
-                            
-                            for (int j = 0; j <= i; j++)
-                            {
-                                int kOffset = bhOffset + j * _headSize;
-                                float sum = MatMulOps.DotProduct(
-                                    new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
-                                    new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
-                                );
-                                scores.Data[scoreRowOffset + j] = sum;  // Store UNSCALED
-                            }
-                            
-                            for (int j = i + 1; j < T; j++)
-                            {
-                                scores.Data[scoreRowOffset + j] = 0;
-                            }
-                        }
+                        // Step 1: Batched matrix multiplication Q @ K^T
+                        ReadOnlySpan<float> qMatrix = new ReadOnlySpan<float>(q.Data, bhOffset, T * _headSize);
+                        ReadOnlySpan<float> kMatrix = new ReadOnlySpan<float>(k.Data, bhOffset, T * _headSize);
+                        Span<float> scoresMatrix = new Span<float>(scores.Data, scoreOffset, T * T);
+                        
+                        MatMulOps.MatMulTransposeB(qMatrix, kMatrix, scoresMatrix, T, _headSize, T);
                         
                         // Step 2: Apply fused scale+mask+softmax for this (batch, head)
                         OptimizedOps.FusedScaleMaskSoftmax(scores.Data, scoreOffset, scale, scores.Data, scoreOffset, T);

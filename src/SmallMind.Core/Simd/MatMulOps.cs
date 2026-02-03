@@ -506,6 +506,67 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
+        /// Matrix multiplication with B transposed: C = A × B^T
+        /// A: (M × K), B: (N × K) [stored in row-major, will be accessed as transposed], C: (M × N)
+        /// This is optimized for computing attention scores: Q @ K^T
+        /// where Q and K have shape (T × headSize) and we compute (T × T) scores.
+        /// </summary>
+        public static void MatMulTransposeB(
+            ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
+            int M, int K, int N)
+        {
+            if (A.Length < M * K || B.Length < N * K || C.Length < M * N)
+                throw new ArgumentException("Matrix dimensions don't match buffer sizes");
+
+            // Clear output
+            C.Clear();
+
+            // For attention: A is Q (T × headSize), B is K (T × headSize)
+            // We compute C = Q @ K^T (T × T)
+            // This is more cache-friendly than transposing K first
+            
+            int vectorSize = Vector<float>.Count;
+            
+            for (int i = 0; i < M; i++)
+            {
+                int aRowStart = i * K;
+                int cRowStart = i * N;
+                
+                for (int j = 0; j < N; j++)
+                {
+                    int bRowStart = j * K;  // B is stored row-major, treat as transpose
+                    
+                    // Dot product between A[i] and B[j] (which becomes B^T[:,j])
+                    int k = 0;
+                    var sumVec = Vector<float>.Zero;
+                    
+                    // SIMD loop
+                    for (; k <= K - vectorSize; k += vectorSize)
+                    {
+                        var va = new Vector<float>(A.Slice(aRowStart + k, vectorSize));
+                        var vb = new Vector<float>(B.Slice(bRowStart + k, vectorSize));
+                        sumVec += va * vb;
+                    }
+                    
+                    // Horizontal sum
+                    float sum = 0f;
+                    for (int v = 0; v < vectorSize; v++)
+                    {
+                        sum += sumVec[v];
+                    }
+                    
+                    // Scalar remainder
+                    for (; k < K; k++)
+                    {
+                        sum += A[aRowStart + k] * B[bRowStart + k];
+                    }
+                    
+                    C[cRowStart + j] = sum;
+                }
+            }
+        }
+
+        /// <summary>
         /// Dot product: sum(a[i] * b[i])
         /// Uses SIMD for acceleration.
         /// </summary>
