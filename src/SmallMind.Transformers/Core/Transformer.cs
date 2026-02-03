@@ -113,9 +113,17 @@ namespace SmallMind.Transformers
             Parameters.AddRange(_lnFinal.Parameters);
             Parameters.AddRange(_lmHead.Parameters);
 
+            long totalParams = GetTotalParameterCount();
             Console.WriteLine($"TransformerModel initialized: vocab={_vocabSize}, block_size={_blockSize}, " +
                             $"n_embd={_nEmbd}, n_layer={_nLayer}, n_head={_nHead}, dropout={_dropout}");
-            Console.WriteLine($"Total parameters: {Parameters.Count} tensors");
+            Console.WriteLine($"Total parameters: {totalParams:N0} ({Parameters.Count} tensors)");
+            
+            // Warn if approaching billion-parameter scale
+            if (totalParams > 500_000_000)
+            {
+                Console.WriteLine($"WARNING: Large model detected ({totalParams / 1_000_000}M parameters). " +
+                                "Consider using quantization (Q8/Q4) for memory efficiency.");
+            }
         }
 
         public Tensor Forward(Tensor idx)
@@ -242,6 +250,39 @@ namespace SmallMind.Transformers
             {
                 _blocks[i].Eval();
             }
+        }
+
+        /// <summary>
+        /// Calculate total number of parameters in the model.
+        /// Uses long to support billion-parameter models.
+        /// </summary>
+        /// <returns>Total parameter count.</returns>
+        public long GetTotalParameterCount()
+        {
+            long total = 0;
+            foreach (var param in Parameters)
+            {
+                total += param.Size;
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// Get memory footprint estimate in bytes.
+        /// </summary>
+        /// <param name="includingGradients">Include gradient memory.</param>
+        /// <returns>Estimated bytes.</returns>
+        public long GetMemoryFootprintBytes(bool includingGradients = false)
+        {
+            long totalParams = GetTotalParameterCount();
+            long bytes = totalParams * sizeof(float); // FP32 parameters
+            
+            if (includingGradients)
+            {
+                bytes += totalParams * sizeof(float); // FP32 gradients
+            }
+            
+            return bytes;
         }
     }
 
