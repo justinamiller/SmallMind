@@ -37,6 +37,27 @@ namespace SmallMind.Abstractions
         /// If null, no limit is enforced.
         /// </summary>
         public long? MaxMemoryBytes { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether to enforce strict memory budgeting.
+        /// When true, operations exceeding budget are rejected before execution.
+        /// Default: false (advisory limits only).
+        /// </summary>
+        public bool EnableStrictMemoryBudget { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the safety margin for strict budgets (0.0 to 1.0).
+        /// Actual limit is MaxMemoryBytes * (1 - SafetyMargin).
+        /// Default: 0.1 (10% safety margin).
+        /// </summary>
+        public double StrictBudgetSafetyMargin { get; set; } = 0.1;
+
+        /// <summary>
+        /// Gets or sets whether to pre-allocate memory when strict budgeting is enabled.
+        /// When true, memory is allocated upfront for predictable performance.
+        /// Default: true.
+        /// </summary>
+        public bool PreAllocateMemory { get; set; } = true;
     }
 
     /// <summary>

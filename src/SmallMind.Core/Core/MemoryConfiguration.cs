@@ -6,6 +6,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Memory configuration and optimization settings for transformer models.
     /// Dynamically adjusts token limits based on available system memory.
+    /// Supports both advisory and strict memory budgeting modes.
     /// </summary>
     public class MemoryConfiguration
     {
@@ -42,6 +43,9 @@ namespace SmallMind.Core.Core
         private readonly int _checkpointInterval;
         private readonly int _slidingWindowSize;
         private readonly int _slidingWindowStride;
+        
+        // Strict memory budgeting (optional)
+        private readonly StrictMemoryBudget? _strictBudget;
 
         /// <summary>
         /// Gets the maximum context size in tokens.
@@ -89,6 +93,16 @@ namespace SmallMind.Core.Core
         public int SlidingWindowStride => _slidingWindowStride;
 
         /// <summary>
+        /// Gets whether strict memory budgeting is enabled.
+        /// </summary>
+        public bool IsStrictMode => _strictBudget != null;
+
+        /// <summary>
+        /// Gets the strict memory budget (if enabled).
+        /// </summary>
+        public StrictMemoryBudget? StrictBudget => _strictBudget;
+
+        /// <summary>
         /// Creates a memory configuration with automatic detection of system memory.
         /// </summary>
         /// <param name="enableGradientCheckpointing">Enable gradient checkpointing for memory savings.</param>
@@ -96,12 +110,14 @@ namespace SmallMind.Core.Core
         /// <param name="enableMemoryMapping">Enable memory-mapped KV cache.</param>
         /// <param name="checkpointInterval">Interval for gradient checkpoints (e.g., 2 = every 2nd layer).</param>
         /// <param name="customMaxTokens">Custom max tokens override (0 = auto-detect based on RAM).</param>
+        /// <param name="strictBudget">Optional strict memory budget for hard limits.</param>
         public MemoryConfiguration(
             bool enableGradientCheckpointing = true,
             bool enableMixedPrecision = false,
             bool enableMemoryMapping = false,
             int checkpointInterval = 2,
-            int customMaxTokens = 0)
+            int customMaxTokens = 0,
+            StrictMemoryBudget? strictBudget = null)
         {
             Guard.GreaterThanOrEqualTo(checkpointInterval, 1, nameof(checkpointInterval));
 
@@ -112,6 +128,7 @@ namespace SmallMind.Core.Core
             _enableMixedPrecision = enableMixedPrecision;
             _enableMemoryMapping = enableMemoryMapping;
             _checkpointInterval = checkpointInterval;
+            _strictBudget = strictBudget;
 
             // Auto-configure max tokens based on available RAM
             if (customMaxTokens > 0)
@@ -137,12 +154,14 @@ namespace SmallMind.Core.Core
         /// <param name="enableMixedPrecision">Enable mixed precision training.</param>
         /// <param name="enableMemoryMapping">Enable memory-mapped KV cache.</param>
         /// <param name="checkpointInterval">Interval for gradient checkpoints.</param>
+        /// <param name="strictBudget">Optional strict memory budget for hard limits.</param>
         public MemoryConfiguration(
             double memoryGB,
             bool enableGradientCheckpointing = true,
             bool enableMixedPrecision = false,
             bool enableMemoryMapping = false,
-            int checkpointInterval = 2)
+            int checkpointInterval = 2,
+            StrictMemoryBudget? strictBudget = null)
         {
             Guard.GreaterThan(memoryGB, 0.0, nameof(memoryGB));
             Guard.GreaterThanOrEqualTo(checkpointInterval, 1, nameof(checkpointInterval));
@@ -152,6 +171,7 @@ namespace SmallMind.Core.Core
             _enableMixedPrecision = enableMixedPrecision;
             _enableMemoryMapping = enableMemoryMapping;
             _checkpointInterval = checkpointInterval;
+            _strictBudget = strictBudget;
 
             _maxContextTokens = CalculateMaxTokens(_systemMemoryBytes);
 
@@ -222,6 +242,7 @@ namespace SmallMind.Core.Core
         /// <summary>
         /// Estimate memory usage for a given model configuration.
         /// Uses LargeModelSupport for billion-parameter model calculations.
+        /// Returns detailed breakdown for budget checking.
         /// </summary>
         /// <param name="vocabSize">Vocabulary size.</param>
         /// <param name="embeddingDim">Embedding dimension.</param>
@@ -229,8 +250,8 @@ namespace SmallMind.Core.Core
         /// <param name="numHeads">Number of attention heads.</param>
         /// <param name="batchSize">Batch size.</param>
         /// <param name="seqLength">Sequence length.</param>
-        /// <returns>Estimated memory usage in bytes.</returns>
-        public long EstimateMemoryUsage(
+        /// <returns>Memory breakdown with detailed component sizes.</returns>
+        public MemoryBreakdown EstimateMemoryBreakdown(
             int vocabSize,
             int embeddingDim,
             int numLayers,
@@ -251,7 +272,7 @@ namespace SmallMind.Core.Core
 
             // Model parameters in FP32 or FP16
             int bytesPerParam = _enableMixedPrecision ? 2 : 4;
-            long memory = totalParams * bytesPerParam;
+            long modelMemory = totalParams * bytesPerParam;
 
             // Activations during forward pass
             long activationsPerLayer = (long)batchSize * seqLength * embeddingDim;
@@ -261,23 +282,103 @@ namespace SmallMind.Core.Core
                 ? (numLayers + _checkpointInterval - 1) / _checkpointInterval 
                 : numLayers;
 
-            memory += numStoredLayers * activationsPerLayer * 4; // FP32 for activations
-            memory += numStoredLayers * attentionScores * 4; // Attention scores
-
-            // Gradients (same size as parameters during training)
-            memory += totalParams * 4; // Gradients always in FP32
-
-            // Optimizer state (Adam: 2x parameters for momentum and variance)
-            memory += totalParams * 4 * 2; // Adam state in FP32
+            long activationsMemory = numStoredLayers * activationsPerLayer * 4; // FP32 for activations
+            activationsMemory += numStoredLayers * attentionScores * 4; // Attention scores
 
             // KV cache (if not using memory mapping)
+            long kvCacheMemory = 0;
             if (!_enableMemoryMapping)
             {
                 long kvCachePerLayer = (long)batchSize * seqLength * embeddingDim * 2; // K and V
-                memory += numLayers * kvCachePerLayer * 4;
+                kvCacheMemory = numLayers * kvCachePerLayer * 4;
             }
 
-            return memory;
+            // Gradients (same size as parameters during training)
+            long gradientsMemory = totalParams * 4; // Gradients always in FP32
+
+            // Optimizer state (Adam: 2x parameters for momentum and variance)
+            long optimizerMemory = totalParams * 4 * 2; // Adam state in FP32
+
+            // Overhead (buffers, temporary allocations, etc.)
+            long overhead = (long)((modelMemory + activationsMemory) * 0.1); // 10% overhead
+
+            return new MemoryBreakdown
+            {
+                ModelParametersBytes = modelMemory,
+                ActivationsBytes = activationsMemory,
+                KVCacheBytes = kvCacheMemory,
+                GradientsBytes = gradientsMemory,
+                OptimizerStateBytes = optimizerMemory,
+                OverheadBytes = overhead
+            };
+        }
+
+        /// <summary>
+        /// Estimate memory usage for a given model configuration (legacy method).
+        /// Returns total estimated memory in bytes.
+        /// For detailed breakdown, use EstimateMemoryBreakdown instead.
+        /// </summary>
+        /// <param name="vocabSize">Vocabulary size.</param>
+        /// <param name="embeddingDim">Embedding dimension.</param>
+        /// <param name="numLayers">Number of transformer layers.</param>
+        /// <param name="numHeads">Number of attention heads.</param>
+        /// <param name="batchSize">Batch size.</param>
+        /// <param name="seqLength">Sequence length.</param>
+        /// <returns>Total estimated memory in bytes.</returns>
+        public long EstimateMemoryUsage(
+            int vocabSize,
+            int embeddingDim,
+            int numLayers,
+            int numHeads,
+            int batchSize,
+            int seqLength)
+        {
+            var breakdown = EstimateMemoryBreakdown(
+                vocabSize, embeddingDim, numLayers, numHeads, batchSize, seqLength);
+            return breakdown.TotalBytes;
+        }
+
+        /// <summary>
+        /// Performs a pre-flight check before running a model.
+        /// Validates memory requirements against budget constraints.
+        /// </summary>
+        /// <param name="vocabSize">Vocabulary size.</param>
+        /// <param name="embeddingDim">Embedding dimension.</param>
+        /// <param name="numLayers">Number of transformer layers.</param>
+        /// <param name="numHeads">Number of attention heads.</param>
+        /// <param name="batchSize">Batch size.</param>
+        /// <param name="seqLength">Sequence length.</param>
+        /// <returns>Budget check result indicating whether operation can proceed.</returns>
+        public BudgetCheckResult CheckBeforeRun(
+            int vocabSize,
+            int embeddingDim,
+            int numLayers,
+            int numHeads,
+            int batchSize,
+            int seqLength)
+        {
+            var breakdown = EstimateMemoryBreakdown(
+                vocabSize, embeddingDim, numLayers, numHeads, batchSize, seqLength);
+
+            // If strict budget is enabled, use it for checking
+            if (_strictBudget != null)
+            {
+                return _strictBudget.CheckBudget(breakdown, isSessionAllocation: false);
+            }
+
+            // Otherwise, use advisory limits (80% of available memory)
+            long available = (long)(_systemMemoryBytes * 0.8);
+            
+            if (breakdown.TotalBytes <= available)
+            {
+                return BudgetCheckResult.Success(breakdown.TotalBytes, available, breakdown);
+            }
+            else
+            {
+                var reason = $"Estimated {breakdown.TotalBytes / 1024.0 / 1024.0:F2}MB exceeds " +
+                            $"available memory of {available / 1024.0 / 1024.0:F2}MB (80% of system)";
+                return BudgetCheckResult.Failure(breakdown.TotalBytes, available, reason, breakdown);
+            }
         }
 
         /// <summary>
@@ -311,14 +412,22 @@ namespace SmallMind.Core.Core
         /// </summary>
         public string GetSummary()
         {
-            return $"Memory Configuration:\n" +
+            var summary = $"Memory Configuration:\n" +
                    $"  System Memory: {SystemMemoryGB:F2} GB\n" +
                    $"  Max Context Tokens: {MaxContextTokens:N0}\n" +
                    $"  Gradient Checkpointing: {(EnableGradientCheckpointing ? "Enabled" : "Disabled")} " +
                    $"(Interval: {CheckpointInterval})\n" +
                    $"  Mixed Precision: {(EnableMixedPrecision ? "Enabled (FP16/FP32)" : "Disabled (FP32)")}\n" +
                    $"  Memory Mapping: {(EnableMemoryMapping ? "Enabled" : "Disabled")}\n" +
-                   $"  Sliding Window: {SlidingWindowSize} tokens (Stride: {SlidingWindowStride})";
+                   $"  Sliding Window: {SlidingWindowSize} tokens (Stride: {SlidingWindowStride})\n" +
+                   $"  Strict Mode: {(IsStrictMode ? "Enabled" : "Disabled")}";
+            
+            if (_strictBudget != null)
+            {
+                summary += $"\n\n{_strictBudget.GetSummary()}";
+            }
+            
+            return summary;
         }
     }
 }

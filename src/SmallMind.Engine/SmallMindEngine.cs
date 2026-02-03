@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Abstractions;
+using SmallMind.Core.Core;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Quantization;
 using SmallMind.Tokenizers;
@@ -300,18 +301,46 @@ namespace SmallMind.Engine
             // Check memory budget if specified
             if (request.MaxMemoryBytes.HasValue)
             {
-                var estimatedBytes = ModelValidator.EstimateMemoryRequirementBytes(
-                    metadata.Metadata,
-                    quantizationBits: 8); // Assume Q8 for SMQ files
+                // Create memory configuration for validation
+                var memoryConfig = new MemoryConfiguration(
+                    enableGradientCheckpointing: false,
+                    enableMixedPrecision: false,
+                    enableMemoryMapping: false,
+                    strictBudget: request.EnableStrictMemoryBudget 
+                        ? new StrictMemoryBudget(
+                            request.MaxMemoryBytes.Value,
+                            maxBytesPerSession: request.MaxMemoryBytes.Value,
+                            rejectOnExceed: true,
+                            preAllocate: request.PreAllocateMemory,
+                            safetyMargin: request.StrictBudgetSafetyMargin)
+                        : null);
 
-                if (estimatedBytes > request.MaxMemoryBytes.Value)
+                // Perform pre-flight check (using reasonable defaults for batch size and sequence length)
+                var checkResult = memoryConfig.CheckBeforeRun(
+                    vocabSize: vocabSize,
+                    embeddingDim: embedDim,
+                    numLayers: numLayers,
+                    numHeads: numHeads,
+                    batchSize: 1,
+                    seqLength: blockSize);
+
+                if (!checkResult.CanProceed)
                 {
                     throw new UnsupportedModelException(
                         request.Path,
                         ".smq",
-                        $"Model exceeds memory budget: estimated {estimatedBytes / 1024 / 1024}MB > max {request.MaxMemoryBytes.Value / 1024 / 1024}MB.{Environment.NewLine}" +
-                        $"Remediation: Increase MaxMemoryBytes, use a smaller model, or use higher quantization (Q4 instead of Q8).");
+                        $"Model loading rejected by memory budget check:\n{checkResult.GetSummary()}");
                 }
+            }
+            else
+            {
+                // Legacy path: estimate memory without strict budgeting (advisory only)
+                // Operation proceeds even if estimated memory exceeds available memory
+                var estimatedBytes = ModelValidator.EstimateMemoryRequirementBytes(
+                    metadata.Metadata,
+                    quantizationBits: 8); // Assume Q8 for SMQ files
+
+                // No rejection in legacy mode - just proceed (backward compatible behavior)
             }
 
             // For now, we create a placeholder FP32 model structure

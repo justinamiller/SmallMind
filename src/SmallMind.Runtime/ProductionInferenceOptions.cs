@@ -1,5 +1,6 @@
 using System;
 using SmallMind.Core.Exceptions;
+using SmallMind.Runtime.Scheduling;
 
 namespace SmallMind.Runtime
 {
@@ -81,6 +82,19 @@ namespace SmallMind.Runtime
         /// NOTE: Log probability calculation not yet implemented. This option is reserved for future use.
         /// </summary>
         public bool IncludeLogProbs { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets whether to enable deterministic token scheduling.
+        /// When true, token generation order is tracked and made reproducible.
+        /// Default: false.
+        /// </summary>
+        public bool EnableScheduleTracking { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the scheduling policy when schedule tracking is enabled.
+        /// Default: FIFO (First-In-First-Out).
+        /// </summary>
+        public SchedulingPolicy SchedulingPolicy { get; set; } = SchedulingPolicy.FIFO;
         
         /// <summary>
         /// Validates the inference options and throws if invalid.
@@ -143,7 +157,9 @@ namespace SmallMind.Runtime
                 MaxNewTokens = MaxNewTokens,
                 MaxTimeMs = MaxTimeMs,
                 TruncateInput = TruncateInput,
-                IncludeLogProbs = IncludeLogProbs
+                IncludeLogProbs = IncludeLogProbs,
+                EnableScheduleTracking = EnableScheduleTracking,
+                SchedulingPolicy = SchedulingPolicy
             };
         }
     }
