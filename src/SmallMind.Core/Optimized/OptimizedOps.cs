@@ -201,16 +201,39 @@ namespace SmallMind.Core.Optimized
         
         public void AppendKV(int layer, float[] newK, float[] newV, int numTokens)
         {
+            if (layer < 0 || layer >= _numLayers)
+                throw new ArgumentOutOfRangeException(nameof(layer), $"Layer must be between 0 and {_numLayers - 1}");
+            
+            if (CurrentLength + numTokens > _maxSeqLen)
+                throw new InvalidOperationException($"Cannot append {numTokens} tokens: would exceed maximum sequence length {_maxSeqLen}");
+            
             int stride = _numHeads * _headDim;
             int offset = CurrentLength * stride;
             Array.Copy(newK, 0, _keyCache[layer], offset, numTokens * stride);
             Array.Copy(newV, 0, _valueCache[layer], offset, numTokens * stride);
         }
         
-        public float[] GetKeys(int layer) => _keyCache[layer];
-        public float[] GetValues(int layer) => _valueCache[layer];
+        public float[] GetKeys(int layer)
+        {
+            if (layer < 0 || layer >= _numLayers)
+                throw new ArgumentOutOfRangeException(nameof(layer), $"Layer must be between 0 and {_numLayers - 1}");
+            return _keyCache[layer];
+        }
         
-        public void IncrementPosition(int count = 1) => CurrentLength += count;
+        public float[] GetValues(int layer)
+        {
+            if (layer < 0 || layer >= _numLayers)
+                throw new ArgumentOutOfRangeException(nameof(layer), $"Layer must be between 0 and {_numLayers - 1}");
+            return _valueCache[layer];
+        }
+        
+        public void IncrementPosition(int count = 1)
+        {
+            if (CurrentLength + count > _maxSeqLen)
+                throw new InvalidOperationException($"Cannot increment position by {count}: would exceed maximum sequence length {_maxSeqLen}");
+            CurrentLength += count;
+        }
+        
         public void Reset() => CurrentLength = 0;
     }
     
@@ -220,6 +243,9 @@ namespace SmallMind.Core.Optimized
     /// </summary>
     public sealed class OptimizedArrayPool
     {
+        private const int MaxPooledArraySize = 1024 * 1024; // 1MB
+        private const int MaxArraysPerBucket = 32;
+        
         private readonly System.Collections.Concurrent.ConcurrentDictionary<int, 
             System.Collections.Concurrent.ConcurrentBag<float[]>> _pools = new();
         
@@ -227,6 +253,9 @@ namespace SmallMind.Core.Optimized
         
         public float[] Rent(int size)
         {
+            if (size <= 0)
+                throw new ArgumentOutOfRangeException(nameof(size), "Size must be greater than 0");
+            
             int poolSize = RoundUpToPowerOf2(size);
             if (_pools.TryGetValue(poolSize, out var bag) && bag.TryTake(out var array))
                 return array;
@@ -235,13 +264,14 @@ namespace SmallMind.Core.Optimized
         
         public void Return(float[] array)
         {
-            if (array == null || array.Length > 1024 * 1024) return;
+            if (array == null || array.Length > MaxPooledArraySize) return;
             var bag = _pools.GetOrAdd(array.Length, _ => new());
-            if (bag.Count < 32) bag.Add(array);
+            if (bag.Count < MaxArraysPerBucket) bag.Add(array);
         }
         
         private static int RoundUpToPowerOf2(int v)
         {
+            if (v <= 0) return 1;
             v--; v |= v >> 1; v |= v >> 2; v |= v >> 4; v |= v >> 8; v |= v >> 16;
             return v + 1;
         }
