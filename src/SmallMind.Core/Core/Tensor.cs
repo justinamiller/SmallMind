@@ -681,7 +681,22 @@ namespace SmallMind.Core.Core
             int size = ShapeToSize(shape);
             var data = TensorPool.Shared.Rent(size, out int capacity);
             
-            return new PooledTensor(data, shape, capacity, requiresGrad);
+            float[]? grad = null;
+            bool pooledGrad = false;
+            if (requiresGrad)
+            {
+                grad = TensorPool.Shared.Rent(size, out _);
+                Array.Clear(grad, 0, size); // Zero out gradient
+                pooledGrad = true;
+            }
+            
+            var tensor = new PooledTensor(data, shape, capacity, requiresGrad, pooledGrad);
+            if (grad != null)
+            {
+                tensor.Grad = grad;
+            }
+            
+            return tensor;
         }
 
         // In-place operations
@@ -913,21 +928,29 @@ namespace SmallMind.Core.Core
     {
         private readonly int _capacity;
         private bool _disposed;
+        private readonly bool _pooledGrad; // Track if gradient is also pooled
         
-        internal PooledTensor(float[] data, int[] shape, int capacity, bool requiresGrad = false)
+        internal PooledTensor(float[] data, int[] shape, int capacity, bool requiresGrad = false, bool pooledGrad = false)
             : base(data, shape, capacity, requiresGrad)
         {
             _capacity = capacity;
+            _pooledGrad = pooledGrad;
         }
         
         public int Capacity => _capacity;
         
-        public void Dispose()
+        public new void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
             
             TensorPool.Shared.Return(Data, clearArray: true);
+            
+            // Return gradient to pool if it was also pooled
+            if (_pooledGrad && Grad != null)
+            {
+                TensorPool.Shared.Return(Grad, clearArray: true);
+            }
         }
     }
     

@@ -11,8 +11,8 @@ namespace SmallMind.Core.Core
     public sealed class TensorPool : IDisposable
     {
         private readonly ConcurrentBag<float[]>[] _pools;
-        private static readonly int[] _sizes = { 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 };
-        private static readonly int[] _capacities = { 32, 32, 32, 32, 16, 16, 8, 8, 4, 4, 2 }; // Capacity per bucket
+        private static readonly int[] _sizes = { 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288 };
+        private static readonly int[] _capacities = { 32, 32, 32, 32, 16, 16, 8, 8, 4, 4, 2, 2, 1, 1 }; // Capacity per bucket
         private readonly int[] _counts; // Track count per bucket
         private long _totalRents;
         private long _totalReturns;
@@ -142,7 +142,7 @@ namespace SmallMind.Core.Core
         /// <summary>
         /// Get statistics about pool usage
         /// </summary>
-        internal (long totalRents, long totalReturns, long totalAllocations, long pooledBytes) GetStats()
+        public (long totalRents, long totalReturns, long totalAllocations, long pooledBytes) GetStats()
         {
             long pooledBytes = 0;
             for (int i = 0; i < _sizes.Length; i++)

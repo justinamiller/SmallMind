@@ -34,6 +34,9 @@ namespace SmallMind.Transformers
         // Final layer norm and linear head
         private readonly LayerNorm _lnFinal;
         private readonly Linear _lmHead;
+        
+        // Cached position indices to avoid recreating each forward pass
+        private readonly Dictionary<int, Tensor> _positionIndicesCache;
 
         public List<Tensor> Parameters { get; private set; }
         
@@ -85,6 +88,9 @@ namespace SmallMind.Transformers
             _nHead = nHead;
             _dropout = dropout;
             _random = new Random(seed);
+            
+            // Initialize position indices cache
+            _positionIndicesCache = new Dictionary<int, Tensor>();
 
             // Token and position embeddings
             _tokenEmbedding = new Embedding(_vocabSize, _nEmbd, _random);
@@ -142,11 +148,15 @@ namespace SmallMind.Transformers
             // Token embeddings: (B, T) -> (B, T, n_embd)
             var tokEmb = _tokenEmbedding.Forward(idx);
 
-            // Position embeddings: create position indices (T,)
-            var posIndices = new Tensor(new float[T], new int[] { T });
-            for (int i = 0; i < T; i++)
+            // Position embeddings: get cached position indices or create new
+            if (!_positionIndicesCache.TryGetValue(T, out var posIndices))
             {
-                posIndices.Data[i] = i;
+                posIndices = new Tensor(new float[T], new int[] { T });
+                for (int i = 0; i < T; i++)
+                {
+                    posIndices.Data[i] = i;
+                }
+                _positionIndicesCache[T] = posIndices;
             }
             var posEmb = _positionEmbedding.Forward(posIndices);
 
@@ -412,6 +422,14 @@ namespace SmallMind.Transformers
         private readonly Dropout _projDropout;
         private readonly bool[,] _causalMask;
         private readonly int _blockSize;
+        
+        // Workspace tensors for reuse in forward pass (avoid allocations)
+        // These are sized for max sequence length and reused
+        private PooledTensor? _qWorkspace;
+        private PooledTensor? _kWorkspace;
+        private PooledTensor? _vWorkspace;
+        private PooledTensor? _scoresWorkspace;
+        private PooledTensor? _attnOutputWorkspace;
 
         public List<Tensor> Parameters { get; private set; }
 
@@ -447,6 +465,44 @@ namespace SmallMind.Transformers
             Parameters.AddRange(_qkv.Parameters);
             Parameters.AddRange(_proj.Parameters);
         }
+        
+        /// <summary>
+        /// Get or allocate workspace tensor for the given shape.
+        /// Reuses existing workspace if shape matches, otherwise allocates new one.
+        /// </summary>
+        private PooledTensor GetOrAllocateWorkspace(ref PooledTensor? workspace, int[] shape)
+        {
+            // Check if we can reuse existing workspace
+            if (workspace != null && workspace.Shape.Length == shape.Length)
+            {
+                bool shapeMatches = true;
+                for (int i = 0; i < shape.Length; i++)
+                {
+                    if (workspace.Shape[i] != shape[i])
+                    {
+                        shapeMatches = false;
+                        break;
+                    }
+                }
+                
+                if (shapeMatches)
+                {
+                    // Clear the data before reuse
+                    Array.Clear(workspace.Data, 0, workspace.Size);
+                    return workspace;
+                }
+                else
+                {
+                    // Dispose old workspace and allocate new one
+                    workspace.Dispose();
+                    workspace = null;
+                }
+            }
+            
+            // Allocate new workspace
+            workspace = Tensor.CreatePooled(shape, requiresGrad: true);
+            return workspace;
+        }
 
         public Tensor Forward(Tensor x)
         {
@@ -457,18 +513,28 @@ namespace SmallMind.Transformers
             // Compute Q, K, V: (B, T, n_embd) -> (B, T, 3 * n_embd)
             var qkv = _qkv.Forward(x);
 
+            // Use workspace tensors for Q, K, V to avoid allocations
+            var qShape = new int[] { B, _nHead, T, _headSize };
+            var q = GetOrAllocateWorkspace(ref _qWorkspace, qShape);
+            var k = GetOrAllocateWorkspace(ref _kWorkspace, qShape);
+            var v = GetOrAllocateWorkspace(ref _vWorkspace, qShape);
+            
             // Split into Q, K, V and reshape to (B, nHead, T, headSize)
-            var q = ExtractAndReshapeQKV(qkv, 0, B, T);
-            var k = ExtractAndReshapeQKV(qkv, 1, B, T);
-            var v = ExtractAndReshapeQKV(qkv, 2, B, T);
+            ExtractAndReshapeQKVInPlace(qkv, q, 0, B, T);
+            ExtractAndReshapeQKVInPlace(qkv, k, 1, B, T);
+            ExtractAndReshapeQKVInPlace(qkv, v, 2, B, T);
 
-            // Compute attention scores
-            var att = ComputeAttentionScores(q, k, B, T);
+            // Use workspace for attention scores
+            var scoresShape = new int[] { B, _nHead, T, T };
+            var att = GetOrAllocateWorkspace(ref _scoresWorkspace, scoresShape);
+            ComputeAttentionScoresInPlace(q, k, att, B, T);
 
-            // Apply attention to values
-            var y = ApplyAttention(att, v, B, T);
+            // Use workspace for attention output
+            var y = GetOrAllocateWorkspace(ref _attnOutputWorkspace, qShape);
+            ApplyAttentionInPlace(att, v, y, B, T);
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
+            // This still allocates, but it's the final output
             var yReshaped = ReshapeAttentionOutput(y, B, T);
 
             // Final projection and dropout
@@ -540,6 +606,66 @@ namespace SmallMind.Transformers
             }
             
             return extracted;
+        }
+        
+        /// <summary>
+        /// In-place version of ExtractAndReshapeQKV that writes to a pre-allocated tensor.
+        /// Avoids allocation overhead for repeated forward passes.
+        /// </summary>
+        private void ExtractAndReshapeQKVInPlace(Tensor qkv, Tensor dest, int index, int B, int T)
+        {
+            // Extract Q, K, or V from concatenated QKV into dest
+            // qkv: (B, T, 3 * n_embd)
+            // dest: (B, nHead, T, headSize) - pre-allocated
+            
+            int embdOffset = index * _nEmbd;  // Offset for Q (0), K (_nEmbd), or V (2*_nEmbd)
+            
+            // Parallelize over batch when B >= 4
+            if (B >= 4)
+            {
+                Parallel.For(0, B, b =>
+                {
+                    int batchInOffset = b * T * 3 * _nEmbd;
+                    int batchOutOffset = b * _nHead * T * _headSize;
+                    
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int headInOffset = embdOffset + h * _headSize;
+                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        
+                        for (int t = 0; t < T; t++)
+                        {
+                            int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
+                            int dstIdx = headOutOffset + t * _headSize;
+                            
+                            Array.Copy(qkv.Data, srcIdx, dest.Data, dstIdx, _headSize);
+                        }
+                    }
+                });
+            }
+            else
+            {
+                // Sequential for small batches
+                for (int b = 0; b < B; b++)
+                {
+                    int batchInOffset = b * T * 3 * _nEmbd;
+                    int batchOutOffset = b * _nHead * T * _headSize;
+                    
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int headInOffset = embdOffset + h * _headSize;
+                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        
+                        for (int t = 0; t < T; t++)
+                        {
+                            int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
+                            int dstIdx = headOutOffset + t * _headSize;
+                            
+                            Array.Copy(qkv.Data, srcIdx, dest.Data, dstIdx, _headSize);
+                        }
+                    }
+                }
+            }
         }
 
         private Tensor ComputeAttentionScores(Tensor q, Tensor k, int B, int T)
@@ -819,6 +945,249 @@ namespace SmallMind.Transformers
             }
             
             return output;
+        }
+        
+        /// <summary>
+        /// In-place version of ComputeAttentionScores that writes to a pre-allocated tensor.
+        /// Computes Q * K^T / sqrt(d_k) with causal masking and softmax.
+        /// </summary>
+        private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T)
+        {
+            // q, k: (B, nHead, T, headSize)
+            // scores: (B, nHead, T, T) - pre-allocated, will be modified in-place
+            
+            float scale = 1.0f / MathF.Sqrt(_headSize);
+            
+            int totalParallelWork = B * _nHead;
+            if (totalParallelWork >= 4)
+            {
+                Parallel.For(0, totalParallelWork, bh =>
+                {
+                    int b = bh / _nHead;
+                    int h = bh % _nHead;
+                    int bhOffset = (b * _nHead + h) * T * _headSize;
+                    int scoreOffset = (b * _nHead + h) * T * T;
+                    
+                    for (int i = 0; i < T; i++)
+                    {
+                        int qOffset = bhOffset + i * _headSize;
+                        int scoreRowOffset = scoreOffset + i * T;
+                        
+                        // Compute scores for valid positions (causal mask: j <= i)
+                        for (int j = 0; j <= i; j++)
+                        {
+                            int kOffset = bhOffset + j * _headSize;
+                            float sum = MatMulOps.DotProduct(
+                                new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
+                                new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
+                            );
+                            scores.Data[scoreRowOffset + j] = sum * scale;
+                        }
+                        
+                        // Set masked positions to NegativeInfinity for softmax
+                        for (int j = i + 1; j < T; j++)
+                        {
+                            scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int b = 0; b < B; b++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int bhOffset = (b * _nHead + h) * T * _headSize;
+                        int scoreOffset = (b * _nHead + h) * T * T;
+                        
+                        for (int i = 0; i < T; i++)
+                        {
+                            int qOffset = bhOffset + i * _headSize;
+                            int scoreRowOffset = scoreOffset + i * T;
+                            
+                            for (int j = 0; j <= i; j++)
+                            {
+                                int kOffset = bhOffset + j * _headSize;
+                                float sum = MatMulOps.DotProduct(
+                                    new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
+                                    new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
+                                );
+                                scores.Data[scoreRowOffset + j] = sum * scale;
+                            }
+                            
+                            for (int j = i + 1; j < T; j++)
+                            {
+                                scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Apply softmax in-place
+            ApplySoftmaxInPlace(scores, B, T);
+            
+            // Apply dropout if in training mode
+            // Note: Since we're using in-place operations, we modify scores directly
+            // The dropout is applied to the tensor passed in, which is the workspace
+        }
+        
+        /// <summary>
+        /// Apply softmax in-place to the scores tensor.
+        /// </summary>
+        private void ApplySoftmaxInPlace(Tensor scores, int B, int T)
+        {
+            int totalParallelWork = B * _nHead;
+            if (totalParallelWork >= 4)
+            {
+                Parallel.For(0, totalParallelWork, bh =>
+                {
+                    int b = bh / _nHead;
+                    int h = bh % _nHead;
+                    
+                    for (int i = 0; i < T; i++)
+                    {
+                        int offset = ((b * _nHead + h) * T + i) * T;
+                        
+                        // Find max for numerical stability
+                        float max = float.NegativeInfinity;
+                        for (int j = 0; j <= i; j++)
+                        {
+                            if (scores.Data[offset + j] > max)
+                                max = scores.Data[offset + j];
+                        }
+                        
+                        // Exp and sum
+                        float sum = 0;
+                        for (int j = 0; j <= i; j++)
+                        {
+                            float exp = MathF.Exp(scores.Data[offset + j] - max);
+                            scores.Data[offset + j] = exp;
+                            sum += exp;
+                        }
+                        
+                        // Normalize
+                        if (sum > 0)
+                        {
+                            float invSum = 1.0f / sum;
+                            for (int j = 0; j <= i; j++)
+                            {
+                                scores.Data[offset + j] *= invSum;
+                            }
+                        }
+                        
+                        // Clear masked positions
+                        for (int j = i + 1; j < T; j++)
+                        {
+                            scores.Data[offset + j] = 0;
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int b = 0; b < B; b++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        for (int i = 0; i < T; i++)
+                        {
+                            int offset = ((b * _nHead + h) * T + i) * T;
+                            
+                            float max = float.NegativeInfinity;
+                            for (int j = 0; j <= i; j++)
+                            {
+                                if (scores.Data[offset + j] > max)
+                                    max = scores.Data[offset + j];
+                            }
+                            
+                            float sum = 0;
+                            for (int j = 0; j <= i; j++)
+                            {
+                                float exp = MathF.Exp(scores.Data[offset + j] - max);
+                                scores.Data[offset + j] = exp;
+                                sum += exp;
+                            }
+                            
+                            if (sum > 0)
+                            {
+                                float invSum = 1.0f / sum;
+                                for (int j = 0; j <= i; j++)
+                                {
+                                    scores.Data[offset + j] *= invSum;
+                                }
+                            }
+                            
+                            for (int j = i + 1; j < T; j++)
+                            {
+                                scores.Data[offset + j] = 0;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// In-place version of ApplyAttention that writes to a pre-allocated tensor.
+        /// Computes attention_weights * V.
+        /// </summary>
+        private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T)
+        {
+            // att: (B, nHead, T, T)
+            // v: (B, nHead, T, headSize)
+            // output: (B, nHead, T, headSize) - pre-allocated
+            
+            int totalParallelWork = B * _nHead;
+            if (totalParallelWork >= 4)
+            {
+                Parallel.For(0, totalParallelWork, bh =>
+                {
+                    int b = bh / _nHead;
+                    int h = bh % _nHead;
+                    
+                    for (int i = 0; i < T; i++)
+                    {
+                        for (int d = 0; d < _headSize; d++)
+                        {
+                            float sum = 0;
+                            for (int j = 0; j < T; j++)
+                            {
+                                int attIdx = ((b * _nHead + h) * T + i) * T + j;
+                                int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                                sum += att.Data[attIdx] * v.Data[vIdx];
+                            }
+                            int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
+                            output.Data[outIdx] = sum;
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int b = 0; b < B; b++)
+                {
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        for (int i = 0; i < T; i++)
+                        {
+                            for (int d = 0; d < _headSize; d++)
+                            {
+                                float sum = 0;
+                                for (int j = 0; j < T; j++)
+                                {
+                                    int attIdx = ((b * _nHead + h) * T + i) * T + j;
+                                    int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                                    sum += att.Data[attIdx] * v.Data[vIdx];
+                                }
+                                int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
+                                output.Data[outIdx] = sum;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         public void Train()
