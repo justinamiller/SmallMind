@@ -66,6 +66,15 @@ namespace SmallMind.Transformers
 
         public override Tensor Forward(Tensor input)
         {
+            return Forward(input, dest: null);
+        }
+        
+        /// <summary>
+        /// Forward pass with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// </summary>
+        public Tensor Forward(Tensor input, Tensor? dest)
+        {
             // input: (batch, inFeatures) or (batch, seq, inFeatures)
             // weight: (outFeatures, inFeatures)
             // output: (batch, outFeatures) or (batch, seq, outFeatures)
@@ -73,10 +82,11 @@ namespace SmallMind.Transformers
             if (input.Shape.Length == 2)
             {
                 // (batch, in) @ (in, out)^T = (batch, out)
-                var output = Tensor.MatMul(input, Weight.Transpose(), requiresGrad: IsTraining);
+                var output = Tensor.MatMul(input, Weight.Transpose(), dest, requiresGrad: IsTraining);
                 if (Bias != null)
                 {
-                    output = Tensor.Add(output, Bias, requiresGrad: IsTraining);
+                    // Add bias in-place to output
+                    output = Tensor.Add(output, Bias, output, requiresGrad: IsTraining);
                 }
                 return output;
             }
@@ -88,11 +98,11 @@ namespace SmallMind.Transformers
                 int inFeatures = input.Shape[2];
                 
                 var reshaped = input.Reshape(new int[] { batch * seq, inFeatures });
-                var output = Tensor.MatMul(reshaped, Weight.Transpose(), requiresGrad: IsTraining);
+                var output = Tensor.MatMul(reshaped, Weight.Transpose(), dest, requiresGrad: IsTraining);
                 
                 if (Bias != null)
                 {
-                    output = Tensor.Add(output, Bias, requiresGrad: IsTraining);
+                    output = Tensor.Add(output, Bias, output, requiresGrad: IsTraining);
                 }
                 
                 return output.Reshape(new int[] { batch, seq, Weight.Shape[0] });
@@ -140,25 +150,34 @@ namespace SmallMind.Transformers
 
         public override Tensor Forward(Tensor input)
         {
+            return Forward(input, dest: null);
+        }
+        
+        /// <summary>
+        /// Forward pass with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// </summary>
+        public Tensor Forward(Tensor input, Tensor? dest)
+        {
             // input: indices (batch,) or (batch, seq)
             // output: (batch, embDim) or (batch, seq, embDim)
             
             if (input.Shape.Length == 1)
             {
-                return ForwardBatch(input);
+                return ForwardBatch(input, dest);
             }
             else if (input.Shape.Length == 2)
             {
-                return ForwardBatchSeq(input);
+                return ForwardBatchSeq(input, dest);
             }
             
             throw new ArgumentException("Embedding input must be 1D or 2D");
         }
 
-        private Tensor ForwardBatch(Tensor input)
+        private Tensor ForwardBatch(Tensor input, Tensor? dest = null)
         {
             int batch = input.Shape[0];
-            var output = new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: IsTraining);
+            var output = dest ?? new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: IsTraining);
             
             if (Weight.IsChunked)
             {
@@ -237,11 +256,11 @@ namespace SmallMind.Transformers
             return output;
         }
 
-        private Tensor ForwardBatchSeq(Tensor input)
+        private Tensor ForwardBatchSeq(Tensor input, Tensor? dest = null)
         {
             int batch = input.Shape[0];
             int seq = input.Shape[1];
-            var output = new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: IsTraining);
+            var output = dest ?? new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: IsTraining);
             
             if (Weight.IsChunked)
             {

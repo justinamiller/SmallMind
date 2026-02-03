@@ -42,6 +42,9 @@ namespace SmallMind.Transformers
         
         // Cached position indices to avoid recreating each forward pass
         private readonly Dictionary<int, Tensor> _positionIndicesCache;
+        
+        // Workspace for reusing intermediate tensors during forward pass
+        private readonly TensorWorkspace _workspace;
 
         public List<Tensor> Parameters { get; private set; }
         
@@ -96,6 +99,9 @@ namespace SmallMind.Transformers
             
             // Initialize position indices cache
             _positionIndicesCache = new Dictionary<int, Tensor>();
+            
+            // Initialize tensor workspace for reusing intermediate tensors
+            _workspace = new TensorWorkspace();
 
             // Token and position embeddings
             _tokenEmbedding = new Embedding(_vocabSize, _nEmbd, _random);
@@ -151,7 +157,9 @@ namespace SmallMind.Transformers
             }
 
             // Token embeddings: (B, T) -> (B, T, n_embd)
-            var tokEmb = _tokenEmbedding.Forward(idx);
+            // Reuse workspace tensor for token embeddings
+            var tokEmbDest = _workspace.GetOrCreate("tokEmb", new int[] { B, T, _nEmbd }, _isTraining);
+            var tokEmb = _tokenEmbedding.Forward(idx, tokEmbDest);
 
             // Position embeddings: get cached position indices or create new
             if (!_positionIndicesCache.TryGetValue(T, out var posIndices))
@@ -163,11 +171,15 @@ namespace SmallMind.Transformers
                 }
                 _positionIndicesCache[T] = posIndices;
             }
-            var posEmb = _positionEmbedding.Forward(posIndices);
+            
+            // Reuse workspace tensor for position embeddings
+            var posEmbDest = _workspace.GetOrCreate("posEmb", new int[] { T, _nEmbd }, _isTraining);
+            var posEmb = _positionEmbedding.Forward(posIndices, posEmbDest);
 
             // Add token and position embeddings: (B, T, n_embd)
-            // Broadcast posEmb across batch dimension
-            var x = AddPositionEmbeddings(tokEmb, posEmb, B, T, _nEmbd);
+            // Reuse workspace for the result
+            var addEmbDest = _workspace.GetOrCreate("addEmb", new int[] { B, T, _nEmbd }, _isTraining);
+            var x = AddPositionEmbeddings(tokEmb, posEmb, addEmbDest, B, T, _nEmbd);
             x = _embDropout.Forward(x);
 
             // Pass through transformer blocks
@@ -185,9 +197,8 @@ namespace SmallMind.Transformers
             return logits;
         }
 
-        private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, int B, int T, int nEmbd)
+        private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, Tensor dest, int B, int T, int nEmbd)
         {
-            var result = new Tensor(new int[] { B, T, nEmbd }, requiresGrad: _isTraining);
             int vectorSize = Vector<float>.Count;
             
             // posEmb is (T, nEmbd), need to broadcast to (B, T, nEmbd)
@@ -206,13 +217,13 @@ namespace SmallMind.Transformers
                     {
                         var vTok = new Vector<float>(tokEmb.Data.AsSpan(tokEmbOffset + e));
                         var vPos = new Vector<float>(posEmb.Data.AsSpan(posEmbOffset + e));
-                        (vTok + vPos).CopyTo(result.Data.AsSpan(resultOffset + e));
+                        (vTok + vPos).CopyTo(dest.Data.AsSpan(resultOffset + e));
                     }
                     
                     // Scalar remainder
                     for (; e < nEmbd; e++)
                     {
-                        result.Data[resultOffset + e] = 
+                        dest.Data[resultOffset + e] = 
                             tokEmb.Data[tokEmbOffset + e] + posEmb.Data[posEmbOffset + e];
                     }
                 }
@@ -221,13 +232,13 @@ namespace SmallMind.Transformers
             // Backward
             if (tokEmb.RequiresGrad || posEmb.RequiresGrad)
             {
-                result.SetBackward(() =>
+                dest.SetBackward(() =>
                 {
                     if (tokEmb.RequiresGrad)
                     {
-                        for (int i = 0; i < result.Size; i++)
+                        for (int i = 0; i < dest.Size; i++)
                         {
-                            tokEmb.Grad[i] += result.Grad[i];
+                            tokEmb.Grad[i] += dest.Grad[i];
                         }
                     }
                     if (posEmb.RequiresGrad)
@@ -238,7 +249,7 @@ namespace SmallMind.Transformers
                             {
                                 for (int e = 0; e < nEmbd; e++)
                                 {
-                                    posEmb.Grad[t * nEmbd + e] += result.Grad[(b * T + t) * nEmbd + e];
+                                    posEmb.Grad[t * nEmbd + e] += dest.Grad[(b * T + t) * nEmbd + e];
                                 }
                             }
                         }
@@ -246,7 +257,7 @@ namespace SmallMind.Transformers
                 });
             }
             
-            return result;
+            return dest;
         }
 
         public void Train()
@@ -322,6 +333,9 @@ namespace SmallMind.Transformers
         private readonly MLP _mlp;
         
         private bool _isTraining = true;
+        
+        // Workspace for reusing intermediate tensors
+        private readonly TensorWorkspace _workspace;
 
         public List<Tensor> Parameters { get; private set; }
 
@@ -331,6 +345,8 @@ namespace SmallMind.Transformers
             _attn = new MultiHeadAttention(nEmbd, nHead, blockSize, dropout, random);
             _ln2 = new LayerNorm(nEmbd);
             _mlp = new MLP(nEmbd, dropout, random);
+            
+            _workspace = new TensorWorkspace();
 
             Parameters = new List<Tensor>();
             Parameters.AddRange(_ln1.Parameters);
@@ -344,13 +360,24 @@ namespace SmallMind.Transformers
             // Pre-norm architecture with residual connections
             // x: (B, T, n_embd)
             
-            // LayerNorm outputs are allocated but operations are fused
-            // TODO: Pool LayerNorm outputs once all downstream ops handle pooled tensors correctly
-            var attnOut = _attn.Forward(_ln1.Forward(x));
-            x = AddTensors(x, attnOut);
+            // Use workspace tensors for LayerNorm outputs and residual connections
+            var ln1Out = _workspace.GetOrCreate("ln1Out", x.Shape, _isTraining);
+            _ln1.Forward(x, ln1Out);
             
-            var mlpOut = _mlp.Forward(_ln2.Forward(x));
-            x = AddTensors(x, mlpOut);
+            var attnOut = _attn.Forward(ln1Out);
+            
+            // Reuse workspace for residual connection
+            var residual1 = _workspace.GetOrCreate("residual1", x.Shape, _isTraining);
+            x = AddTensors(x, attnOut, residual1);
+            
+            // Second residual connection
+            var ln2Out = _workspace.GetOrCreate("ln2Out", x.Shape, _isTraining);
+            _ln2.Forward(x, ln2Out);
+            
+            var mlpOut = _mlp.Forward(ln2Out);
+            
+            var residual2 = _workspace.GetOrCreate("residual2", x.Shape, _isTraining);
+            x = AddTensors(x, mlpOut, residual2);
             
             return x;
         }
@@ -1239,17 +1266,25 @@ namespace SmallMind.Transformers
         private readonly Linear _fc1;
         private readonly Linear _fc2;
         private readonly Dropout _dropout;
+        private readonly int _nEmbd;
         
         private bool _isTraining = true;
+        
+        // Workspace for reusing intermediate tensors
+        private readonly TensorWorkspace _workspace;
 
         public List<Tensor> Parameters { get; private set; }
 
         public MLP(int nEmbd, float dropout, Random random)
         {
+            _nEmbd = nEmbd;
+            
             // Standard Transformer uses 4x expansion
             _fc1 = new Linear(nEmbd, 4 * nEmbd, random: random);
             _fc2 = new Linear(4 * nEmbd, nEmbd, random: random);
             _dropout = new Dropout(dropout, random);
+            
+            _workspace = new TensorWorkspace();
 
             Parameters = new List<Tensor>();
             Parameters.AddRange(_fc1.Parameters);
@@ -1259,11 +1294,24 @@ namespace SmallMind.Transformers
         public Tensor Forward(Tensor x)
         {
             // x: (B, T, n_embd)
-            x = _fc1.Forward(x);
-            x = Activations.GELU(x);
-            x = _fc2.Forward(x);
-            x = _dropout.Forward(x);
-            return x;
+            // Reuse workspace tensors for intermediate results
+            int B = x.Shape[0];
+            int T = x.Shape[1];
+            
+            // fc1 output: (B, T, 4*n_embd)
+            var fc1Out = _workspace.GetOrCreate("fc1Out", new int[] { B, T, 4 * _nEmbd }, _isTraining);
+            _fc1.Forward(x, fc1Out);
+            
+            // GELU is in-place on the data (but allocates new tensor for grad tracking)
+            // For now, we accept this allocation in GELU
+            var geluOut = Activations.GELU(fc1Out);
+            
+            // fc2 output: (B, T, n_embd) - reuse input shape
+            var fc2Out = _workspace.GetOrCreate("fc2Out", new int[] { B, T, _nEmbd }, _isTraining);
+            _fc2.Forward(geluOut, fc2Out);
+            
+            var dropoutOut = _dropout.Forward(fc2Out);
+            return dropoutOut;
         }
 
         public void Train()
