@@ -2,6 +2,25 @@
 
 SmallMind now includes infrastructure to support billion-parameter models through quantization, efficient memory management, and proper overflow protection.
 
+## Quick Answer: Maximum Parameters in C#
+
+**Based on C# limitations, SmallMind can support approximately 2 billion parameters.**
+
+This limit is determined by:
+1. **C# Array Indexing**: Arrays use `int` (32-bit) for indexing, limiting any single tensor to **2,147,483,647 elements** (int.MaxValue)
+2. **Critical Constraint**: The embedding tensor (`vocab_size × embedding_dim`) must not exceed this limit
+3. **Practical Limit**: ~2 billion total parameters when individual tensors are properly sized
+
+**Key Limitations:**
+- ✅ Models up to 2B parameters are supported (with proper tensor sizing)
+- ✅ Use Q8/Q4 quantization for models >500M parameters
+- ⚠️ Single tensor limit: `vocab_size × embedding_dim ≤ 2,147,483,647`
+- ❌ Models requiring tensors >2.1B elements require tensor sharding (not implemented)
+
+**See [FAQ.md](FAQ.md#q-based-on-c-limitations-what-is-the-max-number-of-parameters-i-can-support-in-a-model) and [CSHARP_LIMITATIONS.md](CSHARP_LIMITATIONS.md) for detailed explanations.**
+
+---
+
 ## Overview
 
 While SmallMind is designed as an educational and lightweight inference runtime, it now includes safeguards and optimizations to handle large-scale models up to 2 billion parameters with appropriate quantization.
