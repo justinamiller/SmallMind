@@ -199,7 +199,7 @@ namespace CodeProfiler
                 {
                     using (profiler.BeginScope("TensorAdd_Iteration"))
                     {
-                        var result = Tensor.Add(a, b);
+                        var result = Tensor.Add(a, b, null);
                     }
                 }
             }
@@ -250,7 +250,7 @@ namespace CodeProfiler
                 {
                     using (profiler.BeginScope("BroadcastAdd_Iteration"))
                     {
-                        var result = Tensor.Add(a, b);
+                        var result = Tensor.Add(a, b, null);
                     }
                 }
             }
