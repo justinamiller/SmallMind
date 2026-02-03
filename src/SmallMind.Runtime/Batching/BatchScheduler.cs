@@ -27,8 +27,10 @@ namespace SmallMind.Runtime.Batching
         private readonly CancellationTokenSource _shutdownCts;
         private readonly Task _schedulerTask;
 
-        // Pre-allocated list for batch formation (reused to reduce allocations)
+        // Pre-allocated lists for batch formation (reused to reduce allocations)
+        // We use two buffers and swap between them to avoid copying
         private readonly List<InferenceRequest> _currentBatch;
+        private readonly List<InferenceRequest> _dispatchBatch;
 
         // Deterministic scheduler (optional)
         private readonly DeterministicScheduler? _deterministicScheduler;
@@ -69,6 +71,7 @@ namespace SmallMind.Runtime.Batching
             _metrics = metrics ?? NullRuntimeMetrics.Instance;
             _pendingRequests = new Queue<InferenceRequest>(_options.MaxBatchSize * 2);
             _currentBatch = new List<InferenceRequest>(_options.MaxBatchSize);
+            _dispatchBatch = new List<InferenceRequest>(_options.MaxBatchSize);
             _batchReadySemaphore = new SemaphoreSlim(0, int.MaxValue);
             _shutdownCts = new CancellationTokenSource();
 
@@ -195,9 +198,10 @@ namespace SmallMind.Runtime.Batching
                         }
 
                         // Dispatch batch for execution
-                        // Create a copy to avoid modification during execution
-                        var batchCopy = new List<InferenceRequest>(_currentBatch);
-                        BatchReady?.Invoke(batchCopy);
+                        // Swap buffers instead of copying to avoid allocation
+                        _dispatchBatch.Clear();
+                        _dispatchBatch.AddRange(_currentBatch);
+                        BatchReady?.Invoke(_dispatchBatch);
                     }
                 }
                 catch (OperationCanceledException)

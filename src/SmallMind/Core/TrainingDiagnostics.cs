@@ -86,10 +86,31 @@ namespace SmallMind.Core
             Console.WriteLine("║ Operation                    │ Total (ms) │ Avg (ms) │ Count  │ % Time  ║");
             Console.WriteLine("╟──────────────────────────────┼────────────┼──────────┼────────┼─────────╢");
             
-            var sorted = _stats.OrderByDescending(x => x.Value.TotalTicks).ToList();
-            double totalTime = sorted.Sum(x => x.Value.TotalMs);
+            // Manual sort to avoid LINQ allocations
+            var entries = new List<KeyValuePair<string, OperationStats>>(_stats);
             
-            foreach (var (op, stats) in sorted)
+            // Simple bubble sort (fine for small number of operations)
+            for (int i = 0; i < entries.Count - 1; i++)
+            {
+                for (int j = 0; j < entries.Count - 1 - i; j++)
+                {
+                    if (entries[j].Value.TotalTicks < entries[j + 1].Value.TotalTicks)
+                    {
+                        var temp = entries[j];
+                        entries[j] = entries[j + 1];
+                        entries[j + 1] = temp;
+                    }
+                }
+            }
+            
+            // Calculate total time manually
+            double totalTime = 0;
+            for (int i = 0; i < entries.Count; i++)
+            {
+                totalTime += entries[i].Value.TotalMs;
+            }
+            
+            foreach (var (op, stats) in entries)
             {
                 double pct = totalTime > 0 ? (stats.TotalMs / totalTime * 100) : 0;
                 Console.WriteLine($"║ {op,-28} │ {stats.TotalMs,10:F2} │ {stats.AvgMs,8:F3} │ {stats.Count,6} │ {pct,6:F1}% ║");

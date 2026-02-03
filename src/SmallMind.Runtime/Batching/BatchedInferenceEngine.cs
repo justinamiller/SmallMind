@@ -29,6 +29,10 @@ namespace SmallMind.Runtime.Batching
         private readonly IRuntimeMetrics _metrics;
         private readonly SemaphoreSlim _executionSemaphore;
 
+        // Thread-local buffers to reduce allocations in concurrent processing
+        private readonly ThreadLocal<List<int>> _singleTokenBuffer = new ThreadLocal<List<int>>(() => new List<int>(1));
+        private readonly ThreadLocal<List<int>> _contextCroppedBuffer = new ThreadLocal<List<int>>(() => new List<int>());
+
         private bool _disposed;
 
         /// <summary>
@@ -302,8 +306,11 @@ namespace SmallMind.Runtime.Batching
                     var nextToken = await GenerateNextTokenAsync(context, options, request.CancellationToken);
                     context.Add(nextToken);
 
-                    // Decode token
-                    var tokenText = _tokenizer.Decode(new List<int> { nextToken });
+                    // Decode token using reusable buffer to avoid per-token allocation
+                    var singleTokenBuf = _singleTokenBuffer.Value!;
+                    singleTokenBuf.Clear();
+                    singleTokenBuf.Add(nextToken);
+                    var tokenText = _tokenizer.Decode(singleTokenBuf);
 
                     var generatedToken = new GeneratedToken(
                         tokenId: nextToken,
@@ -339,7 +346,7 @@ namespace SmallMind.Runtime.Batching
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Crop context to last blockSize tokens
+                // Crop context to last blockSize tokens - reuse buffer
                 List<int> contextCropped;
                 if (context.Count <= _blockSize)
                 {
@@ -347,12 +354,19 @@ namespace SmallMind.Runtime.Batching
                 }
                 else
                 {
-                    contextCropped = new List<int>(_blockSize);
+                    var buffer = _contextCroppedBuffer.Value!;
+                    buffer.Clear();
+                    if (buffer.Capacity < _blockSize)
+                    {
+                        buffer.Capacity = _blockSize;
+                    }
+                    
                     int startIdx = context.Count - _blockSize;
                     for (int idx = startIdx; idx < context.Count; idx++)
                     {
-                        contextCropped.Add(context[idx]);
+                        buffer.Add(context[idx]);
                     }
+                    contextCropped = buffer;
                 }
 
                 // Convert to tensor
@@ -571,6 +585,8 @@ namespace SmallMind.Runtime.Batching
             {
                 _scheduler?.Dispose();
                 _executionSemaphore?.Dispose();
+                _singleTokenBuffer?.Dispose();
+                _contextCroppedBuffer?.Dispose();
                 _disposed = true;
             }
         }
