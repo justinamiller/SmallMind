@@ -22,6 +22,11 @@ namespace SmallMind.Transformers
         private readonly int _nHead;
         private readonly double _dropout;
         private readonly Random _random;
+        
+        /// <summary>
+        /// Whether the model is in training mode.
+        /// </summary>
+        private bool _isTraining = true;
 
         // Embedding layers
         private readonly Embedding _tokenEmbedding;
@@ -182,7 +187,7 @@ namespace SmallMind.Transformers
 
         private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, int B, int T, int nEmbd)
         {
-            var result = new Tensor(new int[] { B, T, nEmbd }, requiresGrad: true);
+            var result = new Tensor(new int[] { B, T, nEmbd }, requiresGrad: _isTraining);
             int vectorSize = Vector<float>.Count;
             
             // posEmb is (T, nEmbd), need to broadcast to (B, T, nEmbd)
@@ -246,7 +251,12 @@ namespace SmallMind.Transformers
 
         public void Train()
         {
+            _isTraining = true;
+            _tokenEmbedding.Train();
+            _positionEmbedding.Train();
             _embDropout.Train();
+            _lnFinal.Train();
+            _lmHead.Train();
             for (int i = 0; i < _blocks.Count; i++)
             {
                 _blocks[i].Train();
@@ -255,7 +265,12 @@ namespace SmallMind.Transformers
 
         public void Eval()
         {
+            _isTraining = false;
+            _tokenEmbedding.Eval();
+            _positionEmbedding.Eval();
             _embDropout.Eval();
+            _lnFinal.Eval();
+            _lmHead.Eval();
             for (int i = 0; i < _blocks.Count; i++)
             {
                 _blocks[i].Eval();
@@ -305,6 +320,8 @@ namespace SmallMind.Transformers
         private readonly MultiHeadAttention _attn;
         private readonly LayerNorm _ln2;
         private readonly MLP _mlp;
+        
+        private bool _isTraining = true;
 
         public List<Tensor> Parameters { get; private set; }
 
@@ -340,7 +357,7 @@ namespace SmallMind.Transformers
 
         private Tensor AddTensors(Tensor a, Tensor b, Tensor? dest = null)
         {
-            var result = dest ?? new Tensor(a.Shape, requiresGrad: true);
+            var result = dest ?? new Tensor(a.Shape, requiresGrad: _isTraining);
             
             // SIMD-accelerated forward pass
             int vectorSize = Vector<float>.Count;
@@ -397,13 +414,19 @@ namespace SmallMind.Transformers
 
         public void Train()
         {
+            _isTraining = true;
+            _ln1.Train();
             _attn.Train();
+            _ln2.Train();
             _mlp.Train();
         }
 
         public void Eval()
         {
+            _isTraining = false;
+            _ln1.Eval();
             _attn.Eval();
+            _ln2.Eval();
             _mlp.Eval();
         }
     }
@@ -431,6 +454,8 @@ namespace SmallMind.Transformers
         private Tensor? _vWorkspace;
         private Tensor? _scoresWorkspace;
         private Tensor? _attnOutputWorkspace;
+        
+        private bool _isTraining = true;
 
         public List<Tensor> Parameters { get; private set; }
 
@@ -497,7 +522,7 @@ namespace SmallMind.Transformers
             
             // Allocate new workspace (use regular Tensor, not PooledTensor)
             // These persist across forward passes so we don't want them returned to pool
-            workspace = new Tensor(shape, requiresGrad: true);
+            workspace = new Tensor(shape, requiresGrad: _isTraining);
             return workspace;
         }
 
@@ -1189,12 +1214,18 @@ namespace SmallMind.Transformers
 
         public void Train()
         {
+            _isTraining = true;
+            _qkv.Train();
+            _proj.Train();
             _attnDropout.Train();
             _projDropout.Train();
         }
 
         public void Eval()
         {
+            _isTraining = false;
+            _qkv.Eval();
+            _proj.Eval();
             _attnDropout.Eval();
             _projDropout.Eval();
         }
@@ -1208,6 +1239,8 @@ namespace SmallMind.Transformers
         private readonly Linear _fc1;
         private readonly Linear _fc2;
         private readonly Dropout _dropout;
+        
+        private bool _isTraining = true;
 
         public List<Tensor> Parameters { get; private set; }
 
@@ -1235,11 +1268,17 @@ namespace SmallMind.Transformers
 
         public void Train()
         {
+            _isTraining = true;
+            _fc1.Train();
+            _fc2.Train();
             _dropout.Train();
         }
 
         public void Eval()
         {
+            _isTraining = false;
+            _fc1.Eval();
+            _fc2.Eval();
             _dropout.Eval();
         }
     }

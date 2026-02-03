@@ -13,6 +13,11 @@ namespace SmallMind.Transformers
     {
         public List<Tensor> Parameters { get; protected set; } = new List<Tensor>();
         
+        /// <summary>
+        /// Whether the module is in training mode (affects gradient computation and dropout).
+        /// </summary>
+        protected bool IsTraining { get; private set; } = true;
+        
         public abstract Tensor Forward(Tensor input);
 
         public void ZeroGrad()
@@ -23,8 +28,15 @@ namespace SmallMind.Transformers
             }
         }
 
-        public virtual void Train() { }
-        public virtual void Eval() { }
+        public virtual void Train() 
+        { 
+            IsTraining = true;
+        }
+        
+        public virtual void Eval() 
+        { 
+            IsTraining = false;
+        }
     }
 
     /// <summary>
@@ -61,10 +73,10 @@ namespace SmallMind.Transformers
             if (input.Shape.Length == 2)
             {
                 // (batch, in) @ (in, out)^T = (batch, out)
-                var output = Tensor.MatMul(input, Weight.Transpose(), requiresGrad: true);
+                var output = Tensor.MatMul(input, Weight.Transpose(), requiresGrad: IsTraining);
                 if (Bias != null)
                 {
-                    output = Tensor.Add(output, Bias, requiresGrad: true);
+                    output = Tensor.Add(output, Bias, requiresGrad: IsTraining);
                 }
                 return output;
             }
@@ -76,11 +88,11 @@ namespace SmallMind.Transformers
                 int inFeatures = input.Shape[2];
                 
                 var reshaped = input.Reshape(new int[] { batch * seq, inFeatures });
-                var output = Tensor.MatMul(reshaped, Weight.Transpose(), requiresGrad: true);
+                var output = Tensor.MatMul(reshaped, Weight.Transpose(), requiresGrad: IsTraining);
                 
                 if (Bias != null)
                 {
-                    output = Tensor.Add(output, Bias, requiresGrad: true);
+                    output = Tensor.Add(output, Bias, requiresGrad: IsTraining);
                 }
                 
                 return output.Reshape(new int[] { batch, seq, Weight.Shape[0] });
@@ -146,7 +158,7 @@ namespace SmallMind.Transformers
         private Tensor ForwardBatch(Tensor input)
         {
             int batch = input.Shape[0];
-            var output = new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: true);
+            var output = new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: IsTraining);
             
             if (Weight.IsChunked)
             {
@@ -229,7 +241,7 @@ namespace SmallMind.Transformers
         {
             int batch = input.Shape[0];
             int seq = input.Shape[1];
-            var output = new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: true);
+            var output = new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: IsTraining);
             
             if (Weight.IsChunked)
             {
@@ -442,7 +454,7 @@ namespace SmallMind.Transformers
         public Tensor Forward(Tensor input, Tensor? dest)
         {
             // Use fused LayerNorm operations - no intermediate allocations
-            Tensor output = dest ?? new Tensor(input.Shape, requiresGrad: true);
+            Tensor output = dest ?? new Tensor(input.Shape, requiresGrad: IsTraining);
             
             if (input.Shape.Length == 2)
             {
