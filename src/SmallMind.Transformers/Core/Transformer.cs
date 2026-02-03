@@ -1007,67 +1007,78 @@ namespace SmallMind.Transformers
             
             float scale = 1.0f / MathF.Sqrt(_headSize);
             
-            int totalParallelWork = B * _nHead;
-            if (totalParallelWork >= 4)
+            // Clear scores tensor
+            Array.Clear(scores.Data, 0, scores.Size);
+            
+            // For each batch-head combination, compute: scores[b,h] = q[b,h] @ k[b,h]^T
+            // This is a batched matrix multiply: (T × headSize) @ (headSize × T) = (T × T)
+            int totalBatches = B * _nHead;
+            
+            if (totalBatches >= 4)
             {
-                Parallel.For(0, totalParallelWork, bh =>
+                Parallel.For(0, totalBatches, bh =>
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
                     int bhOffset = (b * _nHead + h) * T * _headSize;
                     int scoreOffset = (b * _nHead + h) * T * T;
                     
+                    // Extract Q and K for this batch-head
+                    var qBh = new ReadOnlySpan<float>(q.Data, bhOffset, T * _headSize);
+                    var kBh = new ReadOnlySpan<float>(k.Data, bhOffset, T * _headSize);
+                    var scoresBh = new Span<float>(scores.Data, scoreOffset, T * T);
+                    
+                    // Compute Q @ K^T using optimized MatMul
+                    // Q: (T × headSize), K^T: (headSize × T), Result: (T × T)
+                    MatMulOps.MatMulTransposeB(qBh, kBh, scoresBh, T, _headSize, T);
+                    
+                    // Apply scale factor and causal mask
                     for (int i = 0; i < T; i++)
                     {
-                        int qOffset = bhOffset + i * _headSize;
-                        int scoreRowOffset = scoreOffset + i * T;
-                        
-                        // Compute scores for valid positions (causal mask: j <= i)
-                        for (int j = 0; j <= i; j++)
+                        for (int j = 0; j < T; j++)
                         {
-                            int kOffset = bhOffset + j * _headSize;
-                            float sum = MatMulOps.DotProduct(
-                                new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
-                                new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
-                            );
-                            scores.Data[scoreRowOffset + j] = sum * scale;
-                        }
-                        
-                        // Set masked positions to NegativeInfinity for softmax
-                        for (int j = i + 1; j < T; j++)
-                        {
-                            scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
+                            int idx = i * T + j;
+                            if (j <= i)
+                            {
+                                scoresBh[idx] *= scale;
+                            }
+                            else
+                            {
+                                scoresBh[idx] = float.NegativeInfinity;  // Causal mask
+                            }
                         }
                     }
                 });
             }
             else
             {
-                for (int b = 0; b < B; b++)
+                // Sequential version for small batches
+                for (int bh = 0; bh < totalBatches; bh++)
                 {
-                    for (int h = 0; h < _nHead; h++)
+                    int b = bh / _nHead;
+                    int h = bh % _nHead;
+                    int bhOffset = (b * _nHead + h) * T * _headSize;
+                    int scoreOffset = (b * _nHead + h) * T * T;
+                    
+                    var qBh = new ReadOnlySpan<float>(q.Data, bhOffset, T * _headSize);
+                    var kBh = new ReadOnlySpan<float>(k.Data, bhOffset, T * _headSize);
+                    var scoresBh = new Span<float>(scores.Data, scoreOffset, T * T);
+                    
+                    MatMulOps.MatMulTransposeB(qBh, kBh, scoresBh, T, _headSize, T);
+                    
+                    // Apply scale and causal mask
+                    for (int i = 0; i < T; i++)
                     {
-                        int bhOffset = (b * _nHead + h) * T * _headSize;
-                        int scoreOffset = (b * _nHead + h) * T * T;
-                        
-                        for (int i = 0; i < T; i++)
+                        for (int j = 0; j < T; j++)
                         {
-                            int qOffset = bhOffset + i * _headSize;
-                            int scoreRowOffset = scoreOffset + i * T;
-                            
-                            for (int j = 0; j <= i; j++)
+                            int idx = i * T + j;
+                            if (j <= i)
                             {
-                                int kOffset = bhOffset + j * _headSize;
-                                float sum = MatMulOps.DotProduct(
-                                    new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
-                                    new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
-                                );
-                                scores.Data[scoreRowOffset + j] = sum * scale;
+                                scoresBh[idx] *= scale;
                             }
-                            
-                            for (int j = i + 1; j < T; j++)
+                            else
                             {
-                                scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
+                                scoresBh[idx] = float.NegativeInfinity;
                             }
                         }
                     }
@@ -1180,61 +1191,53 @@ namespace SmallMind.Transformers
         
         /// <summary>
         /// In-place version of ApplyAttention that writes to a pre-allocated tensor.
-        /// Computes attention_weights * V.
+        /// Computes attention_weights * V using batched matrix multiplication.
         /// </summary>
         private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T)
         {
-            // att: (B, nHead, T, T)
-            // v: (B, nHead, T, headSize)
-            // output: (B, nHead, T, headSize) - pre-allocated
+            // att: (B, nHead, T, T) - attention weights
+            // v: (B, nHead, T, headSize) - values
+            // output: (B, nHead, T, headSize) - pre-allocated output
             
-            int totalParallelWork = B * _nHead;
-            if (totalParallelWork >= 4)
+            int totalBatches = B * _nHead;
+            
+            if (totalBatches >= 4)
             {
-                Parallel.For(0, totalParallelWork, bh =>
+                Parallel.For(0, totalBatches, bh =>
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
                     
-                    for (int i = 0; i < T; i++)
-                    {
-                        for (int d = 0; d < _headSize; d++)
-                        {
-                            float sum = 0;
-                            for (int j = 0; j < T; j++)
-                            {
-                                int attIdx = ((b * _nHead + h) * T + i) * T + j;
-                                int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
-                                sum += att.Data[attIdx] * v.Data[vIdx];
-                            }
-                            int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                            output.Data[outIdx] = sum;
-                        }
-                    }
+                    int attOffset = (b * _nHead + h) * T * T;
+                    int vOffset = (b * _nHead + h) * T * _headSize;
+                    int outOffset = (b * _nHead + h) * T * _headSize;
+                    
+                    var attBh = new ReadOnlySpan<float>(att.Data, attOffset, T * T);
+                    var vBh = new ReadOnlySpan<float>(v.Data, vOffset, T * _headSize);
+                    var outBh = new Span<float>(output.Data, outOffset, T * _headSize);
+                    
+                    // Compute: output[b,h] = att[b,h] @ v[b,h]
+                    // (T × T) @ (T × headSize) = (T × headSize)
+                    MatMulOps.MatMul(attBh, vBh, outBh, T, T, _headSize);
                 });
             }
             else
             {
-                for (int b = 0; b < B; b++)
+                // Sequential version for small batches
+                for (int bh = 0; bh < totalBatches; bh++)
                 {
-                    for (int h = 0; h < _nHead; h++)
-                    {
-                        for (int i = 0; i < T; i++)
-                        {
-                            for (int d = 0; d < _headSize; d++)
-                            {
-                                float sum = 0;
-                                for (int j = 0; j < T; j++)
-                                {
-                                    int attIdx = ((b * _nHead + h) * T + i) * T + j;
-                                    int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
-                                    sum += att.Data[attIdx] * v.Data[vIdx];
-                                }
-                                int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                                output.Data[outIdx] = sum;
-                            }
-                        }
-                    }
+                    int b = bh / _nHead;
+                    int h = bh % _nHead;
+                    
+                    int attOffset = (b * _nHead + h) * T * T;
+                    int vOffset = (b * _nHead + h) * T * _headSize;
+                    int outOffset = (b * _nHead + h) * T * _headSize;
+                    
+                    var attBh = new ReadOnlySpan<float>(att.Data, attOffset, T * T);
+                    var vBh = new ReadOnlySpan<float>(v.Data, vOffset, T * _headSize);
+                    var outBh = new Span<float>(output.Data, outOffset, T * _headSize);
+                    
+                    MatMulOps.MatMul(attBh, vBh, outBh, T, T, _headSize);
                 }
             }
         }

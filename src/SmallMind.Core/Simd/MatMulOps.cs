@@ -544,5 +544,44 @@ namespace SmallMind.Core.Simd
 
             return sum;
         }
+
+        /// <summary>
+        /// Matrix multiplication with B transposed: C = A × B^T
+        /// A: (M × K), B: (N × K), C: (M × N)
+        /// Optimized for attention score computation where we need Q @ K^T.
+        /// Uses cache-friendly ikj loop order for better performance.
+        /// </summary>
+        public static void MatMulTransposeB(
+            ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
+            int M, int K, int N)
+        {
+            if (A.Length < M * K || B.Length < N * K || C.Length < M * N)
+                throw new ArgumentException("Matrix dimensions don't match buffer sizes");
+
+            // Clear output
+            C.Clear();
+
+            // Use ikj loop order for cache efficiency
+            // A is (M × K) row-major, B is (N × K) row-major (we transpose during access)
+            // C is (M × N) row-major
+            
+            for (int i = 0; i < M; i++)
+            {
+                int aRowOffset = i * K;
+                int cRowOffset = i * N;
+                
+                for (int k = 0; k < K; k++)
+                {
+                    float aik = A[aRowOffset + k];
+                    
+                    // Scalar loop - simple and efficient for this access pattern
+                    // SIMD is difficult here due to non-contiguous B access (stride K)
+                    for (int j = 0; j < N; j++)
+                    {
+                        C[cRowOffset + j] += aik * B[j * K + k];
+                    }
+                }
+            }
+        }
     }
 }
