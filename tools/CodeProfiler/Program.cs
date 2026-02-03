@@ -18,6 +18,14 @@ else if (args.Length > 0 && (args[0] == "--deep" || args[0] == "-d"))
 {
     mode = "deep";
 }
+else if (args.Length > 0 && (args[0] == "--compare" || args[0] == "-c"))
+{
+    mode = "compare";
+}
+else if (args.Length > 0 && (args[0] == "--model-compare" || args[0] == "-m"))
+{
+    mode = "model-compare";
+}
 
 string outputPath = mode == "enhanced" ? "enhanced-profile-report.md" : 
                    (args.Length > 0 && !args[0].StartsWith("--") ? args[0] : "profile-report.md");
@@ -36,7 +44,64 @@ Console.WriteLine();
 
 try
 {
-    if (mode == "enhanced")
+    if (mode == "compare")
+    {
+        // Compare two profile reports
+        string previousReport = args.Length > 1 ? args[1] : "previous-profile-report.md";
+        string currentReport = args.Length > 2 ? args[2] : "enhanced-profile-report.md";
+        string outputReport = args.Length > 3 ? args[3] : "profile-comparison-report.md";
+
+        Console.WriteLine($"Comparing:");
+        Console.WriteLine($"  Previous: {previousReport}");
+        Console.WriteLine($"  Current:  {currentReport}");
+        Console.WriteLine($"  Output:   {outputReport}");
+        Console.WriteLine();
+
+        var previousData = ProfileComparator.ParseProfileReport(previousReport);
+        var currentData = ProfileComparator.ParseProfileReport(currentReport);
+
+        if (!previousData.Any())
+        {
+            Console.WriteLine($"Error: Could not parse previous report: {previousReport}");
+            return 1;
+        }
+
+        if (!currentData.Any())
+        {
+            Console.WriteLine($"Error: Could not parse current report: {currentReport}");
+            return 1;
+        }
+
+        var comparisonReport = ProfileComparator.GenerateComparisonReport(
+            previousData, 
+            currentData,
+            "2026-02-03 02:36:36",
+            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+
+        await File.WriteAllTextAsync(outputReport, comparisonReport);
+        Console.WriteLine($"\n✓ Comparison report generated: {outputReport}");
+    }
+    else if (mode == "model-compare")
+    {
+        // Compare model performance only
+        string currentReport = args.Length > 1 ? args[1] : "enhanced-profile-report.md";
+        string outputReport = args.Length > 2 ? args[2] : "model-comparison-report.md";
+
+        Console.WriteLine($"Analyzing model performance from: {currentReport}");
+        Console.WriteLine($"Output: {outputReport}");
+        Console.WriteLine();
+
+        var currentData = ProfileComparator.ParseProfileReport(currentReport);
+        
+        if (!currentData.Any())
+        {
+            Console.WriteLine($"Error: Could not parse report: {currentReport}");
+            return 1;
+        }
+
+        ProfileComparator.GenerateModelOnlyComparison(currentData, outputReport);
+    }
+    else if (mode == "enhanced")
     {
         // Enhanced comprehensive profiling
         EnhancedProfiler.RunComprehensiveProfiling();

@@ -10,8 +10,58 @@ A high-precision performance profiling tool for analyzing hot paths, memory allo
 - **Hot Path Analysis**: Identifies the most time-consuming code paths
 - **Allocation Analysis**: Finds methods with highest memory pressure
 - **Detailed Reports**: Generates markdown reports with comprehensive performance data
+- **Profile Comparison**: Compare performance between different test runs
+- **Model Comparison**: Analyze scaling characteristics across model sizes
 
 ## Usage
+
+### Enhanced Profiling (Recommended)
+
+```bash
+cd /home/runner/work/SmallMind/SmallMind
+dotnet run --project tools/CodeProfiler/CodeProfiler.csproj -- --enhanced
+```
+
+**Enhanced profile includes:**
+- Low-level SIMD operations (MatMul, GELU, Softmax)
+- Mid-level tensor operations
+- High-level transformer inference
+- Small and Medium model comparison (automatically)
+- Saves to `enhanced-profile-report.md`
+
+### Profile Comparison
+
+Compare two profiling runs to identify performance changes:
+
+```bash
+dotnet run --project tools/CodeProfiler/CodeProfiler.csproj -- --compare \
+  previous-profile-report.md \
+  enhanced-profile-report.md \
+  profile-comparison-report.md
+```
+
+**Comparison report includes:**
+- Overall performance summary (runtime, allocations)
+- Top 10 improvements and regressions
+- Detailed method-by-method comparison
+- Model scaling analysis
+- SIMD operation performance (with GFLOPS)
+
+### Model-Only Comparison
+
+Deep dive into model size scaling characteristics:
+
+```bash
+dotnet run --project tools/CodeProfiler/CodeProfiler.csproj -- --model-compare \
+  enhanced-profile-report.md \
+  model-comparison-report.md
+```
+
+**Model comparison includes:**
+- Small vs Medium model specifications
+- Performance metrics (throughput, latency, memory)
+- Scaling efficiency analysis
+- Forward pass breakdown
 
 ### Basic Profiling
 
@@ -39,7 +89,7 @@ dotnet run --project tools/CodeProfiler/CodeProfiler.csproj -- my-profile.md 5 1
 ### Deep Profiling (with SIMD Benchmarks)
 
 ```bash
-dotnet run --project tools/CodeProfiler/CodeProfiler.csproj -- deep-profile.md 3 50 --deep
+dotnet run --project tools/CodeProfiler/CodeProfiler.csproj -- --deep
 ```
 
 **Deep profile includes:**
@@ -50,7 +100,38 @@ dotnet run --project tools/CodeProfiler/CodeProfiler.csproj -- deep-profile.md 3
 
 ## Output
 
-The profiler generates a comprehensive markdown report containing:
+The profiler generates comprehensive markdown reports:
+
+### Enhanced Profile Report (`enhanced-profile-report.md`)
+
+Contains current test run detailed profile:
+- **Summary**: Total runtime, allocations, methods profiled
+- **Hot Paths Table**: Top 30 operations by execution time
+- **Top Allocators Table**: Top 15 operations by memory allocation
+- Includes both Small and Medium model benchmarks
+
+### Profile Comparison Report (`profile-comparison-report.md`)
+
+Side-by-side comparison of two test runs:
+- **Overall Performance Summary**: Total runtime, allocations, method count changes
+- **Performance Verdict**: Automatic assessment (Improved/Regressed/Stable)
+- **Top 10 Improvements**: Operations that got faster
+- **Top 10 Regressions**: Operations that got slower
+- **Detailed Method Comparison**: Full breakdown of all methods
+- **Model Size Comparison**: Small vs Medium scaling analysis
+- **SIMD Operation Performance**: MatMul performance with GFLOPS metrics
+
+### Model Comparison Report (`model-comparison-report.md`)
+
+Deep dive into model scaling:
+- **Model Specifications**: Parameters, dimensions, context windows
+- **Performance Metrics**: Inference time, throughput, memory usage
+- **Scaling Efficiency Analysis**: How well performance scales with model size
+- **Forward Pass Analysis**: Detailed breakdown of forward pass timing
+
+### Standard Profile Report (`profile-report.md`)
+
+Basic profiling output:
 
 ### 1. System Information
 - OS and architecture
@@ -83,19 +164,62 @@ Automated analysis identifying:
 
 ## Example Output
 
+### Enhanced Profile
+
 ```
-=== Top 10 Hot Paths ===
+═══ Top 30 Hot Paths (by Time) ════════════════════════════════
 
- 1. Transformer_Forward
-    Time: 23559.01 ms total, 157.060 ms avg (150 calls)
-    Alloc: 7549.63 MB
+Rank  Method                                   Time (ms)       Calls      Avg (ms)     Alloc (MB)  
+────────────────────────────────────────────────────────────────────────────────────────────────────
+1     Model_Medium_Inference                   2553.97         1          2553.969     734.48      
+2     Model_Medium_GenerateToken               2553.92         25         102.157      734.48      
+3     Model_Medium_Forward                     2553.49         25         102.140      734.48      
+4     Model_Small_Inference                    447.73          1          447.725      110.33      
+5     Model_Small_GenerateToken                447.66          25         17.906       110.33
+```
 
- 2. GenerateToken
-    Time: 23562.59 ms total, 157.084 ms avg (150 calls)
-    Alloc: 7549.63 MB
+### Profile Comparison
 
- 3. MatMul_512x512
-    Time: 299.61 ms total, 299.608 ms avg (1 calls)
+```
+## 📊 Overall Performance Summary
+
+| Metric | Previous | Current | Delta | Change % |
+|--------|----------|---------|-------|----------|
+| **Total Runtime** | 5,591.91 ms | 10,312.68 ms | +4720.77 ms | +84.4% |
+| **Total Allocations** | 2,566.93 MB | 2,566.90 MB | -0.03 MB | -0.0% |
+
+### 🎯 Performance Verdict
+
+⚠️ **REGRESSED**: Overall performance degraded by 84.4%
+
+## 🚀 Top 10 Improvements
+
+| Method | Previous (ms) | Current (ms) | Delta (ms) | Change % |
+|--------|---------------|--------------|------------|----------|
+| `Softmax_2048` | 2.01 | 0.27 | -1.74 | -86.6% |
+| `Softmax_Iteration` | 2.21 | 0.40 | -1.81 | -81.9% |
+```
+
+### Model Comparison
+
+```
+## 📊 Model Specifications
+
+| Model | Dimensions | Layers | Heads | Parameters | Context |
+|-------|-----------|--------|-------|------------|---------|
+| **Small** | 128 | 2 | 4 | 470,528 | 64 |
+| **Medium** | 256 | 4 | 8 | 3,454,464 | 128 |
+
+## ⏱️ Performance Metrics
+
+| Metric | Small Model | Medium Model | Ratio (Med/Small) |
+|--------|-------------|--------------|-------------------|
+| **Total Inference Time** | 447.73 ms | 2,553.97 ms | 5.70x |
+| **Tokens per Second** | 55.84 | 9.79 | 0.18x |
+
+### Computational Efficiency: **1.29x**
+
+✅ **Excellent** - Nearly linear scaling with parameter count
 ```
 
 ## Programmatic Usage
