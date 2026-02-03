@@ -9,11 +9,13 @@
     <Project Path="src/SmallMind/SmallMind.csproj" />
     <Project Path="src/SmallMind.Console/SmallMind.Console.csproj" />
     <Project Path="src/SmallMind.Rag/SmallMind.Rag.csproj" />
+    <Project Path="src/SmallMind.ModelRegistry/SmallMind.ModelRegistry.csproj" />
     <Project Path="src/SmallMind.Quantization/SmallMind.Quantization.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SmallMind.Tests/SmallMind.Tests.csproj" />
     <Project Path="tests/SmallMind.IntegrationTests/SmallMind.IntegrationTests.csproj" />
+    <Project Path="tests/SmallMind.ModelRegistry.Tests/SmallMind.ModelRegistry.Tests.csproj" />
     <Project Path="tests/SmallMind.PerfTests/SmallMind.PerfTests.csproj" />
     <Project Path="tests/SmallMind.Quantization.Tests/SmallMind.Quantization.Tests.csproj" />
   </Folder>

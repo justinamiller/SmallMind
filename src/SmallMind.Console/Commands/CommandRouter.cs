@@ -19,7 +19,11 @@ namespace SmallMind.ConsoleApp.Commands
                 ["quantize"] = new QuantizeCommand(),
                 ["import-gguf"] = new ImportGgufCommand(),
                 ["inspect"] = new InspectCommand(),
-                ["verify"] = new VerifyCommand()
+                ["verify"] = new VerifyCommand(),
+                ["model add"] = new ModelAddCommand(),
+                ["model list"] = new ModelListCommand(),
+                ["model verify"] = new ModelVerifyCommand(),
+                ["model inspect"] = new ModelInspectCommand()
             };
         }
 
