@@ -80,8 +80,8 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
-        /// Fast GELU approximation: 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
-        /// Uses fast sigmoid approximation to avoid expensive tanh.
+        /// Fast GELU approximation: x * sigmoid(1.702 * x)
+        /// Uses SIMD-accelerated multiplication where possible, following Softmax optimization patterns.
         /// Accuracy: within 1e-6 of exact GELU for typical input ranges.
         /// </summary>
         public static void GELU(ReadOnlySpan<float> input, Span<float> output)
@@ -90,16 +90,35 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("Input and output spans must have the same length");
 
             int length = input.Length;
-
+            int vectorSize = Vector<float>.Count;
+            
             // GELU approximation: x * sigmoid(1.702 * x)
-            // This is faster than the tanh-based formula and very close for most inputs
             const float scale = 1.702f;
 
+            // Step 1: Compute sigmoid values (scalar, as exp has no SIMD intrinsic)
+            // Store intermediate results for SIMD multiplication
             for (int i = 0; i < length; i++)
             {
                 float x = input[i];
                 float sigmoid = FastSigmoid(scale * x);
-                output[i] = x * sigmoid;
+                output[i] = sigmoid; // Store sigmoid temporarily
+            }
+
+            // Step 2: Multiply input * sigmoid using SIMD (following Softmax pattern)
+            int i_simd = 0;
+            
+            // SIMD loop: element-wise multiplication
+            for (; i_simd <= length - vectorSize; i_simd += vectorSize)
+            {
+                var vInput = new Vector<float>(input.Slice(i_simd));
+                var vSigmoid = new Vector<float>(output.Slice(i_simd));
+                (vInput * vSigmoid).CopyTo(output.Slice(i_simd));
+            }
+            
+            // Scalar remainder
+            for (; i_simd < length; i_simd++)
+            {
+                output[i_simd] *= input[i_simd];
             }
         }
 
@@ -117,6 +136,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// GELU backward pass (approximate derivative)
+        /// Uses SIMD for vectorizable operations, following Softmax optimization patterns.
         /// </summary>
         public static void GELUBackward(ReadOnlySpan<float> input, ReadOnlySpan<float> outputGrad, Span<float> inputGrad)
         {
@@ -124,8 +144,11 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("All spans must have the same length");
 
             int length = input.Length;
+            int vectorSize = Vector<float>.Count;
             const float scale = 1.702f;
 
+            // Step 1: Compute derivatives (scalar, as sigmoid requires exp which has no SIMD)
+            // Store in inputGrad temporarily
             for (int i = 0; i < length; i++)
             {
                 float x = input[i];
@@ -133,7 +156,24 @@ namespace SmallMind.Core.Simd
                 
                 // Derivative: sigmoid + x * sigmoid * (1 - sigmoid) * scale
                 float derivative = sigmoid + x * sigmoid * (1f - sigmoid) * scale;
-                inputGrad[i] = outputGrad[i] * derivative;
+                inputGrad[i] = derivative;
+            }
+
+            // Step 2: Multiply by outputGrad using SIMD (element-wise)
+            int i_simd = 0;
+            
+            // SIMD loop
+            for (; i_simd <= length - vectorSize; i_simd += vectorSize)
+            {
+                var vDerivative = new Vector<float>(inputGrad.Slice(i_simd));
+                var vOutputGrad = new Vector<float>(outputGrad.Slice(i_simd));
+                (vDerivative * vOutputGrad).CopyTo(inputGrad.Slice(i_simd));
+            }
+            
+            // Scalar remainder
+            for (; i_simd < length; i_simd++)
+            {
+                inputGrad[i_simd] *= outputGrad[i_simd];
             }
         }
 
