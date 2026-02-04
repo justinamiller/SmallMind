@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -12,8 +13,8 @@ namespace SmallMind.Tokenizers
     /// </summary>
     public class WordPieceTokenizer : ITokenizer
     {
-        private readonly Dictionary<string, int> _vocab;
-        private readonly Dictionary<int, string> _inverseVocab;
+        private readonly FrozenDictionary<string, int> _vocab;
+        private readonly FrozenDictionary<int, string> _inverseVocab;
         private readonly int _unkTokenId;
         private readonly string _unkToken;
         private readonly int _maxInputCharsPerWord;
@@ -41,8 +42,8 @@ namespace SmallMind.Tokenizers
             _maxInputCharsPerWord = maxInputCharsPerWord;
 
             // Load vocabulary from file (one token per line)
-            _vocab = new Dictionary<string, int>();
-            _inverseVocab = new Dictionary<int, string>();
+            var vocabDict = new Dictionary<string, int>();
+            var inverseDict = new Dictionary<int, string>();
 
             string[] lines = File.ReadAllLines(vocabPath);
             for (int i = 0; i < lines.Length; i++)
@@ -50,10 +51,14 @@ namespace SmallMind.Tokenizers
                 string token = lines[i].Trim();
                 if (!string.IsNullOrEmpty(token))
                 {
-                    _vocab[token] = i;
-                    _inverseVocab[i] = token;
+                    vocabDict[token] = i;
+                    inverseDict[i] = token;
                 }
             }
+
+            // Convert to FrozenDictionary for faster lookups
+            _vocab = vocabDict.ToFrozenDictionary();
+            _inverseVocab = inverseDict.ToFrozenDictionary();
 
             _unkTokenId = _vocab.TryGetValue(_unkToken, out int id) ? id : -1;
             if (_unkTokenId == -1)

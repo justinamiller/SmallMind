@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -13,11 +14,11 @@ namespace SmallMind.Tokenizers
     /// </summary>
     public class ByteLevelBpeTokenizer : ITokenizer
     {
-        private readonly Dictionary<int, int> _byteToToken;
-        private readonly Dictionary<int, byte> _tokenToByte;
+        private readonly FrozenDictionary<int, int> _byteToToken;
+        private readonly FrozenDictionary<int, byte> _tokenToByte;
         private readonly Dictionary<string, int> _vocab;
-        private readonly Dictionary<int, string> _inverseVocab;
-        private readonly Dictionary<(int, int), int> _mergeRanks;
+        private readonly FrozenDictionary<int, string> _inverseVocab;
+        private readonly FrozenDictionary<(int, int), int> _mergeRanks;
         
         // Cache for merged token strings to reduce allocations
         private readonly Dictionary<(int, int), string> _mergedTokenCache = new Dictionary<(int, int), string>();
@@ -39,23 +40,26 @@ namespace SmallMind.Tokenizers
                 throw new TokenizationException($"Merges file not found: {mergesPath}");
 
             // Initialize byte-to-token mapping (reversible encoding)
-            _byteToToken = new Dictionary<int, int>(256);
-            _tokenToByte = new Dictionary<int, byte>(256);
-            InitializeByteMappings();
+            var byteToTokenDict = new Dictionary<int, int>(256);
+            var tokenToByteDict = new Dictionary<int, byte>(256);
+            InitializeByteMappings(byteToTokenDict, tokenToByteDict);
+            _byteToToken = byteToTokenDict.ToFrozenDictionary();
+            _tokenToByte = tokenToByteDict.ToFrozenDictionary();
 
             // Load vocabulary
             string vocabJson = File.ReadAllText(vocabPath);
             _vocab = JsonSerializer.Deserialize<Dictionary<string, int>>(vocabJson)
                 ?? throw new TokenizationException($"Failed to parse vocab.json: {vocabPath}");
 
-            _inverseVocab = new Dictionary<int, string>(_vocab.Count);
+            var inverseDict = new Dictionary<int, string>(_vocab.Count);
             foreach (var kvp in _vocab)
             {
-                _inverseVocab[kvp.Value] = kvp.Key;
+                inverseDict[kvp.Value] = kvp.Key;
             }
+            _inverseVocab = inverseDict.ToFrozenDictionary();
 
             // Load merges
-            _mergeRanks = new Dictionary<(int, int), int>();
+            var mergeDict = new Dictionary<(int, int), int>();
             string[] lines = File.ReadAllLines(mergesPath);
             int rank = 0;
             
@@ -71,9 +75,10 @@ namespace SmallMind.Tokenizers
                 // Convert merge tokens to byte sequences
                 if (_vocab.TryGetValue(parts[0], out int tok1) && _vocab.TryGetValue(parts[1], out int tok2))
                 {
-                    _mergeRanks[(tok1, tok2)] = rank++;
+                    mergeDict[(tok1, tok2)] = rank++;
                 }
             }
+            _mergeRanks = mergeDict.ToFrozenDictionary();
 
             // Setup Info with special tokens
             int bosId = specialTokens?.Bos != null && _vocab.TryGetValue(specialTokens.Bos, out int bId) ? bId : -1;
@@ -96,7 +101,7 @@ namespace SmallMind.Tokenizers
         /// Initialize reversible byte-to-unicode mapping (GPT-2 style).
         /// This avoids whitespace and control characters in the vocabulary.
         /// </summary>
-        private void InitializeByteMappings()
+        private void InitializeByteMappings(Dictionary<int, int> byteToToken, Dictionary<int, byte> tokenToByte)
         {
             // GPT-2 style byte encoding: maps bytes to printable unicode range
             // This creates a reversible mapping without using control characters
@@ -107,15 +112,15 @@ namespace SmallMind.Tokenizers
                 // Printable ASCII
                 if ((b >= 33 && b <= 126) || (b >= 161 && b <= 172) || (b >= 174 && b <= 255))
                 {
-                    _byteToToken[b] = b;
-                    _tokenToByte[b] = (byte)b;
+                    byteToToken[b] = b;
+                    tokenToByte[b] = (byte)b;
                 }
                 else
                 {
                     // Map to high unicode range (256+)
                     int mapped = 256 + n;
-                    _byteToToken[b] = mapped;
-                    _tokenToByte[mapped] = (byte)b;
+                    byteToToken[b] = mapped;
+                    tokenToByte[mapped] = (byte)b;
                     n++;
                 }
             }

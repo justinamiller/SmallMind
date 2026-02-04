@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Text;
 
@@ -12,8 +13,8 @@ namespace SmallMind.Tokenizers
     /// </summary>
     public class CharTokenizer : ITokenizer
     {
-        private readonly Dictionary<char, int> _charToIdx;
-        private readonly Dictionary<int, char> _idxToChar;
+        private readonly FrozenDictionary<char, int> _charToIdx;
+        private readonly FrozenDictionary<int, char> _idxToChar;
 
         public int VocabSize { get; }
         
@@ -39,14 +40,18 @@ namespace SmallMind.Tokenizers
             Array.Sort(chars);
             
             // Pre-size dictionaries with exact capacity to avoid rehashing
-            _charToIdx = new Dictionary<char, int>(chars.Length);
-            _idxToChar = new Dictionary<int, char>(chars.Length);
+            var charToIdxDict = new Dictionary<char, int>(chars.Length);
+            var idxToCharDict = new Dictionary<int, char>(chars.Length);
 
             for (int i = 0; i < chars.Length; i++)
             {
-                _charToIdx[chars[i]] = i;
-                _idxToChar[i] = chars[i];
+                charToIdxDict[chars[i]] = i;
+                idxToCharDict[i] = chars[i];
             }
+
+            // Convert to FrozenDictionary for faster lookups
+            _charToIdx = charToIdxDict.ToFrozenDictionary();
+            _idxToChar = idxToCharDict.ToFrozenDictionary();
 
             VocabSize = chars.Length;
             Info = new TokenizerInfo(
