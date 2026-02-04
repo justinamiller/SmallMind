@@ -8,7 +8,7 @@ namespace SmallMind.Core
     /// <summary>
     /// Metadata describing the model architecture and configuration.
     /// </summary>
-    public class ModelMetadata
+    public sealed class ModelMetadata
     {
         /// <summary>
         /// Type of model (e.g., "TransformerModel").
@@ -54,7 +54,7 @@ namespace SmallMind.Core
     /// <summary>
     /// Data for a single tensor parameter.
     /// </summary>
-    public class TensorData
+    public sealed class TensorData
     {
         /// <summary>
         /// Shape of the tensor (dimensions).
@@ -70,7 +70,7 @@ namespace SmallMind.Core
     /// <summary>
     /// Model checkpoint containing metadata and all parameters.
     /// </summary>
-    public class ModelCheckpoint
+    public sealed class ModelCheckpoint
     {
         /// <summary>
         /// Checkpoint format version (for backward compatibility).

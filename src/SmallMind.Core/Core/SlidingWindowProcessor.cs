@@ -10,7 +10,7 @@ namespace SmallMind.Core.Core
     /// Sliding window processor for handling large sequences with overlapping chunks.
     /// Enables processing of 32k+ token contexts by breaking them into manageable windows.
     /// </summary>
-    public class SlidingWindowProcessor
+    public sealed class SlidingWindowProcessor
     {
         private readonly int _windowSize;
         private readonly int _stride;

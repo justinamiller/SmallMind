@@ -102,7 +102,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Container for percentile statistics.
     /// </summary>
-    public class PercentileStats
+    public sealed class PercentileStats
     {
         public double Min { get; }
         public double Mean { get; }

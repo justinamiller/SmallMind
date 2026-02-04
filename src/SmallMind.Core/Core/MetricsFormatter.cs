@@ -155,7 +155,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Result from a single benchmark run configuration.
     /// </summary>
-    public class BenchmarkResult
+    public sealed class BenchmarkResult
     {
         public int Concurrency { get; set; }
         public int MaxTokens { get; set; }

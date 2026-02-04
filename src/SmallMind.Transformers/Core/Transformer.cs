@@ -14,7 +14,7 @@ namespace SmallMind.Transformers
     /// Decoder-only Transformer model (GPT-style) implemented in pure C#.
     /// Uses custom Tensor and neural network layers.
     /// </summary>
-    public class TransformerModel
+    public sealed class TransformerModel
     {
         private readonly int _blockSize;
         private readonly int _vocabSize;
@@ -339,7 +339,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Single Transformer block with masked multi-head self-attention and feed-forward MLP.
     /// </summary>
-    public class TransformerBlock
+    public sealed class TransformerBlock
     {
         private readonly LayerNorm _ln1;
         private readonly MultiHeadAttention _attn;
@@ -475,7 +475,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Masked multi-head self-attention implemented in pure C#.
     /// </summary>
-    public class MultiHeadAttention
+    public sealed class MultiHeadAttention
     {
         private readonly int _nEmbd;
         private readonly int _nHead;
@@ -1387,7 +1387,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Feed-forward MLP with GELU activation.
     /// </summary>
-    public class MLP
+    public sealed class MLP
     {
         private readonly Linear _fc1;
         private readonly Linear _fc2;

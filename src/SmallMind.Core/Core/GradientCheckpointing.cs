@@ -85,7 +85,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Checkpoint manager for transformer layers
     /// </summary>
-    public class CheckpointManager
+    public sealed class CheckpointManager
     {
         private readonly Dictionary<int, Tensor> _checkpoints;
         private readonly int _checkpointInterval;
