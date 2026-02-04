@@ -101,7 +101,7 @@ namespace SmallMind.Core.Core
         /// <returns>Budget check result</returns>
         public BudgetCheckResult CheckBudget(MemoryBreakdown breakdown, bool isSessionAllocation = false)
         {
-            Guard.NotNull(breakdown, nameof(breakdown));
+            // Note: breakdown is now a struct, so no null check needed
 
             long requiredBytes = breakdown.TotalBytes;
             long limit = isSessionAllocation ? EffectiveSessionLimit : EffectiveHardLimit;

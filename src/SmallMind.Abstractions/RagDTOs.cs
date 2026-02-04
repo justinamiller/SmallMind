@@ -100,32 +100,66 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// A citation from a source document.
     /// </summary>
-    public sealed class RagCitation
+    public readonly struct RagCitation : IEquatable<RagCitation>
     {
         /// <summary>
         /// Gets the source URI or path.
         /// </summary>
-        public string SourceUri { get; init; } = string.Empty;
+        public readonly string SourceUri;
 
         /// <summary>
         /// Gets the character range in the source (start, end).
         /// </summary>
-        public (int Start, int End) CharRange { get; init; }
+        public readonly (int Start, int End) CharRange;
 
         /// <summary>
         /// Gets the line range in the source (start, end).
         /// </summary>
-        public (int Start, int End)? LineRange { get; init; }
+        public readonly (int Start, int End)? LineRange;
 
         /// <summary>
         /// Gets a snippet of the cited text.
         /// </summary>
-        public string Snippet { get; init; } = string.Empty;
+        public readonly string Snippet;
 
         /// <summary>
         /// Gets the confidence score (0.0 to 1.0).
         /// </summary>
-        public double Confidence { get; init; }
+        public readonly double Confidence;
+
+        /// <summary>
+        /// Initializes a new instance of the RagCitation struct.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonConstructor]
+        public RagCitation(
+            string sourceUri,
+            (int Start, int End) charRange,
+            (int Start, int End)? lineRange,
+            string snippet,
+            double confidence)
+        {
+            SourceUri = sourceUri ?? string.Empty;
+            CharRange = charRange;
+            LineRange = lineRange;
+            Snippet = snippet ?? string.Empty;
+            Confidence = confidence;
+        }
+
+        public bool Equals(RagCitation other) =>
+            SourceUri == other.SourceUri &&
+            CharRange == other.CharRange &&
+            LineRange == other.LineRange &&
+            Snippet == other.Snippet &&
+            Math.Abs(Confidence - other.Confidence) < 1e-9;
+
+        public override bool Equals(object? obj) =>
+            obj is RagCitation other && Equals(other);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(SourceUri, CharRange, LineRange, Snippet, Confidence);
+
+        public static bool operator ==(RagCitation left, RagCitation right) => left.Equals(right);
+        public static bool operator !=(RagCitation left, RagCitation right) => !left.Equals(right);
     }
 
     /// <summary>

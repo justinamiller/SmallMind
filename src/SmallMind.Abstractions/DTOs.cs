@@ -277,37 +277,71 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Event emitted during streaming generation.
     /// </summary>
-    public sealed class TokenEvent
+    public readonly struct TokenEvent : IEquatable<TokenEvent>
     {
         /// <summary>
         /// Gets the event kind.
         /// </summary>
-        public TokenEventKind Kind { get; init; }
+        public readonly TokenEventKind Kind;
 
         /// <summary>
         /// Gets the generated text for this token.
         /// </summary>
-        public ReadOnlyMemory<char> Text { get; init; }
+        public readonly ReadOnlyMemory<char> Text;
 
         /// <summary>
         /// Gets the token ID.
         /// </summary>
-        public int TokenId { get; init; }
+        public readonly int TokenId;
 
         /// <summary>
         /// Gets the total number of tokens generated so far.
         /// </summary>
-        public int GeneratedTokens { get; init; }
+        public readonly int GeneratedTokens;
 
         /// <summary>
         /// Gets whether this is the final event.
         /// </summary>
-        public bool IsFinal { get; init; }
+        public readonly bool IsFinal;
 
         /// <summary>
         /// Gets the error message (only when Kind is Error).
         /// </summary>
-        public string? Error { get; init; }
+        public readonly string? Error;
+
+        /// <summary>
+        /// Initializes a new instance of the TokenEvent struct.
+        /// </summary>
+        public TokenEvent(
+            TokenEventKind kind,
+            ReadOnlyMemory<char> text,
+            int tokenId,
+            int generatedTokens,
+            bool isFinal,
+            string? error = null)
+        {
+            Kind = kind;
+            Text = text;
+            TokenId = tokenId;
+            GeneratedTokens = generatedTokens;
+            IsFinal = isFinal;
+            Error = error;
+        }
+
+        public bool Equals(TokenEvent other) =>
+            Kind == other.Kind &&
+            TokenId == other.TokenId &&
+            GeneratedTokens == other.GeneratedTokens &&
+            IsFinal == other.IsFinal;
+
+        public override bool Equals(object? obj) =>
+            obj is TokenEvent other && Equals(other);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(Kind, TokenId, GeneratedTokens, IsFinal);
+
+        public static bool operator ==(TokenEvent left, TokenEvent right) => left.Equals(right);
+        public static bool operator !=(TokenEvent left, TokenEvent right) => !left.Equals(right);
     }
 
     /// <summary>
@@ -374,27 +408,53 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Information about a chat session.
     /// </summary>
-    public sealed class SessionInfo
+    public readonly struct SessionInfo : IEquatable<SessionInfo>
     {
         /// <summary>
         /// Gets the session ID.
         /// </summary>
-        public string SessionId { get; init; } = string.Empty;
+        public readonly string SessionId;
 
         /// <summary>
         /// Gets when the session was created.
         /// </summary>
-        public DateTimeOffset CreatedAt { get; init; }
+        public readonly DateTimeOffset CreatedAt;
 
         /// <summary>
         /// Gets the number of turns in this session.
         /// </summary>
-        public int TurnCount { get; init; }
+        public readonly int TurnCount;
 
         /// <summary>
         /// Gets the current KV cache size in tokens.
         /// </summary>
-        public int KvCacheTokens { get; init; }
+        public readonly int KvCacheTokens;
+
+        /// <summary>
+        /// Initializes a new instance of the SessionInfo struct.
+        /// </summary>
+        public SessionInfo(string sessionId, DateTimeOffset createdAt, int turnCount, int kvCacheTokens)
+        {
+            SessionId = sessionId ?? string.Empty;
+            CreatedAt = createdAt;
+            TurnCount = turnCount;
+            KvCacheTokens = kvCacheTokens;
+        }
+
+        public bool Equals(SessionInfo other) =>
+            SessionId == other.SessionId &&
+            CreatedAt == other.CreatedAt &&
+            TurnCount == other.TurnCount &&
+            KvCacheTokens == other.KvCacheTokens;
+
+        public override bool Equals(object? obj) =>
+            obj is SessionInfo other && Equals(other);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(SessionId, CreatedAt, TurnCount, KvCacheTokens);
+
+        public static bool operator ==(SessionInfo left, SessionInfo right) => left.Equals(right);
+        public static bool operator !=(SessionInfo left, SessionInfo right) => !left.Equals(right);
     }
 
     /// <summary>

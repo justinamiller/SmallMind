@@ -189,14 +189,12 @@ namespace SmallMind.Engine
             using var budgetEnforcer = new BudgetEnforcer(request.Options, cancellationToken);
 
             // Emit started event
-            yield return new TokenEvent
-            {
-                Kind = TokenEventKind.Started,
-                Text = ReadOnlyMemory<char>.Empty,
-                TokenId = -1,
-                GeneratedTokens = 0,
-                IsFinal = false
-            };
+            yield return new TokenEvent(
+                kind: TokenEventKind.Started,
+                text: ReadOnlyMemory<char>.Empty,
+                tokenId: -1,
+                generatedTokens: 0,
+                isFinal: false);
 
             InferenceSession? session = null;
 
@@ -221,14 +219,12 @@ namespace SmallMind.Engine
                 }
 
                 // Emit completed event
-                yield return new TokenEvent
-                {
-                    Kind = TokenEventKind.Completed,
-                    Text = ReadOnlyMemory<char>.Empty,
-                    TokenId = -1,
-                    GeneratedTokens = budgetEnforcer.GeneratedTokens,
-                    IsFinal = true
-                };
+                yield return new TokenEvent(
+                    kind: TokenEventKind.Completed,
+                    text: ReadOnlyMemory<char>.Empty,
+                    tokenId: -1,
+                    generatedTokens: budgetEnforcer.GeneratedTokens,
+                    isFinal: true);
             }
             finally
             {
@@ -250,14 +246,13 @@ namespace SmallMind.Engine
                 if (!budgetEnforcer.ShouldContinue())
                 {
                     // Budget exceeded - emit error event and stop
-                    yield return new TokenEvent
-                    {
-                        Kind = TokenEventKind.Error,
-                        Text = $"Budget exceeded: {budgetEnforcer.ExceededReason}".AsMemory(),
-                        TokenId = -1,
-                        GeneratedTokens = budgetEnforcer.GeneratedTokens,
-                        IsFinal = true
-                    };
+                    yield return new TokenEvent(
+                        kind: TokenEventKind.Error,
+                        text: $"Budget exceeded: {budgetEnforcer.ExceededReason}".AsMemory(),
+                        tokenId: -1,
+                        generatedTokens: budgetEnforcer.GeneratedTokens,
+                        isFinal: true,
+                        error: $"Budget exceeded: {budgetEnforcer.ExceededReason}");
                     yield break;
                 }
 
@@ -265,14 +260,12 @@ namespace SmallMind.Engine
 
                 bool isLast = !budgetEnforcer.ShouldContinue();
 
-                yield return new TokenEvent
-                {
-                    Kind = TokenEventKind.Token,
-                    Text = token.Text.AsMemory(),
-                    TokenId = token.TokenId,
-                    GeneratedTokens = budgetEnforcer.GeneratedTokens,
-                    IsFinal = isLast
-                };
+                yield return new TokenEvent(
+                    kind: TokenEventKind.Token,
+                    text: token.Text.AsMemory(),
+                    tokenId: token.TokenId,
+                    generatedTokens: budgetEnforcer.GeneratedTokens,
+                    isFinal: isLast);
 
                 if (isLast)
                 {

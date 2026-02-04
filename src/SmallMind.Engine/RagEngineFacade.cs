@@ -143,16 +143,12 @@ namespace SmallMind.Engine
                 var c = chunks[i];
                 if (c.Score >= request.MinConfidence)
                 {
-                    citations[citationIndex++] = new RagCitation
-                    {
-                        SourceUri = $"chunk://{c.ChunkId}",
-                        // Note: CharRange and LineRange would need actual Chunk lookup from chunk store
-                        // RetrievedChunk only has ChunkId, DocId, Score, Rank, Excerpt
-                        CharRange = (0, 0), // Placeholder - requires chunk store access
-                        LineRange = null, // Optional in schema
-                        Snippet = c.Excerpt.Length > 200 ? c.Excerpt.Substring(0, 200) + "..." : c.Excerpt,
-                        Confidence = c.Score
-                    };
+                    citations[citationIndex++] = new RagCitation(
+                        sourceUri: $"chunk://{c.ChunkId}",
+                        charRange: (0, 0), // Placeholder - requires chunk store access
+                        lineRange: null, // Optional in schema
+                        snippet: c.Excerpt.Length > 200 ? c.Excerpt.Substring(0, 200) + "..." : c.Excerpt,
+                        confidence: c.Score);
                 }
             }
 
@@ -226,14 +222,12 @@ namespace SmallMind.Engine
             }
 
             // Emit started event
-            yield return new TokenEvent
-            {
-                Kind = TokenEventKind.Started,
-                Text = ReadOnlyMemory<char>.Empty,
-                TokenId = -1,
-                GeneratedTokens = 0,
-                IsFinal = false
-            };
+            yield return new TokenEvent(
+                kind: TokenEventKind.Started,
+                text: ReadOnlyMemory<char>.Empty,
+                tokenId: -1,
+                generatedTokens: 0,
+                isFinal: false);
 
             // Stream tokens from generator
             int tokenCount = 0;
@@ -245,14 +239,12 @@ namespace SmallMind.Engine
                 tokenCount++;
                 isLast = (tokenCount >= request.GenerationOptions.MaxNewTokens);
 
-                yield return new TokenEvent
-                {
-                    Kind = TokenEventKind.Token,
-                    Text = token.Text.AsMemory(),
-                    TokenId = token.TokenId,
-                    GeneratedTokens = tokenCount,
-                    IsFinal = isLast
-                };
+                yield return new TokenEvent(
+                    kind: TokenEventKind.Token,
+                    text: token.Text.AsMemory(),
+                    tokenId: token.TokenId,
+                    generatedTokens: tokenCount,
+                    isFinal: isLast);
 
                 if (isLast)
                 {
@@ -261,14 +253,12 @@ namespace SmallMind.Engine
             }
 
             // Emit completed event
-            yield return new TokenEvent
-            {
-                Kind = TokenEventKind.Completed,
-                Text = ReadOnlyMemory<char>.Empty,
-                TokenId = -1,
-                GeneratedTokens = tokenCount,
-                IsFinal = true
-            };
+            yield return new TokenEvent(
+                kind: TokenEventKind.Completed,
+                text: ReadOnlyMemory<char>.Empty,
+                tokenId: -1,
+                generatedTokens: tokenCount,
+                isFinal: true);
         }
     }
 

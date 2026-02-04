@@ -38,13 +38,11 @@ namespace SmallMind.Engine
             _createdAt = DateTimeOffset.UtcNow;
         }
 
-        public SessionInfo Info => new SessionInfo
-        {
-            SessionId = _sessionId,
-            CreatedAt = _createdAt,
-            TurnCount = _turnCount,
-            KvCacheTokens = 0 // TODO: Track actual KV cache size
-        };
+        public SessionInfo Info => new SessionInfo(
+            sessionId: _sessionId,
+            createdAt: _createdAt,
+            turnCount: _turnCount,
+            kvCacheTokens: 0); // TODO: Track actual KV cache size
 
         public ValueTask AddSystemAsync(string systemPrompt, CancellationToken cancellationToken = default)
         {
@@ -140,14 +138,12 @@ namespace SmallMind.Engine
                 int tokenCount = 0;
 
                 // Emit started event
-                yield return new TokenEvent
-                {
-                    Kind = TokenEventKind.Started,
-                    Text = ReadOnlyMemory<char>.Empty,
-                    TokenId = -1,
-                    GeneratedTokens = 0,
-                    IsFinal = false
-                };
+                yield return new TokenEvent(
+                    kind: TokenEventKind.Started,
+                    text: ReadOnlyMemory<char>.Empty,
+                    tokenId: -1,
+                    generatedTokens: 0,
+                    isFinal: false);
 
                 bool isLast = false;
                 await foreach (var token in session.GenerateStreamAsync(
@@ -159,14 +155,12 @@ namespace SmallMind.Engine
                     responseBuilder.Append(token.Text);
                     isLast = (tokenCount >= options.MaxNewTokens);
 
-                    yield return new TokenEvent
-                    {
-                        Kind = TokenEventKind.Token,
-                        Text = token.Text.AsMemory(),
-                        TokenId = token.TokenId,
-                        GeneratedTokens = tokenCount,
-                        IsFinal = isLast
-                    };
+                    yield return new TokenEvent(
+                        kind: TokenEventKind.Token,
+                        text: token.Text.AsMemory(),
+                        tokenId: token.TokenId,
+                        generatedTokens: tokenCount,
+                        isFinal: isLast);
 
                     if (isLast)
                     {
@@ -184,14 +178,12 @@ namespace SmallMind.Engine
                 _turnCount++;
 
                 // Emit completed event
-                yield return new TokenEvent
-                {
-                    Kind = TokenEventKind.Completed,
-                    Text = ReadOnlyMemory<char>.Empty,
-                    TokenId = -1,
-                    GeneratedTokens = tokenCount,
-                    IsFinal = true
-                };
+                yield return new TokenEvent(
+                    kind: TokenEventKind.Completed,
+                    text: ReadOnlyMemory<char>.Empty,
+                    tokenId: -1,
+                    generatedTokens: tokenCount,
+                    isFinal: true);
             }
             finally
             {

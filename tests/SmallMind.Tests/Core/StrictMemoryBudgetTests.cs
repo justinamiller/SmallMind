@@ -82,15 +82,13 @@ namespace SmallMind.Tests.Core
                 maxBytesHard: 10000,
                 safetyMargin: 0.1);
 
-            var breakdown = new MemoryBreakdown
-            {
-                ModelParametersBytes = 1000,
-                ActivationsBytes = 500,
-                KVCacheBytes = 300,
-                GradientsBytes = 0,
-                OptimizerStateBytes = 0,
-                OverheadBytes = 100
-            };
+            var breakdown = new MemoryBreakdown(
+                modelParametersBytes: 1000,
+                activationsBytes: 500,
+                kvCacheBytes: 300,
+                gradientsBytes: 0,
+                optimizerStateBytes: 0,
+                overheadBytes: 100);
 
             // Act
             var result = budget.CheckBudget(breakdown);
@@ -108,15 +106,13 @@ namespace SmallMind.Tests.Core
                 maxBytesHard: 1000,
                 safetyMargin: 0.1);
 
-            var breakdown = new MemoryBreakdown
-            {
-                ModelParametersBytes = 500,
-                ActivationsBytes = 500,
-                KVCacheBytes = 100,
-                GradientsBytes = 0,
-                OptimizerStateBytes = 0,
-                OverheadBytes = 0
-            };
+            var breakdown = new MemoryBreakdown(
+                modelParametersBytes: 500,
+                activationsBytes: 500,
+                kvCacheBytes: 100,
+                gradientsBytes: 0,
+                optimizerStateBytes: 0,
+                overheadBytes: 0);
 
             // Act
             var result = budget.CheckBudget(breakdown);
@@ -151,11 +147,13 @@ namespace SmallMind.Tests.Core
         public void Success_CreatesSuccessfulResult()
         {
             // Arrange
-            var breakdown = new MemoryBreakdown
-            {
-                ModelParametersBytes = 1000,
-                ActivationsBytes = 500
-            };
+            var breakdown = new MemoryBreakdown(
+                modelParametersBytes: 1000,
+                activationsBytes: 500,
+                kvCacheBytes: 0,
+                gradientsBytes: 0,
+                optimizerStateBytes: 0,
+                overheadBytes: 0);
 
             // Act
             var result = BudgetCheckResult.Success(1500, 10000, breakdown);
@@ -171,11 +169,13 @@ namespace SmallMind.Tests.Core
         public void Failure_CreatesFailedResult()
         {
             // Arrange
-            var breakdown = new MemoryBreakdown
-            {
-                ModelParametersBytes = 10000,
-                ActivationsBytes = 5000
-            };
+            var breakdown = new MemoryBreakdown(
+                modelParametersBytes: 10000,
+                activationsBytes: 5000,
+                kvCacheBytes: 0,
+                gradientsBytes: 0,
+                optimizerStateBytes: 0,
+                overheadBytes: 0);
 
             // Act
             var result = BudgetCheckResult.Failure(
@@ -195,11 +195,13 @@ namespace SmallMind.Tests.Core
         public void GetSummary_ReturnsFormattedString()
         {
             // Arrange
-            var breakdown = new MemoryBreakdown
-            {
-                ModelParametersBytes = 1000,
-                ActivationsBytes = 500
-            };
+            var breakdown = new MemoryBreakdown(
+                modelParametersBytes: 1000,
+                activationsBytes: 500,
+                kvCacheBytes: 0,
+                gradientsBytes: 0,
+                optimizerStateBytes: 0,
+                overheadBytes: 0);
             var result = BudgetCheckResult.Success(1500, 10000, breakdown);
 
             // Act
@@ -217,15 +219,13 @@ namespace SmallMind.Tests.Core
         public void TotalBytes_SumsAllComponents()
         {
             // Arrange
-            var breakdown = new MemoryBreakdown
-            {
-                ModelParametersBytes = 1000,
-                ActivationsBytes = 500,
-                KVCacheBytes = 300,
-                GradientsBytes = 200,
-                OptimizerStateBytes = 400,
-                OverheadBytes = 100
-            };
+            var breakdown = new MemoryBreakdown(
+                modelParametersBytes: 1000,
+                activationsBytes: 500,
+                kvCacheBytes: 300,
+                gradientsBytes: 200,
+                optimizerStateBytes: 400,
+                overheadBytes: 100);
 
             // Act
             var total = breakdown.TotalBytes;
@@ -238,11 +238,13 @@ namespace SmallMind.Tests.Core
         public void GetSummary_ReturnsFormattedBreakdown()
         {
             // Arrange
-            var breakdown = new MemoryBreakdown
-            {
-                ModelParametersBytes = 1024 * 1024,
-                ActivationsBytes = 512 * 1024
-            };
+            var breakdown = new MemoryBreakdown(
+                modelParametersBytes: 1024 * 1024,
+                activationsBytes: 512 * 1024,
+                kvCacheBytes: 0,
+                gradientsBytes: 0,
+                optimizerStateBytes: 0,
+                overheadBytes: 0);
 
             // Act
             var summary = breakdown.GetSummary();

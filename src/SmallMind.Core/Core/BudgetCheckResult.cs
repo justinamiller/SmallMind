@@ -98,7 +98,7 @@ namespace SmallMind.Core.Core
 
             if (Breakdown != null)
             {
-                summary += $"\n{Breakdown.GetSummary()}";
+                summary += $"\n{Breakdown.Value.GetSummary()}";
             }
 
             return summary;
@@ -108,37 +108,56 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Detailed breakdown of memory requirements.
     /// </summary>
-    public sealed class MemoryBreakdown
+    public readonly struct MemoryBreakdown : IEquatable<MemoryBreakdown>
     {
         /// <summary>
         /// Memory for model parameters in bytes.
         /// </summary>
-        public long ModelParametersBytes { get; init; }
+        public readonly long ModelParametersBytes;
 
         /// <summary>
         /// Memory for activations in bytes.
         /// </summary>
-        public long ActivationsBytes { get; init; }
+        public readonly long ActivationsBytes;
 
         /// <summary>
         /// Memory for KV cache in bytes.
         /// </summary>
-        public long KVCacheBytes { get; init; }
+        public readonly long KVCacheBytes;
 
         /// <summary>
         /// Memory for gradients in bytes (training only).
         /// </summary>
-        public long GradientsBytes { get; init; }
+        public readonly long GradientsBytes;
 
         /// <summary>
         /// Memory for optimizer state in bytes (training only).
         /// </summary>
-        public long OptimizerStateBytes { get; init; }
+        public readonly long OptimizerStateBytes;
 
         /// <summary>
         /// Additional overhead in bytes.
         /// </summary>
-        public long OverheadBytes { get; init; }
+        public readonly long OverheadBytes;
+
+        /// <summary>
+        /// Initializes a new instance of the MemoryBreakdown struct.
+        /// </summary>
+        public MemoryBreakdown(
+            long modelParametersBytes,
+            long activationsBytes,
+            long kvCacheBytes,
+            long gradientsBytes,
+            long optimizerStateBytes,
+            long overheadBytes)
+        {
+            ModelParametersBytes = modelParametersBytes;
+            ActivationsBytes = activationsBytes;
+            KVCacheBytes = kvCacheBytes;
+            GradientsBytes = gradientsBytes;
+            OptimizerStateBytes = optimizerStateBytes;
+            OverheadBytes = overheadBytes;
+        }
 
         /// <summary>
         /// Gets the total memory requirement in bytes.
@@ -165,5 +184,24 @@ namespace SmallMind.Core.Core
                    $"  Overhead:         {OverheadBytes / 1024.0 / 1024.0:F2} MB\n" +
                    $"  Total:            {TotalBytes / 1024.0 / 1024.0:F2} MB";
         }
+
+        public bool Equals(MemoryBreakdown other) =>
+            ModelParametersBytes == other.ModelParametersBytes &&
+            ActivationsBytes == other.ActivationsBytes &&
+            KVCacheBytes == other.KVCacheBytes &&
+            GradientsBytes == other.GradientsBytes &&
+            OptimizerStateBytes == other.OptimizerStateBytes &&
+            OverheadBytes == other.OverheadBytes;
+
+        public override bool Equals(object? obj) =>
+            obj is MemoryBreakdown other && Equals(other);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(
+                ModelParametersBytes, ActivationsBytes, KVCacheBytes,
+                GradientsBytes, OptimizerStateBytes, OverheadBytes);
+
+        public static bool operator ==(MemoryBreakdown left, MemoryBreakdown right) => left.Equals(right);
+        public static bool operator !=(MemoryBreakdown left, MemoryBreakdown right) => !left.Equals(right);
     }
 }

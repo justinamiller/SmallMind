@@ -181,14 +181,12 @@ namespace SmallMind.Runtime
         {
             ThrowIfDisposed();
             
-            return new EngineStatistics
-            {
-                ActiveSessions = _activeSessions.Count,
-                MaxConcurrentSessions = _maxConcurrentSessions,
-                AvailableSlots = _maxConcurrentSessions > 0 
+            return new EngineStatistics(
+                activeSessions: _activeSessions.Count,
+                maxConcurrentSessions: _maxConcurrentSessions,
+                availableSlots: _maxConcurrentSessions > 0 
                     ? Math.Max(0, _maxConcurrentSessions - _activeSessions.Count)
-                    : int.MaxValue
-            };
+                    : int.MaxValue);
         }
         
         private InferenceSession CreateSession(ProductionInferenceOptions options, string? sessionId = null)
@@ -234,21 +232,45 @@ namespace SmallMind.Runtime
     /// <summary>
     /// Statistics about the inference engine state.
     /// </summary>
-    public sealed class EngineStatistics
+    public readonly struct EngineStatistics : IEquatable<EngineStatistics>
     {
         /// <summary>
         /// Number of currently active sessions.
         /// </summary>
-        public int ActiveSessions { get; init; }
+        public readonly int ActiveSessions;
         
         /// <summary>
         /// Maximum allowed concurrent sessions (0 = unlimited).
         /// </summary>
-        public int MaxConcurrentSessions { get; init; }
+        public readonly int MaxConcurrentSessions;
         
         /// <summary>
         /// Number of available session slots.
         /// </summary>
-        public int AvailableSlots { get; init; }
+        public readonly int AvailableSlots;
+
+        /// <summary>
+        /// Initializes a new instance of the EngineStatistics struct.
+        /// </summary>
+        public EngineStatistics(int activeSessions, int maxConcurrentSessions, int availableSlots)
+        {
+            ActiveSessions = activeSessions;
+            MaxConcurrentSessions = maxConcurrentSessions;
+            AvailableSlots = availableSlots;
+        }
+
+        public bool Equals(EngineStatistics other) =>
+            ActiveSessions == other.ActiveSessions &&
+            MaxConcurrentSessions == other.MaxConcurrentSessions &&
+            AvailableSlots == other.AvailableSlots;
+
+        public override bool Equals(object? obj) =>
+            obj is EngineStatistics other && Equals(other);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(ActiveSessions, MaxConcurrentSessions, AvailableSlots);
+
+        public static bool operator ==(EngineStatistics left, EngineStatistics right) => left.Equals(right);
+        public static bool operator !=(EngineStatistics left, EngineStatistics right) => !left.Equals(right);
     }
 }
