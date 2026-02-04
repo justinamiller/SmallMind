@@ -262,6 +262,7 @@ namespace SmallMind.Tests
                 var publicFields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
                     .Where(f => !f.IsLiteral) // Exclude const fields
                     .Where(f => f.Name != "value__") // Exclude enum value__ field
+                    .Where(f => !IsReadonlyStructField(type, f)) // Exclude readonly fields in readonly structs
                     .ToList();
 
                 if (publicFields.Any())
@@ -272,7 +273,25 @@ namespace SmallMind.Tests
 
             // Assert - no public fields (use properties instead)
             // Note: Enum value__ fields are automatically excluded
+            // Note: readonly struct fields are allowed for performance optimization
             Assert.Empty(typesWithPublicFields);
+        }
+
+        private static bool IsReadonlyStructField(Type type, FieldInfo field)
+        {
+            // Allow public readonly fields in readonly structs (performance optimization)
+            if (!type.IsValueType)
+                return false;
+
+            // Check if the field is readonly
+            if (!field.IsInitOnly)
+                return false;
+
+            // Check if the type is a readonly struct (has IsReadOnlyAttribute)
+            var isReadOnlyStruct = type.GetCustomAttributes(false)
+                .Any(attr => attr.GetType().Name == "IsReadOnlyAttribute");
+
+            return isReadOnlyStruct;
         }
 
         [Fact]

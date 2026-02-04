@@ -302,15 +302,13 @@ namespace SmallMind.Core.Core
             // Overhead (buffers, temporary allocations, etc.)
             long overhead = (long)((modelMemory + activationsMemory) * 0.1); // 10% overhead
 
-            return new MemoryBreakdown
-            {
-                ModelParametersBytes = modelMemory,
-                ActivationsBytes = activationsMemory,
-                KVCacheBytes = kvCacheMemory,
-                GradientsBytes = gradientsMemory,
-                OptimizerStateBytes = optimizerMemory,
-                OverheadBytes = overhead
-            };
+            return new MemoryBreakdown(
+                modelParametersBytes: modelMemory,
+                activationsBytes: activationsMemory,
+                kvCacheBytes: kvCacheMemory,
+                gradientsBytes: gradientsMemory,
+                optimizerStateBytes: optimizerMemory,
+                overheadBytes: overhead);
         }
 
         /// <summary>
