@@ -178,7 +178,7 @@ namespace SmallMind.Tokenizers
             }
 
             // Backtrack to get tokens
-            var result = new List<int>();
+            var result = new List<int>(text.Length / 3);
             int pos = n;
             
             while (pos > 0)

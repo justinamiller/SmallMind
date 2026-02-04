@@ -161,7 +161,7 @@ namespace SmallMind.Tokenizers
                 return new List<int>();
             }
 
-            var result = new List<int>();
+            var result = new List<int>(text.Length / 3);
 
             // Pre-tokenize: split into words and punctuation
             var matches = _preTokenizeRegex.Matches(text);

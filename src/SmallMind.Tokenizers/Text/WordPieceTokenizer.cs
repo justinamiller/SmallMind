@@ -88,7 +88,7 @@ namespace SmallMind.Tokenizers
             if (string.IsNullOrEmpty(text))
                 return new List<int>();
 
-            var result = new List<int>();
+            var result = new List<int>(text.Length / 4);
             
             // Split on whitespace
             string[] words = text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
