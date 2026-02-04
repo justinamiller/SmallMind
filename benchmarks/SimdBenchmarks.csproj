@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <!-- Exclude subdirectories from compilation -->
+    <Compile Remove="AllocationProfiler/**/*.cs" />
     <Compile Remove="TokenizerPerf/**/*.cs" />
     <Compile Remove="TrainingBenchmark/**/*.cs" />
     <Compile Remove="MemoryBenchmark/**/*.cs" />

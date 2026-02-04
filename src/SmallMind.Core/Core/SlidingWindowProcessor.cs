@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Buffers;
 using System.Linq;
 using SmallMind.Core.Validation;
 
@@ -166,46 +167,58 @@ namespace SmallMind.Core.Core
             int batchSize = windowOutputs[0].Shape[0];
             int outputDim = windowOutputs[0].Shape.Length == 3 ? windowOutputs[0].Shape[2] : 1;
             
-            // Create output tensor and count tensor for averaging
+            // Create output tensor and rent count buffer from ArrayPool for averaging
             var combined = new Tensor(
                 new int[] { batchSize, originalSeqLength, outputDim },
                 requiresGrad: windowOutputs[0].RequiresGrad);
-            var counts = new float[batchSize * originalSeqLength * outputDim];
             
-            // Accumulate all window outputs
-            int position = 0;
-            foreach (var window in windowOutputs)
+            int countsSize = batchSize * originalSeqLength * outputDim;
+            float[] counts = ArrayPool<float>.Shared.Rent(countsSize);
+            try
             {
-                int windowLen = window.Shape[1];
+                // Clear the rented array (ArrayPool may return larger array with stale data)
+                Array.Clear(counts, 0, countsSize);
                 
-                for (int b = 0; b < batchSize; b++)
+                // Accumulate all window outputs
+                int position = 0;
+                foreach (var window in windowOutputs)
                 {
-                    for (int t = 0; t < windowLen; t++)
+                    int windowLen = window.Shape[1];
+                    
+                    for (int b = 0; b < batchSize; b++)
                     {
-                        int globalPos = position + t;
-                        if (globalPos >= originalSeqLength) break;
-                        
-                        for (int d = 0; d < outputDim; d++)
+                        for (int t = 0; t < windowLen; t++)
                         {
-                            int windowIdx = (b * windowLen + t) * outputDim + d;
-                            int combIdx = (b * originalSeqLength + globalPos) * outputDim + d;
+                            int globalPos = position + t;
+                            if (globalPos >= originalSeqLength) break;
                             
-                            combined.Data[combIdx] += window.Data[windowIdx];
-                            counts[combIdx] += 1.0f;
+                            for (int d = 0; d < outputDim; d++)
+                            {
+                                int windowIdx = (b * windowLen + t) * outputDim + d;
+                                int combIdx = (b * originalSeqLength + globalPos) * outputDim + d;
+                                
+                                combined.Data[combIdx] += window.Data[windowIdx];
+                                counts[combIdx] += 1.0f;
+                            }
                         }
                     }
+                    
+                    position += _stride;
                 }
                 
-                position += _stride;
-            }
-            
-            // Average overlapping regions
-            for (int i = 0; i < combined.Size; i++)
-            {
-                if (counts[i] > 0)
+                // Average overlapping regions
+                for (int i = 0; i < combined.Size; i++)
                 {
-                    combined.Data[i] /= counts[i];
+                    if (counts[i] > 0)
+                    {
+                        combined.Data[i] /= counts[i];
+                    }
                 }
+            }
+            finally
+            {
+                // Return counts buffer to pool
+                ArrayPool<float>.Shared.Return(counts, clearArray: false);
             }
             
             return combined;

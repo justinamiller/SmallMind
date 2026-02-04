@@ -380,22 +380,38 @@ namespace SmallMind.Runtime.Batching
                 // Forward pass
                 var logits = _model.Forward(contextTensor);
 
-                // Get logits for last position
+                // Get logits for last position using ArrayPool to reduce allocations
                 int T = contextCropped.Count;
                 int vocabSize = logits.Shape[2];
-                var logitsLast = new float[vocabSize];
-                int lastPosOffset = (T - 1) * vocabSize;
-                for (int v = 0; v < vocabSize; v++)
+                float[]? logitsLastPooled = null;
+                float[] logitsLast;
+                try
                 {
-                    logitsLast[v] = logits.Data[lastPosOffset + v];
-                }
-
-                // Apply temperature
-                if (options.Temperature != 1.0)
-                {
+                    logitsLastPooled = ArrayPool<float>.Shared.Rent(vocabSize);
+                    int lastPosOffset = (T - 1) * vocabSize;
                     for (int v = 0; v < vocabSize; v++)
                     {
-                        logitsLast[v] /= (float)options.Temperature;
+                        logitsLastPooled[v] = logits.Data[lastPosOffset + v];
+                    }
+
+                    // Apply temperature
+                    if (options.Temperature != 1.0)
+                    {
+                        for (int v = 0; v < vocabSize; v++)
+                        {
+                            logitsLastPooled[v] /= (float)options.Temperature;
+                        }
+                    }
+
+                    // Copy to exact-size array for remaining operations
+                    logitsLast = new float[vocabSize];
+                    Array.Copy(logitsLastPooled, logitsLast, vocabSize);
+                }
+                finally
+                {
+                    if (logitsLastPooled != null)
+                    {
+                        ArrayPool<float>.Shared.Return(logitsLastPooled, clearArray: false);
                     }
                 }
 
@@ -419,8 +435,10 @@ namespace SmallMind.Runtime.Batching
                 return logits;
 
             float[]? rentedBuffer = null;
+            float[]? filtered = null;
             try
             {
+                // Rent buffer for sorting
                 rentedBuffer = ArrayPool<float>.Shared.Rent(logits.Length);
                 Array.Copy(logits, rentedBuffer, logits.Length);
 
@@ -428,13 +446,18 @@ namespace SmallMind.Runtime.Batching
                 Array.Reverse(rentedBuffer, 0, logits.Length);
                 float kthValue = rentedBuffer[Math.Min(k - 1, logits.Length - 1)];
 
-                var filtered = new float[logits.Length];
+                // Rent buffer for filtered results
+                filtered = ArrayPool<float>.Shared.Rent(logits.Length);
                 for (int i = 0; i < logits.Length; i++)
                 {
                     filtered[i] = logits[i] >= kthValue ? logits[i] : float.NegativeInfinity;
                 }
 
-                return filtered;
+                // Copy results to exact-size array for return
+                // This small allocation is necessary for API compatibility
+                var result = new float[logits.Length];
+                Array.Copy(filtered, result, logits.Length);
+                return result;
             }
             finally
             {
@@ -442,45 +465,64 @@ namespace SmallMind.Runtime.Batching
                 {
                     ArrayPool<float>.Shared.Return(rentedBuffer);
                 }
+                if (filtered != null)
+                {
+                    ArrayPool<float>.Shared.Return(filtered);
+                }
             }
         }
 
         private float[] Softmax(float[] logits)
         {
-            var probs = new float[logits.Length];
-
-            float max = float.NegativeInfinity;
-            for (int i = 0; i < logits.Length; i++)
+            float[]? probs = null;
+            try
             {
-                if (logits[i] != float.NegativeInfinity)
+                // Rent buffer for probabilities calculation
+                probs = ArrayPool<float>.Shared.Rent(logits.Length);
+
+                float max = float.NegativeInfinity;
+                for (int i = 0; i < logits.Length; i++)
                 {
-                    max = Math.Max(max, logits[i]);
+                    if (logits[i] != float.NegativeInfinity)
+                    {
+                        max = Math.Max(max, logits[i]);
+                    }
+                }
+
+                float sum = 0;
+                for (int i = 0; i < logits.Length; i++)
+                {
+                    if (logits[i] != float.NegativeInfinity)
+                    {
+                        probs[i] = MathF.Exp(logits[i] - max);
+                        sum += probs[i];
+                    }
+                    else
+                    {
+                        probs[i] = 0;
+                    }
+                }
+
+                if (sum > 0)
+                {
+                    for (int i = 0; i < logits.Length; i++)
+                    {
+                        probs[i] /= sum;
+                    }
+                }
+
+                // Copy to exact-size array for return
+                var result = new float[logits.Length];
+                Array.Copy(probs, result, logits.Length);
+                return result;
+            }
+            finally
+            {
+                if (probs != null)
+                {
+                    ArrayPool<float>.Shared.Return(probs);
                 }
             }
-
-            float sum = 0;
-            for (int i = 0; i < logits.Length; i++)
-            {
-                if (logits[i] != float.NegativeInfinity)
-                {
-                    probs[i] = MathF.Exp(logits[i] - max);
-                    sum += probs[i];
-                }
-                else
-                {
-                    probs[i] = 0;
-                }
-            }
-
-            if (sum > 0)
-            {
-                for (int i = 0; i < probs.Length; i++)
-                {
-                    probs[i] /= sum;
-                }
-            }
-
-            return probs;
         }
 
         [ThreadStatic]
