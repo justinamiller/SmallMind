@@ -1,0 +1,48 @@
+=== SmallMind Allocation Profiler ===
+Runtime: .NET 10.0.2
+OS: Unix 6.11.0.1018
+Processor Count: 4
+
+--- MatMul Backward Pass Allocation Profile ---
+This benchmark measures allocation reduction from using ArrayPool
+for temporary gradient buffers in MatMul backward pass.
+
+Matrix dimensions: 128×256 @ 256×128 = 128×128
+Iterations: 100
+Total time: 405ms
+Avg time per iteration: 4.057ms
+
+Memory Metrics:
+  Total allocations: 12.99 MB
+  Allocations per iteration: 133.02 KB
+  Gen0 Collections: 0
+  Gen1 Collections: 0
+  Gen2 Collections: 0
+
+Analysis:
+  Expected allocations WITHOUT pooling: 25.00 MB
+  Expected per iteration: 256.00 KB
+  Estimated reduction: 48.0%
+  ⚠️  Lower than expected reduction
+
+--- Training Workload Allocation Profile ---
+Simulates a mini training loop to measure overall allocation impact.
+
+Steps: 50
+Batch size: 32, Hidden size: 256
+Total time: 37ms
+Avg time per step: 0.743ms
+
+Memory Metrics:
+  Total allocations: 3.75 MB
+  Allocations per step: 76.70 KB
+  Gen0 Collections: 0
+  Throughput: 43092 samples/sec
+
+Analysis:
+  Expected WITHOUT pooling: 62.50 MB
+  Estimated reduction: 94.0%
+  ✓ Zero Gen0 collections - excellent memory pressure reduction!
+
+
+=== Profiling Complete ===
