@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Core.Core;
@@ -246,13 +247,13 @@ namespace SmallMind.Tests.Batching
             using var engine = new BatchedInferenceEngine(model, tokenizer, 8, batchingOptions);
 
             // Act - launch multiple concurrent requests
-            var tasks = new System.Collections.Generic.List<Task<string>>();
+            var tasks = new System.Collections.Generic.List<ValueTask<string>>();
             for (int i = 0; i < 3; i++)
             {
                 tasks.Add(engine.GenerateAsync("a", inferenceOptions));
             }
 
-            var results = await Task.WhenAll(tasks);
+            var results = await Task.WhenAll(tasks.Select(t => t.AsTask()));
 
             // Assert
             Assert.Equal(3, results.Length);
