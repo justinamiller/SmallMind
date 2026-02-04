@@ -367,27 +367,41 @@ namespace SmallMind.Core.Core
                     if (a.RequiresGrad)
                     {
                         // grad_a = grad_output @ b^T
-                        // Use optimized MatMulTransposeB from MatrixOps
-                        float[] tempGradA = new float[M * K];
-                        MatrixOps.MatMulTransposeB(result.Grad, b.Data, tempGradA, M, N, K);
-                        
-                        // Accumulate gradients
-                        for (int i = 0; i < M * K; i++)
+                        // Use pooled buffer to avoid allocation in hot path
+                        float[] tempGradA = TensorPool.Shared.Rent(M * K);
+                        try
                         {
-                            a.Grad[i] += tempGradA[i];
+                            MatrixOps.MatMulTransposeB(result.Grad, b.Data, tempGradA, M, N, K);
+                            
+                            // Accumulate gradients
+                            for (int i = 0; i < M * K; i++)
+                            {
+                                a.Grad[i] += tempGradA[i];
+                            }
+                        }
+                        finally
+                        {
+                            TensorPool.Shared.Return(tempGradA, clearArray: false);
                         }
                     }
                     if (b.RequiresGrad)
                     {
                         // grad_b = a^T @ grad_output
-                        // Use optimized MatMulTransposeA from MatrixOps
-                        float[] tempGradB = new float[K * N];
-                        MatrixOps.MatMulTransposeA(a.Data, result.Grad, tempGradB, K, M, N);
-                        
-                        // Accumulate gradients
-                        for (int i = 0; i < K * N; i++)
+                        // Use pooled buffer to avoid allocation in hot path
+                        float[] tempGradB = TensorPool.Shared.Rent(K * N);
+                        try
                         {
-                            b.Grad[i] += tempGradB[i];
+                            MatrixOps.MatMulTransposeA(a.Data, result.Grad, tempGradB, K, M, N);
+                            
+                            // Accumulate gradients
+                            for (int i = 0; i < K * N; i++)
+                            {
+                                b.Grad[i] += tempGradB[i];
+                            }
+                        }
+                        finally
+                        {
+                            TensorPool.Shared.Return(tempGradB, clearArray: false);
                         }
                     }
                 });
@@ -437,23 +451,39 @@ namespace SmallMind.Core.Core
                     if (a.RequiresGrad)
                     {
                         // grad_a = grad_output @ b^T
-                        float[] tempGradA = new float[M * K];
-                        MatrixOps.MatMulTransposeB(result.Grad, b.Data, tempGradA, M, N, K);
-                        
-                        for (int i = 0; i < M * K; i++)
+                        // Use pooled buffer to avoid allocation in hot path
+                        float[] tempGradA = TensorPool.Shared.Rent(M * K);
+                        try
                         {
-                            a.Grad[i] += tempGradA[i];
+                            MatrixOps.MatMulTransposeB(result.Grad, b.Data, tempGradA, M, N, K);
+                            
+                            for (int i = 0; i < M * K; i++)
+                            {
+                                a.Grad[i] += tempGradA[i];
+                            }
+                        }
+                        finally
+                        {
+                            TensorPool.Shared.Return(tempGradA, clearArray: false);
                         }
                     }
                     if (b.RequiresGrad)
                     {
                         // grad_b = a^T @ grad_output
-                        float[] tempGradB = new float[K * N];
-                        MatrixOps.MatMulTransposeA(a.Data, result.Grad, tempGradB, K, M, N);
-                        
-                        for (int i = 0; i < K * N; i++)
+                        // Use pooled buffer to avoid allocation in hot path
+                        float[] tempGradB = TensorPool.Shared.Rent(K * N);
+                        try
                         {
-                            b.Grad[i] += tempGradB[i];
+                            MatrixOps.MatMulTransposeA(a.Data, result.Grad, tempGradB, K, M, N);
+                            
+                            for (int i = 0; i < K * N; i++)
+                            {
+                                b.Grad[i] += tempGradB[i];
+                            }
+                        }
+                        finally
+                        {
+                            TensorPool.Shared.Return(tempGradB, clearArray: false);
                         }
                     }
                 });
