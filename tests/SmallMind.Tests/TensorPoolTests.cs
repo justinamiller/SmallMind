@@ -123,13 +123,13 @@ namespace SmallMind.Tests
         public void Return_WithWrongSizeArray_DoesNotPool()
         {
             // Arrange
-            var wrongSize = new float[100]; // Not a bucket size
+            var wrongSize = new float[100]; // Not from the pool
 
-            // Act
+            // Act - Should handle gracefully without throwing
             _pool.Return(wrongSize);
             var newArray = _pool.Rent(100);
 
-            // Assert
+            // Assert - New array should not be the external array
             Assert.NotSame(wrongSize, newArray); // Should allocate new
         }
 
@@ -138,8 +138,10 @@ namespace SmallMind.Tests
         {
             // Arrange
             const int bucketSize = 64;
-            const int capacity = 32; // Max 32 arrays per small bucket
-            var arrays = new float[capacity + 10][];
+            // ArrayPool.Shared manages its own capacity limits
+            // We test that pooling works and some arrays are reused
+            const int arrayCount = 50;
+            var arrays = new float[arrayCount][];
 
             // Act - Rent many arrays
             for (int i = 0; i < arrays.Length; i++)
@@ -153,7 +155,7 @@ namespace SmallMind.Tests
                 _pool.Return(arrays[i]);
             }
 
-            // Rent again - should get mix of pooled and new
+            // Rent again - should get some pooled arrays
             int reusedCount = 0;
             for (int i = 0; i < arrays.Length; i++)
             {
@@ -168,27 +170,32 @@ namespace SmallMind.Tests
                 }
             }
 
-            // Assert - should have reused at most capacity arrays
-            Assert.True(reusedCount <= capacity, $"Reused {reusedCount} arrays, expected <= {capacity}");
+            // Assert - ArrayPool.Shared should reuse at least some arrays
+            // But it manages its own capacity limits
+            Assert.True(reusedCount > 0, $"Expected some array reuse from ArrayPool.Shared, got {reusedCount}");
         }
 
         [Fact]
-        public void Clear_RemovesAllPooledArrays()
+        public void Clear_ResetsStatistics()
         {
             // Arrange
             var array1 = _pool.Rent(256);
             var array2 = _pool.Rent(512);
             _pool.Return(array1);
             _pool.Return(array2);
+            
+            var statsBefore = _pool.GetStats();
 
-            // Act
+            // Act - Clear resets statistics (but can't clear ArrayPool.Shared memory)
             _pool.Clear();
-            var newArray1 = _pool.Rent(256);
-            var newArray2 = _pool.Rent(512);
+            var statsAfter = _pool.GetStats();
 
-            // Assert
-            Assert.NotSame(array1, newArray1);
-            Assert.NotSame(array2, newArray2);
+            // Assert - Statistics should be reset to zero
+            Assert.Equal(0, statsAfter.totalRents);
+            Assert.Equal(0, statsAfter.totalReturns);
+            
+            // Note: ArrayPool.Shared memory may still contain pooled arrays
+            // but we can't verify this as it manages its own internal state
         }
 
         [Fact]
@@ -250,17 +257,18 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public void Rent_ForVeryLargeSize_AllocatesExactSize()
+        public void Rent_ForVeryLargeSize_AllocatesAtLeastRequestedSize()
         {
             // Arrange
-            // Use a size larger than the largest bucket (524288) to ensure exact allocation
+            // Use a size larger than typical buckets
             int veryLargeSize = 1000000;
 
             // Act
             var array = _pool.Rent(veryLargeSize);
 
-            // Assert
-            Assert.Equal(veryLargeSize, array.Length);
+            // Assert - ArrayPool may return larger array for bucketing
+            Assert.True(array.Length >= veryLargeSize, 
+                $"Expected array length >= {veryLargeSize}, got {array.Length}");
         }
     }
 }

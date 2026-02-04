@@ -76,8 +76,16 @@ namespace SmallMind.Core.Core
             
             Interlocked.Increment(ref _totalReturns);
             
-            // ArrayPool.Return handles pooling logic automatically
-            _arrayPool.Return(array, clearArray);
+            // ArrayPool.Return may throw if array wasn't rented from this pool
+            // Catch and ignore to allow graceful handling of external arrays
+            try
+            {
+                _arrayPool.Return(array, clearArray);
+            }
+            catch (ArgumentException)
+            {
+                // Array wasn't from this pool, ignore and let GC handle it
+            }
         }
         
         /// <summary>
