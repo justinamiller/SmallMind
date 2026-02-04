@@ -486,5 +486,72 @@ namespace SmallMind.Tests
         }
 
         #endregion
+
+        #region ReshapeView Tests (Tier-0 optimization)
+
+        [Fact]
+        public void ReshapeView_SharesBackingData()
+        {
+            // Arrange
+            float[] data = new[] { 1f, 2f, 3f, 4f, 5f, 6f };
+            var tensor = new Tensor(data, new int[] { 2, 3 });
+
+            // Act
+            var reshaped = tensor.ReshapeView(new int[] { 3, 2 });
+
+            // Assert - view should share the same Data array (no clone)
+            Assert.Same(tensor.Data, reshaped.Data);
+            Assert.Equal(new int[] { 3, 2 }, reshaped.Shape);
+            Assert.Equal(6, reshaped.Size);
+        }
+
+        [Fact]
+        public void ReshapeView_ModifyingView_AffectsOriginal()
+        {
+            // Arrange
+            float[] data = new[] { 1f, 2f, 3f, 4f };
+            var tensor = new Tensor(data, new int[] { 2, 2 });
+            var view = tensor.ReshapeView(new int[] { 4 });
+
+            // Act - modify via view
+            view.Data[0] = 999f;
+
+            // Assert - original should also be modified (shared storage)
+            Assert.Equal(999f, tensor.Data[0]);
+        }
+
+        [Fact]
+        public void ReshapeView_WithInvalidShape_ThrowsException()
+        {
+            // Arrange
+            var tensor = new Tensor(new int[] { 2, 3 }); // 6 elements
+
+            // Act & Assert - incompatible shape
+            Assert.Throws<ArgumentException>(() => tensor.ReshapeView(new int[] { 2, 2 })); // 4 elements
+        }
+
+        [Fact]
+        public void ReshapeView_CompareTo_Reshape()
+        {
+            // Arrange
+            float[] data = new[] { 1f, 2f, 3f, 4f, 5f, 6f };
+            var tensor = new Tensor(data, new int[] { 2, 3 });
+
+            // Act
+            var reshaped = tensor.Reshape(new int[] { 3, 2 });
+            var reshapedView = tensor.ReshapeView(new int[] { 3, 2 });
+
+            // Assert - Reshape clones, ReshapeView shares
+            Assert.NotSame(tensor.Data, reshaped.Data); // Reshape clones
+            Assert.Same(tensor.Data, reshapedView.Data); // ReshapeView shares
+            
+            // Both should have same values
+            for (int i = 0; i < 6; i++)
+            {
+                Assert.Equal(reshaped.Data[i], reshapedView.Data[i]);
+            }
+        }
+
+        #endregion
     }
 }
