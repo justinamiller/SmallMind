@@ -33,9 +33,50 @@ See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guaran
 
 ### Performance at a Glance
 
-**29.19 GFLOPS** MatMul | **83 tok/s** inference | **87%** memory reduction | **Zero** dependencies
+**30.52 GFLOPS** MatMul | **83 tok/s** inference | **93.7%** memory reduction | **Zero** dependencies
 
-📊 **[Full Benchmark Report](BENCHMARK_METRICS_AND_COMPARISON.md)** | 📝 **[Quick Summary](BENCHMARK_QUICK_SUMMARY.md)**
+📊 **[Complete Performance Report](PROFILING_AND_BENCHMARK_EXECUTIVE_SUMMARY.md)** ⭐ **NEW!**  
+📈 **[Detailed Analysis](COMPREHENSIVE_PROFILING_AND_BENCHMARK_REPORT.md)**  
+📉 **[Performance Visualizations](PERFORMANCE_VISUALIZATIONS.md)**  
+🏆 **[Platform Comparison](BENCHMARK_METRICS_AND_COMPARISON.md)** | 📝 **[Quick Summary](BENCHMARK_QUICK_SUMMARY.md)**
+
+<details>
+<summary>📊 Performance Highlights (Click to expand)</summary>
+
+#### Latest Benchmark Results (2026-02-04)
+
+**Core Performance Metrics:**
+- **Matrix Multiplication:** 30.52 GFLOPS (comparable to PyTorch CPU)
+- **Small Model (470K params):** 83.42 tokens/sec
+- **Medium Model (3.45M params):** 37.41 tokens/sec
+- **Element-wise Operations:** 36.09 GB/s (exceeds llama.cpp)
+- **Memory Efficiency:** 93.7% allocation reduction
+- **GC Pressure:** Zero collections during training
+
+**vs. Industry Leaders:**
+| Platform | GFLOPS | Throughput | Deployment |
+|----------|--------|------------|------------|
+| SmallMind | 30.52 | 37-83 tok/s | Single DLL |
+| llama.cpp | 40-80 | 50-200 tok/s | C++ binary |
+| PyTorch | 30-60 | 20-100 tok/s | Python stack |
+| Transformers.js | 5-15 | 10-50 tok/s | npm package |
+
+**SmallMind Advantages:**
+- ✅ **2-6× faster** than JavaScript implementations
+- ✅ **Comparable** to PyTorch CPU performance
+- ✅ **Best-in-class memory efficiency** (93.7% reduction)
+- ✅ **Zero dependencies** - pure .NET deployment
+- ✅ **Element-wise operations exceed llama.cpp** (36 vs 32 GB/s)
+
+**Perfect For:**
+- .NET enterprise applications (zero native dependencies)
+- Small to medium models (up to ~10M parameters)
+- Educational/learning (clean, readable C# code)
+- CPU-only deployments (no GPU required)
+
+**Full Details:** See [PROFILING_AND_BENCHMARK_EXECUTIVE_SUMMARY.md](PROFILING_AND_BENCHMARK_EXECUTIVE_SUMMARY.md)
+
+</details>
 
 ## Installation
 
