@@ -1,66 +1,66 @@
 # Enhanced Performance Profile Report
 
-**Generated:** 2026-02-04 02:36:17
+**Generated:** 2026-02-04 03:09:32
 
 ## Summary
 
-- **Total Runtime:** 9277.80 ms
-- **Total Allocations:** 338.71 MB
+- **Total Runtime:** 2959.29 ms
+- **Total Allocations:** 338.47 MB
 - **Methods Profiled:** 29
 
 ## 🔥 Hot Paths (Top 30)
 
 | Rank | Method | Time (ms) | Calls | Avg (ms) | Alloc (MB) |
 |------|--------|-----------|-------|----------|------------|
-| 1 | `Model_Medium_Inference` | 2186.63 | 1 | 2186.634 | 83.12 |
-| 2 | `Model_Medium_GenerateToken` | 2186.56 | 25 | 87.463 | 83.12 |
-| 3 | `Model_Medium_Forward` | 2186.21 | 25 | 87.448 | 83.11 |
-| 4 | `MatMul_512x512` | 449.13 | 1 | 449.134 | 0.02 |
-| 5 | `Model_Small_Inference` | 427.71 | 1 | 427.709 | 18.97 |
-| 6 | `Model_Small_GenerateToken` | 427.63 | 25 | 17.105 | 18.97 |
-| 7 | `Model_Small_Forward` | 425.27 | 25 | 17.011 | 18.96 |
-| 8 | `MatMul_Iteration` | 390.54 | 12 | 32.545 | 0.02 |
-| 9 | `GELU_1000000` | 163.03 | 1 | 163.034 | 0.01 |
-| 10 | `GELU_Iteration` | 153.75 | 20 | 7.687 | 0.00 |
-| 11 | `Model_Medium_Creation` | 139.84 | 1 | 139.840 | 26.42 |
-| 12 | `MatMul_256x256` | 56.52 | 1 | 56.523 | 0.01 |
-| 13 | `Model_Small_Creation` | 24.60 | 1 | 24.597 | 3.61 |
-| 14 | `MatMul_128x128` | 20.00 | 1 | 20.005 | 0.07 |
-| 15 | `GELU_100000` | 17.18 | 1 | 17.179 | 0.00 |
-| 16 | `MatMul_64x64` | 4.97 | 1 | 4.968 | 0.00 |
-| 17 | `GELU_1000` | 2.72 | 1 | 2.721 | 0.00 |
-| 18 | `BroadcastAdd_100x100` | 2.19 | 1 | 2.191 | 0.39 |
-| 19 | `BroadcastAdd_Iteration` | 2.16 | 10 | 0.216 | 0.39 |
-| 20 | `GELU_10000` | 2.06 | 1 | 2.061 | 0.00 |
-| 21 | `TensorAdd_10000` | 1.82 | 1 | 1.824 | 0.38 |
-| 22 | `TensorAdd_Iteration` | 1.81 | 10 | 0.181 | 0.38 |
-| 23 | `TensorMul_10000` | 1.69 | 1 | 1.692 | 0.38 |
-| 24 | `TensorMul_Iteration` | 1.68 | 10 | 0.168 | 0.38 |
-| 25 | `Softmax_256` | 1.35 | 1 | 1.347 | 0.00 |
-| 26 | `Softmax_Iteration` | 0.34 | 20 | 0.017 | 0.00 |
-| 27 | `Softmax_2048` | 0.23 | 1 | 0.232 | 0.00 |
-| 28 | `Softmax_1024` | 0.10 | 1 | 0.102 | 0.00 |
-| 29 | `Softmax_512` | 0.06 | 1 | 0.064 | 0.00 |
+| 1 | `Model_Medium_Inference` | 600.35 | 1 | 600.351 | 83.06 |
+| 2 | `Model_Medium_GenerateToken` | 600.29 | 25 | 24.012 | 83.06 |
+| 3 | `Model_Medium_Forward` | 599.95 | 25 | 23.998 | 83.06 |
+| 4 | `Model_Small_Inference` | 241.57 | 1 | 241.575 | 18.95 |
+| 5 | `Model_Small_GenerateToken` | 241.53 | 25 | 9.661 | 18.95 |
+| 6 | `Model_Small_Forward` | 239.27 | 25 | 9.571 | 18.94 |
+| 7 | `MatMul_512x512` | 103.19 | 1 | 103.186 | 0.02 |
+| 8 | `MatMul_Iteration` | 92.17 | 12 | 7.680 | 0.02 |
+| 9 | `Model_Medium_Creation` | 62.23 | 1 | 62.229 | 26.44 |
+| 10 | `GELU_1000000` | 52.23 | 1 | 52.231 | 0.01 |
+| 11 | `GELU_Iteration` | 46.98 | 20 | 2.349 | 0.00 |
+| 12 | `MatMul_128x128` | 18.47 | 1 | 18.474 | 0.07 |
+| 13 | `Model_Small_Creation` | 16.64 | 1 | 16.638 | 3.61 |
+| 14 | `MatMul_256x256` | 11.83 | 1 | 11.829 | 0.01 |
+| 15 | `MatMul_64x64` | 7.92 | 1 | 7.924 | 0.00 |
+| 16 | `GELU_100000` | 5.43 | 1 | 5.430 | 0.00 |
+| 17 | `TensorAdd_10000` | 2.95 | 1 | 2.945 | 0.38 |
+| 18 | `TensorAdd_Iteration` | 2.93 | 10 | 0.293 | 0.38 |
+| 19 | `GELU_1000` | 2.14 | 1 | 2.141 | 0.00 |
+| 20 | `GELU_10000` | 1.98 | 1 | 1.976 | 0.00 |
+| 21 | `BroadcastAdd_100x100` | 1.84 | 1 | 1.841 | 0.38 |
+| 22 | `BroadcastAdd_Iteration` | 1.83 | 10 | 0.183 | 0.38 |
+| 23 | `Softmax_Iteration` | 1.62 | 20 | 0.081 | 0.00 |
+| 24 | `Softmax_2048` | 1.50 | 1 | 1.504 | 0.00 |
+| 25 | `Softmax_256` | 1.08 | 1 | 1.084 | 0.00 |
+| 26 | `TensorMul_10000` | 0.57 | 1 | 0.573 | 0.38 |
+| 27 | `TensorMul_Iteration` | 0.56 | 10 | 0.056 | 0.38 |
+| 28 | `Softmax_1024` | 0.15 | 1 | 0.155 | 0.00 |
+| 29 | `Softmax_512` | 0.07 | 1 | 0.067 | 0.00 |
 
 ## 💾 Top Allocators
 
 | Rank | Method | Total (MB) | Calls | Avg (KB) |
 |------|--------|------------|-------|----------|
-| 1 | `Model_Medium_Inference` | 83.12 | 1 | 85117.36 |
-| 2 | `Model_Medium_GenerateToken` | 83.12 | 25 | 3404.69 |
-| 3 | `Model_Medium_Forward` | 83.11 | 25 | 3404.38 |
-| 4 | `Model_Medium_Creation` | 26.42 | 1 | 27049.35 |
-| 5 | `Model_Small_Inference` | 18.97 | 1 | 19422.23 |
-| 6 | `Model_Small_GenerateToken` | 18.97 | 25 | 776.89 |
-| 7 | `Model_Small_Forward` | 18.96 | 25 | 776.57 |
+| 1 | `Model_Medium_Inference` | 83.06 | 1 | 85054.52 |
+| 2 | `Model_Medium_GenerateToken` | 83.06 | 25 | 3402.18 |
+| 3 | `Model_Medium_Forward` | 83.06 | 25 | 3402.18 |
+| 4 | `Model_Medium_Creation` | 26.44 | 1 | 27071.29 |
+| 5 | `Model_Small_Inference` | 18.95 | 1 | 19400.73 |
+| 6 | `Model_Small_GenerateToken` | 18.95 | 25 | 776.03 |
+| 7 | `Model_Small_Forward` | 18.94 | 25 | 775.71 |
 | 8 | `Model_Small_Creation` | 3.61 | 1 | 3697.93 |
-| 9 | `BroadcastAdd_100x100` | 0.39 | 1 | 398.87 |
-| 10 | `BroadcastAdd_Iteration` | 0.39 | 10 | 39.89 |
-| 11 | `TensorAdd_10000` | 0.38 | 1 | 390.86 |
-| 12 | `TensorAdd_Iteration` | 0.38 | 10 | 39.09 |
-| 13 | `TensorMul_10000` | 0.38 | 1 | 390.86 |
-| 14 | `TensorMul_Iteration` | 0.38 | 10 | 39.09 |
-| 15 | `MatMul_128x128` | 0.07 | 1 | 74.00 |
+| 9 | `TensorAdd_10000` | 0.38 | 1 | 390.86 |
+| 10 | `TensorAdd_Iteration` | 0.38 | 10 | 39.09 |
+| 11 | `TensorMul_10000` | 0.38 | 1 | 390.86 |
+| 12 | `TensorMul_Iteration` | 0.38 | 10 | 39.09 |
+| 13 | `BroadcastAdd_100x100` | 0.38 | 1 | 390.86 |
+| 14 | `BroadcastAdd_Iteration` | 0.38 | 10 | 39.09 |
+| 15 | `MatMul_128x128` | 0.07 | 1 | 74.08 |
 
 ## Analysis
 
