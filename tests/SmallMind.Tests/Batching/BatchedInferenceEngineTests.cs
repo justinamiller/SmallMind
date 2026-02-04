@@ -249,7 +249,7 @@ namespace SmallMind.Tests.Batching
             var tasks = new System.Collections.Generic.List<Task<string>>();
             for (int i = 0; i < 3; i++)
             {
-                tasks.Add(engine.GenerateAsync("a", inferenceOptions));
+                tasks.Add(engine.GenerateAsync("a", inferenceOptions).AsTask());
             }
 
             var results = await Task.WhenAll(tasks);

@@ -17,6 +17,7 @@ namespace SmallMind.Core.Optimized
         /// SIMD-accelerated dot product. 4-8x faster than scalar loop.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
         public static float DotProduct(float[] a, int aOffset, float[] b, int bOffset, int length)
         {
             if (!Vector.IsHardwareAccelerated || length < VectorSize * 2)
@@ -38,9 +39,11 @@ namespace SmallMind.Core.Optimized
                 vsum += va * vb;
             }
             
+            // Horizontal sum reduction
             float result = 0;
             for (int j = 0; j < VectorSize; j++)
                 result += vsum[j];
+            
             for (; i < length; i++)
                 result += a[aOffset + i] * b[bOffset + i];
             

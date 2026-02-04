@@ -173,7 +173,7 @@ namespace SmallMind.Core.Core
         /// <summary>
         /// Gets a summary of the breakdown.
         /// </summary>
-        public string GetSummary()
+        public readonly string GetSummary()
         {
             return $"Memory Breakdown:\n" +
                    $"  Model Parameters: {ModelParametersBytes / 1024.0 / 1024.0:F2} MB\n" +

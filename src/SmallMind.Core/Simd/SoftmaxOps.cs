@@ -46,6 +46,7 @@ namespace SmallMind.Core.Simd
         /// Optimized with SIMD for max finding and normalization.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
         private static void SoftmaxRowIndexed(float[] input, float[] output, int offset, int length)
         {
             // Step 1: Find max with SIMD
@@ -109,6 +110,7 @@ namespace SmallMind.Core.Simd
         /// Implements numerically stable softmax: exp(x - max) / sum(exp(x - max))
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
         private static void SoftmaxRow(ReadOnlySpan<float> input, Span<float> output)
         {
             int length = input.Length;
@@ -135,6 +137,7 @@ namespace SmallMind.Core.Simd
         /// Finds the maximum value in a span using SIMD.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
         private static float FindMax(ReadOnlySpan<float> values)
         {
             int length = values.Length;

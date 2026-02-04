@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace SmallMind.Core.Core
 {
@@ -19,6 +20,7 @@ namespace SmallMind.Core.Core
         /// <param name="batch">Batch size (or number of sequences)</param>
         /// <param name="features">Feature dimension (normalized dimension)</param>
         /// <param name="eps">Small constant for numerical stability</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LayerNorm(
             ReadOnlySpan<float> input,
             ReadOnlySpan<float> gamma,
