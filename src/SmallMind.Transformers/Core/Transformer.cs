@@ -594,8 +594,8 @@ namespace SmallMind.Transformers
                 
                 if (shapeMatches)
                 {
-                    // Clear the data before reuse
-                    Array.Clear(workspace.Data, 0, workspace.Size);
+                    // MatMul and other operations clear their own output buffers.
+                    // Pre-clearing workspace tensors causes double-clear and 400%+ regression.
                     return workspace;
                 }
             }
