@@ -150,7 +150,7 @@ namespace SmallMind.Abstractions
             CharRange == other.CharRange &&
             LineRange == other.LineRange &&
             Snippet == other.Snippet &&
-            Math.Abs(Confidence - other.Confidence) < 1e-9;
+            Confidence.Equals(other.Confidence);
 
         public override bool Equals(object? obj) =>
             obj is RagCitation other && Equals(other);

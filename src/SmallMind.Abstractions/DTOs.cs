@@ -330,15 +330,17 @@ namespace SmallMind.Abstractions
 
         public bool Equals(TokenEvent other) =>
             Kind == other.Kind &&
+            Text.Span.SequenceEqual(other.Text.Span) &&
             TokenId == other.TokenId &&
             GeneratedTokens == other.GeneratedTokens &&
-            IsFinal == other.IsFinal;
+            IsFinal == other.IsFinal &&
+            Error == other.Error;
 
         public override bool Equals(object? obj) =>
             obj is TokenEvent other && Equals(other);
 
         public override int GetHashCode() =>
-            HashCode.Combine(Kind, TokenId, GeneratedTokens, IsFinal);
+            HashCode.Combine(Kind, TokenId, GeneratedTokens, IsFinal, Error);
 
         public static bool operator ==(TokenEvent left, TokenEvent right) => left.Equals(right);
         public static bool operator !=(TokenEvent left, TokenEvent right) => !left.Equals(right);
