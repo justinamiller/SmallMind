@@ -81,7 +81,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// Fast GELU approximation: x * sigmoid(1.702 * x)
-        /// Uses SIMD-accelerated multiplication where possible, following Softmax optimization patterns.
+        /// Uses adaptive algorithm selection for optimal performance across size ranges.
         /// Accuracy: within 1e-6 of exact GELU for typical input ranges.
         /// </summary>
         public static void GELU(ReadOnlySpan<float> input, Span<float> output)
@@ -91,34 +91,49 @@ namespace SmallMind.Core.Simd
 
             int length = input.Length;
             int vectorSize = Vector<float>.Count;
-            
-            // GELU approximation: x * sigmoid(1.702 * x)
             const float scale = 1.702f;
-
-            // Step 1: Compute sigmoid values (scalar, as exp has no SIMD intrinsic)
-            // Store intermediate results for SIMD multiplication
-            for (int i = 0; i < length; i++)
-            {
-                float x = input[i];
-                float sigmoid = FastSigmoid(scale * x);
-                output[i] = sigmoid; // Store sigmoid temporarily
-            }
-
-            // Step 2: Multiply input * sigmoid using SIMD (following Softmax pattern)
-            int i_simd = 0;
+            const int SIMD_THRESHOLD = 40_000; // Threshold tuned based on profiling
             
-            // SIMD loop: element-wise multiplication
-            for (; i_simd <= length - vectorSize; i_simd += vectorSize)
-            {
-                var vInput = new Vector<float>(input.Slice(i_simd));
-                var vSigmoid = new Vector<float>(output.Slice(i_simd));
-                (vInput * vSigmoid).CopyTo(output.Slice(i_simd));
-            }
+            // Adaptive strategy:
+            // - Small arrays (<40K): Single-pass scalar (less overhead)
+            // - Large arrays (40K+): Two-pass SIMD (better throughput)
             
-            // Scalar remainder
-            for (; i_simd < length; i_simd++)
+            if (length < SIMD_THRESHOLD)
             {
-                output[i_simd] *= input[i_simd];
+                // Single-pass scalar for small sizes (minimal overhead)
+                for (int i = 0; i < length; i++)
+                {
+                    float x = input[i];
+                    output[i] = x * FastSigmoid(scale * x);
+                }
+            }
+            else
+            {
+                // Two-pass SIMD for large sizes (following Softmax pattern)
+                // Step 1: Compute sigmoid values (scalar, as exp has no SIMD intrinsic)
+                for (int i = 0; i < length; i++)
+                {
+                    float x = input[i];
+                    float sigmoid = FastSigmoid(scale * x);
+                    output[i] = sigmoid; // Store sigmoid temporarily
+                }
+
+                // Step 2: Multiply input * sigmoid using SIMD
+                int i_simd = 0;
+                
+                // SIMD loop: element-wise multiplication
+                for (; i_simd <= length - vectorSize; i_simd += vectorSize)
+                {
+                    var vInput = new Vector<float>(input.Slice(i_simd));
+                    var vSigmoid = new Vector<float>(output.Slice(i_simd));
+                    (vInput * vSigmoid).CopyTo(output.Slice(i_simd));
+                }
+                
+                // Scalar remainder
+                for (; i_simd < length; i_simd++)
+                {
+                    output[i_simd] *= input[i_simd];
+                }
             }
         }
 
@@ -136,7 +151,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// GELU backward pass (approximate derivative)
-        /// Uses SIMD for vectorizable operations, following Softmax optimization patterns.
+        /// Uses adaptive algorithm selection and SIMD for vectorizable operations.
         /// </summary>
         public static void GELUBackward(ReadOnlySpan<float> input, ReadOnlySpan<float> outputGrad, Span<float> inputGrad)
         {
@@ -146,34 +161,50 @@ namespace SmallMind.Core.Simd
             int length = input.Length;
             int vectorSize = Vector<float>.Count;
             const float scale = 1.702f;
+            const int SIMD_THRESHOLD = 40_000; // Match forward pass threshold
 
-            // Step 1: Compute derivatives (scalar, as sigmoid requires exp which has no SIMD)
-            // Store in inputGrad temporarily
-            for (int i = 0; i < length; i++)
+            if (length < SIMD_THRESHOLD)
             {
-                float x = input[i];
-                float sigmoid = FastSigmoid(scale * x);
+                // Single-pass scalar for small sizes
+                for (int i = 0; i < length; i++)
+                {
+                    float x = input[i];
+                    float sigmoid = FastSigmoid(scale * x);
+                    float derivative = sigmoid + x * sigmoid * (1f - sigmoid) * scale;
+                    inputGrad[i] = derivative * outputGrad[i];
+                }
+            }
+            else
+            {
+                // Two-pass SIMD for large sizes
+                // Step 1: Compute derivatives (scalar, as sigmoid requires exp which has no SIMD)
+                // Store in inputGrad temporarily
+                for (int i = 0; i < length; i++)
+                {
+                    float x = input[i];
+                    float sigmoid = FastSigmoid(scale * x);
+                    
+                    // Derivative: sigmoid + x * sigmoid * (1 - sigmoid) * scale
+                    float derivative = sigmoid + x * sigmoid * (1f - sigmoid) * scale;
+                    inputGrad[i] = derivative;
+                }
+
+                // Step 2: Multiply by outputGrad using SIMD (element-wise)
+                int i_simd = 0;
                 
-                // Derivative: sigmoid + x * sigmoid * (1 - sigmoid) * scale
-                float derivative = sigmoid + x * sigmoid * (1f - sigmoid) * scale;
-                inputGrad[i] = derivative;
-            }
-
-            // Step 2: Multiply by outputGrad using SIMD (element-wise)
-            int i_simd = 0;
-            
-            // SIMD loop
-            for (; i_simd <= length - vectorSize; i_simd += vectorSize)
-            {
-                var vDerivative = new Vector<float>(inputGrad.Slice(i_simd));
-                var vOutputGrad = new Vector<float>(outputGrad.Slice(i_simd));
-                (vDerivative * vOutputGrad).CopyTo(inputGrad.Slice(i_simd));
-            }
-            
-            // Scalar remainder
-            for (; i_simd < length; i_simd++)
-            {
-                inputGrad[i_simd] *= outputGrad[i_simd];
+                // SIMD loop
+                for (; i_simd <= length - vectorSize; i_simd += vectorSize)
+                {
+                    var vDerivative = new Vector<float>(inputGrad.Slice(i_simd));
+                    var vOutputGrad = new Vector<float>(outputGrad.Slice(i_simd));
+                    (vDerivative * vOutputGrad).CopyTo(inputGrad.Slice(i_simd));
+                }
+                
+                // Scalar remainder
+                for (; i_simd < length; i_simd++)
+                {
+                    inputGrad[i_simd] *= outputGrad[i_simd];
+                }
             }
         }
 

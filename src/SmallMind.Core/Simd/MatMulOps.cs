@@ -94,17 +94,25 @@ namespace SmallMind.Core.Simd
             int M, int K, int N)
         {
             const int vecSize = 8; // AVX2 processes 8 floats
-
-            // Use cache blocking for better L1/L2 cache utilization
-            // Always use tiling for matrices >= 512, or when all dimensions are >= TILE_SIZE
-            // This ensures 512×512 matrices always get tiled multiplication
-            if ((M >= 512 && K >= 512 && N >= 512) || 
-                (M >= TILE_SIZE && K >= TILE_SIZE && N >= TILE_SIZE))
+            const int TILING_THRESHOLD = 192; // Use tiling for matrices >= 192×192 (36,864 elements)
+            
+            // Adaptive strategy:
+            // - Small matrices (<192×192): Direct SIMD, minimal overhead
+            // - Medium matrices (192-511): Tiling for cache efficiency
+            // - Large matrices (512+): Tiling + parallelization for max performance
+            
+            int totalElements = M * N;
+            bool shouldTile = (M >= TILING_THRESHOLD || N >= TILING_THRESHOLD || K >= TILING_THRESHOLD)
+                             && totalElements >= (TILING_THRESHOLD * TILING_THRESHOLD);
+            
+            if (shouldTile)
             {
+                // Use tiled implementation for better cache utilization
                 MatMulAvx2Tiled(A, B, C, M, K, N, vecSize);
             }
             else if (M >= PARALLEL_THRESHOLD)
             {
+                // Direct SIMD with parallelization (no tiling overhead)
                 Parallel.For(0, M, i =>
                 {
                     MatMulAvx2RowIndexed(A, B, C, i, M, K, N, vecSize);
@@ -112,6 +120,7 @@ namespace SmallMind.Core.Simd
             }
             else
             {
+                // Direct SIMD sequential (best for small matrices)
                 for (int i = 0; i < M; i++)
                 {
                     MatMulAvx2Row(A, B, C, i, M, K, N, vecSize);
@@ -297,8 +306,11 @@ namespace SmallMind.Core.Simd
             float[] A, float[] B, float[] C,
             int M, int K, int N)
         {
-            const int vecSize = 8;
+            const int vecSize = 8; // AVX processes 8 floats
+            const int TILING_THRESHOLD = 192; // Consistency with AVX2 and Vector implementations
 
+            // For AVX (without FMA), keep it simple - just choose parallel vs sequential
+            // No tiling implementation available for AVX-only path
             if (M >= PARALLEL_THRESHOLD)
             {
                 Parallel.For(0, M, i =>
@@ -371,16 +383,25 @@ namespace SmallMind.Core.Simd
             int M, int K, int N)
         {
             int vectorSize = Vector<float>.Count;
-
-            // Use cache blocking for better L1/L2 cache utilization
-            // Always use tiling for matrices >= 512, or when all dimensions are >= TILE_SIZE
-            if ((M >= 512 && K >= 512 && N >= 512) || 
-                (M >= TILE_SIZE && K >= TILE_SIZE && N >= TILE_SIZE))
+            const int TILING_THRESHOLD = 192; // Use tiling for matrices >= 192×192 (36,864 elements)
+            
+            // Adaptive strategy:
+            // - Small matrices (<192×192): Direct SIMD, minimal overhead
+            // - Medium matrices (192-511): Tiling for cache efficiency
+            // - Large matrices (512+): Tiling + parallelization for max performance
+            
+            int totalElements = M * N;
+            bool shouldTile = (M >= TILING_THRESHOLD || N >= TILING_THRESHOLD || K >= TILING_THRESHOLD)
+                             && totalElements >= (TILING_THRESHOLD * TILING_THRESHOLD);
+            
+            if (shouldTile)
             {
+                // Use tiled implementation for better cache utilization
                 MatMulVectorTiled(A, B, C, M, K, N, vectorSize);
             }
             else if (M >= PARALLEL_THRESHOLD)
             {
+                // Direct SIMD with parallelization (no tiling overhead)
                 Parallel.For(0, M, i =>
                 {
                     MatMulVectorRowIndexed(A, B, C, i, K, N, vectorSize);
@@ -388,6 +409,7 @@ namespace SmallMind.Core.Simd
             }
             else
             {
+                // Direct SIMD sequential (best for small matrices)
                 for (int i = 0; i < M; i++)
                 {
                     MatMulVectorRow(A, B, C, i, K, N, vectorSize);
