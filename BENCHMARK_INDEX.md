@@ -6,13 +6,27 @@ This directory contains comprehensive benchmark results and comparisons for the 
 
 ### 🚀 Start Here
 
-1. **[Executive Summary](BENCHMARK_EXECUTIVE_SUMMARY.md)** ⭐
+1. **[Profiling and Benchmark Executive Summary](PROFILING_AND_BENCHMARK_EXECUTIVE_SUMMARY.md)** ⭐⭐ **NEW!**
+   - Complete performance overview at a glance
+   - Industry comparison with 5+ platforms
+   - Decision matrix for choosing SmallMind
+   - Performance trends and recommendations
+   - **Best for:** Everyone - start here!
+
+2. **[Comprehensive Profiling and Benchmark Report](COMPREHENSIVE_PROFILING_AND_BENCHMARK_REPORT.md)** ⭐
+   - Full analysis of code profiling, memory profiling, and SIMD benchmarks
+   - Historical comparison with baseline results
+   - Detailed industry platform comparison
+   - Performance insights and optimization recommendations
+   - **Best for:** Detailed technical analysis
+
+3. **[Executive Summary](BENCHMARK_EXECUTIVE_SUMMARY.md)** ⭐
    - Visual comparisons with other platforms
    - Decision matrix: When to use SmallMind
    - Performance ratings and use cases
    - **Best for:** Decision makers and architects
 
-2. **[Quick Summary](BENCHMARK_QUICK_SUMMARY.md)** ⭐
+4. **[Quick Summary](BENCHMARK_QUICK_SUMMARY.md)** ⭐
    - One-page overview of core metrics
    - Platform comparison table
    - Bottom-line performance numbers
@@ -20,7 +34,7 @@ This directory contains comprehensive benchmark results and comparisons for the 
 
 ### 📊 Detailed Analysis
 
-3. **[Comprehensive Metrics & Comparison](BENCHMARK_METRICS_AND_COMPARISON.md)**
+5. **[Comprehensive Metrics & Comparison](BENCHMARK_METRICS_AND_COMPARISON.md)**
    - Full performance metrics breakdown
    - Detailed comparison with 5+ LLM platforms
    - Hardware and system details
@@ -29,35 +43,35 @@ This directory contains comprehensive benchmark results and comparisons for the 
 
 ### 🔧 Latest Benchmark Run
 
-4. **[Latest Consolidated Report](benchmark-results-20260204-043035/CONSOLIDATED_BENCHMARK_REPORT.md)**
+6. **[Latest Consolidated Report](benchmark-results-20260204-044103/CONSOLIDATED_BENCHMARK_REPORT.md)**
    - System information
    - Code profiler results
    - SIMD benchmark results
    - Memory allocation analysis
    - **Best for:** Detailed performance analysis
 
-5. **Supporting Files (Latest Run)**
-   - [Enhanced Profile Report](benchmark-results-20260204-043035/enhanced-profile-report.md)
-   - [SIMD Benchmarks (Markdown)](benchmark-results-20260204-043035/simd-benchmark-results.md)
-   - [SIMD Benchmarks (JSON)](benchmark-results-20260204-043035/simd-benchmark-results.json)
-   - [Allocation Profile](benchmark-results-20260204-043035/allocation-profile.txt)
-   - [Model Creation Profile](benchmark-results-20260204-043035/model-creation-profile.txt)
+7. **Supporting Files (Latest Run)**
+   - [Enhanced Profile Report](benchmark-results-20260204-044103/enhanced-profile-report.md)
+   - [SIMD Benchmarks (Markdown)](benchmark-results-20260204-044103/simd-benchmark-results.md)
+   - [SIMD Benchmarks (JSON)](benchmark-results-20260204-044103/simd-benchmark-results.json)
+   - [Allocation Profile](benchmark-results-20260204-044103/allocation-profile.txt)
+   - [Model Creation Profile](benchmark-results-20260204-044103/model-creation-profile.txt)
 
 ## 🎯 Core Performance Numbers at a Glance
 
 ```
-Matrix Multiplication:     29.19 GFLOPS
+Matrix Multiplication:     30.52 GFLOPS  (+4.6% from baseline)
 Throughput (Small Model):  83.42 tokens/sec
 Throughput (Medium Model): 37.41 tokens/sec
-Memory Allocation Reduction: 87%
-Element-wise Operations:   31.62 GB/s
+Memory Allocation Reduction: 93.7%  (+7.7% from baseline)
+Element-wise Operations:   36.09 GB/s  (+14.1% from baseline)
 ```
 
 ## 🏆 Platform Comparison Summary
 
 | Platform | Throughput | GFLOPS | Language | Dependencies |
 |----------|------------|--------|----------|--------------|
-| **SmallMind** | **37-83 tok/s** | **29.19** | **C#** | **Zero** |
+| **SmallMind** | **37-83 tok/s** | **30.52** | **C#** | **Zero** |
 | llama.cpp | 50-200 tok/s | 40-80 | C++ | Compilation |
 | PyTorch | 20-100 tok/s | 30-60 | Python | Heavy stack |
 | ONNX Runtime | 100-300 tok/s | 60-120 | C++ | Runtime libs |
@@ -102,7 +116,7 @@ benchmark-results-YYYYMMDD-HHMMSS/
 
 ## 📅 Benchmark Information
 
-- **Latest Run:** 2026-02-04 04:30:35 UTC
+- **Latest Run:** 2026-02-04 04:41:03 UTC
 - **System:** AMD EPYC 7763 64-Core Processor (4 cores)
 - **Memory:** 15.6 GB RAM
 - **OS:** Ubuntu 24.04.3 LTS
@@ -113,10 +127,12 @@ benchmark-results-YYYYMMDD-HHMMSS/
 
 | Your Goal | Read This |
 |-----------|-----------|
+| **I'm new - where do I start?** | [Profiling and Benchmark Executive Summary](PROFILING_AND_BENCHMARK_EXECUTIVE_SUMMARY.md) ⭐⭐ |
+| **Complete technical analysis** | [Comprehensive Profiling and Benchmark Report](COMPREHENSIVE_PROFILING_AND_BENCHMARK_REPORT.md) ⭐ |
 | **Quick overview of performance** | [Quick Summary](BENCHMARK_QUICK_SUMMARY.md) |
 | **Decide if SmallMind fits your use case** | [Executive Summary](BENCHMARK_EXECUTIVE_SUMMARY.md) |
 | **Deep dive into metrics** | [Comprehensive Comparison](BENCHMARK_METRICS_AND_COMPARISON.md) |
-| **See raw benchmark data** | [Latest Consolidated Report](benchmark-results-20260204-043035/CONSOLIDATED_BENCHMARK_REPORT.md) |
+| **See raw benchmark data** | [Latest Consolidated Report](benchmark-results-20260204-044103/CONSOLIDATED_BENCHMARK_REPORT.md) |
 | **Run benchmarks yourself** | [Running Benchmarks Guide](RUNNING_BENCHMARKS_GUIDE.md) |
 
 ---
