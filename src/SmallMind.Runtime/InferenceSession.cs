@@ -300,70 +300,75 @@ namespace SmallMind.Runtime
         
         private async Task<int> GenerateNextTokenAsync(List<int> context, CancellationToken cancellationToken)
         {
-            // Run generation on ThreadPool to avoid blocking
-            return await Task.Run(() =>
+            // Tier-0 optimization: Remove Task.Run from per-token compute (synchronous compute, async only for cancellation)
+            // Check cancellation before compute
+            cancellationToken.ThrowIfCancellationRequested();
+            
+            // Crop context to last blockSize tokens
+            List<int> contextCropped;
+            if (context.Count <= _blockSize)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                // Crop context to last blockSize tokens
-                List<int> contextCropped;
-                if (context.Count <= _blockSize)
+                contextCropped = context;
+            }
+            else
+            {
+                // Manual copy of last blockSize tokens (avoid LINQ allocation)
+                contextCropped = new List<int>(_blockSize);
+                int startIdx = context.Count - _blockSize;
+                for (int idx = startIdx; idx < context.Count; idx++)
                 {
-                    contextCropped = context;
+                    contextCropped.Add(context[idx]);
                 }
-                else
-                {
-                    // Manual copy of last blockSize tokens (avoid LINQ allocation)
-                    contextCropped = new List<int>(_blockSize);
-                    int startIdx = context.Count - _blockSize;
-                    for (int idx = startIdx; idx < context.Count; idx++)
-                    {
-                        contextCropped.Add(context[idx]);
-                    }
-                }
-                
-                // Convert to tensor
-                var contextData = new float[contextCropped.Count];
-                for (int j = 0; j < contextCropped.Count; j++)
-                {
-                    contextData[j] = contextCropped[j];
-                }
-                var contextTensor = new Tensor(contextData, new int[] { 1, contextCropped.Count });
-                
-                // Forward pass
-                var logits = _model.Forward(contextTensor);
-                
-                // Get logits for last position
-                int T = contextCropped.Count;
-                int vocabSize = logits.Shape[2];
-                var logitsLast = new float[vocabSize];
-                int lastPosOffset = (T - 1) * vocabSize;
+            }
+            
+            // Convert to tensor
+            var contextData = new float[contextCropped.Count];
+            for (int j = 0; j < contextCropped.Count; j++)
+            {
+                contextData[j] = contextCropped[j];
+            }
+            var contextTensor = new Tensor(contextData, new int[] { 1, contextCropped.Count });
+            
+            // Forward pass (synchronous compute)
+            var logits = _model.Forward(contextTensor);
+            
+            // Get logits for last position
+            int T = contextCropped.Count;
+            int vocabSize = logits.Shape[2];
+            
+            // Tier-0 optimization: Reuse logits buffer instead of allocating per token
+            if (_probabilityBuffer == null || _probabilityBuffer.Length != vocabSize)
+            {
+                _probabilityBuffer = new float[vocabSize];
+            }
+            
+            var logitsLast = _probabilityBuffer; // Reuse buffer
+            int lastPosOffset = (T - 1) * vocabSize;
+            for (int v = 0; v < vocabSize; v++)
+            {
+                logitsLast[v] = logits.Data[lastPosOffset + v];
+            }
+            
+            // Apply temperature
+            if (_options.Temperature != 1.0)
+            {
                 for (int v = 0; v < vocabSize; v++)
                 {
-                    logitsLast[v] = logits.Data[lastPosOffset + v];
+                    logitsLast[v] /= (float)_options.Temperature;
                 }
-                
-                // Apply temperature
-                if (_options.Temperature != 1.0)
-                {
-                    for (int v = 0; v < vocabSize; v++)
-                    {
-                        logitsLast[v] /= (float)_options.Temperature;
-                    }
-                }
-                
-                // Apply top-k filtering
-                if (_options.TopK > 0)
-                {
-                    logitsLast = ApplyTopK(logitsLast, _options.TopK);
-                }
-                
-                // Convert to probabilities (softmax)
-                var probs = Softmax(logitsLast);
-                
-                // Sample from the distribution
-                return SampleFromProbs(probs);
-            }, cancellationToken);
+            }
+            
+            // Apply top-k filtering
+            if (_options.TopK > 0)
+            {
+                logitsLast = ApplyTopK(logitsLast, _options.TopK);
+            }
+            
+            // Convert to probabilities (softmax)
+            var probs = Softmax(logitsLast);
+            
+            // Sample from the distribution
+            return SampleFromProbs(probs);
         }
         
         private void ValidateAndTruncateInput(List<int> tokens)

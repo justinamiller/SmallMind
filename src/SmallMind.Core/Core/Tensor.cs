@@ -712,6 +712,34 @@ namespace SmallMind.Core.Core
         }
 
         /// <summary>
+        /// Reshape tensor as a view (no copy) - returns a Tensor sharing the same backing storage.
+        /// This is intended for inference hot paths where we need to reinterpret shape without allocation.
+        /// IMPORTANT: The returned view shares Data with the original tensor. Do not dispose the view separately.
+        /// Only use when you need temporary shape reinterpretation without ownership transfer.
+        /// </summary>
+        public Tensor ReshapeView(int[] newShape)
+        {
+            if (ShapeToSize(newShape) != Size)
+                throw new ArgumentException("New shape must have same total size");
+            
+            // Create a view that shares the same Data array (no clone)
+            var result = new Tensor(Data, newShape, RequiresGrad);
+            
+            if (RequiresGrad)
+            {
+                // For views, gradient sharing is also just a reference
+                result.Grad = Grad;
+                
+                result.SetBackward(() =>
+                {
+                    // Gradients are already shared, so no accumulation needed
+                    // This backward op is essentially a no-op for views
+                });
+            }
+            return result;
+        }
+
+        /// <summary>
         /// Transpose a 2D tensor
         /// </summary>
         public Tensor Transpose()

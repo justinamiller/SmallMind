@@ -146,15 +146,26 @@ namespace SmallMind.Transformers
 
         public Tensor Forward(Tensor idx)
         {
+            return Forward(idx, positionOffset: 0);
+        }
+
+        /// <summary>
+        /// Forward pass with optional position offset for incremental decoding.
+        /// Tier-0 optimization: Support for prefill + incremental decode with correct absolute positions.
+        /// </summary>
+        /// <param name="idx">Token indices (batch_size, sequence_length)</param>
+        /// <param name="positionOffset">Starting position for position embeddings (0 for prefill, currentSeqLen for decode)</param>
+        public Tensor Forward(Tensor idx, int positionOffset)
+        {
             Guard.NotNull(idx);
             
             // idx shape: (batch_size, sequence_length)
             int B = idx.Shape[0];
             int T = idx.Shape[1];
 
-            if (T > _blockSize)
+            if (T + positionOffset > _blockSize)
             {
-                throw new ArgumentException($"Sequence length {T} exceeds block size {_blockSize}");
+                throw new ArgumentException($"Sequence length {T} + offset {positionOffset} exceeds block size {_blockSize}");
             }
 
             // Token embeddings: (B, T) -> (B, T, n_embd)
@@ -163,14 +174,16 @@ namespace SmallMind.Transformers
             var tokEmb = _tokenEmbedding.Forward(idx, tokEmbDest);
 
             // Position embeddings: get cached position indices or create new
-            if (!_positionIndicesCache.TryGetValue(T, out var posIndices))
+            // Tier-0 optimization: Use positionOffset to support incremental decode
+            int cacheKey = T * 100000 + positionOffset; // Unique key combining T and offset
+            if (!_positionIndicesCache.TryGetValue(cacheKey, out var posIndices))
             {
                 posIndices = new Tensor(new float[T], new int[] { T });
                 for (int i = 0; i < T; i++)
                 {
-                    posIndices.Data[i] = i;
+                    posIndices.Data[i] = positionOffset + i; // Apply offset for absolute position
                 }
-                _positionIndicesCache[T] = posIndices;
+                _positionIndicesCache[cacheKey] = posIndices;
             }
             
             // Reuse workspace tensor for position embeddings
@@ -1285,14 +1298,19 @@ namespace SmallMind.Transformers
         
         /// <summary>
         /// In-place version of ApplyAttention that writes to a pre-allocated tensor.
-        /// Computes attention_weights * V.
+        /// Computes attention_weights * V using optimized MatMul kernel.
         /// Supports KV-cache where V may have more positions than output.
+        /// Tier-0 optimization: Replaced triple nested loops with MatMul kernel for better performance.
         /// </summary>
         private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T, int vSeqLen)
         {
             // att: (B, nHead, T, vSeqLen) - attention weights
             // v: (B, nHead, vSeqLen, headSize) - values (may include cached past)
             // output: (B, nHead, T, headSize) - pre-allocated
+            
+            // For each batch and head, perform: output[b,h] = att[b,h] @ v[b,h]
+            // where att[b,h] is (T × vSeqLen) and v[b,h] is (vSeqLen × headSize)
+            // resulting in output[b,h] as (T × headSize)
             
             int totalParallelWork = B * _nHead;
             if (totalParallelWork >= 4)
@@ -1302,21 +1320,19 @@ namespace SmallMind.Transformers
                     int b = bh / _nHead;
                     int h = bh % _nHead;
                     
-                    for (int i = 0; i < T; i++)
-                    {
-                        for (int d = 0; d < _headSize; d++)
-                        {
-                            float sum = 0;
-                            for (int j = 0; j < vSeqLen; j++)
-                            {
-                                int attIdx = ((b * _nHead + h) * T + i) * vSeqLen + j;
-                                int vIdx = ((b * _nHead + h) * vSeqLen + j) * _headSize + d;
-                                sum += att.Data[attIdx] * v.Data[vIdx];
-                            }
-                            int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                            output.Data[outIdx] = sum;
-                        }
-                    }
+                    // Calculate offsets for this batch and head
+                    int attOffset = (b * _nHead + h) * T * vSeqLen;
+                    int vOffset = (b * _nHead + h) * vSeqLen * _headSize;
+                    int outOffset = (b * _nHead + h) * T * _headSize;
+                    
+                    // Use MatMul: att[b,h] @ v[b,h] -> output[b,h]
+                    // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
+                    SmallMind.Core.Simd.MatMulOps.MatMul(
+                        att.Data.AsSpan(attOffset, T * vSeqLen),
+                        v.Data.AsSpan(vOffset, vSeqLen * _headSize),
+                        output.Data.AsSpan(outOffset, T * _headSize),
+                        T, vSeqLen, _headSize
+                    );
                 });
             }
             else
@@ -1325,21 +1341,19 @@ namespace SmallMind.Transformers
                 {
                     for (int h = 0; h < _nHead; h++)
                     {
-                        for (int i = 0; i < T; i++)
-                        {
-                            for (int d = 0; d < _headSize; d++)
-                            {
-                                float sum = 0;
-                                for (int j = 0; j < vSeqLen; j++)
-                                {
-                                    int attIdx = ((b * _nHead + h) * T + i) * vSeqLen + j;
-                                    int vIdx = ((b * _nHead + h) * vSeqLen + j) * _headSize + d;
-                                    sum += att.Data[attIdx] * v.Data[vIdx];
-                                }
-                                int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                                output.Data[outIdx] = sum;
-                            }
-                        }
+                        // Calculate offsets for this batch and head
+                        int attOffset = (b * _nHead + h) * T * vSeqLen;
+                        int vOffset = (b * _nHead + h) * vSeqLen * _headSize;
+                        int outOffset = (b * _nHead + h) * T * _headSize;
+                        
+                        // Use MatMul: att[b,h] @ v[b,h] -> output[b,h]
+                        // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
+                        SmallMind.Core.Simd.MatMulOps.MatMul(
+                            att.Data.AsSpan(attOffset, T * vSeqLen),
+                            v.Data.AsSpan(vOffset, vSeqLen * _headSize),
+                            output.Data.AsSpan(outOffset, T * _headSize),
+                            T, vSeqLen, _headSize
+                        );
                     }
                 }
             }
