@@ -165,7 +165,7 @@ static void BenchmarkMyOperation()
 - **SIMD detection** - Automatic detection of CPU capabilities
 - **Structured output** - Both Markdown and JSON formats
 
-## Files
+## Files and Directories
 
 - `SimdBenchmarks.cs` - Main benchmark harness
 - `SystemInfoCollector.cs` - System metadata collection
@@ -173,4 +173,11 @@ static void BenchmarkMyOperation()
 - `BenchmarkResult.cs` - Benchmark result data structures
 - `MarkdownReportWriter.cs` - Markdown report generator
 - `JsonReportWriter.cs` - JSON report generator
+- `results/` - Historical benchmark results and test artifacts (excluded from git)
+
+## Additional Documentation
+
+See [HOW_TO_RUN_BENCHMARKS.md](HOW_TO_RUN_BENCHMARKS.md) for detailed instructions on running benchmarks and interpreting results.
+
+Historical benchmark reports and analysis can be found in [/docs/benchmarks/](../docs/benchmarks/).
 

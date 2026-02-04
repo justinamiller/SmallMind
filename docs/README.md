@@ -2,6 +2,17 @@
 
 This directory contains detailed documentation about SmallMind's features, implementation, and usage.
 
+## Directory Structure
+
+- **[benchmarks/](benchmarks/)** - Benchmark results, analysis, and performance reports
+- **[features/](features/)** - Feature-specific documentation (ITIL, KV Cache, Quantization, Explainability)
+- **[implementation/](implementation/)** - Implementation summaries and technical details
+- **[optimization/](optimization/)** - Optimization guides, strategies, and results
+- **[performance/](performance/)** - Performance testing and analysis reports
+- **[profiling/](profiling/)** - Profiler reports and hot path analysis
+- **[reports/](reports/)** - Executive summaries and comprehensive reports
+- **[roadmap/](roadmap/)** - Future plans and roadmap documents
+
 ## Overview Documents
 
 ### Architecture & Implementation
