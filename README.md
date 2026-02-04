@@ -31,6 +31,12 @@ See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guaran
 - ✅ **Production Ready**: Resource governance, budgets, deterministic mode, diagnostics
 - ✅ **Platform Native**: Pure .NET - runs on Windows, Linux, macOS, containers
 
+### Performance at a Glance
+
+**29.19 GFLOPS** MatMul | **83 tok/s** inference | **87%** memory reduction | **Zero** dependencies
+
+📊 **[Full Benchmark Report](BENCHMARK_METRICS_AND_COMPARISON.md)** | 📝 **[Quick Summary](BENCHMARK_QUICK_SUMMARY.md)**
+
 ## Installation
 
 ### NuGet Packages
@@ -425,6 +431,8 @@ SmallMind uses .NET's hardware intrinsics to implement optimized kernels for:
 For more details, see [.github/copilot-instructions-simd.md](.github/copilot-instructions-simd.md).
 
 ## Benchmarking
+
+> 📊 **[View Comprehensive Benchmark Results & Platform Comparison](BENCHMARK_METRICS_AND_COMPARISON.md)** - Complete performance metrics and comparison with llama.cpp, PyTorch, ONNX Runtime, and Transformers.js
 
 SmallMind includes a comprehensive benchmarking harness for measuring published/observable performance metrics with no third-party dependencies.
 
