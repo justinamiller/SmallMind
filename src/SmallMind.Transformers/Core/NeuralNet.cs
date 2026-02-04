@@ -48,6 +48,9 @@ namespace SmallMind.Transformers
         public Tensor Weight { get; private set; }
         public Tensor? Bias { get; private set; }
         private Random _random;
+        
+        // Cached transposed weight for inference (Tier-0 optimization: eliminate per-call transpose allocation)
+        private Tensor? _weightTransposeCache;
 
         public Linear(int inFeatures, int outFeatures, bool useBias = true, Random? random = null)
         {
@@ -81,10 +84,18 @@ namespace SmallMind.Transformers
             // weight: (outFeatures, inFeatures)
             // output: (batch, outFeatures) or (batch, seq, outFeatures)
 
+            // Tier-0 optimization: Cache transposed weight for inference to avoid per-call allocation
+            Tensor weightT;
+            if (!IsTraining && _weightTransposeCache == null)
+            {
+                _weightTransposeCache = Weight.Transpose();
+            }
+            weightT = IsTraining ? Weight.Transpose() : _weightTransposeCache!;
+
             if (input.Shape.Length == 2)
             {
                 // (batch, in) @ (in, out)^T = (batch, out)
-                var output = Tensor.MatMul(input, Weight.Transpose(), dest, requiresGrad: IsTraining);
+                var output = Tensor.MatMul(input, weightT, dest, requiresGrad: IsTraining);
                 if (Bias != null)
                 {
                     // Add bias in-place to output
@@ -98,23 +109,39 @@ namespace SmallMind.Transformers
                 int batch = input.Shape[0];
                 int seq = input.Shape[1];
                 int inFeatures = input.Shape[2];
+                int outFeatures = Weight.Shape[0];
                 
-                var reshaped = input.Reshape(new int[] { batch * seq, inFeatures });
+                // Tier-0 optimization: Use ReshapeView instead of Reshape to avoid cloning
+                var reshaped = input.ReshapeView(new int[] { batch * seq, inFeatures });
                 
-                // For 3D case, we can't use dest directly because we need to reshape
-                // So we always allocate for the intermediate result
-                var output = Tensor.MatMul(reshaped, Weight.Transpose(), null, requiresGrad: IsTraining);
+                // Tier-0 optimization: Allow dest usage for 3D case
+                // Create intermediate buffer if dest is null, otherwise use dest reshaped as view
+                Tensor? intermediateBuffer = null;
+                if (dest != null)
+                {
+                    // Use dest as backing storage via view
+                    intermediateBuffer = dest.ReshapeView(new int[] { batch * seq, outFeatures });
+                }
+                
+                var output = Tensor.MatMul(reshaped, weightT, intermediateBuffer, requiresGrad: IsTraining);
                 
                 if (Bias != null)
                 {
                     output = Tensor.Add(output, Bias, output, requiresGrad: IsTraining);
                 }
                 
-                // Reshape the output to 3D
-                return output.Reshape(new int[] { batch, seq, Weight.Shape[0] });
+                // Tier-0 optimization: Use ReshapeView to return final shape without cloning
+                return output.ReshapeView(new int[] { batch, seq, outFeatures });
             }
             
             throw new ArgumentException($"Unsupported input shape: {string.Join(",", input.Shape)}");
+        }
+        
+        public override void Train()
+        {
+            base.Train();
+            // Invalidate transpose cache when switching to training mode
+            _weightTransposeCache = null;
         }
     }
 
