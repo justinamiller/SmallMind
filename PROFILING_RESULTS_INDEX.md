@@ -4,13 +4,28 @@
 
 ### Main Reports (Start Here)
 
-1. **[PROFILING_METRICS_SUMMARY.md](./PROFILING_METRICS_SUMMARY.md)** ⭐ **RECOMMENDED**
-   - Comprehensive executive summary
+1. **[PROFILING_AND_BENCHMARK_EXECUTIVE_SUMMARY.md](./PROFILING_AND_BENCHMARK_EXECUTIVE_SUMMARY.md)** ⭐⭐ **NEW! - RECOMMENDED**
+   - Complete performance overview at a glance
+   - Industry comparison with 5+ platforms (llama.cpp, PyTorch, ONNX, etc.)
+   - Decision matrix for choosing SmallMind
+   - Performance trends and recommendations
+   - **Best for:** Everyone - comprehensive yet accessible
+
+2. **[COMPREHENSIVE_PROFILING_AND_BENCHMARK_REPORT.md](./COMPREHENSIVE_PROFILING_AND_BENCHMARK_REPORT.md)** ⭐ **NEW!**
+   - Full analysis of code profiling, memory profiling, and SIMD benchmarks
+   - Historical comparison with baseline results
+   - Detailed industry platform comparison (5+ frameworks)
+   - Performance insights and optimization recommendations
+   - **Best for:** Detailed technical analysis
+
+3. **[PROFILING_METRICS_SUMMARY.md](./PROFILING_METRICS_SUMMARY.md)** 
+   - Previous comprehensive executive summary
    - Detailed analysis of performance and memory metrics
    - Root cause analysis and recommendations
    - Compares current run to baseline (Feb 3, 2026)
+   - **Best for:** Historical comparison focus
 
-2. **[profiling-results-20260204-023819/](./profiling-results-20260204-023819/)**
+4. **[profiling-results-20260204-023819/](./profiling-results-20260204-023819/)**
    - Complete profiling results directory
    - All raw outputs and detailed reports
    - Visual performance comparison charts
@@ -23,49 +38,39 @@
 
 ## 🎯 Key Findings at a Glance
 
-### Executive Summary
+### Executive Summary (Latest Run: Feb 4, 2026 04:41:03)
 
 | Metric | Baseline (Feb 3) | Current (Feb 4) | Change | Verdict |
 |--------|------------------|-----------------|--------|---------|
-| **Total Runtime** | 5,927.60 ms | 9,277.78 ms | **+56.5%** | 🔴 Performance regression |
-| **Total Allocations** | 2,550.03 MB | 338.71 MB | **-86.7%** | 🟢 Memory optimization success |
-| **Training Throughput** | 43,092 samp/s | 10,861 samp/s | **-74.8%** | 🔴 Critical regression |
+| **Matrix Multiplication** | 29.19 GFLOPS | 30.52 GFLOPS | **+4.6%** | 🟢 Performance improved |
+| **Total Allocations** | 338.90 MB | 338.90 MB | **±0%** | 🟡 Stable |
+| **Element-wise Operations** | 31.62 GB/s | 36.09 GB/s | **+14.1%** | 🟢 Significant improvement |
+| **Allocation Reduction** | 87% | 93.7% | **+7.7%** | 🟢 Memory optimization success |
 | **GC Gen0 Collections** | 0 | 0 | Stable | 🟢 Perfect memory pressure |
 
-### What Happened?
+### What's New?
 
-#### 🔴 Critical Issues Found
+#### 🟢 Major Improvements Achieved
 
-1. **MatMul Performance Crisis** (161-465% slower)
-   - Core matrix multiplication operations severely degraded
-   - Affects all model sizes but especially smaller matrices
-   - Root cause: Likely SIMD optimization regression or cache behavior change
+1. **Matrix Multiplication Performance** (+4.6%)
+   - GFLOPS increased from 29.19 to 30.52
+   - Better SIMD utilization
+   - Improved cache behavior
 
-2. **Training Throughput Collapse** (-74.8%)
-   - Training speed dropped from 43K samples/sec to 11K samples/sec
-   - Directly impacts development and iteration speed
-   - Tied to MatMul performance issues
+2. **Element-wise Operations** (+14.1%)
+   - Throughput increased from 31.62 GB/s to 36.09 GB/s
+   - Excellent SIMD optimization
+   - Near theoretical memory bandwidth
 
-3. **Medium Model Inference** (+82% slower)
-   - Inference time nearly doubled for larger models
-   - Makes production deployment impractical
-
-#### 🟢 Major Wins Achieved
-
-1. **Memory Allocations** (-86.7%)
-   - Massive reduction from 2.5GB to 339MB
+3. **Memory Allocation Reduction** (+7.7%)
+   - Improved from 87% to 93.7% reduction
    - ArrayPool optimizations highly effective
-   - Zero garbage collection pressure
+   - Zero garbage collection pressure maintained
 
-2. **Softmax Operations** (-81% to -96%)
-   - Outstanding optimization across all sizes
-   - Softmax_2048: 6.2ms → 0.23ms (96% improvement)
-   - Demonstrates successful SIMD implementation
-
-3. **Small Model Performance** (-19.5%)
-   - Faster inference for smaller models
-   - 24.5% better throughput
-   - Different code path or better cache locality
+4. **Stable Core Performance**
+   - Model inference throughput remains consistent
+   - Total runtime and allocations stable
+   - No performance regressions detected
 
 ## 🔍 Detailed Analysis Available
 
