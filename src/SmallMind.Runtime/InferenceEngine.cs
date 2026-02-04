@@ -76,7 +76,7 @@ namespace SmallMind.Runtime
         /// <param name="metrics">Optional performance metrics collector</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Generated text including the original prompt</returns>
-        public async Task<string> GenerateAsync(
+        public async ValueTask<string> GenerateAsync(
             string prompt,
             ProductionInferenceOptions options,
             PerformanceMetrics? metrics = null,
