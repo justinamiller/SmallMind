@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,10 +16,10 @@ namespace SmallMind.Tokenizers
     /// </summary>
     public class BpeTokenizer : ITokenizer
     {
-        private readonly Dictionary<string, int> _vocab;
-        private readonly Dictionary<int, string> _inverseVocab;
+        private readonly FrozenDictionary<string, int> _vocab;
+        private readonly FrozenDictionary<int, string> _inverseVocab;
         private readonly List<(string, string)> _merges;
-        private readonly Dictionary<(string, string), int> _mergeRanks;
+        private readonly FrozenDictionary<(string, string), int> _mergeRanks;
         private readonly Regex _preTokenizeRegex;
         private const string UnknownToken = "[UNK]";
         private const string EndOfTextToken = "[EOT]";
@@ -81,19 +82,19 @@ namespace SmallMind.Tokenizers
             {
                 // Load vocabulary
                 string vocabJson = File.ReadAllText(vocabPath);
-                _vocab = JsonSerializer.Deserialize<Dictionary<string, int>>(vocabJson)
+                var vocabDict = JsonSerializer.Deserialize<Dictionary<string, int>>(vocabJson)
                     ?? throw new TokenizationException($"Failed to parse vocab.json: file is empty or invalid");
 
                 // Build inverse vocabulary
-                _inverseVocab = new Dictionary<int, string>(_vocab.Count);
-                foreach (var kvp in _vocab)
+                var inverseDict = new Dictionary<int, string>(vocabDict.Count);
+                foreach (var kvp in vocabDict)
                 {
-                    _inverseVocab[kvp.Value] = kvp.Key;
+                    inverseDict[kvp.Value] = kvp.Key;
                 }
 
                 // Load merges
                 _merges = new List<(string, string)>();
-                _mergeRanks = new Dictionary<(string, string), int>();
+                var mergeDict = new Dictionary<(string, string), int>();
                 
                 string[] mergeLines = File.ReadAllLines(mergesPath);
                 int rank = 0;
@@ -114,8 +115,13 @@ namespace SmallMind.Tokenizers
 
                     var mergePair = (parts[0], parts[1]);
                     _merges.Add(mergePair);
-                    _mergeRanks[mergePair] = rank++;
+                    mergeDict[mergePair] = rank++;
                 }
+
+                // Convert to FrozenDictionary for faster lookups
+                _vocab = vocabDict.ToFrozenDictionary();
+                _inverseVocab = inverseDict.ToFrozenDictionary();
+                _mergeRanks = mergeDict.ToFrozenDictionary();
 
                 // Pre-tokenization regex: split on whitespace and punctuation boundaries
                 // This pattern matches sequences of letters, digits, or individual punctuation/whitespace
@@ -155,7 +161,7 @@ namespace SmallMind.Tokenizers
                 return new List<int>();
             }
 
-            var result = new List<int>();
+            var result = new List<int>(text.Length / 3);
 
             // Pre-tokenize: split into words and punctuation
             var matches = _preTokenizeRegex.Matches(text);

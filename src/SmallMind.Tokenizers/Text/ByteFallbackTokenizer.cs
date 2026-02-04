@@ -192,7 +192,7 @@ namespace SmallMind.Tokenizers
                 return 0;
 
             // Separate inner tokens from byte tokens
-            List<int> innerTokens = new List<int>();
+            List<int> innerTokens = new List<int>(16);
             int byteCount = 0;
 
             foreach (int tokenId in tokens)

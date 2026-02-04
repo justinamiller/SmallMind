@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -13,7 +14,7 @@ namespace SmallMind.Tokenizers
     public class UnigramTokenizer : ITokenizer
     {
         private readonly List<(string token, float score, int id)> _pieces;
-        private readonly Dictionary<int, string> _idToToken;
+        private readonly FrozenDictionary<int, string> _idToToken;
         private readonly TrieNode _trie;
         private readonly int _unkTokenId;
 
@@ -36,7 +37,7 @@ namespace SmallMind.Tokenizers
                 throw new TokenizationException($"Model file not found: {modelPath}");
 
             _pieces = new List<(string, float, int)>();
-            _idToToken = new Dictionary<int, string>();
+            var idToTokenDict = new Dictionary<int, string>();
             _trie = new TrieNode();
 
             // Load model file
@@ -57,11 +58,14 @@ namespace SmallMind.Tokenizers
                     continue;
 
                 _pieces.Add((token, score, id));
-                _idToToken[id] = token;
+                idToTokenDict[id] = token;
                 
                 // Add to trie for fast prefix matching
                 AddToTrie(token, id, score);
             }
+
+            // Convert to FrozenDictionary for faster lookups
+            _idToToken = idToTokenDict.ToFrozenDictionary();
 
             // Find UNK token
             _unkTokenId = -1;
@@ -174,7 +178,7 @@ namespace SmallMind.Tokenizers
             }
 
             // Backtrack to get tokens
-            var result = new List<int>();
+            var result = new List<int>(text.Length / 3);
             int pos = n;
             
             while (pos > 0)

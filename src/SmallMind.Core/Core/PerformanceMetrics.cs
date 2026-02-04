@@ -9,7 +9,7 @@ namespace SmallMind.Core.Core
     /// Thread-safe metrics collector for tracking LLM performance.
     /// Records per-request timing and token counts for benchmarking.
     /// </summary>
-    public class PerformanceMetrics
+    public sealed class PerformanceMetrics
     {
         private readonly object _lock = new object();
         // Pre-size for typical benchmark scenarios (hundreds of requests)
@@ -271,7 +271,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Summary of performance metrics.
     /// </summary>
-    public class MetricsSummary
+    public sealed class MetricsSummary
     {
         // Capacity metrics
         public int Concurrency { get; set; }

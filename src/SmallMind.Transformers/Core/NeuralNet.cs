@@ -43,7 +43,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Linear (fully connected) layer
     /// </summary>
-    public class Linear : Module
+    public sealed class Linear : Module
     {
         public Tensor Weight { get; private set; }
         public Tensor? Bias { get; private set; }
@@ -148,7 +148,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Embedding layer
     /// </summary>
-    public class Embedding : Module
+    public sealed class Embedding : Module
     {
         public Tensor Weight { get; private set; }
         private int _numEmbeddings;
@@ -475,7 +475,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Layer Normalization
     /// </summary>
-    public class LayerNorm : Module
+    public sealed class LayerNorm : Module
     {
         private int _normalizedShape;
         private float _eps;
@@ -592,7 +592,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Dropout layer (for regularization during training)
     /// </summary>
-    public class Dropout : Module
+    public sealed class Dropout : Module
     {
         private float _p;
         private bool _training = true;
