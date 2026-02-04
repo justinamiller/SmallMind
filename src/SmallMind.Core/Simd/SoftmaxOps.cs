@@ -61,14 +61,12 @@ namespace SmallMind.Core.Simd
                 maxVec = Vector.Max(maxVec, v);
             }
             
-            // Horizontal max reduction using stackalloc for small buffer
+            // Horizontal max reduction
             float max = float.NegativeInfinity;
-            Span<float> maxComponents = stackalloc float[vectorSize];
             for (int j = 0; j < vectorSize; j++)
             {
-                maxComponents[j] = maxVec[j];
-                if (maxComponents[j] > max)
-                    max = maxComponents[j];
+                if (maxVec[j] > max)
+                    max = maxVec[j];
             }
             
             // Scalar remainder for max
@@ -156,14 +154,12 @@ namespace SmallMind.Core.Simd
                 maxVec = Vector.Max(maxVec, v);
             }
 
-            // Horizontal max reduction using stackalloc for small buffer
+            // Horizontal max reduction
             float max = float.NegativeInfinity;
-            Span<float> maxComponents = stackalloc float[vectorSize];
             for (int j = 0; j < vectorSize; j++)
             {
-                maxComponents[j] = maxVec[j];
-                if (maxComponents[j] > max)
-                    max = maxComponents[j];
+                if (maxVec[j] > max)
+                    max = maxVec[j];
             }
 
             // Scalar remainder

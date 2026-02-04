@@ -39,14 +39,10 @@ namespace SmallMind.Core.Optimized
                 vsum += va * vb;
             }
             
-            // Horizontal sum reduction using stackalloc for small buffer
+            // Horizontal sum reduction
             float result = 0;
-            Span<float> sumComponents = stackalloc float[VectorSize];
             for (int j = 0; j < VectorSize; j++)
-            {
-                sumComponents[j] = vsum[j];
-                result += sumComponents[j];
-            }
+                result += vsum[j];
             
             for (; i < length; i++)
                 result += a[aOffset + i] * b[bOffset + i];
