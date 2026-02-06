@@ -96,7 +96,6 @@ namespace SmallMind.Quantization.Kernels
         /// Row-major traversal with block-aware SIMD for cache efficiency.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [SkipLocalsInit]
         public static void MultiplyVectorMatrixSIMD(ReadOnlySpan<float> a, Q4Tensor b, Span<float> c, int k, int n)
         {
             c.Clear();
