@@ -34,10 +34,10 @@ namespace SmallMind.Benchmarks
             CheckConfiguration();
             CollectEnvironmentInfo();
 
-            // Run benchmarks
-            RunQ4MatMulBenchmark(128, 128, 128);
-            RunQ4MatMulBenchmark(256, 256, 256);
-            RunQ4MatMulBenchmark(512, 512, 512);
+            // Run benchmarks - compare original vs optimized
+            RunQ4MatMulComparison(128, 128, 128);
+            RunQ4MatMulComparison(256, 256, 256);
+            RunQ4MatMulComparison(512, 512, 512);
             // Skip 1024x1024 for now (too slow with current kernel)
             // RunQ4MatMulBenchmark(1024, 1024, 1024);
 
@@ -84,11 +84,11 @@ namespace SmallMind.Benchmarks
         }
 
         /// <summary>
-        /// Benchmark Q4 matrix multiplication.
+        /// Benchmark Q4 matrix multiplication - comparing original vs optimized.
         /// </summary>
-        private void RunQ4MatMulBenchmark(int m, int k, int n)
+        private void RunQ4MatMulComparison(int m, int k, int n)
         {
-            Console.WriteLine($"Running Q4 MatMul Benchmark: {m}x{k} * {k}x{n}");
+            Console.WriteLine($"Running Q4 MatMul Comparison: {m}x{k} * {k}x{n}");
 
             // Create test data
             var random = new Random(_config.Seed);
@@ -112,11 +112,11 @@ namespace SmallMind.Benchmarks
             }
             Console.WriteLine("Done");
 
-            // Measured iterations
-            Console.Write($"  Measuring ({_config.MeasuredIterations} iterations)... ");
+            // Benchmark original
+            Console.Write($"  Measuring Original ({_config.MeasuredIterations} iterations)... ");
             
             var collector = new MetricsCollector();
-            var times = new List<double>();
+            var timesOriginal = new List<double>();
 
             collector.Start();
 
@@ -128,59 +128,131 @@ namespace SmallMind.Benchmarks
                 MatMulF32Q4.Multiply(a, b, c, m, k, n);
                 sw.Stop();
 
-                times.Add(sw.Elapsed.TotalMilliseconds);
+                timesOriginal.Add(sw.Elapsed.TotalMilliseconds);
                 
                 if (i % 3 == 0)
                     collector.UpdatePeak();
             }
 
-            var (allocatedBytes, gen0, gen1, gen2, peakRSS, managedHeap) = collector.Stop();
+            var (allocOriginal, gen0Original, gen1Original, gen2Original, peakRSSOriginal, managedHeapOriginal) = collector.Stop();
+            Console.WriteLine("Done");
+
+            // Warmup optimized
+            for (int i = 0; i < _config.WarmupIterations; i++)
+            {
+                Array.Clear(c);
+                MatMulF32Q4Optimized.Multiply(a, b, c, m, k, n);
+            }
+
+            // Benchmark optimized
+            Console.Write($"  Measuring Optimized ({_config.MeasuredIterations} iterations)... ");
+            
+            collector = new MetricsCollector();
+            var timesOptimized = new List<double>();
+
+            collector.Start();
+
+            for (int i = 0; i < _config.MeasuredIterations; i++)
+            {
+                Array.Clear(c);
+
+                var sw = Stopwatch.StartNew();
+                MatMulF32Q4Optimized.Multiply(a, b, c, m, k, n);
+                sw.Stop();
+
+                timesOptimized.Add(sw.Elapsed.TotalMilliseconds);
+                
+                if (i % 3 == 0)
+                    collector.UpdatePeak();
+            }
+
+            var (allocOptimized, gen0Optimized, gen1Optimized, gen2Optimized, peakRSSOptimized, managedHeapOptimized) = collector.Stop();
             Console.WriteLine("Done");
 
             // Calculate statistics
-            times.Sort();
-            var median = times[times.Count / 2];
-            var mean = 0.0;
-            foreach (var t in times)
-                mean += t;
-            mean /= times.Count;
+            timesOriginal.Sort();
+            timesOptimized.Sort();
+            var medianOriginal = timesOriginal[timesOriginal.Count / 2];
+            var medianOptimized = timesOptimized[timesOptimized.Count / 2];
+            var meanOriginal = 0.0;
+            var meanOptimized = 0.0;
+            foreach (var t in timesOriginal)
+                meanOriginal += t;
+            foreach (var t in timesOptimized)
+                meanOptimized += t;
+            meanOriginal /= timesOriginal.Count;
+            meanOptimized /= timesOptimized.Count;
 
-            // Calculate GFLOPS: 2*M*N*K operations
+            // Calculate GFLOPS
             var operations = 2.0 * m * n * k;
-            var gflops = operations / (mean * 1e6); // ms to seconds, ops to GFLOPS
+            var gflopsOriginal = operations / (meanOriginal * 1e6);
+            var gflopsOptimized = operations / (meanOptimized * 1e6);
+            
+            var speedup = meanOriginal / meanOptimized;
 
-            Console.WriteLine($"  Time: {mean:F3} ms (median: {median:F3} ms)");
-            Console.WriteLine($"  Performance: {gflops:F2} GFLOPS");
-            Console.WriteLine($"  Allocated: {allocatedBytes / 1024.0:F2} KB, Gen0: {gen0}, Gen1: {gen1}, Gen2: {gen2}");
+            Console.WriteLine($"  Original:  {meanOriginal:F3} ms (median: {medianOriginal:F3} ms), {gflopsOriginal:F2} GFLOPS");
+            Console.WriteLine($"  Optimized: {meanOptimized:F3} ms (median: {medianOptimized:F3} ms), {gflopsOptimized:F2} GFLOPS");
+            Console.WriteLine($"  Speedup:   {speedup:F2}x");
+            Console.WriteLine($"  Allocated (Original): {allocOriginal / 1024.0:F2} KB, Gen0: {gen0Original}");
+            Console.WriteLine($"  Allocated (Optimized): {allocOptimized / 1024.0:F2} KB, Gen0: {gen0Optimized}");
             Console.WriteLine();
 
-            // Store result
-            var result = new BenchmarkResult
+            // Store results for both
+            var resultOriginal = new BenchmarkResult
             {
-                Name = $"Q4MatMul_{m}x{k}x{n}",
+                Name = $"Q4MatMul_Original_{m}x{k}x{n}",
                 Config = _config,
                 Metrics = new PerformanceMetrics
                 {
-                    AllocatedBytesForDecode = allocatedBytes,
-                    Gen0Collections = gen0,
-                    Gen1Collections = gen1,
-                    Gen2Collections = gen2,
-                    PeakRSS = peakRSS,
-                    ManagedHeapSize = managedHeap,
+                    AllocatedBytesForDecode = allocOriginal,
+                    Gen0Collections = gen0Original,
+                    Gen1Collections = gen1Original,
+                    Gen2Collections = gen2Original,
+                    PeakRSS = peakRSSOriginal,
+                    ManagedHeapSize = managedHeapOriginal,
                     CustomMetrics = new Dictionary<string, object>
                     {
-                        ["TimeMs"] = mean,
-                        ["MedianMs"] = median,
-                        ["GFLOPS"] = gflops,
+                        ["TimeMs"] = meanOriginal,
+                        ["MedianMs"] = medianOriginal,
+                        ["GFLOPS"] = gflopsOriginal,
                         ["M"] = m,
                         ["K"] = k,
-                        ["N"] = n
+                        ["N"] = n,
+                        ["Variant"] = "Original"
                     }
                 },
                 Environment = _environment
             };
 
-            _results.Add(result);
+            var resultOptimized = new BenchmarkResult
+            {
+                Name = $"Q4MatMul_Optimized_{m}x{k}x{n}",
+                Config = _config,
+                Metrics = new PerformanceMetrics
+                {
+                    AllocatedBytesForDecode = allocOptimized,
+                    Gen0Collections = gen0Optimized,
+                    Gen1Collections = gen1Optimized,
+                    Gen2Collections = gen2Optimized,
+                    PeakRSS = peakRSSOptimized,
+                    ManagedHeapSize = managedHeapOptimized,
+                    CustomMetrics = new Dictionary<string, object>
+                    {
+                        ["TimeMs"] = meanOptimized,
+                        ["MedianMs"] = medianOptimized,
+                        ["GFLOPS"] = gflopsOptimized,
+                        ["Speedup"] = speedup,
+                        ["M"] = m,
+                        ["K"] = k,
+                        ["N"] = n,
+                        ["Variant"] = "Optimized"
+                    }
+                },
+                Environment = _environment
+            };
+
+            _results.Add(resultOriginal);
+            _results.Add(resultOptimized);
         }
 
         private void WriteReports()
