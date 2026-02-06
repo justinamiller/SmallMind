@@ -33,12 +33,13 @@ See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guaran
 
 ### Performance at a Glance
 
-**30.52 GFLOPS** MatMul | **83 tok/s** inference | **93.7%** memory reduction | **Zero** dependencies
+**29.19 GFLOPS** MatMul | **37-83 tok/s** inference | **87%** memory reduction | **Zero** dependencies
 
-📊 **[Complete Performance Report](PROFILING_AND_BENCHMARK_EXECUTIVE_SUMMARY.md)** ⭐ **NEW!**  
+🆕 **[Universal LLM Benchmarks](COMPREHENSIVE_LLM_BENCHMARK_REPORT.md)** ⭐ **NEW!**  
+📊 **[Quick Comparison Chart](LLM_PERFORMANCE_COMPARISON_CHART.md)** - SmallMind vs Industry  
+🏆 **[Platform Comparison](BENCHMARK_METRICS_AND_COMPARISON.md)**  
 📈 **[Detailed Analysis](COMPREHENSIVE_PROFILING_AND_BENCHMARK_REPORT.md)**  
-📉 **[Performance Visualizations](PERFORMANCE_VISUALIZATIONS.md)**  
-🏆 **[Platform Comparison](BENCHMARK_METRICS_AND_COMPARISON.md)** | 📝 **[Quick Summary](BENCHMARK_QUICK_SUMMARY.md)**
+📉 **[Performance Visualizations](PERFORMANCE_VISUALIZATIONS.md)** | 📝 **[Quick Summary](BENCHMARK_QUICK_SUMMARY.md)**
 
 <details>
 <summary>📊 Performance Highlights (Click to expand)</summary>
