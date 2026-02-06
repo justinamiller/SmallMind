@@ -9,7 +9,7 @@ namespace SmallMind.Core.Simd
 {
     /// <summary>
     /// SIMD-accelerated matrix multiplication operations.
-    /// Provides optimized implementations using AVX2, AVX-512, and Vector&lt;T&gt; fallbacks.
+    /// Provides optimized implementations using AVX-512, AVX2, and Vector&lt;T&gt; fallbacks.
     /// Uses cache-friendly algorithms and parallel processing for large matrices.
     /// </summary>
     public static class MatMulOps
@@ -22,6 +22,7 @@ namespace SmallMind.Core.Simd
         //   - 256×256+: Parallel is 44%+ faster (work >> overhead)
         private const int PARALLEL_THRESHOLD = 128;
         private const int TILE_SIZE = 32; // Cache tile size for blocking
+        private const int VEC512_SIZE = 16; // AVX-512 vector width (16 floats)
 
         /// <summary>
         /// Enhanced matrix multiplication: C = A × B
@@ -39,7 +40,11 @@ namespace SmallMind.Core.Simd
             Array.Clear(C, 0, C.Length);
 
             // Select best implementation based on CPU capabilities
-            if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
+            if (Avx512F.IsSupported && K >= 16)
+            {
+                MatMulAvx512(A, B, C, M, K, N);
+            }
+            else if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
             {
                 MatMulAvx2(A, B, C, M, K, N);
             }
@@ -74,7 +79,11 @@ namespace SmallMind.Core.Simd
                 fixed (float* pA = A, pB = B, pC = C)
                 {
                     // Select best implementation based on CPU capabilities
-                    if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
+                    if (Avx512F.IsSupported && K >= 16)
+                    {
+                        MatMulAvx512Unsafe(pA, pB, pC, M, K, N);
+                    }
+                    else if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
                     {
                         MatMulAvx2Unsafe(pA, pB, pC, M, K, N);
                     }
@@ -86,6 +95,52 @@ namespace SmallMind.Core.Simd
                     {
                         MatMulVectorUnsafe(pA, pB, pC, M, K, N);
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// AVX-512 + FMA implementation (512-bit, 16 floats per vector)
+        /// Uses cache-friendly ikj loop order with tiled blocking for better cache utilization.
+        /// Follows the same adaptive strategy as AVX2 but with 16-float vectors.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
+        private static void MatMulAvx512(
+            float[] A, float[] B, float[] C,
+            int M, int K, int N)
+        {
+            const int vecSize = VEC512_SIZE; // AVX-512 processes 16 floats
+            const int TILING_THRESHOLD = 192; // Use tiling for matrices >= 192×192 (36,864 elements)
+            
+            // Adaptive strategy:
+            // - Small matrices (<192×192): Direct SIMD, minimal overhead
+            // - Medium matrices (192-511): Tiling for cache efficiency
+            // - Large matrices (512+): Tiling + parallelization for max performance
+            
+            int totalElements = M * N;
+            bool shouldTile = (M >= TILING_THRESHOLD || N >= TILING_THRESHOLD || K >= TILING_THRESHOLD)
+                             && totalElements >= (TILING_THRESHOLD * TILING_THRESHOLD);
+            
+            if (shouldTile)
+            {
+                // Use tiled implementation for better cache utilization
+                MatMulAvx512Tiled(A, B, C, M, K, N, vecSize);
+            }
+            else if (M >= PARALLEL_THRESHOLD)
+            {
+                // Direct SIMD with parallelization (no tiling overhead)
+                Parallel.For(0, M, i =>
+                {
+                    MatMulAvx512RowIndexed(A, B, C, i, M, K, N, vecSize);
+                });
+            }
+            else
+            {
+                // Direct SIMD sequential (best for small matrices)
+                for (int i = 0; i < M; i++)
+                {
+                    MatMulAvx512Row(A, B, C, i, M, K, N, vecSize);
                 }
             }
         }
@@ -130,6 +185,160 @@ namespace SmallMind.Core.Simd
                 for (int i = 0; i < M; i++)
                 {
                     MatMulAvx2Row(A, B, C, i, M, K, N, vecSize);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Cache-blocked (tiled) AVX-512 matrix multiplication for better cache utilization.
+        /// Processes the matrix in TILE_SIZE x TILE_SIZE blocks to maximize L1 cache hits.
+        /// Uses parallelization over row tiles for large matrices with loop unrolling for FMA saturation.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
+        private static void MatMulAvx512Tiled(
+            float[] A, float[] B, float[] C,
+            int M, int K, int N, int vecSize)
+        {
+            // Parallelize over row tiles for large matrices to maintain thread utilization
+            int numRowTiles = (M + TILE_SIZE - 1) / TILE_SIZE;
+            
+            if (numRowTiles >= 4) // Use parallelization when we have enough tiles to distribute
+            {
+                Parallel.For(0, numRowTiles, i0Tile =>
+                {
+                    unsafe
+                    {
+                        fixed (float* pA = A, pB = B, pC = C)
+                        {
+                            int i0 = i0Tile * TILE_SIZE;
+                            int iMax = Math.Min(i0 + TILE_SIZE, M);
+                            
+                            for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
+                            {
+                                int kMax = Math.Min(k0 + TILE_SIZE, K);
+                                
+                                for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
+                                {
+                                    int jMax = Math.Min(j0 + TILE_SIZE, N);
+                                    
+                                    // Process this tile
+                                    for (int i = i0; i < iMax; i++)
+                                    {
+                                        int aRowStart = i * K;
+                                        int cRowStart = i * N;
+                                        
+                                        for (int k = k0; k < kMax; k++)
+                                        {
+                                            Vector512<float> vA = Vector512.Create(pA[aRowStart + k]);
+                                            int bRowStart = k * N;
+                                            
+                                            int j = j0;
+                                            
+                                            // Unrolled SIMD loop (2x unroll, 32 floats per iteration)
+                                            for (; j <= jMax - (vecSize * 2); j += vecSize * 2)
+                                            {
+                                                Vector512<float> vB0 = Avx512F.LoadVector512(pB + bRowStart + j);
+                                                Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
+                                                vC0 = Avx512F.FusedMultiplyAdd(vA, vB0, vC0);
+                                                Avx512F.Store(pC + cRowStart + j, vC0);
+                                                
+                                                Vector512<float> vB1 = Avx512F.LoadVector512(pB + bRowStart + j + vecSize);
+                                                Vector512<float> vC1 = Avx512F.LoadVector512(pC + cRowStart + j + vecSize);
+                                                vC1 = Avx512F.FusedMultiplyAdd(vA, vB1, vC1);
+                                                Avx512F.Store(pC + cRowStart + j + vecSize, vC1);
+                                            }
+                                            
+                                            // SIMD remainder (16 floats)
+                                            for (; j <= jMax - vecSize; j += vecSize)
+                                            {
+                                                Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + j);
+                                                Vector512<float> vC = Avx512F.LoadVector512(pC + cRowStart + j);
+                                                vC = Avx512F.FusedMultiplyAdd(vA, vB, vC);
+                                                Avx512F.Store(pC + cRowStart + j, vC);
+                                            }
+                                            
+                                            // Scalar remainder within tile
+                                            float aVal = pA[aRowStart + k];
+                                            for (; j < jMax; j++)
+                                            {
+                                                pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            else
+            {
+                // Sequential for smaller matrices
+                unsafe
+                {
+                    fixed (float* pA = A, pB = B, pC = C)
+                    {
+                        for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
+                        {
+                            int iMax = Math.Min(i0 + TILE_SIZE, M);
+                            
+                            for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
+                            {
+                                int kMax = Math.Min(k0 + TILE_SIZE, K);
+                                
+                                for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
+                                {
+                                    int jMax = Math.Min(j0 + TILE_SIZE, N);
+                                    
+                                    // Process this tile
+                                    for (int i = i0; i < iMax; i++)
+                                    {
+                                        int aRowStart = i * K;
+                                        int cRowStart = i * N;
+                                        
+                                        for (int k = k0; k < kMax; k++)
+                                        {
+                                            Vector512<float> vA = Vector512.Create(pA[aRowStart + k]);
+                                            int bRowStart = k * N;
+                                            
+                                            int j = j0;
+                                            
+                                            // Unrolled SIMD loop (2x unroll, 32 floats per iteration)
+                                            for (; j <= jMax - (vecSize * 2); j += vecSize * 2)
+                                            {
+                                                Vector512<float> vB0 = Avx512F.LoadVector512(pB + bRowStart + j);
+                                                Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
+                                                vC0 = Avx512F.FusedMultiplyAdd(vA, vB0, vC0);
+                                                Avx512F.Store(pC + cRowStart + j, vC0);
+                                                
+                                                Vector512<float> vB1 = Avx512F.LoadVector512(pB + bRowStart + j + vecSize);
+                                                Vector512<float> vC1 = Avx512F.LoadVector512(pC + cRowStart + j + vecSize);
+                                                vC1 = Avx512F.FusedMultiplyAdd(vA, vB1, vC1);
+                                                Avx512F.Store(pC + cRowStart + j + vecSize, vC1);
+                                            }
+                                            
+                                            // SIMD remainder (16 floats)
+                                            for (; j <= jMax - vecSize; j += vecSize)
+                                            {
+                                                Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + j);
+                                                Vector512<float> vC = Avx512F.LoadVector512(pC + cRowStart + j);
+                                                vC = Avx512F.FusedMultiplyAdd(vA, vB, vC);
+                                                Avx512F.Store(pC + cRowStart + j, vC);
+                                            }
+                                            
+                                            // Scalar remainder within tile
+                                            float aVal = pA[aRowStart + k];
+                                            for (; j < jMax; j++)
+                                            {
+                                                pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -256,6 +465,73 @@ namespace SmallMind.Core.Simd
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// AVX-512 row-wise matrix multiplication (for parallel processing).
+        /// Processes a single row of the output matrix with 2x loop unrolling.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
+        private static unsafe void MatMulAvx512RowIndexed(
+            float[] A, float[] B, float[] C,
+            int i, int M, int K, int N, int vecSize)
+        {
+            int aRowStart = i * K;
+            int cRowStart = i * N;
+
+            fixed (float* pA = A, pB = B, pC = C)
+            {
+                for (int k = 0; k < K; k++)
+                {
+                    // Broadcast A[i,k] to vector
+                    Vector512<float> vA = Vector512.Create(pA[aRowStart + k]);
+                    int bRowStart = k * N;
+
+                    int j = 0;
+
+                    // Unrolled SIMD loop (2x unroll, 32 floats per iteration)
+                    for (; j <= N - (vecSize * 2); j += vecSize * 2)
+                    {
+                        Vector512<float> vB0 = Avx512F.LoadVector512(pB + bRowStart + j);
+                        Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
+                        vC0 = Avx512F.FusedMultiplyAdd(vA, vB0, vC0);
+                        Avx512F.Store(pC + cRowStart + j, vC0);
+                        
+                        Vector512<float> vB1 = Avx512F.LoadVector512(pB + bRowStart + j + vecSize);
+                        Vector512<float> vC1 = Avx512F.LoadVector512(pC + cRowStart + j + vecSize);
+                        vC1 = Avx512F.FusedMultiplyAdd(vA, vB1, vC1);
+                        Avx512F.Store(pC + cRowStart + j + vecSize, vC1);
+                    }
+
+                    // SIMD remainder (16 floats)
+                    for (; j <= N - vecSize; j += vecSize)
+                    {
+                        Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + j);
+                        Vector512<float> vC = Avx512F.LoadVector512(pC + cRowStart + j);
+
+                        // C += A * B (fused multiply-add)
+                        vC = Avx512F.FusedMultiplyAdd(vA, vB, vC);
+                        Avx512F.Store(pC + cRowStart + j, vC);
+                    }
+
+                    // Scalar remainder
+                    float aVal = pA[aRowStart + k];
+                    for (; j < N; j++)
+                    {
+                        pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                    }
+                }
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
+        private static unsafe void MatMulAvx512Row(
+            float[] A, float[] B, float[] C,
+            int i, int M, int K, int N, int vecSize)
+        {
+            MatMulAvx512RowIndexed(A, B, C, i, M, K, N, vecSize);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -585,6 +861,108 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
+        /// Unsafe AVX-512 + FMA implementation working directly on pointers.
+        /// Uses 2x loop unrolling to saturate FMA pipeline.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
+        private static unsafe void MatMulAvx512Unsafe(
+            float* pA, float* pB, float* pC,
+            int M, int K, int N)
+        {
+            const int vecSize = VEC512_SIZE;
+
+            if (M >= PARALLEL_THRESHOLD)
+            {
+                Parallel.For(0, M, i =>
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        Vector512<float> vA = Vector512.Create(pA[aRowStart + k]);
+                        int bRowStart = k * N;
+                        int j = 0;
+
+                        // Unrolled SIMD loop (2x unroll)
+                        for (; j <= N - (vecSize * 2); j += vecSize * 2)
+                        {
+                            Vector512<float> vB0 = Avx512F.LoadVector512(pB + bRowStart + j);
+                            Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
+                            vC0 = Avx512F.FusedMultiplyAdd(vA, vB0, vC0);
+                            Avx512F.Store(pC + cRowStart + j, vC0);
+                            
+                            Vector512<float> vB1 = Avx512F.LoadVector512(pB + bRowStart + j + vecSize);
+                            Vector512<float> vC1 = Avx512F.LoadVector512(pC + cRowStart + j + vecSize);
+                            vC1 = Avx512F.FusedMultiplyAdd(vA, vB1, vC1);
+                            Avx512F.Store(pC + cRowStart + j + vecSize, vC1);
+                        }
+
+                        // SIMD remainder
+                        for (; j <= N - vecSize; j += vecSize)
+                        {
+                            Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + j);
+                            Vector512<float> vC = Avx512F.LoadVector512(pC + cRowStart + j);
+                            vC = Avx512F.FusedMultiplyAdd(vA, vB, vC);
+                            Avx512F.Store(pC + cRowStart + j, vC);
+                        }
+
+                        float aVal = pA[aRowStart + k];
+                        for (; j < N; j++)
+                        {
+                            pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int i = 0; i < M; i++)
+                {
+                    int aRowStart = i * K;
+                    int cRowStart = i * N;
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        Vector512<float> vA = Vector512.Create(pA[aRowStart + k]);
+                        int bRowStart = k * N;
+                        int j = 0;
+
+                        // Unrolled SIMD loop (2x unroll)
+                        for (; j <= N - (vecSize * 2); j += vecSize * 2)
+                        {
+                            Vector512<float> vB0 = Avx512F.LoadVector512(pB + bRowStart + j);
+                            Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
+                            vC0 = Avx512F.FusedMultiplyAdd(vA, vB0, vC0);
+                            Avx512F.Store(pC + cRowStart + j, vC0);
+                            
+                            Vector512<float> vB1 = Avx512F.LoadVector512(pB + bRowStart + j + vecSize);
+                            Vector512<float> vC1 = Avx512F.LoadVector512(pC + cRowStart + j + vecSize);
+                            vC1 = Avx512F.FusedMultiplyAdd(vA, vB1, vC1);
+                            Avx512F.Store(pC + cRowStart + j + vecSize, vC1);
+                        }
+
+                        // SIMD remainder
+                        for (; j <= N - vecSize; j += vecSize)
+                        {
+                            Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + j);
+                            Vector512<float> vC = Avx512F.LoadVector512(pC + cRowStart + j);
+                            vC = Avx512F.FusedMultiplyAdd(vA, vB, vC);
+                            Avx512F.Store(pC + cRowStart + j, vC);
+                        }
+
+                        float aVal = pA[aRowStart + k];
+                        for (; j < N; j++)
+                        {
+                            pC[cRowStart + j] += aVal * pB[bRowStart + j];
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// Unsafe AVX2 + FMA implementation working directly on pointers.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -812,43 +1190,64 @@ namespace SmallMind.Core.Simd
             // We compute C = Q @ K^T (T × T)
             // This is more cache-friendly than transposing K first
             
-            int vectorSize = Vector<float>.Count;
-            
-            for (int i = 0; i < M; i++)
+            unsafe
             {
-                int aRowStart = i * K;
-                int cRowStart = i * N;
-                
-                for (int j = 0; j < N; j++)
+                fixed (float* pA = A, pB = B, pC = C)
                 {
-                    int bRowStart = j * K;  // B is stored row-major, treat as transpose
-                    
-                    // Dot product between A[i] and B[j] (which becomes B^T[:,j])
-                    int k = 0;
-                    var sumVec = Vector<float>.Zero;
-                    
-                    // SIMD loop
-                    for (; k <= K - vectorSize; k += vectorSize)
+                    for (int i = 0; i < M; i++)
                     {
-                        var va = new Vector<float>(A.Slice(aRowStart + k, vectorSize));
-                        var vb = new Vector<float>(B.Slice(bRowStart + k, vectorSize));
-                        sumVec += va * vb;
+                        int aRowStart = i * K;
+                        int cRowStart = i * N;
+                        
+                        for (int j = 0; j < N; j++)
+                        {
+                            int bRowStart = j * K;  // B is stored row-major, treat as transpose
+                            
+                            // Dot product between A[i] and B[j] (which becomes B^T[:,j])
+                            int k = 0;
+                            float sum = 0f;
+                            
+                            // AVX-512 path (16 floats)
+                            if (Avx512F.IsSupported && K >= 16)
+                            {
+                                var sumVec512 = Vector512<float>.Zero;
+                                for (; k <= K - 16; k += 16)
+                                {
+                                    var va = Avx512F.LoadVector512(pA + aRowStart + k);
+                                    var vb = Avx512F.LoadVector512(pB + bRowStart + k);
+                                    sumVec512 = Avx512F.FusedMultiplyAdd(va, vb, sumVec512);
+                                }
+                                // Horizontal sum: 512 → scalar
+                                sum = SimdCapabilities.HorizontalSum(sumVec512);
+                            }
+                            
+                            // Vector<T> fallback
+                            int vectorSize = Vector<float>.Count;
+                            var sumVec = new Vector<float>(sum);
+                            
+                            // SIMD loop
+                            for (; k <= K - vectorSize; k += vectorSize)
+                            {
+                                var va = new Vector<float>(A.Slice(aRowStart + k, vectorSize));
+                                var vb = new Vector<float>(B.Slice(bRowStart + k, vectorSize));
+                                sumVec += va * vb;
+                            }
+                            
+                            // Horizontal sum
+                            for (int v = 0; v < vectorSize; v++)
+                            {
+                                sum += sumVec[v];
+                            }
+                            
+                            // Scalar remainder
+                            for (; k < K; k++)
+                            {
+                                sum += A[aRowStart + k] * B[bRowStart + k];
+                            }
+                            
+                            C[cRowStart + j] = sum;
+                        }
                     }
-                    
-                    // Horizontal sum
-                    float sum = 0f;
-                    for (int v = 0; v < vectorSize; v++)
-                    {
-                        sum += sumVec[v];
-                    }
-                    
-                    // Scalar remainder
-                    for (; k < K; k++)
-                    {
-                        sum += A[aRowStart + k] * B[bRowStart + k];
-                    }
-                    
-                    C[cRowStart + j] = sum;
                 }
             }
         }
@@ -864,10 +1263,32 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("Vectors must have the same length");
 
             int length = a.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
+            float sum = 0f;
 
-            var sumVec = Vector<float>.Zero;
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b)
+                    {
+                        var sumVec512 = Vector512<float>.Zero;
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var va = Avx512F.LoadVector512(pA + i);
+                            var vb = Avx512F.LoadVector512(pB + i);
+                            sumVec512 = Avx512F.FusedMultiplyAdd(va, vb, sumVec512);
+                        }
+                        // Horizontal sum: 512 → scalar
+                        sum = SimdCapabilities.HorizontalSum(sumVec512);
+                    }
+                }
+            }
+
+            // Vector<T> fallback
+            int vectorSize = Vector<float>.Count;
+            var sumVec = new Vector<float>(sum);
 
             // SIMD loop
             for (; i <= length - vectorSize; i += vectorSize)
@@ -878,7 +1299,6 @@ namespace SmallMind.Core.Simd
             }
 
             // Horizontal sum
-            float sum = 0f;
             for (int j = 0; j < vectorSize; j++)
             {
                 sum += sumVec[j];

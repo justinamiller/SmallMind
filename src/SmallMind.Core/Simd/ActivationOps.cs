@@ -14,7 +14,7 @@ namespace SmallMind.Core.Simd
     {
         /// <summary>
         /// ReLU activation: result[i] = max(0, input[i])
-        /// Uses SIMD Vector.Max for optimal performance.
+        /// Uses SIMD with AVX-512, AVX2, or Vector&lt;T&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ReLU(ReadOnlySpan<float> input, Span<float> output)
@@ -23,12 +23,28 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("Input and output spans must have the same length");
 
             int length = input.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            var zero = Vector<float>.Zero;
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                var zero512 = Vector512<float>.Zero;
+                unsafe
+                {
+                    fixed (float* pInput = input, pOutput = output)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var v = Avx512F.LoadVector512(pInput + i);
+                            Avx512F.Store(pOutput + i, Avx512F.Max(v, zero512));
+                        }
+                    }
+                }
+            }
 
-            // SIMD loop - use Vector.Max
+            // Vector<T> fallback
+            var zero = Vector<float>.Zero;
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var v = new Vector<float>(input.Slice(i));
@@ -44,21 +60,46 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// ReLU backward pass: grad[i] = input[i] > 0 ? outputGrad[i] : 0
-        /// Uses SIMD for conditional masking.
+        /// Uses SIMD for conditional masking with AVX-512, AVX2, or Vector&lt;T&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
         public static void ReLUBackward(ReadOnlySpan<float> input, ReadOnlySpan<float> outputGrad, Span<float> inputGrad)
         {
             if (input.Length != outputGrad.Length || input.Length != inputGrad.Length)
                 throw new ArgumentException("All spans must have the same length");
 
             int length = input.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            var zero = Vector<float>.Zero;
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                var zero512 = Vector512<float>.Zero;
+                unsafe
+                {
+                    fixed (float* pInput = input, pOutputGrad = outputGrad, pInputGrad = inputGrad)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var vInput = Avx512F.LoadVector512(pInput + i);
+                            var vOutputGrad = Avx512F.LoadVector512(pOutputGrad + i);
+                            
+                            // Mask: input > 0
+                            var mask = Avx512F.CompareGreaterThan(vInput, zero512);
+                            
+                            // Apply mask: outputGrad where input > 0, else 0
+                            // Use bitwise AND to apply mask
+                            var result = Avx512F.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
+                            Avx512F.Store(pInputGrad + i, result);
+                        }
+                    }
+                }
+            }
 
-            // SIMD loop - conditional update
+            // Vector<T> fallback
+            var zero = Vector<float>.Zero;
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var vInput = new Vector<float>(input.Slice(i));
@@ -121,7 +162,24 @@ namespace SmallMind.Core.Simd
                 // Step 2: Multiply input * sigmoid using SIMD
                 int i_simd = 0;
                 
-                // SIMD loop: element-wise multiplication
+                // AVX-512 path (16 floats)
+                if (Avx512F.IsSupported && length >= 16)
+                {
+                    unsafe
+                    {
+                        fixed (float* pInput = input, pOutput = output)
+                        {
+                            for (; i_simd <= length - 16; i_simd += 16)
+                            {
+                                var vInput = Avx512F.LoadVector512(pInput + i_simd);
+                                var vSigmoid = Avx512F.LoadVector512(pOutput + i_simd);
+                                Avx512F.Store(pOutput + i_simd, Avx512F.Multiply(vInput, vSigmoid));
+                            }
+                        }
+                    }
+                }
+                
+                // Vector<T> fallback
                 for (; i_simd <= length - vectorSize; i_simd += vectorSize)
                 {
                     var vInput = new Vector<float>(input.Slice(i_simd));
@@ -210,22 +268,45 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// Leaky ReLU: result[i] = input[i] > 0 ? input[i] : alpha * input[i]
-        /// Uses SIMD for conditional computation.
+        /// Uses SIMD for conditional computation with AVX-512, AVX2, or Vector&lt;T&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
         public static void LeakyReLU(ReadOnlySpan<float> input, Span<float> output, float alpha = 0.01f)
         {
             if (input.Length != output.Length)
                 throw new ArgumentException("Input and output spans must have the same length");
 
             int length = input.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                var zero512 = Vector512<float>.Zero;
+                var vAlpha512 = Vector512.Create(alpha);
+                unsafe
+                {
+                    fixed (float* pInput = input, pOutput = output)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var v = Avx512F.LoadVector512(pInput + i);
+                            var mask = Avx512F.CompareGreaterThan(v, zero512);
+                            
+                            // input > 0 ? input : alpha * input
+                            var scaled = Avx512F.Multiply(v, vAlpha512);
+                            var result = Avx512F.BlendVariable(scaled, v, mask.AsSingle());
+                            Avx512F.Store(pOutput + i, result);
+                        }
+                    }
+                }
+            }
+
+            // Vector<T> fallback
             var zero = Vector<float>.Zero;
             var vAlpha = new Vector<float>(alpha);
-
-            // SIMD loop
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var v = new Vector<float>(input.Slice(i));

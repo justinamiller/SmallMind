@@ -1,5 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 
 namespace SmallMind.Core.Core
 {
@@ -43,8 +45,6 @@ namespace SmallMind.Core.Core
             if (beta.Length != features)
                 throw new Exceptions.ValidationException($"Beta length {beta.Length} must equal features ({features})", nameof(beta));
             
-            int vectorSize = System.Numerics.Vector<float>.Count;
-            
             for (int b = 0; b < batch; b++)
             {
                 int offset = b * features;
@@ -68,7 +68,33 @@ namespace SmallMind.Core.Core
                 // Pass 2: Normalize and apply affine transformation (SIMD optimized)
                 int f = 0;
                 
-                if (System.Numerics.Vector.IsHardwareAccelerated && features >= vectorSize)
+                // AVX-512 path (16 floats)
+                if (Avx512F.IsSupported && features >= 16)
+                {
+                    var vMean512 = Vector512.Create(mean);
+                    var vInvStd512 = Vector512.Create(invStd);
+                    
+                    unsafe
+                    {
+                        fixed (float* pInput = input, pGamma = gamma, pBeta = beta, pOutput = output)
+                        {
+                            for (; f <= features - 16; f += 16)
+                            {
+                                var vInput = Avx512F.LoadVector512(pInput + offset + f);
+                                var vGamma = Avx512F.LoadVector512(pGamma + f);
+                                var vBeta = Avx512F.LoadVector512(pBeta + f);
+                                
+                                var vNormalized = Avx512F.Multiply(Avx512F.Subtract(vInput, vMean512), vInvStd512);
+                                var vResult = Avx512F.FusedMultiplyAdd(vGamma, vNormalized, vBeta);
+                                Avx512F.Store(pOutput + offset + f, vResult);
+                            }
+                        }
+                    }
+                }
+                
+                // Vector<T> fallback
+                int vectorSize = System.Numerics.Vector<float>.Count;
+                if (System.Numerics.Vector.IsHardwareAccelerated && f <= features - vectorSize)
                 {
                     var vMean = new System.Numerics.Vector<float>(mean);
                     var vInvStd = new System.Numerics.Vector<float>(invStd);
