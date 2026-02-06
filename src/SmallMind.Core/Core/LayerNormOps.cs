@@ -22,7 +22,7 @@ namespace SmallMind.Core.Core
         /// <param name="batch">Batch size (or number of sequences)</param>
         /// <param name="features">Feature dimension (normalized dimension)</param>
         /// <param name="eps">Small constant for numerical stability</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public static void LayerNorm(
             ReadOnlySpan<float> input,
             ReadOnlySpan<float> gamma,

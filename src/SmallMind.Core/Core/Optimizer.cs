@@ -93,8 +93,8 @@ namespace SmallMind.Core.Core
                     // Path with fused gradient clipping
                     for (int i = 0; i < param.Size; i++)
                     {
-                        // Clip gradient (preserves original gradSpan for diagnostic purposes)
-                        float grad = Math.Clamp(gradSpan[i], -_gradClipValue, _gradClipValue);
+                        // Branchless clipping (faster than Math.Clamp in hot paths)
+                        float grad = MathF.Max(-_gradClipValue, MathF.Min(gradSpan[i], _gradClipValue));
                         
                         // Update biased first moment estimate
                         m[i] = _beta1 * m[i] + oneMinusBeta1 * grad;

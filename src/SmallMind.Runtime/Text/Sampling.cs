@@ -302,7 +302,7 @@ namespace SmallMind.Runtime
             {
                 if (logits[i] != float.NegativeInfinity)
                 {
-                    max = Math.Max(max, logits[i]);
+                    max = MathF.Max(max, logits[i]);
                 }
             }
 

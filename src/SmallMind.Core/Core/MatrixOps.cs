@@ -110,8 +110,8 @@ namespace SmallMind.Core.Core
             // C = A^T × B without creating transposed copy
             // Access pattern: A[k,i] instead of A[i,k]
             
-            // Zero output first (we're accumulating)
-            Array.Clear(C, 0, C.Length);
+            // Zero output first (we're accumulating) - use Span.Clear for better performance
+            C.AsSpan().Clear();
             
             int vectorSize = Vector<float>.Count;
             

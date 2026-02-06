@@ -499,7 +499,7 @@ namespace SmallMind.Runtime
                     float max = float.NegativeInfinity;
                     for (int v = 0; v < V; v++)
                     {
-                        max = Math.Max(max, logits.Data[offset + v]);
+                        max = MathF.Max(max, logits.Data[offset + v]);
                     }
 
                     float sum = 0;

@@ -36,8 +36,8 @@ namespace SmallMind.Core.Simd
             if (A.Length != M * K || B.Length != K * N || C.Length != M * N)
                 throw new ArgumentException("Matrix dimensions don't match buffer sizes");
 
-            // Clear output
-            Array.Clear(C, 0, C.Length);
+            // Use Span.Clear for better performance than Array.Clear
+            C.AsSpan().Clear();
 
             // Select best implementation based on CPU capabilities
             if (Avx512F.IsSupported && K >= 16)

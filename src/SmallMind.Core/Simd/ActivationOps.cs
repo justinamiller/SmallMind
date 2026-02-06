@@ -16,7 +16,7 @@ namespace SmallMind.Core.Simd
         /// ReLU activation: result[i] = max(0, input[i])
         /// Uses SIMD with AVX-512, AVX2, or Vector&lt;T&gt; fallback.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public static void ReLU(ReadOnlySpan<float> input, Span<float> output)
         {
             if (input.Length != output.Length)
@@ -62,7 +62,7 @@ namespace SmallMind.Core.Simd
         /// ReLU backward pass: grad[i] = input[i] > 0 ? outputGrad[i] : 0
         /// Uses SIMD for conditional masking with AVX-512, AVX2, or Vector&lt;T&gt; fallback.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         [SkipLocalsInit]
         public static void ReLUBackward(ReadOnlySpan<float> input, ReadOnlySpan<float> outputGrad, Span<float> inputGrad)
         {
@@ -126,7 +126,7 @@ namespace SmallMind.Core.Simd
         /// Uses a Padé rational approximation for tanh to enable full SIMD vectorization.
         /// Maximum absolute error vs exact GELU: less than 5e-4 across [-10, 10].
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public static void GELU(ReadOnlySpan<float> input, Span<float> output)
         {
             if (input.Length != output.Length)
@@ -190,7 +190,8 @@ namespace SmallMind.Core.Simd
                 float x = input[i];
                 float x2 = x * x;
                 float inner = SQRT_2_OVER_PI * (x + COEFF * x2 * x);
-                inner = Math.Clamp(inner, -10f, 10f);
+                // Branchless clamp: faster than Math.Clamp in hot paths
+                inner = MathF.Max(-10f, MathF.Min(inner, 10f));
                 float inner2 = inner * inner;
                 float tanh = inner * (PADE_A + inner2) / (PADE_A + PADE_B * inner2);
                 output[i] = HALF * x * (1f + tanh);
@@ -204,8 +205,8 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float FastSigmoid(float x)
         {
-            // Clamp to avoid overflow in exp
-            x = Math.Clamp(x, -20f, 20f);
+            // Branchless clamp to avoid overflow in exp
+            x = MathF.Max(-20f, MathF.Min(x, 20f));
             return 1f / (1f + MathF.Exp(-x));
         }
 
@@ -214,7 +215,7 @@ namespace SmallMind.Core.Simd
         /// d/dx GELU(x) = 0.5 * (1 + tanh(z)) + 0.5 * x * sech²(z) * dz/dx
         /// where z = sqrt(2/π) * (x + 0.044715 * x³)
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public static void GELUBackward(ReadOnlySpan<float> input, ReadOnlySpan<float> outputGrad, Span<float> inputGrad)
         {
             if (input.Length != outputGrad.Length || input.Length != inputGrad.Length)
@@ -279,7 +280,8 @@ namespace SmallMind.Core.Simd
                 float grad = outputGrad[i];
                 float x2 = x * x;
                 float inner = SQRT_2_OVER_PI * (x + COEFF * x2 * x);
-                inner = Math.Clamp(inner, -10f, 10f);
+                // Branchless clamp: faster than Math.Clamp in hot paths
+                inner = MathF.Max(-10f, MathF.Min(inner, 10f));
                 float inner2 = inner * inner;
                 float tanh = inner * (PADE_A + inner2) / (PADE_A + PADE_B * inner2);
                 float sech2 = 1f - tanh * tanh;
