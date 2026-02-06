@@ -46,7 +46,7 @@ jobs:
         run: dotnet restore
 
       - name: Build (Release)
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --no-restore --configuration Release -maxcpucount
 
       - name: Run Unit Tests
         run: dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=unit-tests.trx"
@@ -95,7 +95,7 @@ jobs:
         run: dotnet restore
 
       - name: Build (Release)
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --no-restore --configuration Release -maxcpucount
 
       - name: Run Performance Tests
         env:
