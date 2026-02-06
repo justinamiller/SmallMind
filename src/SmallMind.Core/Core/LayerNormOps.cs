@@ -181,23 +181,93 @@ namespace SmallMind.Core.Core
                 int offset = b * features;
                 
                 // Pass 1: Compute mean and variance of (input + residual)
-                float mean = 0f;
-                float m2 = 0f;
-                
-                for (int f = 0; f < features; f++)
+                float mean;
+                float invStd;
+
+                if (System.Numerics.Vector.IsHardwareAccelerated && features >= System.Numerics.Vector<float>.Count * 2)
                 {
-                    float val = input[offset + f] + residual[offset + f];
-                    float delta = val - mean;
-                    mean += delta / (f + 1);
-                    float delta2 = val - mean;
-                    m2 += delta * delta2;
+                    int vectorSize = System.Numerics.Vector<float>.Count;
+
+                    // Pass 1a: Sum for mean (SIMD)
+                    var vSum = System.Numerics.Vector<float>.Zero;
+                    int f1 = 0;
+                    for (; f1 <= features - vectorSize; f1 += vectorSize)
+                    {
+                        var vIn = new System.Numerics.Vector<float>(input.Slice(offset + f1, vectorSize));
+                        var vRes = new System.Numerics.Vector<float>(residual.Slice(offset + f1, vectorSize));
+                        vSum += vIn + vRes;
+                    }
+                    float sum = 0f;
+                    for (int vi = 0; vi < vectorSize; vi++) sum += vSum[vi];
+                    for (; f1 < features; f1++) sum += input[offset + f1] + residual[offset + f1];
+                    mean = sum / features;
+
+                    // Pass 1b: Sum of squared deviations (SIMD)
+                    var vMeanTmp = new System.Numerics.Vector<float>(mean);
+                    var vSqSum = System.Numerics.Vector<float>.Zero;
+                    int f2 = 0;
+                    for (; f2 <= features - vectorSize; f2 += vectorSize)
+                    {
+                        var vIn = new System.Numerics.Vector<float>(input.Slice(offset + f2, vectorSize));
+                        var vRes = new System.Numerics.Vector<float>(residual.Slice(offset + f2, vectorSize));
+                        var vDiff = vIn + vRes - vMeanTmp;
+                        vSqSum += vDiff * vDiff;
+                    }
+                    float sqSum = 0f;
+                    for (int vi = 0; vi < vectorSize; vi++) sqSum += vSqSum[vi];
+                    for (; f2 < features; f2++)
+                    {
+                        float diff = input[offset + f2] + residual[offset + f2] - mean;
+                        sqSum += diff * diff;
+                    }
+                    float variance = sqSum / features;
+                    invStd = 1f / MathF.Sqrt(variance + eps);
+                }
+                else
+                {
+                    // Scalar Welford fallback (original code, unchanged)
+                    mean = 0f;
+                    float m2 = 0f;
+                    for (int fi = 0; fi < features; fi++)
+                    {
+                        float val = input[offset + fi] + residual[offset + fi];
+                        float delta = val - mean;
+                        mean += delta / (fi + 1);
+                        float delta2 = val - mean;
+                        m2 += delta * delta2;
+                    }
+                    float variance = m2 / features;
+                    invStd = 1f / MathF.Sqrt(variance + eps);
                 }
                 
-                float variance = m2 / features;
-                float invStd = 1f / MathF.Sqrt(variance + eps);
-                
                 // Pass 2: Normalize (input + residual) and apply affine transformation
-                for (int f = 0; f < features; f++)
+                int f = 0;
+
+                if (System.Numerics.Vector.IsHardwareAccelerated && features >= System.Numerics.Vector<float>.Count)
+                {
+                    int vectorSize = System.Numerics.Vector<float>.Count;
+                    var vMean = new System.Numerics.Vector<float>(mean);
+                    var vInvStd = new System.Numerics.Vector<float>(invStd);
+
+                    for (; f <= features - vectorSize; f += vectorSize)
+                    {
+                        // Load all 4 input vectors
+                        var vInput = new System.Numerics.Vector<float>(input.Slice(offset + f, vectorSize));
+                        var vResidual = new System.Numerics.Vector<float>(residual.Slice(offset + f, vectorSize));
+                        var vGamma = new System.Numerics.Vector<float>(gamma.Slice(f, vectorSize));
+                        var vBeta = new System.Numerics.Vector<float>(beta.Slice(f, vectorSize));
+
+                        // Fused: gamma * ((input + residual - mean) * invStd) + beta
+                        var vCombined = vInput + vResidual;
+                        var vNormalized = (vCombined - vMean) * vInvStd;
+                        var vResult = vGamma * vNormalized + vBeta;
+
+                        vResult.CopyTo(output.Slice(offset + f, vectorSize));
+                    }
+                }
+
+                // Scalar remainder
+                for (; f < features; f++)
                 {
                     float combined = input[offset + f] + residual[offset + f];
                     float normalized = (combined - mean) * invStd;
