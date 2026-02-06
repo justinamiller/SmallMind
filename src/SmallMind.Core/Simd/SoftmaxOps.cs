@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Threading.Tasks;
+using SmallMind.Core.Utilities;
 
 namespace SmallMind.Core.Simd
 {
@@ -112,11 +113,11 @@ namespace SmallMind.Core.Simd
             }
 
             // Step 2: Compute exp(x - max) and sum (fused for cache efficiency)
-            // Note: exp() has no SIMD intrinsic, so this must be scalar
+            // Use FastExp approximation for 3-5x speedup with acceptable accuracy
             float sum = 0f;
             for (i = 0; i < length; i++)
             {
-                float exp = MathF.Exp(input[offset + i] - max);
+                float exp = MathUtils.FastExp(input[offset + i] - max);
                 output[offset + i] = exp;
                 sum += exp;
             }
@@ -171,11 +172,11 @@ namespace SmallMind.Core.Simd
             float max = FindMax(input);
 
             // Step 2: Compute exp(x - max) and sum (fused loop for cache efficiency)
-            // Note: exp() has no SIMD intrinsic, so this is scalar
+            // Use FastExp approximation for 3-5x speedup with acceptable accuracy
             float sum = 0f;
             for (int i = 0; i < length; i++)
             {
-                float exp = MathF.Exp(input[i] - max);
+                float exp = MathUtils.FastExp(input[i] - max);
                 output[i] = exp;
                 sum += exp;
             }
@@ -324,11 +325,11 @@ namespace SmallMind.Core.Simd
                 // Find max
                 float max = FindMax(inputRow);
 
-                // Compute sum of exp(x - max)
+                // Compute sum of exp(x - max) using FastExp
                 float sum = 0f;
                 for (int j = 0; j < cols; j++)
                 {
-                    sum += MathF.Exp(inputRow[j] - max);
+                    sum += MathUtils.FastExp(inputRow[j] - max);
                 }
 
                 float logSumExp = MathF.Log(sum);

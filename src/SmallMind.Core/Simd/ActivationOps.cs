@@ -126,6 +126,7 @@ namespace SmallMind.Core.Simd
         /// Uses a Padé rational approximation for tanh to enable full SIMD vectorization.
         /// Maximum absolute error vs exact GELU: less than 5e-4 across [-10, 10].
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void GELU(ReadOnlySpan<float> input, Span<float> output)
         {
             if (input.Length != output.Length)
@@ -213,6 +214,7 @@ namespace SmallMind.Core.Simd
         /// d/dx GELU(x) = 0.5 * (1 + tanh(z)) + 0.5 * x * sech²(z) * dz/dx
         /// where z = sqrt(2/π) * (x + 0.044715 * x³)
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void GELUBackward(ReadOnlySpan<float> input, ReadOnlySpan<float> outputGrad, Span<float> inputGrad)
         {
             if (input.Length != outputGrad.Length || input.Length != inputGrad.Length)
