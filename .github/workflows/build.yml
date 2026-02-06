@@ -105,12 +105,12 @@ jobs:
       - name: Run SIMD Benchmarks
         run: |
           cd benchmarks
-          dotnet run --configuration Release --no-build
+          dotnet run --configuration Release
 
       - name: Run SmallMind Performance Benchmarks
         run: |
           cd src/SmallMind.Benchmarks
-          dotnet run --configuration Release --no-build
+          dotnet run --configuration Release
 
       - name: Upload Benchmark Results
         uses: actions/upload-artifact@v4
