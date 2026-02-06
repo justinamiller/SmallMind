@@ -679,7 +679,16 @@ namespace SmallMind.Transformers
 
         public static Tensor GELU(Tensor input)
         {
-            var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
+            return GELU(input, dest: null);
+        }
+
+        /// <summary>
+        /// GELU activation with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// </summary>
+        public static Tensor GELU(Tensor input, Tensor? dest)
+        {
+            var output = dest ?? new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
             
             // Use optimized fast GELU approximation from ActivationOps
             // Based on the sigmoid approximation: GELU(x) ≈ x * σ(1.702 * x)

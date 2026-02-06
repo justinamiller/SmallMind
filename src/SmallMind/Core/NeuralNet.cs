@@ -474,7 +474,16 @@ namespace SmallMind.Core
 
         public static Tensor GELU(Tensor input)
         {
-            var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
+            return GELU(input, dest: null);
+        }
+
+        /// <summary>
+        /// GELU activation with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// </summary>
+        public static Tensor GELU(Tensor input, Tensor? dest)
+        {
+            var output = dest ?? new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
             
             for (int i = 0; i < input.Size; i++)
             {
