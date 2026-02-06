@@ -282,7 +282,7 @@ namespace SmallMind.Runtime
         /// <summary>
         /// Performs validation and saves the best model if validation loss improves.
         /// </summary>
-        /// <returns>The current validation loss, or the previous best if validation wasn't performed this step.</returns>
+        /// <returns>The updated best validation loss.</returns>
         private float PerformValidation(int step, int valEvery, int valBatches, string checkpointDir, float bestValLoss)
         {
             if (valEvery > 0 && (step + 1) % valEvery == 0)
@@ -298,8 +298,6 @@ namespace SmallMind.Runtime
                     SaveCheckpoint(bestCheckpointPath);
                     Console.WriteLine($"New best validation loss! Saved to {bestCheckpointPath}");
                 }
-                
-                return valLoss < bestValLoss ? valLoss : bestValLoss;
             }
             
             return bestValLoss;
