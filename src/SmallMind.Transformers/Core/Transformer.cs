@@ -169,8 +169,9 @@ namespace SmallMind.Transformers
             }
 
             // Token embeddings: (B, T) -> (B, T, n_embd)
-            // Reuse workspace tensor for token embeddings
-            var tokEmbDest = _workspace.GetOrCreate("tokEmb", new int[] { B, T, _nEmbd }, _isTraining);
+            // Reuse workspace tensor for token embeddings using stackalloc
+            Span<int> embedShape = stackalloc int[3] { B, T, _nEmbd };
+            var tokEmbDest = _workspace.GetOrCreate("tokEmb", embedShape, _isTraining);
             var tokEmb = _tokenEmbedding.Forward(idx, tokEmbDest);
 
             // Position embeddings: get cached position indices or create new
@@ -178,6 +179,7 @@ namespace SmallMind.Transformers
             int cacheKey = T * 100000 + positionOffset; // Unique key combining T and offset
             if (!_positionIndicesCache.TryGetValue(cacheKey, out var posIndices))
             {
+                // Position indices are cached, so one-time allocation is acceptable
                 posIndices = new Tensor(new float[T], new int[] { T });
                 for (int i = 0; i < T; i++)
                 {
@@ -187,12 +189,13 @@ namespace SmallMind.Transformers
             }
             
             // Reuse workspace tensor for position embeddings
-            var posEmbDest = _workspace.GetOrCreate("posEmb", new int[] { T, _nEmbd }, _isTraining);
+            Span<int> posEmbShape = stackalloc int[2] { T, _nEmbd };
+            var posEmbDest = _workspace.GetOrCreate("posEmb", posEmbShape, _isTraining);
             var posEmb = _positionEmbedding.Forward(posIndices, posEmbDest);
 
             // Add token and position embeddings: (B, T, n_embd)
-            // Reuse workspace for the result
-            var addEmbDest = _workspace.GetOrCreate("addEmb", new int[] { B, T, _nEmbd }, _isTraining);
+            // Reuse workspace for the result (reuse embedShape)
+            var addEmbDest = _workspace.GetOrCreate("addEmb", embedShape, _isTraining);
             var x = AddPositionEmbeddings(tokEmb, posEmb, addEmbDest, B, T, _nEmbd);
             x = _embDropout.Forward(x);
 
@@ -554,6 +557,15 @@ namespace SmallMind.Transformers
         private Tensor? _attnOutputWorkspace;
         private Tensor? _reshapedOutputWorkspace;  // Added for ReshapeAttentionOutput
         
+        // Cached shape arrays to avoid per-forward allocations
+        // These are reused and updated with current batch/sequence dimensions
+        private readonly int[] _qShapeCache = new int[4];      // [B, nHead, T, headSize]
+        private readonly int[] _kShapeCache = new int[4];      // [B, nKvHead, T, headSize]
+        private readonly int[] _vShapeCache = new int[4];      // [B, nKvHead, T, headSize]
+        private readonly int[] _scoresShapeCache = new int[4]; // [B, nHead, T, fullSeqLen]
+        private readonly int[] _reshapedShapeCache = new int[3]; // [B, T, nEmbd]
+        private readonly int[] _cacheShapeCache = new int[4];  // [B, nKvHead, blockSize, headSize]
+        
         // KV-Cache support for efficient autoregressive generation
         private Tensor? _cachedKeys;    // Cached keys from previous tokens
         private Tensor? _cachedValues;  // Cached values from previous tokens
@@ -689,6 +701,38 @@ namespace SmallMind.Transformers
             workspace = new Tensor(shape, requiresGrad: _isTraining);
             return workspace;
         }
+        
+        /// <summary>
+        /// Get or allocate workspace tensor for the given shape (span-based, zero-allocation).
+        /// Reuses existing workspace if shape matches, otherwise allocates new one.
+        /// Use with cached shape arrays to avoid per-forward allocations.
+        /// </summary>
+        private Tensor GetOrAllocateWorkspace(ref Tensor? workspace, ReadOnlySpan<int> shape)
+        {
+            // Check if we can reuse existing workspace
+            if (workspace != null && workspace.Shape.Length == shape.Length)
+            {
+                bool shapeMatches = true;
+                for (int i = 0; i < shape.Length; i++)
+                {
+                    if (workspace.Shape[i] != shape[i])
+                    {
+                        shapeMatches = false;
+                        break;
+                    }
+                }
+                
+                if (shapeMatches)
+                {
+                    return workspace;
+                }
+            }
+            
+            // Allocate new workspace (must create array here, but only on shape change)
+            var shapeArray = shape.ToArray();
+            workspace = new Tensor(shapeArray, requiresGrad: _isTraining);
+            return workspace;
+        }
 
         public Tensor Forward(Tensor x)
         {
@@ -699,14 +743,25 @@ namespace SmallMind.Transformers
             // Compute Q, K, V: (B, T, n_embd) -> (B, T, nEmbd + 2*kvDim)
             var qkv = _qkv.Forward(x);
 
-            // Use workspace tensors for Q, K, V to avoid allocations
-            var qShape = new int[] { B, _nHead, T, _headSize };
-            var kShape = new int[] { B, _nKvHead, T, _headSize };
-            var vShape = new int[] { B, _nKvHead, T, _headSize };
+            // Use cached shape arrays to avoid allocations (update in place)
+            _qShapeCache[0] = B; 
+            _qShapeCache[1] = _nHead;   
+            _qShapeCache[2] = T; 
+            _qShapeCache[3] = _headSize;
             
-            var q = GetOrAllocateWorkspace(ref _qWorkspace, qShape);
-            var k = GetOrAllocateWorkspace(ref _kWorkspace, kShape);
-            var v = GetOrAllocateWorkspace(ref _vWorkspace, vShape);
+            _kShapeCache[0] = B; 
+            _kShapeCache[1] = _nKvHead; 
+            _kShapeCache[2] = T; 
+            _kShapeCache[3] = _headSize;
+            
+            _vShapeCache[0] = B; 
+            _vShapeCache[1] = _nKvHead; 
+            _vShapeCache[2] = T; 
+            _vShapeCache[3] = _headSize;
+            
+            var q = GetOrAllocateWorkspace(ref _qWorkspace, _qShapeCache);
+            var k = GetOrAllocateWorkspace(ref _kWorkspace, _kShapeCache);
+            var v = GetOrAllocateWorkspace(ref _vWorkspace, _vShapeCache);
             
             // Split into Q, K, V and reshape
             // Q: (B, T, nEmbd) -> (B, nHead, T, headSize)
@@ -736,9 +791,14 @@ namespace SmallMind.Transformers
                 // Initialize cache on first use (use nKvHead for GQA)
                 if (_cachedKeys == null)
                 {
-                    var cacheShape = new int[] { B, _nKvHead, _blockSize, _headSize };
-                    _cachedKeys = new Tensor(cacheShape, requiresGrad: false);
-                    _cachedValues = new Tensor(cacheShape, requiresGrad: false);
+                    // Use cached shape array to avoid allocation
+                    _cacheShapeCache[0] = B; 
+                    _cacheShapeCache[1] = _nKvHead; 
+                    _cacheShapeCache[2] = _blockSize; 
+                    _cacheShapeCache[3] = _headSize;
+                    // Clone the cache shape for tensor storage (one-time allocation)
+                    _cachedKeys = new Tensor((int[])_cacheShapeCache.Clone(), requiresGrad: false);
+                    _cachedValues = new Tensor((int[])_cacheShapeCache.Clone(), requiresGrad: false);
                 }
                 
                 // Append new K, V to cache
@@ -772,19 +832,24 @@ namespace SmallMind.Transformers
                 fullSeqLen = T;
             }
 
-            // Use workspace for attention scores
-            var scoresShape = new int[] { B, _nHead, T, fullSeqLen };
-            var att = GetOrAllocateWorkspace(ref _scoresWorkspace, scoresShape);
+            // Use workspace for attention scores (update cached shape)
+            _scoresShapeCache[0] = B; 
+            _scoresShapeCache[1] = _nHead; 
+            _scoresShapeCache[2] = T; 
+            _scoresShapeCache[3] = fullSeqLen;
+            var att = GetOrAllocateWorkspace(ref _scoresWorkspace, _scoresShapeCache);
             ComputeAttentionScoresInPlace(q, kFull, att, B, T, fullSeqLen);
 
-            // Use workspace for attention output
-            var y = GetOrAllocateWorkspace(ref _attnOutputWorkspace, qShape);
+            // Use workspace for attention output (reuse qShapeCache)
+            var y = GetOrAllocateWorkspace(ref _attnOutputWorkspace, _qShapeCache);
             ApplyAttentionInPlace(att, vFull, y, B, T, fullSeqLen);
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
-            // Use workspace to avoid allocation
-            var reshapedShape = new int[] { B, T, _nEmbd };
-            var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, reshapedShape);
+            // Use cached shape array to avoid allocation
+            _reshapedShapeCache[0] = B; 
+            _reshapedShapeCache[1] = T; 
+            _reshapedShapeCache[2] = _nEmbd;
+            var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, _reshapedShapeCache);
             ReshapeAttentionOutputInPlace(y, yReshaped, B, T);
 
             // Final projection and dropout
@@ -1665,16 +1730,19 @@ namespace SmallMind.Transformers
             int B = x.Shape[0];
             int T = x.Shape[1];
             
-            // fc1 output: (B, T, 4*n_embd)
-            var fc1Out = _workspace.GetOrCreate("fc1Out", new int[] { B, T, 4 * _nEmbd }, _isTraining);
+            // Use stackalloc for shape arrays to avoid heap allocations
+            Span<int> fc1Shape = stackalloc int[3] { B, T, 4 * _nEmbd };
+            var fc1Out = _workspace.GetOrCreate("fc1Out", fc1Shape, _isTraining);
             _fc1.Forward(x, fc1Out);
             
             // GELU activation with reused workspace tensor (avoids allocation)
-            var geluOut = _workspace.GetOrCreate("geluOut", new int[] { B, T, 4 * _nEmbd }, _isTraining);
+            // Reuse same shape as fc1Out
+            var geluOut = _workspace.GetOrCreate("geluOut", fc1Shape, _isTraining);
             Activations.GELU(fc1Out, geluOut);
             
             // fc2 output: (B, T, n_embd) - reuse input shape
-            var fc2Out = _workspace.GetOrCreate("fc2Out", new int[] { B, T, _nEmbd }, _isTraining);
+            Span<int> fc2Shape = stackalloc int[3] { B, T, _nEmbd };
+            var fc2Out = _workspace.GetOrCreate("fc2Out", fc2Shape, _isTraining);
             _fc2.Forward(geluOut, fc2Out);
             
             var dropoutOut = _dropout.Forward(fc2Out);
@@ -1752,24 +1820,28 @@ namespace SmallMind.Transformers
             int B = x.Shape[0];
             int T = x.Shape[1];
             
+            // Use stackalloc for shape arrays to avoid heap allocations
+            Span<int> hiddenShape = stackalloc int[3] { B, T, _hiddenDim };
+            Span<int> outputShape = stackalloc int[3] { B, T, _nEmbd };
+            
             // Gate projection: (B, T, n_embd) -> (B, T, hiddenDim)
-            var gateOut = _workspace.GetOrCreate("gateOut", new int[] { B, T, _hiddenDim }, _isTraining);
+            var gateOut = _workspace.GetOrCreate("gateOut", hiddenShape, _isTraining);
             _gateProj.Forward(x, gateOut);
             
             // Up projection: (B, T, n_embd) -> (B, T, hiddenDim)
-            var upOut = _workspace.GetOrCreate("upOut", new int[] { B, T, _hiddenDim }, _isTraining);
+            var upOut = _workspace.GetOrCreate("upOut", hiddenShape, _isTraining);
             _upProj.Forward(x, upOut);
             
             // Apply SiLU activation to gate
-            var gateAct = _workspace.GetOrCreate("gateAct", new int[] { B, T, _hiddenDim }, _isTraining);
+            var gateAct = _workspace.GetOrCreate("gateAct", hiddenShape, _isTraining);
             Activations.SiLU(gateOut, gateAct);
             
             // Element-wise multiply: gateAct * upOut
-            var hidden = _workspace.GetOrCreate("hidden", new int[] { B, T, _hiddenDim }, _isTraining);
+            var hidden = _workspace.GetOrCreate("hidden", hiddenShape, _isTraining);
             ElementwiseMultiply(gateAct, upOut, hidden);
             
             // Down projection: (B, T, hiddenDim) -> (B, T, n_embd)
-            var downOut = _workspace.GetOrCreate("downOut", new int[] { B, T, _nEmbd }, _isTraining);
+            var downOut = _workspace.GetOrCreate("downOut", outputShape, _isTraining);
             _downProj.Forward(hidden, downOut);
             
             // Dropout
