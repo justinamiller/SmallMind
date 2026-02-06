@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
@@ -186,6 +187,38 @@ namespace SmallMind.Core.Simd
         public static string GetSummary()
         {
             return $"SIMD: {BestInstructionSet} ({FloatsPerVector} floats/vec, {VectorWidthBits}-bit)";
+        }
+
+        /// <summary>
+        /// Gets whether AVX-512 is available.
+        /// </summary>
+        public static bool HasAvx512 => Avx512F.IsSupported;
+
+        /// <summary>
+        /// Gets the preferred vector width in float count.
+        /// Returns 16 for AVX-512, 8 for AVX2, or Vector&lt;float&gt;.Count otherwise.
+        /// </summary>
+        public static int PreferredVectorWidth => Avx512F.IsSupported ? 16 : (Avx2.IsSupported ? 8 : Vector<float>.Count);
+
+        /// <summary>
+        /// Performs horizontal sum of a Vector512&lt;float&gt;.
+        /// Reduces 512 bits → 256 bits → 128 bits → scalar.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static float HorizontalSum(Vector512<float> v)
+        {
+            // 512 → 256: add upper and lower halves
+            var v256 = Avx.Add(
+                Avx512F.ExtractVector256(v, 0),
+                Avx512F.ExtractVector256(v, 1));
+            // 256 → 128
+            var v128 = Sse.Add(
+                Avx.ExtractVector128(v256, 0),
+                Avx.ExtractVector128(v256, 1));
+            // 128 → scalar
+            v128 = Sse.Add(v128, Sse.MoveHighToLow(v128, v128));
+            v128 = Sse.AddScalar(v128, Sse.Shuffle(v128, v128, 0x01));
+            return Sse.ConvertToSingle(v128);
         }
 
         private static string FormatSupport(bool isSupported)

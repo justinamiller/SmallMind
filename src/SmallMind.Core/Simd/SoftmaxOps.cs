@@ -1,6 +1,8 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Threading.Tasks;
 
 namespace SmallMind.Core.Simd
@@ -50,23 +52,53 @@ namespace SmallMind.Core.Simd
         private static void SoftmaxRowIndexed(float[] input, float[] output, int offset, int length)
         {
             // Step 1: Find max with SIMD
-            int vectorSize = Vector<float>.Count;
-            var maxVec = new Vector<float>(float.NegativeInfinity);
             int i = 0;
+            float max = float.NegativeInfinity;
+
+            unsafe
+            {
+                fixed (float* pInput = input)
+                {
+                    // AVX-512 path (16 floats)
+                    if (Avx512F.IsSupported && length >= 16)
+                    {
+                        var maxVec512 = Vector512.Create(float.NegativeInfinity);
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var v = Avx512F.LoadVector512(pInput + offset + i);
+                            maxVec512 = Avx512F.Max(maxVec512, v);
+                        }
+                        // Reduce 512→256→scalar
+                        var upper = Avx512F.ExtractVector256(maxVec512, 1);
+                        var lower = Avx512F.ExtractVector256(maxVec512, 0);
+                        var maxVec256 = Avx.Max(upper, lower);
+                        
+                        // Further reduce 256→scalar
+                        var maxVec = new Vector<float>(maxVec256);
+                        int vectorSize = Vector<float>.Count;
+                        for (int j = 0; j < vectorSize; j++)
+                        {
+                            if (maxVec[j] > max)
+                                max = maxVec[j];
+                        }
+                    }
+                }
+            }
             
-            // SIMD max finding
-            for (; i <= length - vectorSize; i += vectorSize)
+            // Vector<T> fallback for remaining elements
+            int vectorSize2 = Vector<float>.Count;
+            var maxVec2 = new Vector<float>(max);
+            for (; i <= length - vectorSize2; i += vectorSize2)
             {
                 var v = new Vector<float>(input, offset + i);
-                maxVec = Vector.Max(maxVec, v);
+                maxVec2 = Vector.Max(maxVec2, v);
             }
             
             // Horizontal max reduction
-            float max = float.NegativeInfinity;
-            for (int j = 0; j < vectorSize; j++)
+            for (int j = 0; j < vectorSize2; j++)
             {
-                if (maxVec[j] > max)
-                    max = maxVec[j];
+                if (maxVec2[j] > max)
+                    max = maxVec2[j];
             }
             
             // Scalar remainder for max
@@ -88,11 +120,28 @@ namespace SmallMind.Core.Simd
 
             // Step 3: Normalize by sum with SIMD
             float invSum = 1f / sum;
-            var invSumVec = new Vector<float>(invSum);
             i = 0;
             
-            // SIMD normalization
-            for (; i <= length - vectorSize; i += vectorSize)
+            unsafe
+            {
+                fixed (float* pOutput = output)
+                {
+                    // AVX-512 normalization path (16 floats)
+                    if (Avx512F.IsSupported && length >= 16)
+                    {
+                        var invSumVec512 = Vector512.Create(invSum);
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var v = Avx512F.LoadVector512(pOutput + offset + i);
+                            Avx512F.Store(pOutput + offset + i, Avx512F.Multiply(v, invSumVec512));
+                        }
+                    }
+                }
+            }
+            
+            // Vector<T> fallback for normalization
+            var invSumVec = new Vector<float>(invSum);
+            for (; i <= length - vectorSize2; i += vectorSize2)
             {
                 var v = new Vector<float>(output, offset + i);
                 (v * invSumVec).CopyTo(output, offset + i);
@@ -102,6 +151,8 @@ namespace SmallMind.Core.Simd
             for (; i < length; i++)
             {
                 output[offset + i] *= invSum;
+            }
+        }
             }
         }
 
@@ -134,20 +185,39 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
-        /// Finds the maximum value in a span using SIMD.
+        /// Finds the maximum value in a span using SIMD (AVX-512, AVX2, or Vector&lt;T&gt;).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [SkipLocalsInit]
         private static float FindMax(ReadOnlySpan<float> values)
         {
             int length = values.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
-
-            // Initialize with negative infinity
             var maxVec = new Vector<float>(float.NegativeInfinity);
 
-            // SIMD loop
+            unsafe
+            {
+                fixed (float* pValues = values)
+                {
+                    // AVX-512 path (16 floats)
+                    if (Avx512F.IsSupported && length >= 16)
+                    {
+                        var maxVec512 = Vector512.Create(float.NegativeInfinity);
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var v = Avx512F.LoadVector512(pValues + i);
+                            maxVec512 = Avx512F.Max(maxVec512, v);
+                        }
+                        // Reduce 512→256: take max of upper and lower halves
+                        var upper = Avx512F.ExtractVector256(maxVec512, 1);
+                        var lower = Avx512F.ExtractVector256(maxVec512, 0);
+                        maxVec = new Vector<float>(Avx.Max(upper, lower));
+                    }
+                }
+            }
+
+            // Vector<T> fallback
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var v = new Vector<float>(values.Slice(i));
@@ -173,18 +243,34 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
-        /// In-place scalar multiplication using SIMD.
+        /// In-place scalar multiplication using SIMD (AVX-512, AVX2, or Vector&lt;T&gt;).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void Scale(Span<float> values, float scalar)
         {
             int length = values.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            var vScalar = new Vector<float>(scalar);
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                var vScalar512 = Vector512.Create(scalar);
+                unsafe
+                {
+                    fixed (float* pValues = values)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var v = Avx512F.LoadVector512(pValues + i);
+                            Avx512F.Store(pValues + i, Avx512F.Multiply(v, vScalar512));
+                        }
+                    }
+                }
+            }
 
-            // SIMD loop
+            // Vector<T> fallback
+            var vScalar = new Vector<float>(scalar);
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var v = new Vector<float>(values.Slice(i));

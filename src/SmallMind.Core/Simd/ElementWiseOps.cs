@@ -15,7 +15,7 @@ namespace SmallMind.Core.Simd
     {
         /// <summary>
         /// Element-wise addition: result[i] = a[i] + b[i]
-        /// Uses SIMD acceleration with Vector&lt;float&gt; for portable performance.
+        /// Uses SIMD acceleration with AVX-512, AVX2, or Vector&lt;float&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Add(ReadOnlySpan<float> a, ReadOnlySpan<float> b, Span<float> result)
@@ -24,10 +24,27 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("All spans must have the same length");
 
             int length = a.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            // SIMD loop - process multiple elements per iteration
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b, pR = result)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var va = Avx512F.LoadVector512(pA + i);
+                            var vb = Avx512F.LoadVector512(pB + i);
+                            Avx512F.Store(pR + i, Avx512F.Add(va, vb));
+                        }
+                    }
+                }
+            }
+
+            // Vector<T> fallback - process remaining elements
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var va = new Vector<float>(a.Slice(i));
@@ -44,7 +61,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// Element-wise subtraction: result[i] = a[i] - b[i]
-        /// Uses SIMD acceleration with Vector&lt;float&gt; for portable performance.
+        /// Uses SIMD acceleration with AVX-512, AVX2, or Vector&lt;float&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Subtract(ReadOnlySpan<float> a, ReadOnlySpan<float> b, Span<float> result)
@@ -53,10 +70,27 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("All spans must have the same length");
 
             int length = a.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            // SIMD loop
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b, pR = result)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var va = Avx512F.LoadVector512(pA + i);
+                            var vb = Avx512F.LoadVector512(pB + i);
+                            Avx512F.Store(pR + i, Avx512F.Subtract(va, vb));
+                        }
+                    }
+                }
+            }
+
+            // Vector<T> fallback
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var va = new Vector<float>(a.Slice(i));
@@ -73,7 +107,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// Element-wise multiplication: result[i] = a[i] * b[i]
-        /// Uses SIMD acceleration with Vector&lt;float&gt; for portable performance.
+        /// Uses SIMD acceleration with AVX-512, AVX2, or Vector&lt;float&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Multiply(ReadOnlySpan<float> a, ReadOnlySpan<float> b, Span<float> result)
@@ -82,10 +116,27 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("All spans must have the same length");
 
             int length = a.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            // SIMD loop
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b, pR = result)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var va = Avx512F.LoadVector512(pA + i);
+                            var vb = Avx512F.LoadVector512(pB + i);
+                            Avx512F.Store(pR + i, Avx512F.Multiply(va, vb));
+                        }
+                    }
+                }
+            }
+
+            // Vector<T> fallback
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var va = new Vector<float>(a.Slice(i));
@@ -124,19 +175,33 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
-        /// FMA implementation using hardware intrinsics (256-bit AVX2+FMA).
+        /// FMA implementation using hardware intrinsics (AVX-512 or 256-bit AVX2+FMA).
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
         private static void MultiplyAddFma(ReadOnlySpan<float> a, ReadOnlySpan<float> b, ReadOnlySpan<float> c, Span<float> result)
         {
             int length = a.Length;
-            int vectorSize = Vector256<float>.Count; // 8 floats
             int i = 0;
 
             unsafe
             {
                 fixed (float* pA = a, pB = b, pC = c, pResult = result)
                 {
-                    // SIMD loop with FMA
+                    // AVX-512 path (16 floats)
+                    if (Avx512F.IsSupported && length >= 16)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            Vector512<float> va = Avx512F.LoadVector512(pA + i);
+                            Vector512<float> vb = Avx512F.LoadVector512(pB + i);
+                            Vector512<float> vc = Avx512F.LoadVector512(pC + i);
+                            Avx512F.Store(pResult + i, Avx512F.FusedMultiplyAdd(va, vb, vc));
+                        }
+                    }
+
+                    // AVX2+FMA path (8 floats)
+                    int vectorSize = Vector256<float>.Count; // 8 floats
                     for (; i <= length - vectorSize; i += vectorSize)
                     {
                         Vector256<float> va = Avx.LoadVector256(pA + i);
@@ -185,7 +250,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// Scalar multiplication: result[i] = a[i] * scalar
-        /// Uses SIMD acceleration with broadcasted scalar value.
+        /// Uses SIMD acceleration with AVX-512, AVX2, or Vector&lt;T&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Scale(ReadOnlySpan<float> a, float scalar, Span<float> result)
@@ -194,13 +259,28 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("Input and output spans must have the same length");
 
             int length = a.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            // Broadcast scalar to vector
-            var vScalar = new Vector<float>(scalar);
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                var vScalar512 = Vector512.Create(scalar);
+                unsafe
+                {
+                    fixed (float* pA = a, pR = result)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var va = Avx512F.LoadVector512(pA + i);
+                            Avx512F.Store(pR + i, Avx512F.Multiply(va, vScalar512));
+                        }
+                    }
+                }
+            }
 
-            // SIMD loop
+            // Vector<T> fallback
+            int vectorSize = Vector<float>.Count;
+            var vScalar = new Vector<float>(scalar);
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var va = new Vector<float>(a.Slice(i));
@@ -216,19 +296,34 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// In-place scalar addition: a[i] += scalar
-        /// Uses SIMD acceleration with broadcasted scalar value.
+        /// Uses SIMD acceleration with AVX-512, AVX2, or Vector&lt;T&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void AddScalarInPlace(Span<float> a, float scalar)
         {
             int length = a.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            // Broadcast scalar to vector
-            var vScalar = new Vector<float>(scalar);
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                var vScalar512 = Vector512.Create(scalar);
+                unsafe
+                {
+                    fixed (float* pA = a)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var va = Avx512F.LoadVector512(pA + i);
+                            Avx512F.Store(pA + i, Avx512F.Add(va, vScalar512));
+                        }
+                    }
+                }
+            }
 
-            // SIMD loop
+            // Vector<T> fallback
+            int vectorSize = Vector<float>.Count;
+            var vScalar = new Vector<float>(scalar);
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var va = new Vector<float>(a.Slice(i));
@@ -244,7 +339,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// In-place element-wise addition: a[i] += b[i]
-        /// Uses SIMD acceleration for better performance.
+        /// Uses SIMD acceleration with AVX-512, AVX2, or Vector&lt;T&gt; fallback.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void AddInPlace(Span<float> a, ReadOnlySpan<float> b)
@@ -253,10 +348,27 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException("Spans must have the same length");
 
             int length = a.Length;
-            int vectorSize = Vector<float>.Count;
             int i = 0;
 
-            // SIMD loop
+            // AVX-512 path (16 floats)
+            if (Avx512F.IsSupported && length >= 16)
+            {
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var va = Avx512F.LoadVector512(pA + i);
+                            var vb = Avx512F.LoadVector512(pB + i);
+                            Avx512F.Store(pA + i, Avx512F.Add(va, vb));
+                        }
+                    }
+                }
+            }
+
+            // Vector<T> fallback
+            int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var va = new Vector<float>(a.Slice(i));
