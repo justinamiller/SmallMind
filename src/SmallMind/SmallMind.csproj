@@ -34,4 +34,8 @@
     <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
+  </ItemGroup>
+
 </Project>

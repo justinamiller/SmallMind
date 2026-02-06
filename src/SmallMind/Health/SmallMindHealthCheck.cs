@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.Intrinsics.X86;
+using SmallMind.Core.Core;
 
 namespace SmallMind.Health
 {
@@ -174,8 +175,8 @@ namespace SmallMind.Health
             try
             {
                 // Test tensor pool by renting and returning
-                var testArray = Core.TensorPool.Shared.Rent(64);
-                Core.TensorPool.Shared.Return(testArray);
+                var testArray = TensorPool.Shared.Rent(64);
+                TensorPool.Shared.Return(testArray);
                 
                 data["tensor_pool.functional"] = true;
                 return HealthStatus.Healthy;

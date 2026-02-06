@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using SmallMind.Embeddings;
-using SmallMind.Validation;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Indexing
 {

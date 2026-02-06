@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using SmallMind.Validation;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Domain
 {

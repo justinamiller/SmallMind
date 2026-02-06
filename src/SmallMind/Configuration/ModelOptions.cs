@@ -1,4 +1,5 @@
 using System;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Configuration
 {
@@ -48,12 +49,12 @@ namespace SmallMind.Configuration
         /// <exception cref="Exceptions.ValidationException">Thrown when options are invalid.</exception>
         public void Validate()
         {
-            Validation.Guard.GreaterThan(VocabSize, 0);
-            Validation.Guard.GreaterThan(BlockSize, 0);
-            Validation.Guard.GreaterThan(EmbeddingDimension, 0);
-            Validation.Guard.GreaterThan(NumLayers, 0);
-            Validation.Guard.GreaterThan(NumHeads, 0);
-            Validation.Guard.InRange(Dropout, 0.0, 1.0);
+            Guard.GreaterThan(VocabSize, 0);
+            Guard.GreaterThan(BlockSize, 0);
+            Guard.GreaterThan(EmbeddingDimension, 0);
+            Guard.GreaterThan(NumLayers, 0);
+            Guard.GreaterThan(NumHeads, 0);
+            Guard.InRange(Dropout, 0.0, 1.0);
             
             if (EmbeddingDimension % NumHeads != 0)
             {

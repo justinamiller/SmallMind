@@ -1,6 +1,6 @@
 using System;
 using SmallMind.Domain.Policies;
-using SmallMind.Validation;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Domain
 {
