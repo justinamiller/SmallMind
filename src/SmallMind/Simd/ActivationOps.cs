@@ -142,7 +142,6 @@ namespace SmallMind.Simd
         }
 
         /// <summary>
-        /// <summary>
         /// GELU activation using the tanh-based approximation (matches PyTorch nn.GELU).
         /// GELU(x) ≈ 0.5 * x * (1 + tanh(sqrt(2/π) * (x + 0.044715 * x³)))
         /// Uses a Padé rational approximation for tanh to enable full SIMD vectorization.

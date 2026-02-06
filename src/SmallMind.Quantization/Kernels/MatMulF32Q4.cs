@@ -77,12 +77,11 @@ namespace SmallMind.Quantization.Kernels
                     int blockIdx = linearIdx / blockSize;
                     float scale = b.Scales[blockIdx];
 
-                    // Unpack 4-bit value
-                    int byteIdx = linearIdx / 2;
+                    // Unpack 4-bit value - branchless nibble extraction
+                    int byteIdx = linearIdx >> 1;  // Divide by 2
                     byte packedByte = b.Data[byteIdx];
-                    byte nibble = (linearIdx % 2 == 0)
-                        ? (byte)(packedByte & 0xF)
-                        : (byte)((packedByte >> 4) & 0xF);
+                    int shift = (linearIdx & 1) << 2;  // 0 or 4
+                    byte nibble = (byte)((packedByte >> shift) & 0xF);
 
                     int quantVal = Q4Tensor.DecodeNibble(nibble);
                     c[col] += aVal * quantVal * scale;
@@ -141,11 +140,11 @@ namespace SmallMind.Quantization.Kernels
                             for (int vi = 0; vi < Vector<float>.Count; vi++)
                             {
                                 int idx = bRowOffset + ci + vi;
-                                int byteIdx = idx / 2;
+                                // Branchless nibble extraction
+                                int byteIdx = idx >> 1;
                                 byte packedByte = b.Data[byteIdx];
-                                byte nibble = (idx % 2 == 0)
-                                    ? (byte)(packedByte & 0xF)
-                                    : (byte)((packedByte >> 4) & 0xF);
+                                int shift = (idx & 1) << 2;
+                                byte nibble = (byte)((packedByte >> shift) & 0xF);
                                 bFloats[vi] = Q4Tensor.DecodeNibble(nibble);
                             }
 
@@ -159,11 +158,11 @@ namespace SmallMind.Quantization.Kernels
                     for (; ci < colEnd; ci++)
                     {
                         int idx = bRowOffset + ci;
-                        int byteIdx = idx / 2;
+                        // Branchless nibble extraction
+                        int byteIdx = idx >> 1;
                         byte packedByte = b.Data[byteIdx];
-                        byte nibble = (idx % 2 == 0)
-                            ? (byte)(packedByte & 0xF)
-                            : (byte)((packedByte >> 4) & 0xF);
+                        int shift = (idx & 1) << 2;
+                        byte nibble = (byte)((packedByte >> shift) & 0xF);
                         int quantVal = Q4Tensor.DecodeNibble(nibble);
                         c[ci] += aTimesScale * quantVal;
                     }
