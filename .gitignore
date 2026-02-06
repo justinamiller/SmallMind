@@ -25,3 +25,5 @@ benchmarks/results/
 latest-profiling-dir.txt
 benchmark-results*.md
 benchmark-results*.json
+artifacts/
+perf/baselines/baseline.json

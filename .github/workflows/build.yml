@@ -89,6 +89,11 @@ jobs:
           cd benchmarks
           dotnet run --configuration Release
 
+      - name: Run SmallMind Performance Benchmarks
+        run: |
+          cd src/SmallMind.Benchmarks
+          dotnet run --configuration Release
+
       - name: Upload Benchmark Results
         uses: actions/upload-artifact@v4
         with:
@@ -96,7 +101,21 @@ jobs:
           path: |
             benchmarks/benchmark-results.md
             benchmarks/benchmark-results.json
+            artifacts/perf/perf-results-latest.md
+            artifacts/perf/perf-results-latest.json
           retention-days: 30
+
+      - name: Check Performance Regressions
+        continue-on-error: true
+        run: |
+          # Future: Add baseline comparison and regression detection
+          # For now, just ensure benchmarks ran successfully
+          if [ -f "artifacts/perf/perf-results-latest.json" ]; then
+            echo "✅ Performance benchmarks completed successfully"
+          else
+            echo "❌ Performance benchmarks failed to generate results"
+            exit 1
+          fi
 
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
