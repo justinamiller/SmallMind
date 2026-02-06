@@ -238,50 +238,93 @@ namespace SmallMind.Runtime
                 totalTokens += tokensThisStep;
 
                 // Logging
-                if ((step + 1) % logEvery == 0 || step == 0)
-                {
-                    if (showPerf)
-                    {
-                        double stepTimeMs = stepStopwatch.Elapsed.TotalMilliseconds;
-                        double tokensPerSec = stepTimeMs > 0 ? tokensThisStep / (stepTimeMs / 1000.0) : 0;
-                        double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
-                        Console.WriteLine($"Step {step + 1}/{steps}, Loss: {avgLoss:F4}, LR: {currentLr:F6}, " +
-                                        $"Time: {stepTimeMs:F0}ms, Tokens/sec: {tokensPerSec:F0}, " +
-                                        $"Avg step: {avgTimePerStep:F0}ms");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Step {step + 1}/{steps}, Loss: {avgLoss:F4}, LR: {currentLr:F6}");
-                    }
-                }
+                LogTrainingProgress(step, steps, avgLoss, currentLr, logEvery, showPerf, 
+                                  stepStopwatch, totalStopwatch, tokensThisStep);
 
                 // Validation
-                if (valEvery > 0 && (step + 1) % valEvery == 0)
-                {
-                    float valLoss = EvaluateValidationLoss(valBatches);
-                    Console.WriteLine($"Validation loss: {valLoss:F4}");
-                    
-                    // Save best model
-                    if (valLoss < bestValLoss)
-                    {
-                        bestValLoss = valLoss;
-                        var bestCheckpointPath = Path.Combine(checkpointDir, "model_best.json");
-                        SaveCheckpoint(bestCheckpointPath);
-                        Console.WriteLine($"New best validation loss! Saved to {bestCheckpointPath}");
-                    }
-                }
+                bestValLoss = PerformValidation(step, valEvery, valBatches, checkpointDir, bestValLoss);
 
                 // Checkpointing
-                if ((step + 1) % saveEvery == 0)
-                {
-                    var checkpointPath = Path.Combine(checkpointDir, "model.json");
-                    SaveCheckpoint(checkpointPath);
-                    Console.WriteLine($"Checkpoint saved to {checkpointPath}");
-                }
+                SavePeriodicCheckpoint(step, saveEvery, checkpointDir);
             }
 
             totalStopwatch.Stop();
 
+            // Log final statistics and save final checkpoint
+            LogFinalStatistics(checkpointDir, showPerf, totalStopwatch, totalTokens, bestValLoss);
+        }
+
+        /// <summary>
+        /// Logs training progress for the current step.
+        /// </summary>
+        private void LogTrainingProgress(int step, int totalSteps, float loss, float learningRate, 
+                                        int logEvery, bool showPerf, System.Diagnostics.Stopwatch stepStopwatch, 
+                                        System.Diagnostics.Stopwatch totalStopwatch, int tokensThisStep)
+        {
+            if ((step + 1) % logEvery == 0 || step == 0)
+            {
+                if (showPerf)
+                {
+                    double stepTimeMs = stepStopwatch.Elapsed.TotalMilliseconds;
+                    double tokensPerSec = stepTimeMs > 0 ? tokensThisStep / (stepTimeMs / 1000.0) : 0;
+                    double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
+                    Console.WriteLine($"Step {step + 1}/{totalSteps}, Loss: {loss:F4}, LR: {learningRate:F6}, " +
+                                    $"Time: {stepTimeMs:F0}ms, Tokens/sec: {tokensPerSec:F0}, " +
+                                    $"Avg step: {avgTimePerStep:F0}ms");
+                }
+                else
+                {
+                    Console.WriteLine($"Step {step + 1}/{totalSteps}, Loss: {loss:F4}, LR: {learningRate:F6}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Performs validation and saves the best model if validation loss improves.
+        /// </summary>
+        /// <returns>The current validation loss, or the previous best if validation wasn't performed this step.</returns>
+        private float PerformValidation(int step, int valEvery, int valBatches, string checkpointDir, float bestValLoss)
+        {
+            if (valEvery > 0 && (step + 1) % valEvery == 0)
+            {
+                float valLoss = EvaluateValidationLoss(valBatches);
+                Console.WriteLine($"Validation loss: {valLoss:F4}");
+                
+                // Save best model
+                if (valLoss < bestValLoss)
+                {
+                    bestValLoss = valLoss;
+                    var bestCheckpointPath = Path.Combine(checkpointDir, "model_best.json");
+                    SaveCheckpoint(bestCheckpointPath);
+                    Console.WriteLine($"New best validation loss! Saved to {bestCheckpointPath}");
+                }
+                
+                return valLoss < bestValLoss ? valLoss : bestValLoss;
+            }
+            
+            return bestValLoss;
+        }
+
+        /// <summary>
+        /// Saves a periodic checkpoint if the step interval is reached.
+        /// </summary>
+        private void SavePeriodicCheckpoint(int step, int saveEvery, string checkpointDir)
+        {
+            if ((step + 1) % saveEvery == 0)
+            {
+                var checkpointPath = Path.Combine(checkpointDir, "model.json");
+                SaveCheckpoint(checkpointPath);
+                Console.WriteLine($"Checkpoint saved to {checkpointPath}");
+            }
+        }
+
+        /// <summary>
+        /// Logs final training statistics and saves the final checkpoint.
+        /// </summary>
+        private void LogFinalStatistics(string checkpointDir, bool showPerf, 
+                                       System.Diagnostics.Stopwatch totalStopwatch, 
+                                       long totalTokens, float bestValLoss)
+        {
             // Save final checkpoint
             var finalCheckpointPath = Path.Combine(checkpointDir, "model.json");
             SaveCheckpoint(finalCheckpointPath);
