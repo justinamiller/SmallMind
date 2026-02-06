@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 
 namespace SmallMind.Core.Core
 {
@@ -207,8 +209,10 @@ namespace SmallMind.Core.Core
         /// <summary>
         /// SIMD-vectorized AdamW update step (no gradient clipping).
         /// Processes vectors of 4-16 floats at a time for 2-4x throughput improvement.
+        /// Uses AVX2 intrinsics when available for maximum performance.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [SkipLocalsInit]
         private void StepSIMD(
             ReadOnlySpan<float> grad, 
             Span<float> data,
@@ -220,52 +224,108 @@ namespace SmallMind.Core.Core
             float beta1Correction,
             float beta2Correction)
         {
-            int vectorSize = Vector<float>.Count;
             int i = 0;
             
-            // Pre-broadcast constants to vectors
-            var vBeta1 = new Vector<float>(_beta1);
-            var vBeta2 = new Vector<float>(_beta2);
-            var vOneMinusBeta1 = new Vector<float>(oneMinusBeta1);
-            var vOneMinusBeta2 = new Vector<float>(oneMinusBeta2);
-            var vBeta1Correction = new Vector<float>(beta1Correction);
-            var vBeta2Correction = new Vector<float>(beta2Correction);
-            var vLr = new Vector<float>(_lr);
-            var vEps = new Vector<float>(_eps);
-            var vWeightDecay = new Vector<float>(_weightDecay);
-            
-            // SIMD loop: Process vectorSize floats per iteration
-            for (; i <= size - vectorSize; i += vectorSize)
+            // AVX2 path (8 floats) - optimal for most CPUs
+            if (Avx2.IsSupported && Fma.IsSupported && size >= 8)
             {
-                // Load current state
-                var vGrad = new Vector<float>(grad.Slice(i, vectorSize));
-                var vM = new Vector<float>(m, i);
-                var vV = new Vector<float>(v, i);
-                var vData = new Vector<float>(data.Slice(i, vectorSize));
+                var vBeta1_256 = Vector256.Create(_beta1);
+                var vBeta2_256 = Vector256.Create(_beta2);
+                var vOneMinusBeta1_256 = Vector256.Create(oneMinusBeta1);
+                var vOneMinusBeta2_256 = Vector256.Create(oneMinusBeta2);
+                var vBeta1Correction_256 = Vector256.Create(beta1Correction);
+                var vBeta2Correction_256 = Vector256.Create(beta2Correction);
+                var vLr_256 = Vector256.Create(_lr);
+                var vEps_256 = Vector256.Create(_eps);
+                var vWeightDecay_256 = Vector256.Create(_weightDecay);
                 
-                // Update biased first moment: m = beta1 * m + (1 - beta1) * grad
-                vM = vBeta1 * vM + vOneMinusBeta1 * vGrad;
-                
-                // Update biased second moment: v = beta2 * v + (1 - beta2) * grad^2
-                vV = vBeta2 * vV + vOneMinusBeta2 * vGrad * vGrad;
-                
-                // Store updated moments
-                vM.CopyTo(m, i);
-                vV.CopyTo(v, i);
-                
-                // Bias-corrected moments
-                var vMHat = vM * vBeta1Correction;
-                var vVHat = vV * vBeta2Correction;
-                
-                // AdamW update: data -= lr * (mHat / sqrt(vHat + eps) + weightDecay * data)
-                // Note: Vector<T> doesn't have Sqrt, so we need to do this in scalar for now
-                // This is still faster overall because moment updates are vectorized
-                for (int j = 0; j < vectorSize; j++)
+                unsafe
                 {
-                    int idx = i + j;
-                    float mHat = vMHat[j];
-                    float vHat = vVHat[j];
-                    data[idx] -= _lr * (mHat / (MathF.Sqrt(vHat) + _eps) + _weightDecay * data[idx]);
+                    fixed (float* pGrad = grad, pData = data, pM = m, pV = v)
+                    {
+                        for (; i <= size - 8; i += 8)
+                        {
+                            // Load current state
+                            var vGrad = Avx.LoadVector256(pGrad + i);
+                            var vM = Avx.LoadVector256(pM + i);
+                            var vV = Avx.LoadVector256(pV + i);
+                            var vData = Avx.LoadVector256(pData + i);
+                            
+                            // Update biased first moment: m = beta1 * m + (1 - beta1) * grad
+                            vM = Fma.MultiplyAdd(vBeta1_256, vM, Avx.Multiply(vOneMinusBeta1_256, vGrad));
+                            
+                            // Update biased second moment: v = beta2 * v + (1 - beta2) * grad^2
+                            vV = Fma.MultiplyAdd(vBeta2_256, vV, Avx.Multiply(vOneMinusBeta2_256, Avx.Multiply(vGrad, vGrad)));
+                            
+                            // Store updated moments
+                            Avx.Store(pM + i, vM);
+                            Avx.Store(pV + i, vV);
+                            
+                            // Bias-corrected moments
+                            var vMHat = Avx.Multiply(vM, vBeta1Correction_256);
+                            var vVHat = Avx.Multiply(vV, vBeta2Correction_256);
+                            
+                            // AdamW update: data -= lr * (mHat / sqrt(vHat + eps) + weightDecay * data)
+                            var vDenom = Avx.Sqrt(Avx.Add(vVHat, vEps_256));
+                            var vUpdate = Avx.Divide(vMHat, vDenom);
+                            vUpdate = Fma.MultiplyAdd(vWeightDecay_256, vData, vUpdate);
+                            vData = Avx.Subtract(vData, Avx.Multiply(vLr_256, vUpdate));
+                            
+                            Avx.Store(pData + i, vData);
+                        }
+                    }
+                }
+            }
+            
+            // Vector<T> fallback for platforms without AVX2
+            if (!Avx2.IsSupported && Vector.IsHardwareAccelerated)
+            {
+                int vectorSize = Vector<float>.Count;
+                
+                // Pre-broadcast constants to vectors
+                var vBeta1 = new Vector<float>(_beta1);
+                var vBeta2 = new Vector<float>(_beta2);
+                var vOneMinusBeta1 = new Vector<float>(oneMinusBeta1);
+                var vOneMinusBeta2 = new Vector<float>(oneMinusBeta2);
+                var vBeta1Correction = new Vector<float>(beta1Correction);
+                var vBeta2Correction = new Vector<float>(beta2Correction);
+                var vLr = new Vector<float>(_lr);
+                var vEps = new Vector<float>(_eps);
+                var vWeightDecay = new Vector<float>(_weightDecay);
+                
+                // SIMD loop: Process vectorSize floats per iteration
+                for (; i <= size - vectorSize; i += vectorSize)
+                {
+                    // Load current state
+                    var vGrad = new Vector<float>(grad.Slice(i, vectorSize));
+                    var vM = new Vector<float>(m, i);
+                    var vV = new Vector<float>(v, i);
+                    var vData = new Vector<float>(data.Slice(i, vectorSize));
+                    
+                    // Update biased first moment: m = beta1 * m + (1 - beta1) * grad
+                    vM = vBeta1 * vM + vOneMinusBeta1 * vGrad;
+                    
+                    // Update biased second moment: v = beta2 * v + (1 - beta2) * grad^2
+                    vV = vBeta2 * vV + vOneMinusBeta2 * vGrad * vGrad;
+                    
+                    // Store updated moments
+                    vM.CopyTo(m, i);
+                    vV.CopyTo(v, i);
+                    
+                    // Bias-corrected moments
+                    var vMHat = vM * vBeta1Correction;
+                    var vVHat = vV * vBeta2Correction;
+                    
+                    // AdamW update: data -= lr * (mHat / sqrt(vHat + eps) + weightDecay * data)
+                    // Note: Vector<T> doesn't have Sqrt, so we need to do this in scalar
+                    // This is still faster overall because moment updates are vectorized
+                    for (int j = 0; j < vectorSize; j++)
+                    {
+                        int idx = i + j;
+                        float mHat = vMHat[j];
+                        float vHat = vVHat[j];
+                        data[idx] -= _lr * (mHat / (MathF.Sqrt(vHat) + _eps) + _weightDecay * data[idx]);
+                    }
                 }
             }
             
