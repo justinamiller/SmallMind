@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Tokenizers;
+using SmallMind.Runtime.Metrics;
 
 // Use aliases to avoid ambiguity
 using Tensor = SmallMind.Core.Core.Tensor;
@@ -28,6 +29,8 @@ namespace SmallMind.Runtime
         public bool EnableDiagnostics { get; set; } = false;
         public bool CheckGradientHealth { get; set; } = false;
         public int DiagnosticInterval { get; set; } = 100;
+        public bool TrackModelMetrics { get; set; } = true;
+        public bool ComputeTokenAccuracy { get; set; } = false;
     }
 
     /// <summary>
@@ -42,6 +45,11 @@ namespace SmallMind.Runtime
         private readonly List<int> _data;
         private readonly Random _random;
         private readonly ICheckpointStore _checkpointStore;
+
+        /// <summary>
+        /// Metrics tracker for monitoring model quality and training progress.
+        /// </summary>
+        public TrainingMetrics Metrics { get; } = new TrainingMetrics();
 
         public Training(TransformerModel model, ITokenizer tokenizer, string trainingText, 
                        int blockSize, int batchSize, int seed, ICheckpointStore? checkpointStore = null)
@@ -159,6 +167,7 @@ namespace SmallMind.Runtime
             Console.WriteLine($"Gradient accumulation steps: {gradAccumSteps}, Warmup steps: {warmupSteps}");
             Console.WriteLine($"Validation every {valEvery} steps with {valBatches} batches");
             Console.WriteLine($"Model parameters: {_model.Parameters.Count} tensors");
+            Console.WriteLine("Model quality metrics tracking: ENABLED");
             if (showPerf)
             {
                 Console.WriteLine("Performance tracking enabled");
@@ -211,6 +220,14 @@ namespace SmallMind.Runtime
 
                 // Average the loss
                 float avgLoss = accumulatedLoss / gradAccumSteps;
+                
+                // Record training loss
+                Metrics.RecordTrainingLoss(avgLoss);
+
+                // Check gradient health (before scaling for accumulation)
+                var (meanNorm, maxNorm, minNorm, nanCount, infCount) = 
+                    MetricsComputer.ComputeGradientStats(_model.Parameters);
+                Metrics.RecordGradientStats(meanNorm, maxNorm, minNorm, nanCount, infCount);
 
                 // Scale gradients if using gradient accumulation
                 if (gradAccumSteps > 1)
@@ -288,7 +305,11 @@ namespace SmallMind.Runtime
             if (valEvery > 0 && (step + 1) % valEvery == 0)
             {
                 float valLoss = EvaluateValidationLoss(valBatches);
-                Console.WriteLine($"Validation loss: {valLoss:F4}");
+                float perplexity = MetricsComputer.ComputePerplexity(valLoss);
+                float? accuracy = Metrics.GetCurrentTokenAccuracy();
+                
+                Console.WriteLine($"Validation - Loss: {valLoss:F4}, Perplexity: {perplexity:F2}" + 
+                    (accuracy.HasValue ? $", Accuracy: {accuracy.Value * 100:F2}%" : ""));
                 
                 // Save best model
                 if (valLoss < bestValLoss)
@@ -337,26 +358,50 @@ namespace SmallMind.Runtime
                 Console.WriteLine($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
                 Console.WriteLine($"Best validation loss: {bestValLoss:F4}");
             }
+
+            // Print comprehensive metrics report
+            Console.WriteLine();
+            Console.WriteLine(Metrics.GetReport());
         }
 
         /// <summary>
         /// Evaluate validation loss on a held-out set
         /// </summary>
-        private float EvaluateValidationLoss(int numBatches)
+        private float EvaluateValidationLoss(int numBatches, bool computeAccuracy = true)
         {
             _model.Eval();
             
             float totalLoss = 0.0f;
+            float totalAccuracy = 0.0f;
+            
             for (int i = 0; i < numBatches; i++)
             {
                 var (x, y) = GetBatch();
                 var logits = _model.Forward(x);
                 var loss = ComputeCrossEntropyLoss(logits, y);
                 totalLoss += loss.Data[0];
+                
+                // Optionally compute token accuracy
+                if (computeAccuracy)
+                {
+                    float accuracy = MetricsComputer.ComputeTokenAccuracy(logits, y);
+                    totalAccuracy += accuracy;
+                }
+            }
+            
+            float avgLoss = totalLoss / numBatches;
+            
+            // Record validation metrics
+            Metrics.RecordValidationLoss(avgLoss);
+            
+            if (computeAccuracy)
+            {
+                float avgAccuracy = totalAccuracy / numBatches;
+                Metrics.RecordTokenAccuracy(avgAccuracy);
             }
             
             _model.Train();
-            return totalLoss / numBatches;
+            return avgLoss;
         }
 
         /// <summary>
