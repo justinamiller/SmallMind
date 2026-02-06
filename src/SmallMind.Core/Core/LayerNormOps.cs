@@ -92,6 +92,33 @@ namespace SmallMind.Core.Core
                     }
                 }
                 
+                // AVX2 with FMA path (8 floats) - faster than Vector<T> on most CPUs
+                if (Avx2.IsSupported && Fma.IsSupported && f <= features - 8)
+                {
+                    var vMean256 = Vector256.Create(mean);
+                    var vInvStd256 = Vector256.Create(invStd);
+                    
+                    unsafe
+                    {
+                        fixed (float* pInput = input, pGamma = gamma, pBeta = beta, pOutput = output)
+                        {
+                            for (; f <= features - 8; f += 8)
+                            {
+                                var vInput = Avx.LoadVector256(pInput + offset + f);
+                                var vGamma = Avx.LoadVector256(pGamma + f);
+                                var vBeta = Avx.LoadVector256(pBeta + f);
+                                
+                                // Normalize: (input - mean) * invStd using FMA
+                                var vNormalized = Avx.Multiply(Avx.Subtract(vInput, vMean256), vInvStd256);
+                                
+                                // Affine: gamma * normalized + beta (FMA: a*b+c)
+                                var vResult = Fma.MultiplyAdd(vGamma, vNormalized, vBeta);
+                                Avx.Store(pOutput + offset + f, vResult);
+                            }
+                        }
+                    }
+                }
+                
                 // Vector<T> fallback
                 int vectorSize = System.Numerics.Vector<float>.Count;
                 if (System.Numerics.Vector.IsHardwareAccelerated && f <= features - vectorSize)
@@ -243,7 +270,36 @@ namespace SmallMind.Core.Core
                 // Pass 2: Normalize (input + residual) and apply affine transformation
                 int f = 0;
 
-                if (System.Numerics.Vector.IsHardwareAccelerated && features >= System.Numerics.Vector<float>.Count)
+                // AVX2 with FMA path (8 floats) - faster than Vector<T> on most CPUs
+                if (Avx2.IsSupported && Fma.IsSupported && features >= 8)
+                {
+                    var vMean256 = Vector256.Create(mean);
+                    var vInvStd256 = Vector256.Create(invStd);
+                    
+                    unsafe
+                    {
+                        fixed (float* pInput = input, pResidual = residual, pGamma = gamma, pBeta = beta, pOutput = output)
+                        {
+                            for (; f <= features - 8; f += 8)
+                            {
+                                var vInput = Avx.LoadVector256(pInput + offset + f);
+                                var vResidual = Avx.LoadVector256(pResidual + offset + f);
+                                var vGamma = Avx.LoadVector256(pGamma + f);
+                                var vBeta = Avx.LoadVector256(pBeta + f);
+                                
+                                // Fused: gamma * ((input + residual - mean) * invStd) + beta
+                                var vCombined = Avx.Add(vInput, vResidual);
+                                var vNormalized = Avx.Multiply(Avx.Subtract(vCombined, vMean256), vInvStd256);
+                                
+                                // FMA: gamma * normalized + beta
+                                var vResult = Fma.MultiplyAdd(vGamma, vNormalized, vBeta);
+                                Avx.Store(pOutput + offset + f, vResult);
+                            }
+                        }
+                    }
+                }
+
+                if (System.Numerics.Vector.IsHardwareAccelerated && f <= features - System.Numerics.Vector<float>.Count)
                 {
                     int vectorSize = System.Numerics.Vector<float>.Count;
                     var vMean = new System.Numerics.Vector<float>(mean);
