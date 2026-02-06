@@ -1216,6 +1216,7 @@ namespace SmallMind.Core.Simd
         /// A: (M × K), B: (N × K) [stored in row-major, will be accessed as transposed], C: (M × N)
         /// This is optimized for computing attention scores: Q @ K^T
         /// where Q and K have shape (T × headSize) and we compute (T × T) scores.
+        /// Uses tiling and SIMD for improved cache locality and throughput.
         /// </summary>
         public static void MatMulTransposeB(
             ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
@@ -1224,72 +1225,135 @@ namespace SmallMind.Core.Simd
             if (A.Length < M * K || B.Length < N * K || C.Length < M * N)
                 throw new ArgumentException("Matrix dimensions don't match buffer sizes");
 
-            // Clear output
-            C.Clear();
+            // NOTE: C.Clear() removed - kernel now uses store-once pattern
+            // Output is fully overwritten by direct assignment
 
             // For attention: A is Q (T × headSize), B is K (T × headSize)
             // We compute C = Q @ K^T (T × T)
             // This is more cache-friendly than transposing K first
             
+            // NOTE: Parallelization removed to avoid Span capture issues
+            // For attention, this is typically called with moderate M (T ≤ 2048)
+            // and high K (headSize = 64-128), making sequential acceptable
             unsafe
             {
                 fixed (float* pA = A, pB = B, pC = C)
                 {
                     for (int i = 0; i < M; i++)
                     {
-                        int aRowStart = i * K;
-                        int cRowStart = i * N;
-                        
-                        for (int j = 0; j < N; j++)
-                        {
-                            int bRowStart = j * K;  // B is stored row-major, treat as transpose
-                            
-                            // Dot product between A[i] and B[j] (which becomes B^T[:,j])
-                            int k = 0;
-                            float sum = 0f;
-                            
-                            // AVX-512 path (16 floats)
-                            if (Avx512F.IsSupported && K >= 16)
-                            {
-                                var sumVec512 = Vector512<float>.Zero;
-                                for (; k <= K - 16; k += 16)
-                                {
-                                    var va = Avx512F.LoadVector512(pA + aRowStart + k);
-                                    var vb = Avx512F.LoadVector512(pB + bRowStart + k);
-                                    sumVec512 = Avx512F.FusedMultiplyAdd(va, vb, sumVec512);
-                                }
-                                // Horizontal sum: 512 → scalar
-                                sum = SimdCapabilities.HorizontalSum(sumVec512);
-                            }
-                            
-                            // Vector<T> fallback
-                            int vectorSize = Vector<float>.Count;
-                            var sumVec = new Vector<float>(sum);
-                            
-                            // SIMD loop
-                            for (; k <= K - vectorSize; k += vectorSize)
-                            {
-                                var va = new Vector<float>(A.Slice(aRowStart + k, vectorSize));
-                                var vb = new Vector<float>(B.Slice(bRowStart + k, vectorSize));
-                                sumVec += va * vb;
-                            }
-                            
-                            // Horizontal sum
-                            for (int v = 0; v < vectorSize; v++)
-                            {
-                                sum += sumVec[v];
-                            }
-                            
-                            // Scalar remainder
-                            for (; k < K; k++)
-                            {
-                                sum += A[aRowStart + k] * B[bRowStart + k];
-                            }
-                            
-                            C[cRowStart + j] = sum;
-                        }
+                        MatMulTransposeBRow(pA, pB, pC, i, K, N);
                     }
                 }
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void MatMulTransposeBRow(
+            float* pA, float* pB, float* pC,
+            int i, int K, int N)
+        {
+            int aRowStart = i * K;
+            int cRowStart = i * N;
+            
+            // Process output row with AVX2/AVX-512 if available
+            if (Avx2.IsSupported && Fma.IsSupported)
+            {
+                MatMulTransposeBRowAvx2(pA, pB, pC, aRowStart, cRowStart, K, N);
+            }
+            else
+            {
+                MatMulTransposeBRowScalar(pA, pB, pC, aRowStart, cRowStart, K, N);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void MatMulTransposeBRowAvx2(
+            float* pA, float* pB, float* pC,
+            int aRowStart, int cRowStart, int K, int N)
+        {
+            const int vecSize = 8;
+            
+            // Tile j loop for better cache reuse
+            const int TILE_J = 64;
+            
+            for (int j0 = 0; j0 < N; j0 += TILE_J)
+            {
+                int jMax = Math.Min(j0 + TILE_J, N);
+                
+                // Process tile of output elements
+                for (int j = j0; j < jMax; j++)
+                {
+                    int bRowStart = j * K;
+                    
+                    // Compute dot product using AVX2
+                    Vector256<float> acc = Vector256<float>.Zero;
+                    int k = 0;
+                    
+                    // Main SIMD loop
+                    for (; k <= K - vecSize; k += vecSize)
+                    {
+                        Vector256<float> vA = Avx.LoadVector256(pA + aRowStart + k);
+                        Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + k);
+                        acc = Fma.MultiplyAdd(vA, vB, acc);
+                    }
+                    
+                    // Horizontal sum using AVX
+                    // [a0 a1 a2 a3 a4 a5 a6 a7]
+                    Vector128<float> lo = acc.GetLower(); // [a0 a1 a2 a3]
+                    Vector128<float> hi = acc.GetUpper(); // [a4 a5 a6 a7]
+                    Vector128<float> sum128 = Sse.Add(lo, hi); // [a0+a4 a1+a5 a2+a6 a3+a7]
+                    Vector128<float> sum64 = Sse.Add(sum128, Sse.Shuffle(sum128, sum128, 0b_11_10_11_10)); // [a0+a4+a2+a6 ...]
+                    Vector128<float> sum32 = Sse.Add(sum64, Sse.Shuffle(sum64, sum64, 0b_01_01_01_01));
+                    float sum = sum32.ToScalar();
+                    
+                    // Scalar remainder
+                    for (; k < K; k++)
+                    {
+                        sum += pA[aRowStart + k] * pB[bRowStart + k];
+                    }
+                    
+                    pC[cRowStart + j] = sum;
+                }
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void MatMulTransposeBRowScalar(
+            float* pA, float* pB, float* pC,
+            int aRowStart, int cRowStart, int K, int N)
+        {
+            int vectorSize = Vector<float>.Count;
+            
+            for (int j = 0; j < N; j++)
+            {
+                int bRowStart = j * K;
+                
+                // Compute dot product using Vector<T>
+                Vector<float> acc = Vector<float>.Zero;
+                int k = 0;
+                
+                // SIMD loop
+                for (; k <= K - vectorSize; k += vectorSize)
+                {
+                    var vA = System.Runtime.CompilerServices.Unsafe.Read<Vector<float>>(pA + aRowStart + k);
+                    var vB = System.Runtime.CompilerServices.Unsafe.Read<Vector<float>>(pB + bRowStart + k);
+                    acc += vA * vB;
+                }
+                
+                // Horizontal sum
+                float sum = 0f;
+                for (int v = 0; v < vectorSize; v++)
+                {
+                    sum += acc[v];
+                }
+                
+                // Scalar remainder
+                for (; k < K; k++)
+                {
+                    sum += pA[aRowStart + k] * pB[bRowStart + k];
+                }
+                
+                pC[cRowStart + j] = sum;
             }
         }
 
