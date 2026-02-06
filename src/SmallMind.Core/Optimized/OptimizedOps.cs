@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using SmallMind.Core.Utilities;
 
 namespace SmallMind.Core.Optimized
 {
@@ -82,7 +83,7 @@ namespace SmallMind.Core.Optimized
             float sum = 0;
             for (int i = 0; i < length; i++)
             {
-                output[outOffset + i] = FastExp(input[offset + i] - maxVal);
+                output[outOffset + i] = MathUtils.FastExp(input[offset + i] - maxVal);
                 sum += output[outOffset + i];
             }
             
@@ -148,7 +149,7 @@ namespace SmallMind.Core.Optimized
                 float sum = 0;
                 for (int j = 0; j < validCols; j++)
                 {
-                    float e = FastExp(scores[scoresOffset + rowOffset + j] * scale - maxVal);
+                    float e = MathUtils.FastExp(scores[scoresOffset + rowOffset + j] * scale - maxVal);
                     output[outputOffset + rowOffset + j] = e;
                     sum += e;
                 }

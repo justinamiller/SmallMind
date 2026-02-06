@@ -93,7 +93,7 @@ namespace SmallMind.Core.Core
                 }
                 
                 // AVX2 with FMA path (8 floats) - faster than Vector<T> on most CPUs
-                if (Avx2.IsSupported && Fma.IsSupported && f <= features - 8)
+                if (Avx2.IsSupported && Fma.IsSupported && features >= 8)
                 {
                     var vMean256 = Vector256.Create(mean);
                     var vInvStd256 = Vector256.Create(invStd);

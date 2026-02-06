@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Threading.Tasks;
+using SmallMind.Core.Utilities;
 
 namespace SmallMind.Core.Simd
 {
@@ -13,25 +14,6 @@ namespace SmallMind.Core.Simd
     /// </summary>
     public static class SoftmaxOps
     {
-        /// <summary>
-        /// Fast exponential approximation using Pade approximation.
-        /// Accurate for softmax range (typically -10 to 0 after max subtraction).
-        /// 3-5x faster than MathF.Exp with acceptable accuracy for neural networks.
-        /// Max relative error: ~0.5% for x in [-10, 0]
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static float FastExp(float x)
-        {
-            // Clamp to safe range for softmax (after max subtraction, values are typically negative)
-            x = Math.Clamp(x, -87.3f, 88.7f); // ln(float.MaxValue) bounds
-            
-            // Pade approximation: exp(x) ≈ (1 + x/2 + x²/12) / (1 - x/2 + x²/12)
-            // More accurate than Taylor series for negative x
-            float x2 = x * x;
-            float num = 1.0f + x * 0.5f + x2 * 0.08333333f; // 1/12 ≈ 0.08333333
-            float den = 1.0f - x * 0.5f + x2 * 0.08333333f;
-            return num / den;
-        }
         /// <summary>
         /// Applies softmax over the last dimension of a 2D tensor (rows x cols).
         /// Each row is normalized independently.
@@ -135,7 +117,7 @@ namespace SmallMind.Core.Simd
             float sum = 0f;
             for (i = 0; i < length; i++)
             {
-                float exp = FastExp(input[offset + i] - max);
+                float exp = MathUtils.FastExp(input[offset + i] - max);
                 output[offset + i] = exp;
                 sum += exp;
             }
@@ -194,7 +176,7 @@ namespace SmallMind.Core.Simd
             float sum = 0f;
             for (int i = 0; i < length; i++)
             {
-                float exp = FastExp(input[i] - max);
+                float exp = MathUtils.FastExp(input[i] - max);
                 output[i] = exp;
                 sum += exp;
             }
@@ -347,7 +329,7 @@ namespace SmallMind.Core.Simd
                 float sum = 0f;
                 for (int j = 0; j < cols; j++)
                 {
-                    sum += FastExp(inputRow[j] - max);
+                    sum += MathUtils.FastExp(inputRow[j] - max);
                 }
 
                 float logSumExp = MathF.Log(sum);
