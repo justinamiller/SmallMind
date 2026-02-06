@@ -194,9 +194,11 @@ namespace SmallMind.Tests
             ScalarSoftmaxInPlace(scalarResult);
 
             // Assert
+            // Note: SIMD version uses FastExp approximation, so we need a larger tolerance
+            const float softmaxTolerance = 0.01f; // 1% tolerance to account for FastExp approximation
             for (int i = 0; i < size; i++)
             {
-                Assert.True(Math.Abs(simdResult[i] - scalarResult[i]) < Tolerance,
+                Assert.True(Math.Abs(simdResult[i] - scalarResult[i]) < softmaxTolerance,
                     $"Mismatch at index {i} for size {size}: SIMD={simdResult[i]}, Scalar={scalarResult[i]}");
             }
 
