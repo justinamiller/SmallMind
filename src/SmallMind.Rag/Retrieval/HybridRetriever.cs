@@ -1,3 +1,4 @@
+using SmallMind.Rag.Common;
 using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Retrieval;
@@ -126,9 +127,7 @@ public sealed class HybridRetriever
         {
             var (chunk, score) = mergedResults[i];
 
-            string excerpt = chunk.Text.Length <= 200
-                ? chunk.Text
-                : chunk.Text.Substring(0, 200) + "...";
+            string excerpt = TextHelper.TruncateWithEllipsis(chunk.Text, RetrievalConstants.MaxExcerptLength);
 
             finalResults.Add(new RetrievedChunk(
                 chunkId: chunk.ChunkId,

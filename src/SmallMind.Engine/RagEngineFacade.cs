@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Abstractions;
 using RagNamespace = SmallMind.Rag;
+using SmallMind.Rag.Common;
 using SmallMind.Rag.Pipeline;
 using SmallMind.Rag.Indexing;
 using SmallMind.Rag.Generation;
@@ -147,7 +148,7 @@ namespace SmallMind.Engine
                         sourceUri: $"chunk://{c.ChunkId}",
                         charRange: (0, 0), // Placeholder - requires chunk store access
                         lineRange: null, // Optional in schema
-                        snippet: c.Excerpt.Length > 200 ? c.Excerpt.Substring(0, 200) + "..." : c.Excerpt,
+                        snippet: TextHelper.TruncateWithEllipsis(c.Excerpt, RetrievalConstants.MaxExcerptLength),
                         confidence: c.Score);
                 }
             }

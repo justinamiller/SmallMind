@@ -1,3 +1,4 @@
+using SmallMind.Rag.Common;
 using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Retrieval;
@@ -51,9 +52,7 @@ public sealed class DenseRetriever
 
             if (chunkStore.TryGetValue(chunkId, out var chunk))
             {
-                string excerpt = chunk.Text.Length <= 200
-                    ? chunk.Text
-                    : chunk.Text.Substring(0, 200) + "...";
+                string excerpt = TextHelper.TruncateWithEllipsis(chunk.Text, RetrievalConstants.MaxExcerptLength);
 
                 var retrieved = new RetrievedChunk(
                     chunkId: chunk.ChunkId,
