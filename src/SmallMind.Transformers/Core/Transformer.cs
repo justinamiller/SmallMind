@@ -1482,11 +1482,9 @@ namespace SmallMind.Transformers
             var fc1Out = _workspace.GetOrCreate("fc1Out", new int[] { B, T, 4 * _nEmbd }, _isTraining);
             _fc1.Forward(x, fc1Out);
             
-            // TODO: Optimize GELU to accept dest parameter for in-place computation
-            // Current limitation: GELU allocates new tensor for gradient tracking
-            // This accounts for ~10-15% of remaining allocations in forward pass
-            // Potential optimization: Add Activations.GELU(input, dest) overload
-            var geluOut = Activations.GELU(fc1Out);
+            // GELU activation with reused workspace tensor (avoids allocation)
+            var geluOut = _workspace.GetOrCreate("geluOut", new int[] { B, T, 4 * _nEmbd }, _isTraining);
+            Activations.GELU(fc1Out, geluOut);
             
             // fc2 output: (B, T, n_embd) - reuse input shape
             var fc2Out = _workspace.GetOrCreate("fc2Out", new int[] { B, T, _nEmbd }, _isTraining);

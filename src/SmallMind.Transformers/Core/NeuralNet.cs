@@ -679,7 +679,46 @@ namespace SmallMind.Transformers
 
         public static Tensor GELU(Tensor input)
         {
-            var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
+            return GELU(input, dest: null);
+        }
+
+        /// <summary>
+        /// GELU activation with optional destination tensor to avoid allocation.
+        /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
+        /// </summary>
+        public static Tensor GELU(Tensor input, Tensor? dest)
+        {
+            // Validate dest tensor if provided
+            if (dest != null)
+            {
+                // Validate shape matches exactly
+                if (dest.Shape.Length != input.Shape.Length)
+                {
+                    throw new ArgumentException(
+                        $"Destination tensor rank {dest.Shape.Length} " +
+                        $"does not match input rank {input.Shape.Length}");
+                }
+                
+                for (int i = 0; i < input.Shape.Length; i++)
+                {
+                    if (dest.Shape[i] != input.Shape[i])
+                    {
+                        throw new ArgumentException(
+                            $"Destination tensor shape {string.Join("x", dest.Shape)} " +
+                            $"does not match input shape {string.Join("x", input.Shape)}");
+                    }
+                }
+                
+                // Validate RequiresGrad matches
+                if (dest.RequiresGrad != input.RequiresGrad)
+                {
+                    throw new ArgumentException(
+                        $"Destination tensor RequiresGrad={dest.RequiresGrad} " +
+                        $"does not match input RequiresGrad={input.RequiresGrad}");
+                }
+            }
+            
+            var output = dest ?? new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
             
             // Use optimized fast GELU approximation from ActivationOps
             // Based on the sigmoid approximation: GELU(x) ≈ x * σ(1.702 * x)
