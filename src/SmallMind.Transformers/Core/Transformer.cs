@@ -528,11 +528,13 @@ namespace SmallMind.Transformers
 
     /// <summary>
     /// Masked multi-head self-attention implemented in pure C#.
+    /// Supports RoPE (Rotary Position Embeddings) and GQA (Grouped-Query Attention).
     /// </summary>
     public sealed class MultiHeadAttention
     {
         private readonly int _nEmbd;
         private readonly int _nHead;
+        private readonly int _nKvHead;  // Number of key/value heads (for GQA)
         private readonly int _headSize;
         private readonly Linear _qkv;
         private readonly Linear _proj;
@@ -540,6 +542,7 @@ namespace SmallMind.Transformers
         private readonly Dropout _projDropout;
         private readonly bool[,] _causalMask;
         private readonly int _blockSize;
+        private readonly RotaryEmbedding? _rope;  // Optional RoPE support
         
         // Workspace tensors for reuse in forward pass (avoid allocations)
         // These persist across forward passes and are sized dynamically
@@ -561,10 +564,23 @@ namespace SmallMind.Transformers
 
         public List<Tensor> Parameters { get; private set; }
 
-        public MultiHeadAttention(int nEmbd, int nHead, int blockSize, float dropout, Random random)
+        /// <summary>
+        /// Creates a multi-head attention layer.
+        /// </summary>
+        /// <param name="nEmbd">Embedding dimension</param>
+        /// <param name="nHead">Number of query heads</param>
+        /// <param name="blockSize">Maximum sequence length</param>
+        /// <param name="dropout">Dropout probability</param>
+        /// <param name="random">Random number generator</param>
+        /// <param name="nKvHead">Number of key/value heads (default: same as nHead). Use less for GQA/MQA.</param>
+        /// <param name="useRope">Whether to use Rotary Position Embeddings</param>
+        /// <param name="ropeTheta">RoPE base frequency (default 10000.0)</param>
+        public MultiHeadAttention(int nEmbd, int nHead, int blockSize, float dropout, Random random,
+            int? nKvHead = null, bool useRope = false, float ropeTheta = 10000.0f)
         {
             _nEmbd = nEmbd;
             _nHead = nHead;
+            _nKvHead = nKvHead ?? nHead;  // Default: same as nHead (standard MHA)
             _headSize = nEmbd / nHead;
             _blockSize = blockSize;
             _useKVCache = false;
@@ -574,9 +590,17 @@ namespace SmallMind.Transformers
             {
                 throw new ArgumentException("Embedding dimension must be divisible by number of heads");
             }
+            
+            if (_nHead % _nKvHead != 0)
+            {
+                throw new ArgumentException($"Number of query heads ({_nHead}) must be divisible by number of KV heads ({_nKvHead})");
+            }
 
-            // Linear projection for Q, K, V combined
-            _qkv = new Linear(_nEmbd, 3 * _nEmbd, random: random);
+            // Linear projection for Q, K, V
+            // Q: nEmbd -> nEmbd (nHead * headSize)
+            // K, V: nEmbd -> nKvHead * headSize
+            int kvDim = _nKvHead * _headSize;
+            _qkv = new Linear(_nEmbd, _nEmbd + 2 * kvDim, random: random);
             _proj = new Linear(_nEmbd, _nEmbd, random: random);
             _attnDropout = new Dropout(dropout, random);
             _projDropout = new Dropout(dropout, random);
@@ -589,6 +613,12 @@ namespace SmallMind.Transformers
                 {
                     _causalMask[i, j] = i >= j;
                 }
+            }
+            
+            // Initialize RoPE if requested
+            if (useRope)
+            {
+                _rope = new RotaryEmbedding(blockSize, _headSize, ropeTheta);
             }
 
             Parameters = new List<Tensor>();
@@ -666,19 +696,36 @@ namespace SmallMind.Transformers
             int B = x.Shape[0];
             int T = x.Shape[1];
 
-            // Compute Q, K, V: (B, T, n_embd) -> (B, T, 3 * n_embd)
+            // Compute Q, K, V: (B, T, n_embd) -> (B, T, nEmbd + 2*kvDim)
             var qkv = _qkv.Forward(x);
 
             // Use workspace tensors for Q, K, V to avoid allocations
             var qShape = new int[] { B, _nHead, T, _headSize };
-            var q = GetOrAllocateWorkspace(ref _qWorkspace, qShape);
-            var k = GetOrAllocateWorkspace(ref _kWorkspace, qShape);
-            var v = GetOrAllocateWorkspace(ref _vWorkspace, qShape);
+            var kShape = new int[] { B, _nKvHead, T, _headSize };
+            var vShape = new int[] { B, _nKvHead, T, _headSize };
             
-            // Split into Q, K, V and reshape to (B, nHead, T, headSize)
-            ExtractAndReshapeQKVInPlace(qkv, q, 0, B, T);
-            ExtractAndReshapeQKVInPlace(qkv, k, 1, B, T);
-            ExtractAndReshapeQKVInPlace(qkv, v, 2, B, T);
+            var q = GetOrAllocateWorkspace(ref _qWorkspace, qShape);
+            var k = GetOrAllocateWorkspace(ref _kWorkspace, kShape);
+            var v = GetOrAllocateWorkspace(ref _vWorkspace, vShape);
+            
+            // Split into Q, K, V and reshape
+            // Q: (B, T, nEmbd) -> (B, nHead, T, headSize)
+            // K, V: (B, T, kvDim) -> (B, nKvHead, T, headSize)
+            ExtractAndReshapeQInPlace(qkv, q, B, T);
+            ExtractAndReshapeKVInPlace(qkv, k, v, B, T);
+            
+            // Apply RoPE if enabled
+            if (_rope != null)
+            {
+                _rope.ApplyInPlace(
+                    q.Data.AsSpan(),
+                    k.Data.AsSpan(),
+                    _cachePosition,  // Position offset for incremental decoding
+                    B,
+                    _nHead,
+                    _nKvHead,
+                    T);
+            }
 
             // KV-Cache: Use cached keys/values if available
             Tensor kFull, vFull;
@@ -686,10 +733,10 @@ namespace SmallMind.Transformers
             
             if (_useKVCache && !_isTraining)
             {
-                // Initialize cache on first use
+                // Initialize cache on first use (use nKvHead for GQA)
                 if (_cachedKeys == null)
                 {
-                    var cacheShape = new int[] { B, _nHead, _blockSize, _headSize };
+                    var cacheShape = new int[] { B, _nKvHead, _blockSize, _headSize };
                     _cachedKeys = new Tensor(cacheShape, requiresGrad: false);
                     _cachedValues = new Tensor(cacheShape, requiresGrad: false);
                 }
@@ -698,10 +745,10 @@ namespace SmallMind.Transformers
                 int cacheOffset = _cachePosition * _headSize;
                 for (int b = 0; b < B; b++)
                 {
-                    for (int h = 0; h < _nHead; h++)
+                    for (int h = 0; h < _nKvHead; h++)
                     {
-                        int bhOffset = (b * _nHead + h) * T * _headSize;
-                        int cacheIndex = (b * _nHead + h) * _blockSize * _headSize + cacheOffset;
+                        int bhOffset = (b * _nKvHead + h) * T * _headSize;
+                        int cacheIndex = (b * _nKvHead + h) * _blockSize * _headSize + cacheOffset;
                         
                         // Copy new keys and values to cache
                         Array.Copy(k.Data, bhOffset, _cachedKeys.Data, cacheIndex, T * _headSize);
@@ -865,6 +912,129 @@ namespace SmallMind.Transformers
                             int dstIdx = headOutOffset + t * _headSize;
                             
                             Array.Copy(qkv.Data, srcIdx, dest.Data, dstIdx, _headSize);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Extract Q from concatenated QKV output (supports GQA).
+        /// QKV layout: [Q(nEmbd), K(kvDim), V(kvDim)]
+        /// </summary>
+        private void ExtractAndReshapeQInPlace(Tensor qkv, Tensor q, int B, int T)
+        {
+            // Q is first nEmbd elements
+            // dest Q: (B, nHead, T, headSize)
+            
+            if (B >= 4)
+            {
+                Parallel.For(0, B, b =>
+                {
+                    int qkvDim = _nEmbd + 2 * _nKvHead * _headSize;
+                    int batchInOffset = b * T * qkvDim;
+                    int batchOutOffset = b * _nHead * T * _headSize;
+                    
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int headInOffset = h * _headSize;
+                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        
+                        for (int t = 0; t < T; t++)
+                        {
+                            int srcIdx = batchInOffset + t * qkvDim + headInOffset;
+                            int dstIdx = headOutOffset + t * _headSize;
+                            
+                            Array.Copy(qkv.Data, srcIdx, q.Data, dstIdx, _headSize);
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int b = 0; b < B; b++)
+                {
+                    int qkvDim = _nEmbd + 2 * _nKvHead * _headSize;
+                    int batchInOffset = b * T * qkvDim;
+                    int batchOutOffset = b * _nHead * T * _headSize;
+                    
+                    for (int h = 0; h < _nHead; h++)
+                    {
+                        int headInOffset = h * _headSize;
+                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        
+                        for (int t = 0; t < T; t++)
+                        {
+                            int srcIdx = batchInOffset + t * qkvDim + headInOffset;
+                            int dstIdx = headOutOffset + t * _headSize;
+                            
+                            Array.Copy(qkv.Data, srcIdx, q.Data, dstIdx, _headSize);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Extract K and V from concatenated QKV output (supports GQA).
+        /// QKV layout: [Q(nEmbd), K(kvDim), V(kvDim)]
+        /// </summary>
+        private void ExtractAndReshapeKVInPlace(Tensor qkv, Tensor k, Tensor v, int B, int T)
+        {
+            // K starts after Q (offset = nEmbd)
+            // V starts after K (offset = nEmbd + kvDim)
+            // dest K, V: (B, nKvHead, T, headSize)
+            
+            int kvDim = _nKvHead * _headSize;
+            
+            if (B >= 4)
+            {
+                Parallel.For(0, B, b =>
+                {
+                    int qkvDim = _nEmbd + 2 * kvDim;
+                    int batchInOffset = b * T * qkvDim;
+                    int batchOutOffset = b * _nKvHead * T * _headSize;
+                    
+                    for (int h = 0; h < _nKvHead; h++)
+                    {
+                        int kHeadInOffset = _nEmbd + h * _headSize;
+                        int vHeadInOffset = _nEmbd + kvDim + h * _headSize;
+                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        
+                        for (int t = 0; t < T; t++)
+                        {
+                            int kSrcIdx = batchInOffset + t * qkvDim + kHeadInOffset;
+                            int vSrcIdx = batchInOffset + t * qkvDim + vHeadInOffset;
+                            int dstIdx = headOutOffset + t * _headSize;
+                            
+                            Array.Copy(qkv.Data, kSrcIdx, k.Data, dstIdx, _headSize);
+                            Array.Copy(qkv.Data, vSrcIdx, v.Data, dstIdx, _headSize);
+                        }
+                    }
+                });
+            }
+            else
+            {
+                for (int b = 0; b < B; b++)
+                {
+                    int qkvDim = _nEmbd + 2 * kvDim;
+                    int batchInOffset = b * T * qkvDim;
+                    int batchOutOffset = b * _nKvHead * T * _headSize;
+                    
+                    for (int h = 0; h < _nKvHead; h++)
+                    {
+                        int kHeadInOffset = _nEmbd + h * _headSize;
+                        int vHeadInOffset = _nEmbd + kvDim + h * _headSize;
+                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        
+                        for (int t = 0; t < T; t++)
+                        {
+                            int kSrcIdx = batchInOffset + t * qkvDim + kHeadInOffset;
+                            int vSrcIdx = batchInOffset + t * qkvDim + vHeadInOffset;
+                            int dstIdx = headOutOffset + t * _headSize;
+                            
+                            Array.Copy(qkv.Data, kSrcIdx, k.Data, dstIdx, _headSize);
+                            Array.Copy(qkv.Data, vSrcIdx, v.Data, dstIdx, _headSize);
                         }
                     }
                 }
@@ -1185,14 +1355,16 @@ namespace SmallMind.Transformers
         /// Computes Q * K^T / sqrt(d_k) with causal masking and softmax.
         /// Uses fused scale+mask+softmax operation for better performance.
         /// Supports KV-cache where K may have more positions than Q.
+        /// Supports GQA where query heads are mapped to fewer KV heads.
         /// </summary>
         private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T, int kSeqLen)
         {
             // q: (B, nHead, T, headSize) - query for current tokens
-            // k: (B, nHead, kSeqLen, headSize) - keys (may include cached past)
+            // k: (B, nKvHead, kSeqLen, headSize) - keys (may include cached past, GQA)
             // scores: (B, nHead, T, kSeqLen) - pre-allocated, will be modified in-place
             
             float scale = 1.0f / MathF.Sqrt(_headSize);
+            int headsPerKvHead = _nHead / _nKvHead;  // For GQA head mapping
             
             int totalParallelWork = B * _nHead;
             if (totalParallelWork >= 4)
@@ -1201,8 +1373,12 @@ namespace SmallMind.Transformers
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
+                    
+                    // Map query head to KV head (for GQA)
+                    int kvHead = h / headsPerKvHead;
+                    
                     int qOffset = (b * _nHead + h) * T * _headSize;
-                    int kOffset = (b * _nHead + h) * kSeqLen * _headSize;
+                    int kOffset = (b * _nKvHead + kvHead) * kSeqLen * _headSize;
                     int scoreOffset = (b * _nHead + h) * T * kSeqLen;
                     
                     // Step 1: Batched matrix multiplication Q @ K^T
@@ -1225,8 +1401,11 @@ namespace SmallMind.Transformers
                 {
                     for (int h = 0; h < _nHead; h++)
                     {
+                        // Map query head to KV head (for GQA)
+                        int kvHead = h / headsPerKvHead;
+                        
                         int qOffset = (b * _nHead + h) * T * _headSize;
-                        int kOffset = (b * _nHead + h) * kSeqLen * _headSize;
+                        int kOffset = (b * _nKvHead + kvHead) * kSeqLen * _headSize;
                         int scoreOffset = (b * _nHead + h) * T * kSeqLen;
                         
                         // Step 1: Batched matrix multiplication Q @ K^T
@@ -1354,18 +1533,20 @@ namespace SmallMind.Transformers
         /// In-place version of ApplyAttention that writes to a pre-allocated tensor.
         /// Computes attention_weights * V using optimized MatMul kernel.
         /// Supports KV-cache where V may have more positions than output.
+        /// Supports GQA where query heads are mapped to fewer KV heads.
         /// Tier-0 optimization: Replaced triple nested loops with MatMul kernel for better performance.
         /// </summary>
         private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T, int vSeqLen)
         {
             // att: (B, nHead, T, vSeqLen) - attention weights
-            // v: (B, nHead, vSeqLen, headSize) - values (may include cached past)
+            // v: (B, nKvHead, vSeqLen, headSize) - values (may include cached past, GQA)
             // output: (B, nHead, T, headSize) - pre-allocated
             
-            // For each batch and head, perform: output[b,h] = att[b,h] @ v[b,h]
-            // where att[b,h] is (T × vSeqLen) and v[b,h] is (vSeqLen × headSize)
+            // For each batch and head, perform: output[b,h] = att[b,h] @ v[b,kvh]
+            // where att[b,h] is (T × vSeqLen) and v[b,kvh] is (vSeqLen × headSize)
             // resulting in output[b,h] as (T × headSize)
             
+            int headsPerKvHead = _nHead / _nKvHead;  // For GQA head mapping
             int totalParallelWork = B * _nHead;
             if (totalParallelWork >= 4)
             {
@@ -1374,12 +1555,15 @@ namespace SmallMind.Transformers
                     int b = bh / _nHead;
                     int h = bh % _nHead;
                     
+                    // Map query head to KV head (for GQA)
+                    int kvHead = h / headsPerKvHead;
+                    
                     // Calculate offsets for this batch and head
                     int attOffset = (b * _nHead + h) * T * vSeqLen;
-                    int vOffset = (b * _nHead + h) * vSeqLen * _headSize;
+                    int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
                     int outOffset = (b * _nHead + h) * T * _headSize;
                     
-                    // Use MatMul: att[b,h] @ v[b,h] -> output[b,h]
+                    // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]
                     // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
                     SmallMind.Core.Simd.MatMulOps.MatMul(
                         att.Data.AsSpan(attOffset, T * vSeqLen),
@@ -1395,12 +1579,15 @@ namespace SmallMind.Transformers
                 {
                     for (int h = 0; h < _nHead; h++)
                     {
+                        // Map query head to KV head (for GQA)
+                        int kvHead = h / headsPerKvHead;
+                        
                         // Calculate offsets for this batch and head
                         int attOffset = (b * _nHead + h) * T * vSeqLen;
-                        int vOffset = (b * _nHead + h) * vSeqLen * _headSize;
+                        int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
                         int outOffset = (b * _nHead + h) * T * _headSize;
                         
-                        // Use MatMul: att[b,h] @ v[b,h] -> output[b,h]
+                        // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]
                         // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
                         SmallMind.Core.Simd.MatMulOps.MatMul(
                             att.Data.AsSpan(attOffset, T * vSeqLen),
