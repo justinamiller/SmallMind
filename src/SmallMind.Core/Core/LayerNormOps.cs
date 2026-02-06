@@ -45,8 +45,6 @@ namespace SmallMind.Core.Core
             if (beta.Length != features)
                 throw new Exceptions.ValidationException($"Beta length {beta.Length} must equal features ({features})", nameof(beta));
             
-            int vectorSize = System.Numerics.Vector<float>.Count;
-            
             for (int b = 0; b < batch; b++)
             {
                 int offset = b * features;

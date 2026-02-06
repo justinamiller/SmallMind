@@ -73,13 +73,16 @@ namespace SmallMind.Core.Simd
                         var lower = Avx512F.ExtractVector256(maxVec512, 0);
                         var maxVec256 = Avx.Max(upper, lower);
                         
-                        // Further reduce 256→scalar
-                        var maxVec = new Vector<float>(maxVec256);
-                        int vectorSize = Vector<float>.Count;
-                        for (int j = 0; j < vectorSize; j++)
+                        // Further reduce 256→scalar using horizontal max
+                        unsafe
                         {
-                            if (maxVec[j] > max)
-                                max = maxVec[j];
+                            float* temp = stackalloc float[8];
+                            Avx.Store(temp, maxVec256);
+                            for (int j = 0; j < 8; j++)
+                            {
+                                if (temp[j] > max)
+                                    max = temp[j];
+                            }
                         }
                     }
                 }
@@ -153,8 +156,6 @@ namespace SmallMind.Core.Simd
                 output[offset + i] *= invSum;
             }
         }
-            }
-        }
 
         /// <summary>
         /// Applies softmax to a single row with SIMD acceleration (span-based).
@@ -193,7 +194,7 @@ namespace SmallMind.Core.Simd
         {
             int length = values.Length;
             int i = 0;
-            var maxVec = new Vector<float>(float.NegativeInfinity);
+            float max = float.NegativeInfinity;
 
             unsafe
             {
@@ -211,12 +212,22 @@ namespace SmallMind.Core.Simd
                         // Reduce 512→256: take max of upper and lower halves
                         var upper = Avx512F.ExtractVector256(maxVec512, 1);
                         var lower = Avx512F.ExtractVector256(maxVec512, 0);
-                        maxVec = new Vector<float>(Avx.Max(upper, lower));
+                        var maxVec256 = Avx.Max(upper, lower);
+                        
+                        // Reduce 256→scalar
+                        float* temp = stackalloc float[8];
+                        Avx.Store(temp, maxVec256);
+                        for (int j = 0; j < 8; j++)
+                        {
+                            if (temp[j] > max)
+                                max = temp[j];
+                        }
                     }
                 }
             }
 
             // Vector<T> fallback
+            var maxVec = new Vector<float>(max);
             int vectorSize = Vector<float>.Count;
             for (; i <= length - vectorSize; i += vectorSize)
             {
@@ -225,7 +236,6 @@ namespace SmallMind.Core.Simd
             }
 
             // Horizontal max reduction
-            float max = float.NegativeInfinity;
             for (int j = 0; j < vectorSize; j++)
             {
                 if (maxVec[j] > max)

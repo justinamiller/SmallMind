@@ -89,7 +89,8 @@ namespace SmallMind.Core.Simd
                             var mask = Avx512F.CompareGreaterThan(vInput, zero512);
                             
                             // Apply mask: outputGrad where input > 0, else 0
-                            var result = Avx512F.And(vOutputGrad, mask.AsSingle());
+                            // Use bitwise AND to apply mask
+                            var result = Avx512F.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
                             Avx512F.Store(pInputGrad + i, result);
                         }
                     }

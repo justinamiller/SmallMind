@@ -215,10 +215,10 @@ namespace SmallMind.Core.Simd
             var v128 = Sse.Add(
                 Avx.ExtractVector128(v256, 0),
                 Avx.ExtractVector128(v256, 1));
-            // 128 → scalar
+            // 128 → scalar (horizontal sum)
             v128 = Sse.Add(v128, Sse.MoveHighToLow(v128, v128));
             v128 = Sse.AddScalar(v128, Sse.Shuffle(v128, v128, 0x01));
-            return Sse.ConvertToSingle(v128);
+            return v128.ToScalar();
         }
 
         private static string FormatSupport(bool isSupported)

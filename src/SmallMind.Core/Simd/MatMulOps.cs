@@ -9,7 +9,7 @@ namespace SmallMind.Core.Simd
 {
     /// <summary>
     /// SIMD-accelerated matrix multiplication operations.
-    /// Provides optimized implementations using AVX2, AVX-512, and Vector&lt;T&gt; fallbacks.
+    /// Provides optimized implementations using AVX-512, AVX2, and Vector&lt;T&gt; fallbacks.
     /// Uses cache-friendly algorithms and parallel processing for large matrices.
     /// </summary>
     public static class MatMulOps
@@ -22,6 +22,7 @@ namespace SmallMind.Core.Simd
         //   - 256×256+: Parallel is 44%+ faster (work >> overhead)
         private const int PARALLEL_THRESHOLD = 128;
         private const int TILE_SIZE = 32; // Cache tile size for blocking
+        private const int VEC512_SIZE = 16; // AVX-512 vector width (16 floats)
 
         /// <summary>
         /// Enhanced matrix multiplication: C = A × B
@@ -39,7 +40,11 @@ namespace SmallMind.Core.Simd
             Array.Clear(C, 0, C.Length);
 
             // Select best implementation based on CPU capabilities
-            if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
+            if (Avx512F.IsSupported && K >= 16)
+            {
+                MatMulAvx512(A, B, C, M, K, N);
+            }
+            else if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
             {
                 MatMulAvx2(A, B, C, M, K, N);
             }
