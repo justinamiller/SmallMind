@@ -11,6 +11,14 @@ namespace SmallMind.Quantization.Kernels
     /// </summary>
     public static class MatMulF32Q4
     {
+        // Lookup table for fast nibble to int conversion (4-bit two's complement)
+        // This avoids the branch in DecodeNibble for every single element
+        private static readonly int[] NibbleToInt = new int[16]
+        {
+            0, 1, 2, 3, 4, 5, 6, 7,      // 0-7: positive values
+            -8, -7, -6, -5, -4, -3, -2, -1  // 8-15: negative values (two's complement)
+        };
+        
         /// <summary>
         /// Matrix multiply: C[M×N] = A[M×K] * B[K×N] where B is Q4 quantized.
         /// </summary>
@@ -47,126 +55,140 @@ namespace SmallMind.Quantization.Kernels
 
         /// <summary>
         /// Vector-matrix multiply: c[1×N] = a[1×K] * B[K×N] where B is Q4 quantized.
-        /// Optimized for single-row inference.
+        /// Optimized for single-row inference with cache-friendly row-major traversal and LUT.
         /// </summary>
         private static void MultiplyVectorMatrix(ReadOnlySpan<float> a, Q4Tensor b, Span<float> c, int k, int n)
         {
             c.Clear(); // Zero output
 
             int blockSize = b.BlockSize;
-            int totalElements = k * n;
+            int numBlocksPerRow = (n + blockSize - 1) / blockSize;
 
-            // For each output column
-            for (int col = 0; col < n; col++)
+            // Row-major traversal for better cache locality
+            // Outer loop over K (rows of B), inner loop over N (columns of B)
+            for (int row = 0; row < k; row++)
             {
-                float sum = 0f;
-
-                // Traverse K dimension (rows of B)
-                for (int row = 0; row < k; row++)
+                float aVal = a[row];
+                if (aVal == 0f) continue; // Skip zero activations
+                
+                int rowOffset = row * n;
+                int rowBlockBase = row * numBlocksPerRow;
+                
+                // Process output columns in this row
+                for (int col = 0; col < n; col++)
                 {
-                    int linearIdx = row * n + col; // B is K×N row-major
-                    int blockIdx = linearIdx / blockSize;
+                    int linearIdx = rowOffset + col;
+                    int blockIdx = rowBlockBase + (col / blockSize);
                     
-                    if (blockIdx >= b.Scales.Length) continue; // Safety
+                    if (blockIdx >= b.Scales.Length) break; // Safety
                     
                     float scale = b.Scales[blockIdx];
                     
-                    // Unpack 4-bit value
-                    int byteIdx = linearIdx / 2;
+                    // Unpack 4-bit value - branchless nibble extraction
+                    int byteIdx = linearIdx >> 1; // Divide by 2
                     byte packedByte = b.Data[byteIdx];
-                    byte nibble = (linearIdx % 2 == 0)
-                        ? (byte)(packedByte & 0xF)
-                        : (byte)((packedByte >> 4) & 0xF);
+                    int shift = (linearIdx & 1) << 2; // 0 or 4
+                    byte nibble = (byte)((packedByte >> shift) & 0xF);
                     
-                    int quantVal = Q4Tensor.DecodeNibble(nibble);
-                    sum += a[row] * quantVal * scale;
+                    // Fast LUT-based decode instead of branch
+                    int quantVal = NibbleToInt[nibble];
+                    c[col] += aVal * quantVal * scale;
                 }
-
-                c[col] = sum;
             }
         }
 
         /// <summary>
         /// Optimized vector-matrix multiply using SIMD where beneficial.
         /// c[1×N] = a[1×K] * B[K×N] where B is Q4 quantized.
+        /// Zero-allocation SIMD path with row-major traversal and LUT.
         /// </summary>
         public static void MultiplyVectorMatrixSIMD(ReadOnlySpan<float> a, Q4Tensor b, Span<float> c, int k, int n)
         {
             c.Clear();
 
             int blockSize = b.BlockSize;
-            int numBlocksPerRow = (k + blockSize - 1) / blockSize;
+            int numBlocksPerRow = (n + blockSize - 1) / blockSize;
+            int vectorSize = Vector<float>.Count;
 
-            for (int col = 0; col < n; col++)
+            // Preallocate SIMD scratch buffer on stack to avoid allocations
+            Span<float> bValsBuffer = stackalloc float[vectorSize];
+
+            // Row-major traversal for better cache locality
+            for (int row = 0; row < k; row++)
             {
-                float sum = 0f;
-
-                for (int blockIdx = 0; blockIdx < numBlocksPerRow; blockIdx++)
+                float aVal = a[row];
+                if (aVal == 0f) continue; // Skip zero activations
+                
+                int rowOffset = row * n;
+                int rowBlockBase = row * numBlocksPerRow;
+                
+                // Process columns in SIMD-width chunks where possible
+                int col = 0;
+                
+                // SIMD path for aligned chunks
+                if (Vector.IsHardwareAccelerated && n >= vectorSize)
                 {
-                    int kStart = blockIdx * blockSize;
-                    int kEnd = Math.Min(kStart + blockSize, k);
-                    int bBlockIdx = col * numBlocksPerRow + blockIdx;
-                    
-                    if (bBlockIdx >= b.Scales.Length) break;
-                    
-                    float scale = b.Scales[bBlockIdx];
-
-                    // SIMD accumulation
-                    float blockDot = 0f;
-                    int ki = kStart;
-
-                    // SIMD path
-                    if (Vector.IsHardwareAccelerated && (kEnd - kStart) >= Vector<float>.Count)
+                    for (; col <= n - vectorSize; col += vectorSize)
                     {
-                        var vecSum = Vector<float>.Zero;
-                        int simdEnd = kStart + ((kEnd - kStart) / Vector<float>.Count) * Vector<float>.Count;
-
-                        for (; ki < simdEnd; ki += Vector<float>.Count)
+                        // Determine block index for this column group
+                        int blockIdx = rowBlockBase + (col / blockSize);
+                        
+                        if (blockIdx >= b.Scales.Length) break;
+                        
+                        // Load quantized values and dequantize using LUT
+                        for (int vi = 0; vi < vectorSize; vi++)
                         {
-                            // Load activation values
-                            var aVec = new Vector<float>(a.Slice(ki));
-
-                            // Unpack and convert quantized values to float
-                            var bVals = new float[Vector<float>.Count];
-                            for (int vi = 0; vi < Vector<float>.Count; vi++)
+                            int linearIdx = rowOffset + col + vi;
+                            int localBlockIdx = rowBlockBase + ((col + vi) / blockSize);
+                            
+                            if (localBlockIdx >= b.Scales.Length)
                             {
-                                int linearIdx = (ki + vi) * n + col;
-                                int byteIdx = linearIdx / 2;
-                                byte packedByte = b.Data[byteIdx];
-                                byte nibble = (linearIdx % 2 == 0)
-                                    ? (byte)(packedByte & 0xF)
-                                    : (byte)((packedByte >> 4) & 0xF);
-                                bVals[vi] = Q4Tensor.DecodeNibble(nibble);
+                                bValsBuffer[vi] = 0f;
+                                continue;
                             }
-                            var bVec = new Vector<float>(bVals);
-
-                            vecSum += aVec * bVec;
+                            
+                            float scale = b.Scales[localBlockIdx];
+                            
+                            // Branchless nibble extraction
+                            int byteIdx = linearIdx >> 1;
+                            byte packedByte = b.Data[byteIdx];
+                            int shift = (linearIdx & 1) << 2;
+                            byte nibble = (byte)((packedByte >> shift) & 0xF);
+                            
+                            // Fast LUT-based decode
+                            int quantVal = NibbleToInt[nibble];
+                            bValsBuffer[vi] = quantVal * scale;
                         }
-
-                        // Horizontal sum
-                        for (int vi = 0; vi < Vector<float>.Count; vi++)
-                        {
-                            blockDot += vecSum[vi];
-                        }
+                        
+                        // SIMD multiply-accumulate
+                        var bVec = new Vector<float>(bValsBuffer);
+                        var aVec = new Vector<float>(aVal);
+                        var cVec = new Vector<float>(c.Slice(col));
+                        var result = cVec + aVec * bVec;
+                        result.CopyTo(c.Slice(col));
                     }
-
-                    // Scalar remainder
-                    for (; ki < kEnd; ki++)
-                    {
-                        int linearIdx = ki * n + col;
-                        int byteIdx = linearIdx / 2;
-                        byte packedByte = b.Data[byteIdx];
-                        byte nibble = (linearIdx % 2 == 0)
-                            ? (byte)(packedByte & 0xF)
-                            : (byte)((packedByte >> 4) & 0xF);
-                        int quantVal = Q4Tensor.DecodeNibble(nibble);
-                        blockDot += a[ki] * quantVal;
-                    }
-
-                    sum += blockDot * scale;
                 }
-
-                c[col] = sum;
+                
+                // Scalar remainder
+                for (; col < n; col++)
+                {
+                    int linearIdx = rowOffset + col;
+                    int blockIdx = rowBlockBase + (col / blockSize);
+                    
+                    if (blockIdx >= b.Scales.Length) break;
+                    
+                    float scale = b.Scales[blockIdx];
+                    
+                    // Branchless nibble extraction
+                    int byteIdx = linearIdx >> 1;
+                    byte packedByte = b.Data[byteIdx];
+                    int shift = (linearIdx & 1) << 2;
+                    byte nibble = (byte)((packedByte >> shift) & 0xF);
+                    
+                    // Fast LUT-based decode
+                    int quantVal = NibbleToInt[nibble];
+                    c[col] += aVal * quantVal * scale;
+                }
             }
         }
     }
