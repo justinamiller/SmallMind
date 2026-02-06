@@ -8,7 +8,7 @@ using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
-using SmallMind.Simd;
+using SmallMind.Core.Simd;
 
 #if WINDOWS
 using System.Management;
