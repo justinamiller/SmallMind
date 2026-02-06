@@ -36,7 +36,7 @@ namespace SmallMind.Configuration
         /// <summary>
         /// Validates all configuration options.
         /// </summary>
-        /// <exception cref="Exceptions.ValidationException">Thrown when any options are invalid.</exception>
+        /// <exception cref="Core.Exceptions.ValidationException">Thrown when any options are invalid.</exception>
         public void Validate()
         {
             Model.Validate();

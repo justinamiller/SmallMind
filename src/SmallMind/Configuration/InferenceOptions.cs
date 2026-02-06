@@ -92,7 +92,7 @@ namespace SmallMind.Configuration
         /// <summary>
         /// Validates the inference options.
         /// </summary>
-        /// <exception cref="Exceptions.ValidationException">Thrown when options are invalid.</exception>
+        /// <exception cref="Core.Exceptions.ValidationException">Thrown when options are invalid.</exception>
         public void Validate()
         {
             Guard.GreaterThan(Temperature, 0.0);
@@ -106,7 +106,7 @@ namespace SmallMind.Configuration
             // Validate that context limit is reasonable
             if (MaxContextTokens > 0 && MaxInputTokens > MaxContextTokens)
             {
-                throw new Exceptions.ValidationException(
+                throw new Core.Exceptions.ValidationException(
                     $"MaxInputTokens ({MaxInputTokens}) cannot exceed MaxContextTokens ({MaxContextTokens})",
                     nameof(MaxInputTokens));
             }

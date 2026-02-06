@@ -2,7 +2,7 @@ using System;
 using Xunit;
 using SmallMind.Core;
 using SmallMind.Core.Simd;
-using SmallMind.Exceptions;
+using SmallMind.Core.Exceptions;
 
 namespace SmallMind.Tests
 {

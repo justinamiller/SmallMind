@@ -52,7 +52,7 @@ namespace SmallMind.Configuration
         /// <summary>
         /// Validates the training options.
         /// </summary>
-        /// <exception cref="Exceptions.ValidationException">Thrown when options are invalid.</exception>
+        /// <exception cref="Core.Exceptions.ValidationException">Thrown when options are invalid.</exception>
         public void Validate()
         {
             Guard.GreaterThan(BatchSize, 0);

@@ -46,7 +46,7 @@ namespace SmallMind.Configuration
         /// <summary>
         /// Validates the model options.
         /// </summary>
-        /// <exception cref="Exceptions.ValidationException">Thrown when options are invalid.</exception>
+        /// <exception cref="Core.Exceptions.ValidationException">Thrown when options are invalid.</exception>
         public void Validate()
         {
             Guard.GreaterThan(VocabSize, 0);
@@ -58,7 +58,7 @@ namespace SmallMind.Configuration
             
             if (EmbeddingDimension % NumHeads != 0)
             {
-                throw new Exceptions.ValidationException(
+                throw new Core.Exceptions.ValidationException(
                     $"EmbeddingDimension ({EmbeddingDimension}) must be divisible by NumHeads ({NumHeads})",
                     nameof(EmbeddingDimension));
             }
