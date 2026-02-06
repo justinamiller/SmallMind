@@ -6,7 +6,7 @@ using SmallMind.Text;
 using SmallMind.RAG;
 using SmallMind.Embeddings;
 using SmallMind.Indexing;
-using SmallMind.Simd;
+using SmallMind.Core.Simd;
 using SmallMind.ConsoleApp.Commands;
 
 namespace SmallMind.ConsoleApp

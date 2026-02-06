@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 using Xunit;
-using SmallMind.Simd;
+using SmallMind.Core.Simd;
 
 namespace SmallMind.PerfTests
 {
