@@ -32,6 +32,15 @@ namespace SmallMind.Runtime
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
         
+        // KV-cache state for efficient decode
+        private bool _kvCacheActive = false;
+        private int _currentPosition = 0;
+        
+        // Reusable decode tensor for single-token generation
+        private float[] _decodeData = new float[1];
+        private int[] _decodeShape = new int[] { 1, 1 };
+        private Tensor? _decodeTensor;
+        
         // Deterministic scheduler (optional)
         private readonly DeterministicScheduler? _scheduler;
         private TokenScheduleResult? _currentSchedule;
@@ -192,6 +201,16 @@ namespace SmallMind.Runtime
             {
                 throw new InferenceTimeoutException(_options.MaxTimeMs);
             }
+            finally
+            {
+                // Cleanup: Disable KV-cache after generation completes
+                if (_kvCacheActive)
+                {
+                    _model.DisableKVCache();
+                    _kvCacheActive = false;
+                    _currentPosition = 0;
+                }
+            }
         }
         
         /// <summary>
@@ -219,124 +238,173 @@ namespace SmallMind.Runtime
             
             var effectiveToken = linkedCts?.Token ?? cancellationToken;
             
-            // Encode and validate input
-            var context = _tokenizer.Encode(prompt);
-            ValidateAndTruncateInput(context);
-            
-            int inputTokens = context.Count;
-            int requestId = -1;
-            
-            // Create schedule if tracking is enabled
-            if (_scheduler != null)
+            try
             {
-                var promptArray = context.ToArray();
-                _currentSchedule = _scheduler.Schedule(
-                    promptArray,
-                    _options.MaxNewTokens,
-                    _options.SchedulingPolicy,
-                    _options.Seed.HasValue ? (uint)_options.Seed.Value : null);
-            }
-            
-            // Start metrics tracking
-            if (metrics != null)
-            {
-                if (!metrics.IsEnabled)
+                // Encode and validate input
+                var context = _tokenizer.Encode(prompt);
+                ValidateAndTruncateInput(context);
+                
+                int inputTokens = context.Count;
+                int requestId = -1;
+                
+                // Create schedule if tracking is enabled
+                if (_scheduler != null)
                 {
-                    metrics.Start();
+                    var promptArray = context.ToArray();
+                    _currentSchedule = _scheduler.Schedule(
+                        promptArray,
+                        _options.MaxNewTokens,
+                        _options.SchedulingPolicy,
+                        _options.Seed.HasValue ? (uint)_options.Seed.Value : null);
                 }
-                requestId = metrics.RecordRequestStart();
-                metrics.RecordInferenceStart(requestId);
-            }
-            
-            bool firstTokenRecorded = false;
-            
-            // Generate tokens (no try-catch to allow yield)
-            // Timeout is handled by cancellation token
-            for (int i = 0; i < _options.MaxNewTokens; i++)
-            {
-                // Check for timeout
-                if (effectiveToken.IsCancellationRequested)
+                
+                // Start metrics tracking
+                if (metrics != null)
                 {
-                    if (timeoutCts?.IsCancellationRequested == true)
+                    if (!metrics.IsEnabled)
                     {
-                        throw new InferenceTimeoutException(_options.MaxTimeMs);
+                        metrics.Start();
                     }
-                    effectiveToken.ThrowIfCancellationRequested();
+                    requestId = metrics.RecordRequestStart();
+                    metrics.RecordInferenceStart(requestId);
                 }
                 
-                // Check context limit
-                if (_options.MaxContextTokens > 0 && context.Count >= _options.MaxContextTokens)
+                bool firstTokenRecorded = false;
+                
+                // Generate tokens
+                for (int i = 0; i < _options.MaxNewTokens; i++)
                 {
-                    break;
+                    // Check for timeout
+                    if (effectiveToken.IsCancellationRequested)
+                    {
+                        if (timeoutCts?.IsCancellationRequested == true)
+                        {
+                            throw new InferenceTimeoutException(_options.MaxTimeMs);
+                        }
+                        effectiveToken.ThrowIfCancellationRequested();
+                    }
+                    
+                    // Check context limit
+                    if (_options.MaxContextTokens > 0 && context.Count >= _options.MaxContextTokens)
+                    {
+                        break;
+                    }
+                    
+                    var nextToken = await GenerateNextTokenAsync(context, effectiveToken);
+                    context.Add(nextToken);
+                    
+                    // Record first token for TTFT
+                    if (metrics != null && !firstTokenRecorded)
+                    {
+                        metrics.RecordFirstToken(requestId);
+                        firstTokenRecorded = true;
+                    }
+                    
+                    // Decode just this token
+                    var tokenText = _tokenizer.Decode(new List<int> { nextToken });
+                    
+                    yield return new GeneratedToken(
+                        tokenId: nextToken,
+                        text: tokenText,
+                        index: i,
+                        logProb: null // Note: Log probability calculation not yet implemented (future enhancement)
+                    );
                 }
                 
-                var nextToken = await GenerateNextTokenAsync(context, effectiveToken);
-                context.Add(nextToken);
-                
-                // Record first token for TTFT
-                if (metrics != null && !firstTokenRecorded)
+                // Record completion
+                if (metrics != null)
                 {
-                    metrics.RecordFirstToken(requestId);
-                    firstTokenRecorded = true;
+                    metrics.RecordRequestComplete(requestId, inputTokens, context.Count - inputTokens, success: true);
                 }
-                
-                // Decode just this token
-                var tokenText = _tokenizer.Decode(new List<int> { nextToken });
-                
-                yield return new GeneratedToken(
-                    tokenId: nextToken,
-                    text: tokenText,
-                    index: i,
-                    logProb: null // Note: Log probability calculation not yet implemented (future enhancement)
-                );
             }
-            
-            // Record completion
-            if (metrics != null)
+            finally
             {
-                metrics.RecordRequestComplete(requestId, inputTokens, context.Count - inputTokens, success: true);
+                // Cleanup: Disable KV-cache after generation completes
+                if (_kvCacheActive)
+                {
+                    _model.DisableKVCache();
+                    _kvCacheActive = false;
+                    _currentPosition = 0;
+                }
             }
         }
         
         private async Task<int> GenerateNextTokenAsync(List<int> context, CancellationToken cancellationToken)
         {
-            // Tier-0 optimization: Remove Task.Run from per-token compute (synchronous compute, async only for cancellation)
             // Check cancellation before compute
             cancellationToken.ThrowIfCancellationRequested();
             
-            // Crop context to last blockSize tokens
-            List<int> contextCropped;
-            if (context.Count <= _blockSize)
+            Tensor logits;
+            
+            if (!_kvCacheActive)
             {
-                contextCropped = context;
+                // PREFILL PHASE: Process full prompt to populate KV cache
+                
+                // Reset and enable KV-cache
+                _model.ResetKVCache();
+                _model.EnableKVCache();
+                
+                // Crop context to last blockSize tokens if needed
+                List<int> contextCropped;
+                if (context.Count <= _blockSize)
+                {
+                    contextCropped = context;
+                }
+                else
+                {
+                    // Manual copy of last blockSize tokens (avoid LINQ allocation)
+                    contextCropped = new List<int>(_blockSize);
+                    int startIdx = context.Count - _blockSize;
+                    for (int idx = startIdx; idx < context.Count; idx++)
+                    {
+                        contextCropped.Add(context[idx]);
+                    }
+                }
+                
+                int promptLength = contextCropped.Count;
+                
+                // Build tensor from full prompt: shape (1, promptLength)
+                // Use exact allocation for Tensor (validates data.Length == shape product)
+                var prefillData = new float[promptLength];
+                for (int j = 0; j < promptLength; j++)
+                {
+                    prefillData[j] = contextCropped[j];
+                }
+                var prefillTensor = new Tensor(prefillData, new int[] { 1, promptLength });
+                
+                // Forward pass with position offset 0 (start of sequence)
+                logits = _model.Forward(prefillTensor, positionOffset: 0);
+                
+                // Set position for next decode step
+                _currentPosition = promptLength;
+                _kvCacheActive = true;
             }
             else
             {
-                // Manual copy of last blockSize tokens (avoid LINQ allocation)
-                contextCropped = new List<int>(_blockSize);
-                int startIdx = context.Count - _blockSize;
-                for (int idx = startIdx; idx < context.Count; idx++)
+                // DECODE PHASE: Single-token forward with KV cache
+                
+                // Get the last token from context
+                int lastToken = context[context.Count - 1];
+                
+                // Reuse decode tensor (zero allocation)
+                _decodeData[0] = lastToken;
+                if (_decodeTensor == null)
                 {
-                    contextCropped.Add(context[idx]);
+                    _decodeTensor = new Tensor(_decodeData, _decodeShape);
                 }
+                
+                // Forward pass with current position offset
+                logits = _model.Forward(_decodeTensor, positionOffset: _currentPosition);
+                
+                // Increment position for next token
+                _currentPosition++;
             }
-            
-            // Convert to tensor
-            var contextData = new float[contextCropped.Count];
-            for (int j = 0; j < contextCropped.Count; j++)
-            {
-                contextData[j] = contextCropped[j];
-            }
-            var contextTensor = new Tensor(contextData, new int[] { 1, contextCropped.Count });
-            
-            // Forward pass (synchronous compute)
-            var logits = _model.Forward(contextTensor);
             
             // Get logits for last position
-            int T = contextCropped.Count;
+            int T = logits.Shape[1];  // Sequence length in output (1 for decode, promptLength for prefill)
             int vocabSize = logits.Shape[2];
             
-            // Tier-0 optimization: Reuse logits buffer instead of allocating per token
+            // Reuse logits buffer instead of allocating per token
             if (_probabilityBuffer == null || _probabilityBuffer.Length != vocabSize)
             {
                 _probabilityBuffer = new float[vocabSize];
