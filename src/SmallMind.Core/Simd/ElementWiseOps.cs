@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using System.Runtime.Intrinsics.Arm;
 
 namespace SmallMind.Core.Simd
 {
@@ -38,6 +39,22 @@ namespace SmallMind.Core.Simd
                             var va = Avx512F.LoadVector512(pA + i);
                             var vb = Avx512F.LoadVector512(pB + i);
                             Avx512F.Store(pR + i, Avx512F.Add(va, vb));
+                        }
+                    }
+                }
+            }
+            // ARM NEON path (4 floats)
+            else if (AdvSimd.Arm64.IsSupported && length >= 4)
+            {
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b, pR = result)
+                    {
+                        for (; i <= length - 4; i += 4)
+                        {
+                            var va = AdvSimd.LoadVector128(pA + i);
+                            var vb = AdvSimd.LoadVector128(pB + i);
+                            AdvSimd.Store(pR + i, AdvSimd.Add(va, vb));
                         }
                     }
                 }
@@ -130,6 +147,22 @@ namespace SmallMind.Core.Simd
                             var va = Avx512F.LoadVector512(pA + i);
                             var vb = Avx512F.LoadVector512(pB + i);
                             Avx512F.Store(pR + i, Avx512F.Multiply(va, vb));
+                        }
+                    }
+                }
+            }
+            // ARM NEON path (4 floats)
+            else if (AdvSimd.Arm64.IsSupported && length >= 4)
+            {
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b, pR = result)
+                    {
+                        for (; i <= length - 4; i += 4)
+                        {
+                            var va = AdvSimd.LoadVector128(pA + i);
+                            var vb = AdvSimd.LoadVector128(pB + i);
+                            AdvSimd.Store(pR + i, AdvSimd.Multiply(va, vb));
                         }
                     }
                 }

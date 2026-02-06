@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using System.Runtime.Intrinsics.Arm;
 using System.Threading.Tasks;
 
 namespace SmallMind.Core.Simd
@@ -51,6 +52,10 @@ namespace SmallMind.Core.Simd
             else if (Avx.IsSupported && K >= 8)
             {
                 MatMulAvx(A, B, C, M, K, N);
+            }
+            else if (AdvSimd.Arm64.IsSupported)
+            {
+                MatMulNeonTiled(A, B, C, M, K, N);
             }
             else
             {
@@ -1253,6 +1258,84 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
+        /// ARM NEON tiled matrix multiplication for Apple Silicon and ARM servers.
+        /// Processes 4 floats per vector using AdvSimd.Arm64 FMA operations.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void MatMulNeonTiled(
+            float[] A, float[] B, float[] C,
+            int M, int K, int N)
+        {
+            const int vecSize = 4; // NEON processes 4 floats per vector
+            int numRowTiles = (M + TILE_SIZE - 1) / TILE_SIZE;
+            
+            // Parallelize over row tiles when beneficial
+            if (numRowTiles >= 2)
+            {
+                Parallel.For(0, numRowTiles, i0Idx =>
+                {
+                    int i0 = i0Idx * TILE_SIZE;
+                    int iMax = Math.Min(i0 + TILE_SIZE, M);
+                    MatMulNeonTileKernel(A, B, C, i0, iMax, K, N, vecSize);
+                });
+            }
+            else
+            {
+                MatMulNeonTileKernel(A, B, C, 0, M, K, N, vecSize);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void MatMulNeonTileKernel(
+            float[] A, float[] B, float[] C,
+            int i0, int iMax, int K, int N, int vecSize)
+        {
+            fixed (float* pA = A, pB = B, pC = C)
+            {
+                for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
+                {
+                    int kMax = Math.Min(k0 + TILE_SIZE, K);
+                    
+                    for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
+                    {
+                        int jMax = Math.Min(j0 + TILE_SIZE, N);
+                        
+                        // Process this tile
+                        for (int i = i0; i < iMax; i++)
+                        {
+                            int aRow = i * K;
+                            int cRow = i * N;
+                            
+                            for (int k = k0; k < kMax; k++)
+                            {
+                                var vA = AdvSimd.DuplicateToVector128(pA[aRow + k]);
+                                int bRow = k * N;
+                                int j = j0;
+                                
+                                // NEON SIMD loop (4 floats at a time)
+                                for (; j <= jMax - vecSize; j += vecSize)
+                                {
+                                    var vB = AdvSimd.LoadVector128(pB + bRow + j);
+                                    var vC = AdvSimd.LoadVector128(pC + cRow + j);
+                                    // FMA: vC = vC + vB * vA
+                                    vC = AdvSimd.FusedMultiplyAdd(vC, vB, vA);
+                                    AdvSimd.Store(pC + cRow + j, vC);
+                                }
+                                
+                                // Scalar remainder
+                                float aVal = pA[aRow + k];
+                                for (; j < jMax; j++)
+                                {
+                                    pC[cRow + j] += aVal * pB[bRow + j];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// Dot product: sum(a[i] * b[i])
         /// Uses SIMD for acceleration.
         /// </summary>
@@ -1285,23 +1368,43 @@ namespace SmallMind.Core.Simd
                     }
                 }
             }
+            // ARM NEON path (4 floats)
+            else if (AdvSimd.Arm64.IsSupported && length >= 4)
+            {
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b)
+                    {
+                        var sumVec = Vector128<float>.Zero;
+                        for (; i <= length - 4; i += 4)
+                        {
+                            var va = AdvSimd.LoadVector128(pA + i);
+                            var vb = AdvSimd.LoadVector128(pB + i);
+                            sumVec = AdvSimd.FusedMultiplyAdd(sumVec, va, vb);
+                        }
+                        // Horizontal sum: manual extraction and add
+                        sum = sumVec.GetElement(0) + sumVec.GetElement(1) + 
+                              sumVec.GetElement(2) + sumVec.GetElement(3);
+                    }
+                }
+            }
 
             // Vector<T> fallback
             int vectorSize = Vector<float>.Count;
-            var sumVec = new Vector<float>(sum);
+            var sumVec2 = new Vector<float>(sum);
 
             // SIMD loop
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var va = new Vector<float>(a.Slice(i));
                 var vb = new Vector<float>(b.Slice(i));
-                sumVec += va * vb;
+                sumVec2 += va * vb;
             }
 
             // Horizontal sum
             for (int j = 0; j < vectorSize; j++)
             {
-                sum += sumVec[j];
+                sum += sumVec2[j];
             }
 
             // Scalar remainder

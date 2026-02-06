@@ -303,6 +303,42 @@ namespace SmallMind.Transformers
         }
 
         /// <summary>
+        /// Enable KV-cache for all transformer blocks.
+        /// Call before inference to enable efficient autoregressive generation.
+        /// </summary>
+        public void EnableKVCache()
+        {
+            for (int i = 0; i < _blocks.Count; i++)
+            {
+                _blocks[i].EnableKVCache();
+            }
+        }
+
+        /// <summary>
+        /// Disable KV-cache for all transformer blocks.
+        /// Call after inference to free cache memory.
+        /// </summary>
+        public void DisableKVCache()
+        {
+            for (int i = 0; i < _blocks.Count; i++)
+            {
+                _blocks[i].DisableKVCache();
+            }
+        }
+
+        /// <summary>
+        /// Reset KV-cache position for all transformer blocks.
+        /// Call before starting a new sequence to reset cache state.
+        /// </summary>
+        public void ResetKVCache()
+        {
+            for (int i = 0; i < _blocks.Count; i++)
+            {
+                _blocks[i].ResetKVCache();
+            }
+        }
+
+        /// <summary>
         /// Calculate total number of parameters in the model.
         /// Uses long to support billion-parameter models.
         /// </summary>
@@ -470,6 +506,24 @@ namespace SmallMind.Transformers
             _ln2.Eval();
             _mlp.Eval();
         }
+
+        /// <summary>
+        /// Enable KV-cache for efficient autoregressive generation.
+        /// Delegates to the attention layer.
+        /// </summary>
+        public void EnableKVCache() => _attn.EnableKVCache();
+
+        /// <summary>
+        /// Disable KV-cache and reset cache state.
+        /// Delegates to the attention layer.
+        /// </summary>
+        public void DisableKVCache() => _attn.DisableKVCache();
+
+        /// <summary>
+        /// Reset KV-cache position to start a new sequence.
+        /// Delegates to the attention layer.
+        /// </summary>
+        public void ResetKVCache() => _attn.ResetKVCache();
     }
 
     /// <summary>

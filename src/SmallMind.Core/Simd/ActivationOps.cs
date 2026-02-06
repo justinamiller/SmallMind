@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using System.Runtime.Intrinsics.Arm;
 
 namespace SmallMind.Core.Simd
 {
@@ -37,6 +38,22 @@ namespace SmallMind.Core.Simd
                         {
                             var v = Avx512F.LoadVector512(pInput + i);
                             Avx512F.Store(pOutput + i, Avx512F.Max(v, zero512));
+                        }
+                    }
+                }
+            }
+            // ARM NEON path (4 floats)
+            else if (AdvSimd.Arm64.IsSupported && length >= 4)
+            {
+                var zero128 = Vector128<float>.Zero;
+                unsafe
+                {
+                    fixed (float* pInput = input, pOutput = output)
+                    {
+                        for (; i <= length - 4; i += 4)
+                        {
+                            var v = AdvSimd.LoadVector128(pInput + i);
+                            AdvSimd.Store(pOutput + i, AdvSimd.Max(v, zero128));
                         }
                     }
                 }
@@ -92,6 +109,29 @@ namespace SmallMind.Core.Simd
                             // Use bitwise AND to apply mask
                             var result = Avx512F.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
                             Avx512F.Store(pInputGrad + i, result);
+                        }
+                    }
+                }
+            }
+            // ARM NEON path (4 floats)
+            else if (AdvSimd.Arm64.IsSupported && length >= 4)
+            {
+                var zero128 = Vector128<float>.Zero;
+                unsafe
+                {
+                    fixed (float* pInput = input, pOutputGrad = outputGrad, pInputGrad = inputGrad)
+                    {
+                        for (; i <= length - 4; i += 4)
+                        {
+                            var vInput = AdvSimd.LoadVector128(pInput + i);
+                            var vOutputGrad = AdvSimd.LoadVector128(pOutputGrad + i);
+                            
+                            // Mask: input > 0
+                            var mask = AdvSimd.CompareGreaterThan(vInput, zero128);
+                            
+                            // Apply mask: outputGrad where input > 0, else 0
+                            var result = AdvSimd.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
+                            AdvSimd.Store(pInputGrad + i, result);
                         }
                     }
                 }

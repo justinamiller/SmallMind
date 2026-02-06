@@ -21,7 +21,15 @@ namespace SmallMind.Runtime
         private List<int>? _contextCroppedBuffer;
         private float[]? _logitsLastBuffer;
         private float[]? _topKFilteredBuffer;
-        // Note: Cannot reuse contextData or shape buffers as Tensor validates exact sizing and holds references
+        
+        // KV-cache state for efficient decode
+        private bool _kvCacheActive = false;
+        private int _currentPosition = 0;
+        
+        // Reusable decode tensor for single-token generation
+        private float[] _decodeData = new float[1];
+        private int[] _decodeShape = new int[] { 1, 1 };
+        private Tensor? _decodeTensor;
 
         public Sampling(TransformerModel model, ITokenizer tokenizer, int blockSize)
         {
@@ -102,104 +110,148 @@ namespace SmallMind.Runtime
 
             bool firstTokenRecorded = false;
 
-            for (int i = 0; i < maxNewTokens; i++)
+            try
             {
-                // Crop context to last blockSize tokens (avoid LINQ allocation)
-                // Reuse buffer to eliminate per-token allocation
-                List<int> contextCropped;
-                if (context.Count <= _blockSize)
+                for (int i = 0; i < maxNewTokens; i++)
                 {
-                    contextCropped = context;
-                }
-                else
-                {
-                    // Reuse buffer instead of allocating new List
-                    if (_contextCroppedBuffer == null)
+                    Tensor logits;
+                    
+                    if (!_kvCacheActive)
                     {
-                        _contextCroppedBuffer = new List<int>(_blockSize);
+                        // PREFILL PHASE: Process full prompt to populate KV cache
+                        
+                        // Reset and enable KV-cache
+                        _model.ResetKVCache();
+                        _model.EnableKVCache();
+                        
+                        // Crop context to last blockSize tokens (avoid LINQ allocation)
+                        List<int> contextCropped;
+                        if (context.Count <= _blockSize)
+                        {
+                            contextCropped = context;
+                        }
+                        else
+                        {
+                            // Reuse buffer instead of allocating new List
+                            if (_contextCroppedBuffer == null)
+                            {
+                                _contextCroppedBuffer = new List<int>(_blockSize);
+                            }
+                            else
+                            {
+                                _contextCroppedBuffer.Clear();
+                            }
+                            
+                            int startIdx = context.Count - _blockSize;
+                            for (int idx = startIdx; idx < context.Count; idx++)
+                            {
+                                _contextCroppedBuffer.Add(context[idx]);
+                            }
+                            contextCropped = _contextCroppedBuffer;
+                        }
+                        
+                        int promptLength = contextCropped.Count;
+                        
+                        // Build tensor from full prompt: shape (1, promptLength)
+                        var prefillData = new float[promptLength];
+                        for (int j = 0; j < promptLength; j++)
+                        {
+                            prefillData[j] = contextCropped[j];
+                        }
+                        var prefillTensor = new Tensor(prefillData, new int[] { 1, promptLength });
+                        
+                        // Forward pass with position offset 0
+                        logits = _model.Forward(prefillTensor, positionOffset: 0);
+                        
+                        // Set position for next decode step
+                        _currentPosition = promptLength;
+                        _kvCacheActive = true;
                     }
                     else
                     {
-                        _contextCroppedBuffer.Clear();
+                        // DECODE PHASE: Single-token forward with KV cache
+                        
+                        // Get the last token from context
+                        int lastToken = context[context.Count - 1];
+                        
+                        // Reuse decode tensor (zero allocation)
+                        _decodeData[0] = lastToken;
+                        if (_decodeTensor == null)
+                        {
+                            _decodeTensor = new Tensor(_decodeData, _decodeShape);
+                        }
+                        
+                        // Forward pass with current position offset
+                        logits = _model.Forward(_decodeTensor, positionOffset: _currentPosition);
+                        
+                        // Increment position for next token
+                        _currentPosition++;
+                    }
+
+                    // Get logits for the last position: (vocab_size,)
+                    // logits shape: (1, T, vocab_size), we want position (0, T-1, :)
+                    int T = logits.Shape[1];  // Sequence length (1 for decode, promptLength for prefill)
+                    int vocabSize = logits.Shape[2];
+                    
+                    // Reuse logitsLast buffer
+                    if (_logitsLastBuffer == null || _logitsLastBuffer.Length < vocabSize)
+                    {
+                        _logitsLastBuffer = new float[vocabSize];
                     }
                     
-                    int startIdx = context.Count - _blockSize;
-                    for (int idx = startIdx; idx < context.Count; idx++)
-                    {
-                        _contextCroppedBuffer.Add(context[idx]);
-                    }
-                    contextCropped = _contextCroppedBuffer;
-                }
-
-                // Convert to tensor: (1, T)
-                // Allocate exact-size array (Tensor validates data.Length == shape size)
-                int contextSize = contextCropped.Count;
-                var contextData = new float[contextSize];
-                for (int j = 0; j < contextSize; j++)
-                {
-                    contextData[j] = contextCropped[j];
-                }
-                
-                // Note: Cannot reuse shape buffer as Tensor holds reference to it
-                // These are small allocations (int[] and float[]) but unavoidable due to Tensor API design
-                var contextTensor = new Tensor(contextData, new int[] { 1, contextSize });
-
-                // Forward pass: (1, T, vocab_size)
-                var logits = _model.Forward(contextTensor);
-
-                // Get logits for the last position: (vocab_size,)
-                // logits shape: (1, T, vocab_size), we want position (0, T-1, :)
-                int T = contextSize;
-                int vocabSize = logits.Shape[2];
-                
-                // Reuse logitsLast buffer
-                if (_logitsLastBuffer == null || _logitsLastBuffer.Length < vocabSize)
-                {
-                    _logitsLastBuffer = new float[vocabSize];
-                }
-                
-                int lastPosOffset = (T - 1) * vocabSize; // Offset for last position in batch 0
-                for (int v = 0; v < vocabSize; v++)
-                {
-                    _logitsLastBuffer[v] = logits.Data[lastPosOffset + v];
-                }
-
-                // Apply temperature - operate on buffer directly
-                if (temperature != 1.0)
-                {
+                    int lastPosOffset = (T - 1) * vocabSize; // Offset for last position in batch 0
                     for (int v = 0; v < vocabSize; v++)
                     {
-                        _logitsLastBuffer[v] /= (float)temperature;
+                        _logitsLastBuffer[v] = logits.Data[lastPosOffset + v];
+                    }
+
+                    // Apply temperature - operate on buffer directly
+                    if (temperature != 1.0)
+                    {
+                        for (int v = 0; v < vocabSize; v++)
+                        {
+                            _logitsLastBuffer[v] /= (float)temperature;
+                        }
+                    }
+
+                    // Apply top-k filtering - returns reference to buffer or filtered buffer
+                    float[] logitsToSample = _logitsLastBuffer;
+                    if (topK > 0)
+                    {
+                        logitsToSample = ApplyTopK(_logitsLastBuffer, vocabSize, topK);
+                    }
+
+                    // Convert to probabilities (softmax)
+                    var probs = Softmax(logitsToSample, vocabSize);
+
+                    // Sample from the distribution
+                    var nextToken = SampleFromProbs(probs, random);
+
+                    // Add to context
+                    context.Add(nextToken);
+                    
+                    // Record first token for TTFT metric
+                    if (metrics != null && !firstTokenRecorded)
+                    {
+                        metrics.RecordFirstToken(requestId);
+                        firstTokenRecorded = true;
+                    }
+
+                    // Optional: print progress
+                    if (!showPerf && !isPerfJsonMode && (i + 1) % 50 == 0)
+                    {
+                        Console.Write(".");
                     }
                 }
-
-                // Apply top-k filtering - returns reference to buffer or filtered buffer
-                float[] logitsToSample = _logitsLastBuffer;
-                if (topK > 0)
+            }
+            finally
+            {
+                // Cleanup: Disable KV-cache after generation completes
+                if (_kvCacheActive)
                 {
-                    logitsToSample = ApplyTopK(_logitsLastBuffer, vocabSize, topK);
-                }
-
-                // Convert to probabilities (softmax)
-                var probs = Softmax(logitsToSample, vocabSize);
-
-                // Sample from the distribution
-                var nextToken = SampleFromProbs(probs, random);
-
-                // Add to context
-                context.Add(nextToken);
-                
-                // Record first token for TTFT metric
-                if (metrics != null && !firstTokenRecorded)
-                {
-                    metrics.RecordFirstToken(requestId);
-                    firstTokenRecorded = true;
-                }
-
-                // Optional: print progress
-                if (!showPerf && !isPerfJsonMode && (i + 1) % 50 == 0)
-                {
-                    Console.Write(".");
+                    _model.DisableKVCache();
+                    _kvCacheActive = false;
+                    _currentPosition = 0;
                 }
             }
 
