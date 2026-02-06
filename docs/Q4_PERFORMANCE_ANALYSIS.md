@@ -213,8 +213,6 @@ Span<float> bValsBuffer = stackalloc float[vectorSize];  // Zero heap allocation
 
 ### A. What Changed?
 
-### A. What Changed?
-
 **BEFORE optimization**: Q4 was 2-3x SLOWER than FP32 due to:
 1. Column-major iteration causing cache misses
 2. Branch mispredictions in nibble decoding
