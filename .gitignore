@@ -23,3 +23,5 @@ benchmarks/results/
 # Temporary profiling logs (keep organized results only)
 *-run.log
 latest-profiling-dir.txt
+benchmark-results*.md
+benchmark-results*.json
