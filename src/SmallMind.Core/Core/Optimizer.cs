@@ -81,14 +81,16 @@ namespace SmallMind.Core.Core
                 Span<float> gradSpan = param.Grad;
                 Span<float> dataSpan = param.Data;
                 
-                // Fused gradient clipping and parameter update (eliminates redundant iteration)
+                // Performance note: We use separate paths for clipping vs no-clipping
+                // to avoid a branch in the innermost loop (called millions of times).
+                // This duplication is intentional for maximum performance.
                 if (_gradClipValue > 0)
                 {
+                    // Path with fused gradient clipping
                     for (int i = 0; i < param.Size; i++)
                     {
-                        // Clip gradient
+                        // Clip gradient (preserves original gradSpan for diagnostic purposes)
                         float grad = Math.Clamp(gradSpan[i], -_gradClipValue, _gradClipValue);
-                        gradSpan[i] = grad;
                         
                         // Update biased first moment estimate
                         m[i] = _beta1 * m[i] + oneMinusBeta1 * grad;
@@ -106,7 +108,7 @@ namespace SmallMind.Core.Core
                 }
                 else
                 {
-                    // Optimized path without clipping
+                    // Optimized path without clipping (avoids Clamp overhead)
                     for (int i = 0; i < param.Size; i++)
                     {
                         float grad = gradSpan[i];
