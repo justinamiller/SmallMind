@@ -1491,7 +1491,7 @@ namespace SmallMind.Core.Simd
 
             // Vector<T> fallback
             int vectorSize = Vector<float>.Count;
-            var sumVec2 = new Vector<float>(sum);
+            var sumVec2 = Vector<float>.Zero;
 
             // SIMD loop
             for (; i <= length - vectorSize; i += vectorSize)
