@@ -159,6 +159,76 @@ namespace SmallMind.Quantization.Tests
         }
 
         [Fact]
+        public void Q4_MatMulOptimized_MatchesOriginal_SingleRow()
+        {
+            // Test optimized kernel matches original
+            var random = new Random(42);
+            int k = 64, n = 32;
+            var a = GenerateRandomFloats(random, k, -1f, 1f);
+            var bFloat = GenerateRandomFloats(random, k * n, -1f, 1f);
+            var bQuant = Q4Tensor.Quantize(bFloat, k, n, blockSize: 64);
+
+            var expected = new float[n];
+            MatMulF32Q4.Multiply(a, bQuant, expected, 1, k, n);
+
+            var actual = new float[n];
+            MatMulF32Q4Optimized.Multiply(a, bQuant, actual, 1, k, n);
+
+            // Should match exactly (same algorithm)
+            AssertArraysClose(expected, actual, 0.001f);
+        }
+
+        [Fact]
+        public void Q4_MatMulOptimized_MatchesOriginal_Batched()
+        {
+            // Test batched case
+            var random = new Random(42);
+            int m = 4, k = 64, n = 32;
+            var a = GenerateRandomFloats(random, m * k, -1f, 1f);
+            var bFloat = GenerateRandomFloats(random, k * n, -1f, 1f);
+            var bQuant = Q4Tensor.Quantize(bFloat, k, n, blockSize: 64);
+
+            var expected = new float[m * n];
+            MatMulF32Q4.Multiply(a, bQuant, expected, m, k, n);
+
+            var actual = new float[m * n];
+            MatMulF32Q4Optimized.Multiply(a, bQuant, actual, m, k, n);
+
+            AssertArraysClose(expected, actual, 0.001f);
+        }
+
+        [Fact]
+        public void Q4_MatMulOptimized_MatchesReference_MultipleBlockSizes()
+        {
+            // Test with various matrix sizes
+            var random = new Random(42);
+            
+            var testCases = new[] 
+            {
+                (m: 1, k: 128, n: 128),
+                (m: 2, k: 256, n: 64),
+                (m: 4, k: 512, n: 128)
+            };
+
+            foreach (var (m, k, n) in testCases)
+            {
+                var a = GenerateRandomFloats(random, m * k, -1f, 1f);
+                var bFloat = GenerateRandomFloats(random, k * n, -1f, 1f);
+                var bQuant = Q4Tensor.Quantize(bFloat, k, n, blockSize: 64);
+
+                // Reference float matmul
+                var expected = new float[m * n];
+                MatMulReference(a, bFloat, expected, m, k, n);
+
+                // Optimized Q4 matmul
+                var actual = new float[m * n];
+                MatMulF32Q4Optimized.Multiply(a, bQuant, actual, m, k, n);
+
+                AssertArraysClose(expected, actual, Q4Tolerance);
+            }
+        }
+
+        [Fact]
         public void Q8_BlockSizeAlignment_HandlesOddSizes()
         {
             // Test that non-aligned sizes work correctly
