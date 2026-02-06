@@ -11,6 +11,14 @@ namespace SmallMind.Quantization.Kernels
     /// </summary>
     public static class MatMulF32Q4
     {
+        // Lookup table for fast nibble to int conversion (4-bit two's complement)
+        // This avoids the branch in DecodeNibble for every single element
+        private static readonly int[] NibbleToInt = new int[16]
+        {
+            0, 1, 2, 3, 4, 5, 6, 7,      // 0-7: positive values
+            -8, -7, -6, -5, -4, -3, -2, -1  // 8-15: negative values (two's complement)
+        };
+        
         /// <summary>
         /// Matrix multiply: C[M×N] = A[M×K] * B[K×N] where B is Q4 quantized.
         /// </summary>
@@ -47,7 +55,7 @@ namespace SmallMind.Quantization.Kernels
 
         /// <summary>
         /// Vector-matrix multiply: c[1×N] = a[1×K] * B[K×N] where B is Q4 quantized.
-        /// Optimized for single-row inference with cache-friendly row-major traversal.
+        /// Optimized for single-row inference with cache-friendly row-major traversal and LUT.
         /// </summary>
         private static void MultiplyVectorMatrix(ReadOnlySpan<float> a, Q4Tensor b, Span<float> c, int k, int n)
         {
@@ -82,7 +90,8 @@ namespace SmallMind.Quantization.Kernels
                     int shift = (linearIdx & 1) << 2; // 0 or 4
                     byte nibble = (byte)((packedByte >> shift) & 0xF);
                     
-                    int quantVal = Q4Tensor.DecodeNibble(nibble);
+                    // Fast LUT-based decode instead of branch
+                    int quantVal = NibbleToInt[nibble];
                     c[col] += aVal * quantVal * scale;
                 }
             }
@@ -91,7 +100,7 @@ namespace SmallMind.Quantization.Kernels
         /// <summary>
         /// Optimized vector-matrix multiply using SIMD where beneficial.
         /// c[1×N] = a[1×K] * B[K×N] where B is Q4 quantized.
-        /// Zero-allocation SIMD path with row-major traversal.
+        /// Zero-allocation SIMD path with row-major traversal and LUT.
         /// </summary>
         public static void MultiplyVectorMatrixSIMD(ReadOnlySpan<float> a, Q4Tensor b, Span<float> c, int k, int n)
         {
@@ -126,7 +135,7 @@ namespace SmallMind.Quantization.Kernels
                         
                         if (blockIdx >= b.Scales.Length) break;
                         
-                        // Load quantized values and dequantize
+                        // Load quantized values and dequantize using LUT
                         for (int vi = 0; vi < vectorSize; vi++)
                         {
                             int linearIdx = rowOffset + col + vi;
@@ -146,7 +155,8 @@ namespace SmallMind.Quantization.Kernels
                             int shift = (linearIdx & 1) << 2;
                             byte nibble = (byte)((packedByte >> shift) & 0xF);
                             
-                            int quantVal = Q4Tensor.DecodeNibble(nibble);
+                            // Fast LUT-based decode
+                            int quantVal = NibbleToInt[nibble];
                             bValsBuffer[vi] = quantVal * scale;
                         }
                         
@@ -175,7 +185,8 @@ namespace SmallMind.Quantization.Kernels
                     int shift = (linearIdx & 1) << 2;
                     byte nibble = (byte)((packedByte >> shift) & 0xF);
                     
-                    int quantVal = Q4Tensor.DecodeNibble(nibble);
+                    // Fast LUT-based decode
+                    int quantVal = NibbleToInt[nibble];
                     c[col] += aVal * quantVal * scale;
                 }
             }
