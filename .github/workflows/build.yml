@@ -33,17 +33,26 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Cache NuGet packages to speed up restore
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
       - name: Restore dependencies
         run: dotnet restore
 
       - name: Build (Release)
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --no-restore --configuration Release -maxcpucount
 
       - name: Run Unit Tests
-        run: dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj --configuration Release --verbosity normal --logger "trx;LogFileName=unit-tests.trx"
+        run: dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=unit-tests.trx"
 
       - name: Run Integration Tests
-        run: dotnet test tests/SmallMind.IntegrationTests/SmallMind.IntegrationTests.csproj --configuration Release --verbosity normal --logger "trx;LogFileName=integration-tests.trx"
+        run: dotnet test tests/SmallMind.IntegrationTests/SmallMind.IntegrationTests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=integration-tests.trx"
 
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
@@ -73,16 +82,25 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Cache NuGet packages to speed up restore (perf job)
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
       - name: Restore dependencies
         run: dotnet restore
 
       - name: Build (Release)
-        run: dotnet build --no-restore --configuration Release
+        run: dotnet build --no-restore --configuration Release -maxcpucount
 
       - name: Run Performance Tests
         env:
           RUN_PERF_TESTS: 'true'
-        run: dotnet test tests/SmallMind.PerfTests/SmallMind.PerfTests.csproj --configuration Release --verbosity normal --logger "trx;LogFileName=perf-tests.trx"
+        run: dotnet test tests/SmallMind.PerfTests/SmallMind.PerfTests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=perf-tests.trx"
 
       - name: Run SIMD Benchmarks
         run: |
