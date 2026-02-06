@@ -145,7 +145,7 @@ namespace SmallMind.Tests
             var options = new ProductionInferenceOptions
             {
                 MaxNewTokens = 1000, // Would take a while
-                MaxTimeMs = 200, // Short timeout
+                MaxTimeMs = 1, // Very short timeout to ensure it fires
                 Temperature = 1.0
             };
 
