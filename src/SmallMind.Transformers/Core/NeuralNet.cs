@@ -688,6 +688,18 @@ namespace SmallMind.Transformers
         /// </summary>
         public static Tensor GELU(Tensor input, Tensor? dest)
         {
+            // Validate dest tensor if provided
+            if (dest != null)
+            {
+                if (dest.Shape.Length != input.Shape.Length || 
+                    dest.Size != input.Size)
+                {
+                    throw new ArgumentException(
+                        $"Destination tensor shape {string.Join("x", dest.Shape)} " +
+                        $"does not match input shape {string.Join("x", input.Shape)}");
+                }
+            }
+            
             var output = dest ?? new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
             
             // Use optimized fast GELU approximation from ActivationOps
