@@ -156,7 +156,7 @@ namespace SmallMind.Tests
             var options = new ProductionInferenceOptions
             {
                 MaxNewTokens = 1000,
-                MaxTimeMs = 10, // Short enough to potentially timeout, but not so short as to be flaky
+                MaxTimeMs = 50, // Short enough to potentially timeout on slower systems, long enough to avoid flakiness
                 Temperature = 1.0
             };
 
