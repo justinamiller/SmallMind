@@ -657,7 +657,7 @@ namespace SmallMind.Transformers
             
             for (int i = 0; i < input.Size; i++)
             {
-                output.Data[i] = Math.Max(0, input.Data[i]);
+                output.Data[i] = MathF.Max(0, input.Data[i]);
             }
             
             if (input.RequiresGrad)
