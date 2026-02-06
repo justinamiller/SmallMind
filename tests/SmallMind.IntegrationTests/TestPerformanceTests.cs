@@ -57,12 +57,12 @@ public class TestPerformanceTests
     public void VerifyTestTimeoutConfiguration()
     {
         // Verify that the test timeout configuration is reasonable
-        var maxAllowedSeconds = 60;
-        
-        _output.WriteLine($"Maximum allowed test duration: {maxAllowedSeconds} seconds");
+        _output.WriteLine($"Maximum allowed test duration: {MaxTestDurationSeconds} seconds");
         _output.WriteLine("Configuration enforced via xunit.runner.json");
+        _output.WriteLine($"Constant value: {MaxTestDurationSeconds}");
         
-        Assert.True(maxAllowedSeconds >= 60, "Test timeout should allow at least 60 seconds for complex tests");
-        Assert.True(maxAllowedSeconds <= 120, "Test timeout should not exceed 120 seconds to catch performance regressions");
+        // Document the expected range for test timeout
+        Assert.True(MaxTestDurationSeconds >= 60, "Test timeout should allow at least 60 seconds for complex tests");
+        Assert.True(MaxTestDurationSeconds <= 120, "Test timeout should not exceed 120 seconds to catch performance regressions");
     }
 }
