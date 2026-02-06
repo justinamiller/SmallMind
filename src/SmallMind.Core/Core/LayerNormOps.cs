@@ -49,21 +49,81 @@ namespace SmallMind.Core.Core
             {
                 int offset = b * features;
                 
-                // Pass 1: Compute mean and variance (Welford's online algorithm for better numerical stability)
-                float mean = 0f;
-                float m2 = 0f;
+                // Pass 1: Compute mean and variance
+                // For large feature dimensions (>=128), use SIMD two-pass for better performance
+                // For smaller dimensions, use Welford's online algorithm for numerical stability
+                float mean;
+                float invStd;
                 
-                for (int i = 0; i < features; i++)
+                if (System.Numerics.Vector.IsHardwareAccelerated && features >= 128)
                 {
-                    float val = input[offset + i];
-                    float delta = val - mean;
-                    mean += delta / (i + 1);
-                    float delta2 = val - mean;
-                    m2 += delta * delta2;
+                    // SIMD two-pass: faster for large feature dimensions
+                    int vecSize = System.Numerics.Vector<float>.Count;
+                    
+                    // Pass 1a: Compute mean with SIMD
+                    var vSum = System.Numerics.Vector<float>.Zero;
+                    int f1 = 0;
+                    for (; f1 <= features - vecSize; f1 += vecSize)
+                    {
+                        var v = new System.Numerics.Vector<float>(input.Slice(offset + f1, vecSize));
+                        vSum += v;
+                    }
+                    
+                    // Horizontal sum reduction
+                    float sum = 0f;
+                    for (int vi = 0; vi < vecSize; vi++)
+                        sum += vSum[vi];
+                    
+                    // Add scalar remainder
+                    for (; f1 < features; f1++)
+                        sum += input[offset + f1];
+                    
+                    mean = sum / features;
+                    
+                    // Pass 1b: Compute variance with SIMD
+                    var vMean = new System.Numerics.Vector<float>(mean);
+                    var vSqSum = System.Numerics.Vector<float>.Zero;
+                    int f2 = 0;
+                    for (; f2 <= features - vecSize; f2 += vecSize)
+                    {
+                        var v = new System.Numerics.Vector<float>(input.Slice(offset + f2, vecSize));
+                        var vDiff = v - vMean;
+                        vSqSum += vDiff * vDiff;
+                    }
+                    
+                    // Horizontal sum reduction
+                    float sqSum = 0f;
+                    for (int vi = 0; vi < vecSize; vi++)
+                        sqSum += vSqSum[vi];
+                    
+                    // Add scalar remainder
+                    for (; f2 < features; f2++)
+                    {
+                        float diff = input[offset + f2] - mean;
+                        sqSum += diff * diff;
+                    }
+                    
+                    float variance = sqSum / features;
+                    invStd = 1f / MathF.Sqrt(variance + eps);
                 }
-                
-                float variance = m2 / features;
-                float invStd = 1f / MathF.Sqrt(variance + eps);
+                else
+                {
+                    // Welford's online algorithm for small dimensions (better numerical stability)
+                    mean = 0f;
+                    float m2 = 0f;
+                    
+                    for (int i = 0; i < features; i++)
+                    {
+                        float val = input[offset + i];
+                        float delta = val - mean;
+                        mean += delta / (i + 1);
+                        float delta2 = val - mean;
+                        m2 += delta * delta2;
+                    }
+                    
+                    float variance = m2 / features;
+                    invStd = 1f / MathF.Sqrt(variance + eps);
+                }
                 
                 // Pass 2: Normalize and apply affine transformation (SIMD optimized)
                 int f = 0;
