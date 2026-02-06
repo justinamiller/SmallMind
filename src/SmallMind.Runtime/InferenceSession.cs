@@ -177,6 +177,12 @@ namespace SmallMind.Runtime
                         break;
                     }
                     
+                    // Check block size limit to prevent exceeding model's positional embeddings
+                    if (context.Count >= _blockSize)
+                    {
+                        break;
+                    }
+                    
                     var nextToken = await GenerateNextTokenAsync(context, effectiveToken);
                     context.Add(nextToken);
                     
