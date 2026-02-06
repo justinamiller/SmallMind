@@ -65,9 +65,9 @@ namespace SmallMind.Tokenizers
                 throw new TokenizationException($"Unknown token '{_unkToken}' not found in vocabulary");
 
             // Setup Info
-            int bosId = specialTokens?.Bos != null && _vocab.TryGetValue(specialTokens.Bos, out int bId) ? bId : -1;
-            int eosId = specialTokens?.Eos != null && _vocab.TryGetValue(specialTokens.Eos, out int eId) ? eId : -1;
-            int padId = specialTokens?.Pad != null && _vocab.TryGetValue(specialTokens.Pad, out int pId) ? pId : -1;
+            int bosId = TokenizerHelper.ResolveSpecialToken(specialTokens?.Bos, _vocab);
+            int eosId = TokenizerHelper.ResolveSpecialToken(specialTokens?.Eos, _vocab);
+            int padId = TokenizerHelper.ResolveSpecialToken(specialTokens?.Pad, _vocab);
 
             Info = new TokenizerInfo(
                 name: "WordPiece",

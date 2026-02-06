@@ -81,10 +81,10 @@ namespace SmallMind.Tokenizers
             _mergeRanks = mergeDict.ToFrozenDictionary();
 
             // Setup Info with special tokens
-            int bosId = specialTokens?.Bos != null && _vocab.TryGetValue(specialTokens.Bos, out int bId) ? bId : -1;
-            int eosId = specialTokens?.Eos != null && _vocab.TryGetValue(specialTokens.Eos, out int eId) ? eId : -1;
-            int padId = specialTokens?.Pad != null && _vocab.TryGetValue(specialTokens.Pad, out int pId) ? pId : -1;
-            int unkId = specialTokens?.Unk != null && _vocab.TryGetValue(specialTokens.Unk, out int uId) ? uId : -1;
+            int bosId = TokenizerHelper.ResolveSpecialToken(specialTokens?.Bos, _vocab);
+            int eosId = TokenizerHelper.ResolveSpecialToken(specialTokens?.Eos, _vocab);
+            int padId = TokenizerHelper.ResolveSpecialToken(specialTokens?.Pad, _vocab);
+            int unkId = TokenizerHelper.ResolveSpecialToken(specialTokens?.Unk, _vocab);
 
             Info = new TokenizerInfo(
                 name: "ByteLevelBpe",

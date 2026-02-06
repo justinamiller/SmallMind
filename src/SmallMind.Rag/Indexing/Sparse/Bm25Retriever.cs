@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmallMind.Rag.Common;
 
 namespace SmallMind.Rag.Indexing.Sparse;
 
@@ -109,9 +110,7 @@ public sealed class Bm25Retriever
                 continue;
 
             // Create excerpt (first 200 chars of text)
-            string excerpt = chunk.Text.Length <= 200
-                ? chunk.Text
-                : chunk.Text.Substring(0, 200) + "...";
+            string excerpt = TextHelper.TruncateWithEllipsis(chunk.Text, RetrievalConstants.MaxExcerptLength);
 
             var retrievedChunk = new RetrievedChunk(
                 chunkId: sc.ChunkId,
