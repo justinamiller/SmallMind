@@ -1,9 +1,12 @@
 # SmallMind Benchmark Metrics and LLM Platform Comparison
 
-**Benchmark Date:** 2026-02-04  
+**Latest Benchmark Date:** 2026-02-06 (Updated)  
+**Previous Benchmark:** 2026-02-04  
 **System:** AMD EPYC 7763 64-Core Processor (4 cores), 15.6 GB RAM, Linux Ubuntu 24.04.3 LTS  
 **Runtime:** .NET 10.0.2  
-**Build:** Release Configuration  
+**Build:** Release Configuration
+
+> **📊 Latest Results:** See `BENCHMARK_RUN_RESULTS_SUMMARY.md` and `BENCHMARK_COMPARISON_CHART.md` for the most recent benchmark data.  
 
 ---
 
@@ -24,13 +27,13 @@ SmallMind is a **pure C# LLM implementation** designed for educational purposes 
 
 ### Computational Performance
 
-| Metric | Value | Industry Target | Rating |
-|--------|-------|-----------------|--------|
-| **Matrix Multiplication (512×512)** | 29.19 GFLOPS | >20 GFLOPS | 🟢 Excellent |
-| **Total Runtime (Medium Model)** | 668.30 ms | N/A | 🟢 Good |
-| **Total Allocations (Medium Model)** | 338.90 MB | <100 MB | 🟡 Acceptable |
-| **SIMD Element-wise Operations** | 31.62 GB/s | >25 GB/s | 🟢 Excellent |
-| **ReLU Activation Throughput** | 34.76 GB/s | >25 GB/s | 🟢 Excellent |
+| Metric | Value (2026-02-06) | Value (2026-02-04) | Industry Target | Rating |
+|--------|-------------------|-------------------|-----------------|--------|
+| **Matrix Multiplication (512×512)** | 28.82 GFLOPS | 29.19 GFLOPS | >20 GFLOPS | 🟢 Excellent |
+| **Total Runtime (Medium Model)** | 549.84 ms | 668.30 ms | N/A | 🟢 Excellent |
+| **Total Allocations** | 337.79 MB | 338.90 MB | <350 MB | 🟢 Good |
+| **SIMD Element-wise Operations** | 29.25 GB/s | 31.62 GB/s | >25 GB/s | 🟢 Excellent |
+| **ReLU Activation Throughput** | 27.70 GB/s | 34.76 GB/s | >25 GB/s | 🟢 Excellent |
 
 ### Model Inference Performance
 
