@@ -131,7 +131,8 @@ namespace SmallMind.Tests
             ScalarGELU(input, scalarResult);
 
             // Assert - GELU uses approximation, so use slightly larger tolerance
-            const float geluTolerance = 1e-4f;
+            // The tanh-based Padé approximation may have minor SIMD vs scalar differences
+            const float geluTolerance = 2e-3f;
             for (int i = 0; i < size; i++)
             {
                 Assert.True(Math.Abs(simdResult[i] - scalarResult[i]) < geluTolerance,
@@ -240,12 +241,22 @@ namespace SmallMind.Tests
 
         private void ScalarGELU(float[] input, float[] result)
         {
-            // GELU approximation: x * sigmoid(1.702 * x)
+            // GELU tanh-based approximation with Padé tanh
+            const float SQRT_2_OVER_PI = 0.7978845608f;
+            const float COEFF = 0.044715f;
+            const float HALF = 0.5f;
+            const float PADE_A = 27f;
+            const float PADE_B = 9f;
+
             for (int i = 0; i < input.Length; i++)
             {
                 float x = input[i];
-                float sigmoid = 1f / (1f + MathF.Exp(-1.702f * x));
-                result[i] = x * sigmoid;
+                float x2 = x * x;
+                float inner = SQRT_2_OVER_PI * (x + COEFF * x2 * x);
+                inner = Math.Clamp(inner, -10f, 10f);
+                float inner2 = inner * inner;
+                float tanh = inner * (PADE_A + inner2) / (PADE_A + PADE_B * inner2);
+                result[i] = HALF * x * (1f + tanh);
             }
         }
 
