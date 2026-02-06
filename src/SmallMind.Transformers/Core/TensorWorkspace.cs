@@ -53,6 +53,37 @@ namespace SmallMind.Transformers
         }
         
         /// <summary>
+        /// Get or create a tensor with the specified key and shape (span-based, zero-allocation).
+        /// If a tensor with the same key exists and matches the shape, it is reused.
+        /// Otherwise, a new tensor is allocated and stored.
+        /// Use with stackalloc for zero-allocation shape passing.
+        /// </summary>
+        /// <param name="key">Unique identifier for the tensor</param>
+        /// <param name="shape">Shape of the tensor (can be stackalloc'd)</param>
+        /// <param name="requiresGrad">Whether the tensor requires gradient</param>
+        /// <returns>A tensor ready for use</returns>
+        public Tensor GetOrCreate(string key, ReadOnlySpan<int> shape, bool requiresGrad = false)
+        {
+            if (_tensors.TryGetValue(key, out var existing))
+            {
+                // Check if shape matches
+                if (ShapeMatchesSpan(existing.Shape, shape))
+                {
+                    return existing;
+                }
+                
+                // Shape doesn't match, remove old tensor
+                _tensors.Remove(key);
+            }
+            
+            // Create new tensor (must allocate shape array here, but only once per new shape)
+            var shapeArray = shape.ToArray();
+            var tensor = new Tensor(shapeArray, requiresGrad);
+            _tensors[key] = tensor;
+            return tensor;
+        }
+        
+        /// <summary>
         /// Clear all tensors in the workspace.
         /// </summary>
         public void Clear()
@@ -61,6 +92,20 @@ namespace SmallMind.Transformers
         }
         
         private bool ShapeMatches(int[] shape1, int[] shape2)
+        {
+            if (shape1.Length != shape2.Length)
+                return false;
+            
+            for (int i = 0; i < shape1.Length; i++)
+            {
+                if (shape1[i] != shape2[i])
+                    return false;
+            }
+            
+            return true;
+        }
+        
+        private bool ShapeMatchesSpan(int[] shape1, ReadOnlySpan<int> shape2)
         {
             if (shape1.Length != shape2.Length)
                 return false;
