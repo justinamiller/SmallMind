@@ -9,7 +9,6 @@ namespace SmallMind.Quantization.Kernels
     /// Fused matrix multiplication kernels for Q4_0 quantized weights.
     /// Computes C = A * B where A is float32 and B is Q4_0 quantized.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static class MatMulF32Q4
     {
         // Lookup table for fast nibble to int conversion (4-bit two's complement)

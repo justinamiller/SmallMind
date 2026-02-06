@@ -9,7 +9,6 @@ namespace SmallMind.Core.Core
     /// Fused LayerNorm operations with no intermediate allocations.
     /// Implements efficient two-pass normalization over last dimension.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static class LayerNormOps
     {
         /// <summary>
@@ -23,7 +22,7 @@ namespace SmallMind.Core.Core
         /// <param name="batch">Batch size (or number of sequences)</param>
         /// <param name="features">Feature dimension (normalized dimension)</param>
         /// <param name="eps">Small constant for numerical stability</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         public static void LayerNorm(
             ReadOnlySpan<float> input,
             ReadOnlySpan<float> gamma,

@@ -12,7 +12,6 @@ namespace SmallMind.Core.Simd
     /// Provides optimized implementations using AVX-512, AVX2, and Vector&lt;T&gt; fallbacks.
     /// Uses cache-friendly algorithms and parallel processing for large matrices.
     /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static class MatMulOps
     {
    // Parallelization threshold: Use Parallel.For only when M >= 128
