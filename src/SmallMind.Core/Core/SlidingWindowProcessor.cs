@@ -177,7 +177,7 @@ namespace SmallMind.Core.Core
             try
             {
                 // Clear the rented array (ArrayPool may return larger array with stale data)
-                Array.Clear(counts, 0, countsSize);
+                counts.AsSpan(0, countsSize).Clear();
                 
                 // Accumulate all window outputs
                 int position = 0;

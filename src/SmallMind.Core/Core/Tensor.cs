@@ -293,7 +293,7 @@ namespace SmallMind.Core.Core
         {
             if (Grad != null)
             {
-                Array.Clear(Grad, 0, Grad.Length);
+                Grad.AsSpan().Clear();
             }
         }
 
@@ -806,7 +806,7 @@ namespace SmallMind.Core.Core
             if (requiresGrad)
             {
                 grad = TensorPool.Shared.Rent(size, out _);
-                Array.Clear(grad, 0, size); // Zero out gradient
+                grad.AsSpan(0, size).Clear(); // Zero out gradient
                 pooledGrad = true;
             }
             

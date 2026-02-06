@@ -12,6 +12,7 @@ namespace SmallMind.Core.Simd
     /// SIMD-accelerated softmax operation with numerical stability.
     /// Implements the stable softmax: exp(x - max(x)) / sum(exp(x - max(x)))
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static class SoftmaxOps
     {
         /// <summary>

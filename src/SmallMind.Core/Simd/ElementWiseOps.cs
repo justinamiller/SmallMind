@@ -11,6 +11,7 @@ namespace SmallMind.Core.Simd
     /// Supports add, subtract, multiply, multiply-add (FMA), and scale operations.
     /// All operations are allocation-free and use the best available SIMD instruction set.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static class ElementWiseOps
     {
         /// <summary>

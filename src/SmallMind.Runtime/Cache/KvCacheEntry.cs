@@ -95,9 +95,9 @@ namespace SmallMind.Runtime.Cache
                 _keyCaches[i] = _pool.Rent(cacheSize);
                 _valueCaches[i] = _pool.Rent(cacheSize);
                 
-                // Clear rented arrays
-                Array.Clear(_keyCaches[i], 0, cacheSize);
-                Array.Clear(_valueCaches[i], 0, cacheSize);
+                // Clear rented arrays - use Span.Clear for better performance
+                _keyCaches[i].AsSpan(0, cacheSize).Clear();
+                _valueCaches[i].AsSpan(0, cacheSize).Clear();
             }
 
             _currentTokenCount = 0;

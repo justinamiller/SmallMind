@@ -9,6 +9,7 @@ namespace SmallMind.Quantization.Kernels
     /// Fused matrix multiplication kernels for Q8_0 quantized weights.
     /// Computes C = A * B where A is float32 and B is Q8_0 quantized.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static class MatMulF32Q8
     {
         /// <summary>

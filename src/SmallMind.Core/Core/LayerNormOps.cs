@@ -9,6 +9,7 @@ namespace SmallMind.Core.Core
     /// Fused LayerNorm operations with no intermediate allocations.
     /// Implements efficient two-pass normalization over last dimension.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static class LayerNormOps
     {
         /// <summary>

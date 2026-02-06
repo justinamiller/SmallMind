@@ -232,7 +232,7 @@ namespace SmallMind.Core.Core
             }
             else
             {
-                Array.Clear(_inMemoryCache!, 0, _inMemoryCache!.Length);
+                _inMemoryCache.AsSpan().Clear();
             }
         }
 

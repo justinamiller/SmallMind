@@ -265,7 +265,7 @@ namespace SmallMind.Core.Core
         {
             for (int i = 0; i < _chunks.Length; i++)
             {
-                Array.Clear(_chunks[i], 0, _chunks[i].Length);
+                _chunks[i].AsSpan().Clear();
             }
         }
 

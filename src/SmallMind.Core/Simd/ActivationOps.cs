@@ -10,6 +10,7 @@ namespace SmallMind.Core.Simd
     /// SIMD-accelerated activation functions for neural networks.
     /// Provides optimized implementations of ReLU, GELU, and other common activations.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static class ActivationOps
     {
         /// <summary>
@@ -190,7 +191,8 @@ namespace SmallMind.Core.Simd
                 float x = input[i];
                 float x2 = x * x;
                 float inner = SQRT_2_OVER_PI * (x + COEFF * x2 * x);
-                inner = Math.Clamp(inner, -10f, 10f);
+                // Branchless clamp: faster than Math.Clamp in hot paths
+                inner = MathF.Max(-10f, MathF.Min(inner, 10f));
                 float inner2 = inner * inner;
                 float tanh = inner * (PADE_A + inner2) / (PADE_A + PADE_B * inner2);
                 output[i] = HALF * x * (1f + tanh);
@@ -204,8 +206,8 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static float FastSigmoid(float x)
         {
-            // Clamp to avoid overflow in exp
-            x = Math.Clamp(x, -20f, 20f);
+            // Branchless clamp to avoid overflow in exp
+            x = MathF.Max(-20f, MathF.Min(x, 20f));
             return 1f / (1f + MathF.Exp(-x));
         }
 
@@ -279,7 +281,8 @@ namespace SmallMind.Core.Simd
                 float grad = outputGrad[i];
                 float x2 = x * x;
                 float inner = SQRT_2_OVER_PI * (x + COEFF * x2 * x);
-                inner = Math.Clamp(inner, -10f, 10f);
+                // Branchless clamp: faster than Math.Clamp in hot paths
+                inner = MathF.Max(-10f, MathF.Min(inner, 10f));
                 float inner2 = inner * inner;
                 float tanh = inner * (PADE_A + inner2) / (PADE_A + PADE_B * inner2);
                 float sech2 = 1f - tanh * tanh;
