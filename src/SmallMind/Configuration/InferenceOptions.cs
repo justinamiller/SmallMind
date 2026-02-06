@@ -1,4 +1,5 @@
 using System;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Configuration
 {
@@ -91,21 +92,21 @@ namespace SmallMind.Configuration
         /// <summary>
         /// Validates the inference options.
         /// </summary>
-        /// <exception cref="Exceptions.ValidationException">Thrown when options are invalid.</exception>
+        /// <exception cref="Core.Exceptions.ValidationException">Thrown when options are invalid.</exception>
         public void Validate()
         {
-            Validation.Guard.GreaterThan(Temperature, 0.0);
-            Validation.Guard.GreaterThan(MaxNewTokens, 0);
-            Validation.Guard.GreaterThanOrEqualTo(MaxInputTokens, 0);
-            Validation.Guard.GreaterThanOrEqualTo(MaxContextTokens, 0);
-            Validation.Guard.GreaterThanOrEqualTo(MaxTimeMs, 0);
-            Validation.Guard.GreaterThanOrEqualTo(MaxConcurrentSessions, 0);
-            Validation.Guard.InRange(TopP, 0.0, 1.0);
+            Guard.GreaterThan(Temperature, 0.0);
+            Guard.GreaterThan(MaxNewTokens, 0);
+            Guard.GreaterThanOrEqualTo(MaxInputTokens, 0);
+            Guard.GreaterThanOrEqualTo(MaxContextTokens, 0);
+            Guard.GreaterThanOrEqualTo(MaxTimeMs, 0);
+            Guard.GreaterThanOrEqualTo(MaxConcurrentSessions, 0);
+            Guard.InRange(TopP, 0.0, 1.0);
             
             // Validate that context limit is reasonable
             if (MaxContextTokens > 0 && MaxInputTokens > MaxContextTokens)
             {
-                throw new Exceptions.ValidationException(
+                throw new Core.Exceptions.ValidationException(
                     $"MaxInputTokens ({MaxInputTokens}) cannot exceed MaxContextTokens ({MaxContextTokens})",
                     nameof(MaxInputTokens));
             }

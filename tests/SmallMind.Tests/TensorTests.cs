@@ -1,8 +1,8 @@
 using System;
 using Xunit;
 using SmallMind.Core;
-using SmallMind.Simd;
-using SmallMind.Exceptions;
+using SmallMind.Core.Simd;
+using SmallMind.Core.Exceptions;
 
 namespace SmallMind.Tests
 {

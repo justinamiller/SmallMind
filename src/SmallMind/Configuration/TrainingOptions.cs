@@ -1,4 +1,5 @@
 using System;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Configuration
 {
@@ -51,12 +52,12 @@ namespace SmallMind.Configuration
         /// <summary>
         /// Validates the training options.
         /// </summary>
-        /// <exception cref="Exceptions.ValidationException">Thrown when options are invalid.</exception>
+        /// <exception cref="Core.Exceptions.ValidationException">Thrown when options are invalid.</exception>
         public void Validate()
         {
-            Validation.Guard.GreaterThan(BatchSize, 0);
-            Validation.Guard.GreaterThan(LearningRate, 0.0);
-            Validation.Guard.GreaterThan(GradientAccumulationSteps, 0);
+            Guard.GreaterThan(BatchSize, 0);
+            Guard.GreaterThan(LearningRate, 0.0);
+            Guard.GreaterThan(GradientAccumulationSteps, 0);
         }
     }
 }

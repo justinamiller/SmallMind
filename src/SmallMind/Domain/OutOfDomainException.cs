@@ -1,5 +1,5 @@
 using System;
-using SmallMind.Exceptions;
+using SmallMind.Core.Exceptions;
 
 namespace SmallMind.Domain
 {

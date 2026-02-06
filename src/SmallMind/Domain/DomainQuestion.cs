@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using SmallMind.Validation;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Domain
 {

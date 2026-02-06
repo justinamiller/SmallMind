@@ -1,6 +1,11 @@
 using System;
 using Xunit;
 using SmallMind.Core;
+using CoreMatrixOps = SmallMind.Core.MatrixOps;
+using TrainingProfiler = SmallMind.Core.TrainingProfiler;
+using MemoryTracker = SmallMind.Core.MemoryTracker;
+using GradientDiagnostics = SmallMind.Core.GradientDiagnostics;
+using CoreTensorPool = SmallMind.Core.Core.TensorPool;
 
 namespace SmallMind.Tests
 {
@@ -70,7 +75,7 @@ namespace SmallMind.Tests
         public void TensorPool_RentAndReturn_ReusesArrays()
         {
             // Arrange
-            var pool = new TensorPool();
+            var pool = new CoreTensorPool();
             
             // Act
             var array1 = pool.Rent(100);
@@ -88,7 +93,7 @@ namespace SmallMind.Tests
         public void TensorPool_Rent_AllocatesCorrectBucketSize()
         {
             // Arrange
-            var pool = new TensorPool();
+            var pool = new CoreTensorPool();
             
             // Act
             var array = pool.Rent(100);
@@ -101,7 +106,7 @@ namespace SmallMind.Tests
         public void TensorPool_Return_ClearsArray()
         {
             // Arrange
-            var pool = new TensorPool();
+            var pool = new CoreTensorPool();
             var array = pool.Rent(64);
             array[0] = 42.0f;
             array[10] = 99.0f;

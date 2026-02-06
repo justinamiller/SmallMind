@@ -1,6 +1,6 @@
 using System;
 using Xunit;
-using SmallMind.Exceptions;
+using SmallMind.Core.Exceptions;
 
 namespace SmallMind.Tests
 {

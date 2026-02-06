@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Text;
-using SmallMind.Validation;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Core
 {

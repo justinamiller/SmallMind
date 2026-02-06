@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SmallMind.Core;
 using SmallMind.Text;
-using SmallMind.Validation;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Domain
 {

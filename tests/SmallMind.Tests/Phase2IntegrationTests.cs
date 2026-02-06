@@ -2,6 +2,9 @@ using System;
 using Xunit;
 using SmallMind.Core;
 using SmallMind.Text;
+using CoreMatrixOps = SmallMind.Core.MatrixOps;
+using CoreCheckpointStrategy = SmallMind.Core.CheckpointStrategy;
+using CoreTensorPool = SmallMind.Core.Core.TensorPool;
 
 namespace SmallMind.Tests
 {
@@ -141,7 +144,7 @@ Knowledge is power.";
             {
                 UseMixedPrecision = true,
                 UseGradientCheckpointing = true,
-                CheckpointStrategy = CheckpointStrategy.SqrtLayers,
+                CheckpointStrategy = CoreCheckpointStrategy.SqrtLayers,
                 EnableDiagnostics = true,
                 CheckGradientHealth = true,
                 DiagnosticInterval = 2
@@ -229,7 +232,7 @@ Knowledge is power.";
             float[] A1 = { 1, 2, 3, 4 }; // 2x2
             float[] B1 = { 5, 6, 7, 8 }; // 2x2
             float[] C1 = new float[4];   // 2x2
-            MatrixOps.MatMulTransposeB(A1, B1, C1, M: 2, K: 2, N: 2);
+            CoreMatrixOps.MatMulTransposeB(A1, B1, C1, M: 2, K: 2, N: 2);
             
             // Verify results are reasonable
             Assert.True(C1[0] > 0);
@@ -241,7 +244,7 @@ Knowledge is power.";
             float[] A2 = { 1, 2, 3, 4 }; // 2x2 (to be transposed)
             float[] B2 = { 5, 6, 7, 8 }; // 2x2
             float[] C2 = new float[4];   // 2x2
-            MatrixOps.MatMulTransposeA(A2, B2, C2, M: 2, K: 2, N: 2);
+            CoreMatrixOps.MatMulTransposeA(A2, B2, C2, M: 2, K: 2, N: 2);
             
             // Verify results are reasonable
             Assert.True(C2[0] > 0);
@@ -254,7 +257,7 @@ Knowledge is power.";
         public void MemoryPool_IntegrationTest_HighVolume()
         {
             // Test that memory pool handles high volume of rent/return
-            var pool = TensorPool.Shared;
+            var pool = CoreTensorPool.Shared;
             var arrays = new float[100][];
             
             // Rent many arrays
@@ -290,7 +293,7 @@ Knowledge is power.";
             Assert.False(config.UseGradientCheckpointing); // Off by default
             Assert.False(config.EnableDiagnostics);       // Off by default
             Assert.False(config.CheckGradientHealth);     // Off by default
-            Assert.Equal(CheckpointStrategy.SqrtLayers, config.CheckpointStrategy);
+            Assert.Equal(CoreCheckpointStrategy.SqrtLayers, config.CheckpointStrategy);
             Assert.Equal(100, config.DiagnosticInterval);
         }
     }

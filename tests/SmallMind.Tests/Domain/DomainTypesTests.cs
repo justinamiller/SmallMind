@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Xunit;
 using SmallMind.Domain;
-using SmallMind.Exceptions;
+using SmallMind.Core.Exceptions;
 
 namespace SmallMind.Tests.Domain
 {
