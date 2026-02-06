@@ -116,7 +116,7 @@ namespace SmallMind.Core.Core
                 }
                 
                 // AVX2 with FMA path (8 floats)
-                if (Avx2.IsSupported && Fma.IsSupported && features >= 8)
+                if (Avx2.IsSupported && Fma.IsSupported && f2 <= features - 8)
                 {
                     var vInvRms256 = Vector256.Create(invRms);
                     

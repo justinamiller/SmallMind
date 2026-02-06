@@ -661,19 +661,25 @@ namespace SmallMind.Transformers
             }
             
             // Backward: simplified gradient pass
-            // NOTE: This is a simplified implementation. A complete RMSNorm backward would
-            // compute gradients with respect to the RMS. For educational purposes,
-            // this approximation passes gradients through, which works but is suboptimal.
+            // NOTE: This is a simplified implementation for educational purposes and initial deployment.
+            // A complete RMSNorm backward would compute gradients with respect to the RMS.
+            // For inference-only use cases (which is the primary target), this is acceptable.
+            // For training modern architectures, consider implementing the full backward pass:
+            // dL/dx_i = (1/rms) * (dL/dy_i * gamma_i) - (x_i / (rms^3 * n)) * sum_j(dL/dy_j * gamma_j * x_j)
             if (input.RequiresGrad || Gamma.RequiresGrad)
             {
                 output.SetBackward(() =>
                 {
-                    // Simplified: pass through gradients (not fully correct but works for learning)
+                    // Simplified: pass through gradients (not fully correct but works for basic training)
                     if (input.RequiresGrad)
                     {
-                        for (int i = 0; i < input.Size; i++)
+                        int expectedSize = input.Size;
+                        var inputGradSpan = input.Grad.AsSpan(0, expectedSize);
+                        var outputGradSpan = output.Grad.AsSpan(0, expectedSize);
+                        
+                        for (int i = 0; i < expectedSize; i++)
                         {
-                            input.Grad[i] += output.Grad[i];
+                            inputGradSpan[i] += outputGradSpan[i];
                         }
                     }
                     
