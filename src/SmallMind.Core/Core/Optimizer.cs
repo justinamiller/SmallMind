@@ -60,11 +60,16 @@ namespace SmallMind.Core.Core
         {
             _t++;
             
-            // Apply gradient clipping if enabled
-            if (_gradClipValue > 0)
-            {
-                ClipGradients(_gradClipValue);
-            }
+            // Pre-compute bias correction factors outside inner loop (CRITICAL OPTIMIZATION)
+            // These were previously computed millions of times per step via MathF.Pow() in the inner loop
+            float beta1T = MathF.Pow(_beta1, _t);
+            float beta2T = MathF.Pow(_beta2, _t);
+            float beta1Correction = 1.0f / (1.0f - beta1T);
+            float beta2Correction = 1.0f / (1.0f - beta2T);
+            
+            // Pre-compute beta complements
+            float oneMinusBeta1 = 1.0f - _beta1;
+            float oneMinusBeta2 = 1.0f - _beta2;
             
             for (int p = 0; p < _parameters.Count; p++)
             {
@@ -73,50 +78,59 @@ namespace SmallMind.Core.Core
 
                 var m = _m[p];
                 var v = _v[p];
-
-                for (int i = 0; i < param.Size; i++)
+                Span<float> gradSpan = param.Grad;
+                Span<float> dataSpan = param.Data;
+                
+                // Fused gradient clipping and parameter update (eliminates redundant iteration)
+                if (_gradClipValue > 0)
                 {
-                    float grad = param.Grad[i];
-                    
-                    // Update biased first moment estimate
-                    m[i] = _beta1 * m[i] + (1 - _beta1) * grad;
-                    
-                    // Update biased second moment estimate
-                    v[i] = _beta2 * v[i] + (1 - _beta2) * grad * grad;
-                    
-                    // Compute bias-corrected moment estimates
-                    float mHat = m[i] / (1 - MathF.Pow(_beta1, _t));
-                    float vHat = v[i] / (1 - MathF.Pow(_beta2, _t));
-                    
-                    // Update parameters with weight decay (AdamW)
-                    param.Data[i] -= _lr * (mHat / (MathF.Sqrt(vHat) + _eps) + _weightDecay * param.Data[i]);
+                    for (int i = 0; i < param.Size; i++)
+                    {
+                        // Clip gradient
+                        float grad = Math.Clamp(gradSpan[i], -_gradClipValue, _gradClipValue);
+                        gradSpan[i] = grad;
+                        
+                        // Update biased first moment estimate
+                        m[i] = _beta1 * m[i] + oneMinusBeta1 * grad;
+                        
+                        // Update biased second moment estimate
+                        v[i] = _beta2 * v[i] + oneMinusBeta2 * grad * grad;
+                        
+                        // Compute bias-corrected moment estimates (using pre-computed corrections)
+                        float mHat = m[i] * beta1Correction;
+                        float vHat = v[i] * beta2Correction;
+                        
+                        // Update parameters with weight decay (AdamW)
+                        dataSpan[i] -= _lr * (mHat / (MathF.Sqrt(vHat) + _eps) + _weightDecay * dataSpan[i]);
+                    }
                 }
-            }
-        }
-
-        /// <summary>
-        /// Clip gradients by value to prevent exploding gradients
-        /// </summary>
-        /// <param name="maxValue">Maximum absolute value for gradients</param>
-        private void ClipGradients(float maxValue)
-        {
-            for (int p = 0; p < _parameters.Count; p++)
-            {
-                var param = _parameters[p];
-                if (param.Grad == null) continue;
-
-                for (int i = 0; i < param.Size; i++)
+                else
                 {
-                    if (param.Grad[i] > maxValue)
-                        param.Grad[i] = maxValue;
-                    else if (param.Grad[i] < -maxValue)
-                        param.Grad[i] = -maxValue;
+                    // Optimized path without clipping
+                    for (int i = 0; i < param.Size; i++)
+                    {
+                        float grad = gradSpan[i];
+                        
+                        // Update biased first moment estimate
+                        m[i] = _beta1 * m[i] + oneMinusBeta1 * grad;
+                        
+                        // Update biased second moment estimate
+                        v[i] = _beta2 * v[i] + oneMinusBeta2 * grad * grad;
+                        
+                        // Compute bias-corrected moment estimates (using pre-computed corrections)
+                        float mHat = m[i] * beta1Correction;
+                        float vHat = v[i] * beta2Correction;
+                        
+                        // Update parameters with weight decay (AdamW)
+                        dataSpan[i] -= _lr * (mHat / (MathF.Sqrt(vHat) + _eps) + _weightDecay * dataSpan[i]);
+                    }
                 }
             }
         }
 
         /// <summary>
         /// Clip gradients by global norm to prevent exploding gradients
+        /// Note: For value-based clipping (_gradClipValue > 0), clipping is fused into the Step() method for performance.
         /// </summary>
         /// <param name="maxNorm">Maximum L2 norm of gradients</param>
         public void ClipGradientsByNorm(float maxNorm)

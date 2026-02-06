@@ -311,11 +311,8 @@ namespace SmallMind.Core.Core
                 {
                     Grad = new float[Data.Length];
                 }
-                Span<float> gradSpan = Grad;
-                for (int i = 0; i < Grad.Length; i++)
-                {
-                    gradSpan[i] = 1.0f;
-                }
+                // Use Array.Fill for better performance than manual loop
+                Array.Fill(Grad, 1.0f);
             }
             else
             {
