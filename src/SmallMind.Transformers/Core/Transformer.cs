@@ -179,9 +179,8 @@ namespace SmallMind.Transformers
             int cacheKey = T * 100000 + positionOffset; // Unique key combining T and offset
             if (!_positionIndicesCache.TryGetValue(cacheKey, out var posIndices))
             {
-                // Use stackalloc for position indices shape
-                Span<int> posShape = stackalloc int[1] { T };
-                posIndices = new Tensor(new float[T], posShape.ToArray());
+                // Position indices are cached, so one-time allocation is acceptable
+                posIndices = new Tensor(new float[T], new int[] { T });
                 for (int i = 0; i < T; i++)
                 {
                     posIndices.Data[i] = positionOffset + i; // Apply offset for absolute position
@@ -745,9 +744,20 @@ namespace SmallMind.Transformers
             var qkv = _qkv.Forward(x);
 
             // Use cached shape arrays to avoid allocations (update in place)
-            _qShapeCache[0] = B; _qShapeCache[1] = _nHead;   _qShapeCache[2] = T; _qShapeCache[3] = _headSize;
-            _kShapeCache[0] = B; _kShapeCache[1] = _nKvHead; _kShapeCache[2] = T; _kShapeCache[3] = _headSize;
-            _vShapeCache[0] = B; _vShapeCache[1] = _nKvHead; _vShapeCache[2] = T; _vShapeCache[3] = _headSize;
+            _qShapeCache[0] = B; 
+            _qShapeCache[1] = _nHead;   
+            _qShapeCache[2] = T; 
+            _qShapeCache[3] = _headSize;
+            
+            _kShapeCache[0] = B; 
+            _kShapeCache[1] = _nKvHead; 
+            _kShapeCache[2] = T; 
+            _kShapeCache[3] = _headSize;
+            
+            _vShapeCache[0] = B; 
+            _vShapeCache[1] = _nKvHead; 
+            _vShapeCache[2] = T; 
+            _vShapeCache[3] = _headSize;
             
             var q = GetOrAllocateWorkspace(ref _qWorkspace, _qShapeCache);
             var k = GetOrAllocateWorkspace(ref _kWorkspace, _kShapeCache);
@@ -782,9 +792,13 @@ namespace SmallMind.Transformers
                 if (_cachedKeys == null)
                 {
                     // Use cached shape array to avoid allocation
-                    _cacheShapeCache[0] = B; _cacheShapeCache[1] = _nKvHead; _cacheShapeCache[2] = _blockSize; _cacheShapeCache[3] = _headSize;
-                    _cachedKeys = new Tensor(_cacheShapeCache.ToArray(), requiresGrad: false);
-                    _cachedValues = new Tensor(_cacheShapeCache.ToArray(), requiresGrad: false);
+                    _cacheShapeCache[0] = B; 
+                    _cacheShapeCache[1] = _nKvHead; 
+                    _cacheShapeCache[2] = _blockSize; 
+                    _cacheShapeCache[3] = _headSize;
+                    // Clone the cache shape for tensor storage (one-time allocation)
+                    _cachedKeys = new Tensor((int[])_cacheShapeCache.Clone(), requiresGrad: false);
+                    _cachedValues = new Tensor((int[])_cacheShapeCache.Clone(), requiresGrad: false);
                 }
                 
                 // Append new K, V to cache
@@ -819,7 +833,10 @@ namespace SmallMind.Transformers
             }
 
             // Use workspace for attention scores (update cached shape)
-            _scoresShapeCache[0] = B; _scoresShapeCache[1] = _nHead; _scoresShapeCache[2] = T; _scoresShapeCache[3] = fullSeqLen;
+            _scoresShapeCache[0] = B; 
+            _scoresShapeCache[1] = _nHead; 
+            _scoresShapeCache[2] = T; 
+            _scoresShapeCache[3] = fullSeqLen;
             var att = GetOrAllocateWorkspace(ref _scoresWorkspace, _scoresShapeCache);
             ComputeAttentionScoresInPlace(q, kFull, att, B, T, fullSeqLen);
 
@@ -829,7 +846,9 @@ namespace SmallMind.Transformers
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
             // Use cached shape array to avoid allocation
-            _reshapedShapeCache[0] = B; _reshapedShapeCache[1] = T; _reshapedShapeCache[2] = _nEmbd;
+            _reshapedShapeCache[0] = B; 
+            _reshapedShapeCache[1] = T; 
+            _reshapedShapeCache[2] = _nEmbd;
             var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, _reshapedShapeCache);
             ReshapeAttentionOutputInPlace(y, yReshaped, B, T);
 
