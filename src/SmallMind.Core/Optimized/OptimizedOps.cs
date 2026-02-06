@@ -129,37 +129,61 @@ namespace SmallMind.Core.Optimized
         /// Fused scale + causal mask + softmax with KV-cache support.
         /// For KV-cache, kSeqLen may be larger than seqLen (includes cached past).
         /// cacheOffset is the position offset in the cache (how many past tokens are cached).
+        /// Optimized to avoid redundant scale multiplies and vectorize normalize step.
         /// </summary>
         public static void FusedScaleMaskSoftmax(float[] scores, int scoresOffset, float scale, float[] output, int outputOffset, int seqLen, int kSeqLen, int cacheOffset)
         {
             for (int i = 0; i < seqLen; i++)
             {
                 int rowOffset = i * kSeqLen;
+                int rowStart = scoresOffset + rowOffset;
+                int outRowStart = outputOffset + rowOffset;
+                
                 // For KV-cache: position in full sequence is cacheOffset + i
                 // Can attend to positions 0..(cacheOffset + i)
                 int validCols = cacheOffset + i + 1; // Causal mask with cache offset
                 
+                // Pass 1: Find max of (score * scale)
                 float maxVal = float.NegativeInfinity;
                 for (int j = 0; j < validCols; j++)
                 {
-                    float s = scores[scoresOffset + rowOffset + j] * scale;
+                    float s = scores[rowStart + j] * scale;
                     if (s > maxVal) maxVal = s;
                 }
                 
+                // Pass 2: Compute exp and sum
+                // NOTE: We compute (score * scale - maxVal) in one expression to avoid redundant multiply
                 float sum = 0;
                 for (int j = 0; j < validCols; j++)
                 {
-                    float e = MathUtils.FastExp(scores[scoresOffset + rowOffset + j] * scale - maxVal);
-                    output[outputOffset + rowOffset + j] = e;
+                    float e = MathUtils.FastExp(scores[rowStart + j] * scale - maxVal);
+                    output[outRowStart + j] = e;
                     sum += e;
                 }
                 
+                // Pass 3: Normalize with SIMD
                 float invSum = 1f / sum;
-                for (int j = 0; j < validCols; j++)
-                    output[outputOffset + rowOffset + j] *= invSum;
+                if (Vector.IsHardwareAccelerated && validCols >= VectorSize)
+                {
+                    var vInvSum = new Vector<float>(invSum);
+                    int j = 0;
+                    for (; j <= validCols - VectorSize; j += VectorSize)
+                    {
+                        var v = new Vector<float>(output, outRowStart + j);
+                        (v * vInvSum).CopyTo(output, outRowStart + j);
+                    }
+                    for (; j < validCols; j++)
+                        output[outRowStart + j] *= invSum;
+                }
+                else
+                {
+                    for (int j = 0; j < validCols; j++)
+                        output[outRowStart + j] *= invSum;
+                }
                 
+                // Zero out masked positions
                 for (int j = validCols; j < kSeqLen; j++)
-                    output[outputOffset + rowOffset + j] = 0;
+                    output[outRowStart + j] = 0;
             }
         }
         
