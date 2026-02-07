@@ -11,6 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="GgufInferenceDemo" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SmallMind.Abstractions\SmallMind.Abstractions.csproj" />
     <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
     <ProjectReference Include="..\SmallMind.Runtime\SmallMind.Runtime.csproj" />
