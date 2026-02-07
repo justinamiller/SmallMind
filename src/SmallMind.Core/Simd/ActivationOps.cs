@@ -10,7 +10,9 @@ namespace SmallMind.Core.Simd
     /// <summary>
     /// SIMD-accelerated activation functions for neural networks.
     /// Provides optimized implementations of ReLU, GELU, and other common activations.
+    /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on class to avoid zero-initialization overhead.
     /// </summary>
+    [SkipLocalsInit]
     public static class ActivationOps
     {
         /// <summary>

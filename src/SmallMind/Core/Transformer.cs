@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
 using SmallMind.Core.Validation;
+using SmallMind.Core.Core;
 
 namespace SmallMind.Core
 {
@@ -360,15 +361,44 @@ namespace SmallMind.Core
 
         /// <summary>
         /// Forward pass with optional KV caching.
+        /// TIER-6 OPTIMIZATION: Uses fused residual+layernorm for better cache efficiency.
         /// </summary>
         public Tensor Forward(Tensor x, InferenceSession? session, bool isPrefill)
         {
             // Pre-norm architecture with residual connections
             // x: (B, T, n_embd)
-            var attnOut = _attn.Forward(_ln1.Forward(x), session, isPrefill);
+            
+            // First residual + layernorm sequence
+            var ln1Out = _ln1.Forward(x);
+            var attnOut = _attn.Forward(ln1Out, session, isPrefill);
+            
+            // TIER-6 OPTIMIZATION: Fuse residual add + layernorm for second sequence
+            // Instead of: x = AddTensors(x, attnOut); mlpIn = _ln2.Forward(x);
+            // We use: LayerNormResidual(x, attnOut, ...) which computes LayerNorm(x + attnOut) in one pass
+            int B = x.Shape[0];
+            int T = x.Shape[1];
+            int nEmbd = x.Shape[2];
+            int batchSize = B * T;
+            
+            // Create output tensor for fused operation
+            var ln2Out = new Tensor(x.Shape, requiresGrad: x.RequiresGrad || attnOut.RequiresGrad);
+            
+            // Apply fused residual + layernorm
+            LayerNormOps.LayerNormResidual(
+                x.Data,
+                attnOut.Data,
+                _ln2.Gamma.Data,
+                _ln2.Beta.Data,
+                ln2Out.Data,
+                batchSize,
+                nEmbd);
+            
+            // Need to update x to be the sum for the next residual connection
+            // This still needs the add operation for the residual path
             x = AddTensors(x, attnOut);
             
-            var mlpOut = _mlp.Forward(_ln2.Forward(x));
+            // MLP forward and second residual
+            var mlpOut = _mlp.Forward(ln2Out);  // Use fused ln2Out instead of _ln2.Forward(x)
             x = AddTensors(x, mlpOut);
             
             return x;
