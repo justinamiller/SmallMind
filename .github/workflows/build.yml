@@ -51,6 +51,9 @@ jobs:
       - name: Run Unit Tests
         run: dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=unit-tests.trx"
 
+      - name: Run Regression Tests
+        run: dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj --filter "Category=Regression" --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=regression-tests.trx"
+
       - name: Run Integration Tests
         run: dotnet test tests/SmallMind.IntegrationTests/SmallMind.IntegrationTests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=integration-tests.trx"
 
@@ -101,6 +104,11 @@ jobs:
         env:
           RUN_PERF_TESTS: 'true'
         run: dotnet test tests/SmallMind.PerfTests/SmallMind.PerfTests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=perf-tests.trx"
+
+      - name: Run Regression Benchmarks
+        env:
+          RUN_PERF_TESTS: 'true'
+        run: dotnet test tests/SmallMind.PerfTests/SmallMind.PerfTests.csproj --filter "Category=Performance" --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=regression-benchmarks.trx"
 
       - name: Run SIMD Benchmarks
         run: |
