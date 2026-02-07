@@ -108,7 +108,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public async Task ChatTemplate_DetectsLlama2()
+        public void ChatTemplate_DetectsLlama2()
         {
             // This test doesn't require downloads
             var template = SmallMind.ConsoleApp.Commands.ChatTemplates.DetectTemplate(
@@ -119,7 +119,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public async Task ChatTemplate_DetectsMistral()
+        public void ChatTemplate_DetectsMistral()
         {
             var template = SmallMind.ConsoleApp.Commands.ChatTemplates.DetectTemplate(
                 "mistral-7b-instruct-v0.2.Q4_0.gguf"
@@ -129,7 +129,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public async Task ChatTemplate_DetectsPhi()
+        public void ChatTemplate_DetectsPhi()
         {
             var template = SmallMind.ConsoleApp.Commands.ChatTemplates.DetectTemplate(
                 "phi-2-q8_0.gguf"
@@ -139,7 +139,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public async Task ChatTemplate_FormatLlama2_Correct()
+        public void ChatTemplate_FormatLlama2_Correct()
         {
             string prompt = "What is AI?";
             string formatted = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
@@ -154,7 +154,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public async Task ChatTemplate_FormatMistral_Correct()
+        public void ChatTemplate_FormatMistral_Correct()
         {
             string prompt = "Hello";
             string formatted = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
@@ -169,7 +169,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public async Task ChatTemplate_FormatChatML_Correct()
+        public void ChatTemplate_FormatChatML_Correct()
         {
             string prompt = "Test";
             string formatted = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
@@ -185,7 +185,7 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public async Task ChatTemplate_FormatPhi_Correct()
+        public void ChatTemplate_FormatPhi_Correct()
         {
             string prompt = "Question";
             string formatted = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
