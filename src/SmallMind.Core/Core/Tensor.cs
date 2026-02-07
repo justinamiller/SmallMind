@@ -41,7 +41,7 @@ namespace SmallMind.Core.Core
             }
             
             Data = data;
-            Shape = shape;
+            Shape = (int[])shape.Clone(); // Clone to avoid external modifications
             RequiresGrad = requiresGrad;
             if (requiresGrad)
             {
@@ -64,7 +64,7 @@ namespace SmallMind.Core.Core
             Guard.GreaterThanOrEqualTo(data.Length, size);
             
             Data = data;
-            Shape = shape;
+            Shape = (int[])shape.Clone(); // Clone to avoid external modifications
             _logicalSize = expectedSize; // Track logical size separately
             RequiresGrad = requiresGrad;
             if (requiresGrad)
@@ -79,7 +79,7 @@ namespace SmallMind.Core.Core
             Guard.NotNullOrEmpty(shape);
             
             Data = new float[ShapeToSize(shape)];
-            Shape = shape;
+            Shape = (int[])shape.Clone(); // Clone to avoid external modifications
             RequiresGrad = requiresGrad;
             if (requiresGrad)
             {

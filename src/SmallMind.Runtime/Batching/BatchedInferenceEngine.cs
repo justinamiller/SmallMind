@@ -337,14 +337,12 @@ namespace SmallMind.Runtime.Batching
         /// <summary>
         /// Generates the next token for a single request.
         /// </summary>
-        private async Task<int> GenerateNextTokenAsync(
+        private Task<int> GenerateNextTokenAsync(
             List<int> context,
             ProductionInferenceOptions options,
             CancellationToken cancellationToken)
         {
-            return await Task.Run(() =>
-            {
-                cancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
 
                 // Crop context to last blockSize tokens - reuse buffer
                 List<int> contextCropped;
@@ -425,8 +423,7 @@ namespace SmallMind.Runtime.Batching
                 var probs = Softmax(logitsLast);
 
                 // Sample from the distribution
-                return SampleFromProbs(probs, options);
-            }, cancellationToken);
+                return Task.FromResult(SampleFromProbs(probs, options));
         }
 
         private float[] ApplyTopK(float[] logits, int k)
