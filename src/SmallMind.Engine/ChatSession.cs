@@ -257,7 +257,7 @@ namespace SmallMind.Engine
 
             // Estimate: role prefix + content + newline
             int totalChars = rolePrefix.Length + content.Length + 1;
-            return (totalChars + 3) / 4; // Round up: ~4 chars per token
+            return (int)Math.Ceiling(totalChars / 4.0); // Round up: ~4 chars per token
         }
 
         public void Dispose()

@@ -262,6 +262,7 @@ namespace SmallMind.Runtime.Batching
         /// Apply deterministic scheduling to a batch of requests.
         /// This ensures reproducible ordering and resource allocation.
         /// Uses the first request's prompt tokens as representative for batch scheduling.
+        /// Note: Assumes all requests in a batch have similar characteristics (validated by IsCompatibleWith).
         /// </summary>
         private void ApplyDeterministicScheduling(List<InferenceRequest> batch)
         {
@@ -269,7 +270,6 @@ namespace SmallMind.Runtime.Batching
                 return;
 
             // Use the first request's prompt tokens as representative for scheduling
-            // In practice, all requests in a batch should have similar characteristics
             var representativeRequest = batch[0];
             
             var schedule = _deterministicScheduler.Schedule(
