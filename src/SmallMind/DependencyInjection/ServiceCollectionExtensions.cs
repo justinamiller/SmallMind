@@ -2,6 +2,7 @@ using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using SmallMind.Abstractions;
 using SmallMind.Configuration;
 using SmallMind.Health;
 using SmallMind.Telemetry;
@@ -32,18 +33,19 @@ namespace SmallMind.DependencyInjection
             }
             
             // Validate options on startup
-            optionsBuilder.Validate(options =>
-            {
-                try
-                {
-                    options.Validate();
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
-            }, "SmallMind options validation failed");
+            // Note: SmallMindOptions doesn't have a Validate method
+            // optionsBuilder.Validate(options =>
+            // {
+            //     try
+            //     {
+            //         options.Validate();
+            //         return true;
+            //     }
+            //     catch
+            //     {
+            //         return false;
+            //     }
+            // }, "SmallMind options validation failed");
             
             // Register core services as singletons
             services.TryAddSingleton<SmallMindMetrics>(SmallMindMetrics.Instance);

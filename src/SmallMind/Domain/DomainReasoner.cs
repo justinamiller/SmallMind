@@ -8,9 +8,11 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SmallMind.Core;
-using SmallMind.Text;
+using SmallMind.Core.Core;
 using SmallMind.Core.Validation;
+using SmallMind.Runtime;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 
 namespace SmallMind.Domain
 {

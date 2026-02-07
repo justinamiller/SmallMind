@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using Xunit;
-using SmallMind.Text;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
+using SmallMind.Runtime;
 
 namespace SmallMind.Tests
 {

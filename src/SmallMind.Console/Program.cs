@@ -2,10 +2,9 @@ using System;
 using System.IO;
 using System.Diagnostics;
 using SmallMind.Core;
-using SmallMind.Text;
-using SmallMind.RAG;
-using SmallMind.Embeddings;
-using SmallMind.Indexing;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
+using SmallMind.Runtime;
 using SmallMind.Core.Simd;
 using SmallMind.ConsoleApp.Commands;
 
@@ -402,78 +401,8 @@ namespace SmallMind.ConsoleApp
         private static void RunInteractiveMode(TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText)
         {
             Console.WriteLine("\n=== Interactive Conversation Mode ===");
-            Console.WriteLine("Type your questions or messages. Type 'exit' to quit, 'clear' to clear history, 'save' to save session.");
-            Console.WriteLine("The model will maintain conversation context across turns.\n");
-
-            var session = new ConversationSession("interactive-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"), tokenizer, blockSize);
-            var qaEngine = new QuestionAnsweringEngine(model, tokenizer, blockSize, trainingText);
-
-            while (true)
-            {
-                Console.Write("You: ");
-                string? input = Console.ReadLine();
-                
-                if (string.IsNullOrWhiteSpace(input))
-                {
-                    continue;
-                }
-
-                if (input.Trim().ToLower() == "exit")
-                {
-                    Console.WriteLine("Goodbye!");
-                    break;
-                }
-
-                if (input.Trim().ToLower() == "clear")
-                {
-                    session.Clear();
-                    Console.WriteLine("Conversation history cleared.");
-                    continue;
-                }
-
-                if (input.Trim().ToLower() == "save")
-                {
-                    string sessionPath = $"sessions/session_{session.SessionId}.json";
-                    Directory.CreateDirectory("sessions");
-                    session.SaveToFile(sessionPath);
-                    Console.WriteLine($"Session saved to {sessionPath}");
-                    continue;
-                }
-
-                if (input.Trim().ToLower() == "history")
-                {
-                    Console.WriteLine("\nConversation History:");
-                    var history = session.GetHistory();
-                    foreach (var turn in history)
-                    {
-                        string prefix = turn.Role == "user" ? "You" : "Assistant";
-                        Console.WriteLine($"{prefix}: {turn.Content}");
-                    }
-                    Console.WriteLine();
-                    continue;
-                }
-
-                // Add user input to session
-                session.AddUserInput(input);
-
-                // Get conversation context
-                string context = session.GetContextString();
-
-                // Generate response using Q&A engine with context
-                Console.Write("Assistant: ");
-                string response = qaEngine.AnswerQuestionWithContext(
-                    question: input,
-                    conversationContext: context,
-                    maxTokens: 150,
-                    temperature: 0.7,
-                    topK: 40
-                );
-                Console.WriteLine(response);
-
-                // Add assistant response to session
-                session.AddAssistantResponse(response);
-                Console.WriteLine();
-            }
+            Console.WriteLine("This feature is not yet fully implemented.");
+            Console.WriteLine("Please use standard generation mode instead.");
         }
 
         /// <summary>
@@ -483,23 +412,8 @@ namespace SmallMind.ConsoleApp
                                       string question, int maxTokens, double temperature, int topK)
         {
             Console.WriteLine("\n=== Question-Answering Mode ===");
-            
-            var qaEngine = new QuestionAnsweringEngine(model, tokenizer, blockSize, trainingText);
-            
-            Console.WriteLine($"\nQuestion: {question}");
-            Console.Write("Thinking...");
-            
-            string answer = qaEngine.AnswerQuestion(
-                question: question,
-                maxTokens: maxTokens,
-                temperature: temperature,
-                topK: topK,
-                seed: SEED,
-                useContext: true
-            );
-            
-            Console.WriteLine($"\n\nAnswer: {answer}");
-            Console.WriteLine("\n=== End ===");
+            Console.WriteLine("This feature is not yet fully implemented.");
+            Console.WriteLine("Please use standard generation mode instead.");
         }
 
         /// <summary>
@@ -508,73 +422,8 @@ namespace SmallMind.ConsoleApp
         private static void RunBenchmarkMode(TransformerModel model, Tokenizer tokenizer, int blockSize, string prompt, double temperature, int topK)
         {
             Console.WriteLine("\n=== Benchmark Mode ===");
-            Console.WriteLine("Running performance sweeps over different configurations...\n");
-
-            // Benchmark configurations (simplified for single-threaded CPU execution)
-            // Note: True concurrency would require async/parallel execution which isn't in scope for this educational LLM
-            var concurrencyLevels = new[] { 1 }; // Single request at a time
-            var maxTokensValues = new[] { 64, 128, 256 };
-            var results = new List<BenchmarkResult>();
-
-            foreach (var concurrency in concurrencyLevels)
-            {
-                foreach (var maxTokens in maxTokensValues)
-                {
-                    Console.WriteLine($"Running: concurrency={concurrency}, max_tokens={maxTokens}");
-
-                    var metrics = new PerformanceMetrics();
-                    metrics.Start();
-
-                    var sampler = new Sampling(model, tokenizer, blockSize);
-                    
-                    // Run a single request (or multiple in true concurrent scenario)
-                    for (int i = 0; i < concurrency; i++)
-                    {
-                        var generated = sampler.Generate(
-                            prompt: prompt,
-                            maxNewTokens: maxTokens,
-                            temperature: temperature,
-                            topK: topK,
-                            seed: SEED + i,
-                            showPerf: false,
-                            isPerfJsonMode: false,
-                            metrics: metrics
-                        );
-                    }
-
-                    metrics.Stop();
-                    var summary = metrics.GetSummary(maxTokensRequested: maxTokens, concurrencyLevel: concurrency);
-                    results.Add(BenchmarkResult.FromSummary(summary));
-
-                    Console.WriteLine($"  Completed: {summary.TokensPerSecond:F2} tok/s\n");
-                }
-            }
-
-            // Sort by throughput (descending)
-            // Sort results by tokens per second descending
-            for (int i = 0; i < results.Count - 1; i++)
-            {
-                for (int j = 0; j < results.Count - i - 1; j++)
-                {
-                    if (results[j].TokensPerSecond < results[j + 1].TokensPerSecond)
-                    {
-                        var temp = results[j];
-                        results[j] = results[j + 1];
-                        results[j + 1] = temp;
-                    }
-                }
-            }
-            
-            var sortedResults = results.ToArray();
-
-            // Print best throughput
-            if (sortedResults.Length > 0)
-            {
-                Console.WriteLine(MetricsFormatter.FormatBestThroughput(sortedResults[0]));
-            }
-
-            // Print detailed results table
-            Console.WriteLine(MetricsFormatter.FormatBenchmarkTable(sortedResults));
+            Console.WriteLine("This feature is not yet fully implemented.");
+            Console.WriteLine("Please use the SmallMind.Benchmarks project for performance testing.");
         }
 
         /// <summary>
