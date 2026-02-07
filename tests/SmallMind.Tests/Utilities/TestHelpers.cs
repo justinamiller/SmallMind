@@ -208,6 +208,7 @@ namespace SmallMind.Tests.Utilities
             Min = _times.Length > 0 ? _times[0] : 0;
             Max = _times.Length > 0 ? _times[^1] : 0;
             Median = _times.Length > 0 ? _times[_times.Length / 2] : 0;
+            StdDev = 0; // Default for insufficient samples
 
             if (_times.Length > 1)
             {
