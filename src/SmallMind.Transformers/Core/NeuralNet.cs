@@ -84,13 +84,18 @@ namespace SmallMind.Transformers
             // weight: (outFeatures, inFeatures)
             // output: (batch, outFeatures) or (batch, seq, outFeatures)
 
-            // Tier-0 optimization: Cache transposed weight for inference to avoid per-call allocation
+            // TIER-3 OPTIMIZATION: Use precomputed transpose cache in inference
+            // Cache is precomputed in Eval(), no lazy allocation during forward pass
             Tensor weightT;
-            if (!IsTraining && _weightTransposeCache == null)
+            if (IsTraining)
             {
-                _weightTransposeCache = Weight.Transpose();
+                weightT = Weight.Transpose();
             }
-            weightT = IsTraining ? Weight.Transpose() : _weightTransposeCache!;
+            else
+            {
+                // Use precomputed cache (should never be null after Eval())
+                weightT = _weightTransposeCache!;
+            }
 
             if (input.Shape.Length == 2)
             {
@@ -142,6 +147,21 @@ namespace SmallMind.Transformers
             base.Train();
             // Invalidate transpose cache when switching to training mode
             _weightTransposeCache = null;
+        }
+        
+        /// <summary>
+        /// TIER-3 OPTIMIZATION: Precompute transpose cache at Eval() time
+        /// Ensures transpose is computed once when entering inference mode,
+        /// not lazily on first forward pass
+        /// </summary>
+        public override void Eval()
+        {
+            base.Eval();
+            // Precompute transpose cache for inference
+            if (_weightTransposeCache == null)
+            {
+                _weightTransposeCache = Weight.Transpose();
+            }
         }
     }
 
@@ -731,9 +751,13 @@ namespace SmallMind.Transformers
         {
             if (!_training || _p == 0)
             {
-                // During inference, we need to return the input.
-                // Clone is necessary to maintain tensor independence.
-                return input.Clone();
+                // TIER-1 OPTIMIZATION: Zero-copy passthrough in eval mode.
+                // During inference (eval), dropout is a no-op, so we return the input tensor directly.
+                // This eliminates a major allocation hotspot (Clone() created new float[] every call).
+                // 
+                // OWNERSHIP NOTE: Callers must not mutate the returned tensor when in eval mode.
+                // This is safe because inference flows are read-only; training flows create new tensors.
+                return input;
             }
             
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
