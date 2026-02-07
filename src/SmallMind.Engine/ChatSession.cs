@@ -23,6 +23,7 @@ namespace SmallMind.Engine
         private readonly string _sessionId;
         private readonly DateTimeOffset _createdAt;
         private int _turnCount;
+        private int _approximateTokenCount; // Approximate token count for conversation history
         private bool _disposed;
 
         public ChatSession(
@@ -42,7 +43,7 @@ namespace SmallMind.Engine
             sessionId: _sessionId,
             createdAt: _createdAt,
             turnCount: _turnCount,
-            kvCacheTokens: 0); // TODO: Track actual KV cache size
+            kvCacheTokens: _approximateTokenCount); // Approximate based on conversation history
 
         public ValueTask AddSystemAsync(string systemPrompt, CancellationToken cancellationToken = default)
         {
@@ -58,6 +59,9 @@ namespace SmallMind.Engine
                 Role = ChatRole.System,
                 Content = systemPrompt
             });
+
+            // Approximate tokens: ~4 characters per token + role prefix
+            _approximateTokenCount += EstimateTokenCount(systemPrompt, "System: ");
 
             return ValueTask.CompletedTask;
         }
@@ -96,6 +100,8 @@ namespace SmallMind.Engine
                     Content = response
                 });
 
+                _approximateTokenCount += EstimateTokenCount(response, "Assistant: ");
+
                 _turnCount++;
 
                 return new GenerationResult
@@ -126,6 +132,7 @@ namespace SmallMind.Engine
 
             // Add user message to history
             _conversationHistory.Add(message);
+            _approximateTokenCount += EstimateTokenCount(message.Content, "User: ");
 
             // Build full conversation prompt
             var prompt = BuildConversationPrompt();
@@ -169,11 +176,14 @@ namespace SmallMind.Engine
                 }
 
                 // Add complete response to history
+                var response = responseBuilder.ToString();
                 _conversationHistory.Add(new ChatMessage
                 {
                     Role = ChatRole.Assistant,
-                    Content = responseBuilder.ToString()
+                    Content = response
                 });
+
+                _approximateTokenCount += EstimateTokenCount(response, "Assistant: ");
 
                 _turnCount++;
 
@@ -197,6 +207,7 @@ namespace SmallMind.Engine
 
             _conversationHistory.Clear();
             _turnCount = 0;
+            _approximateTokenCount = 0;
         }
 
         private string BuildConversationPrompt()
@@ -233,6 +244,20 @@ namespace SmallMind.Engine
             {
                 throw new ObjectDisposedException(nameof(ChatSession));
             }
+        }
+
+        /// <summary>
+        /// Estimates token count for a message using a simple heuristic.
+        /// Assumes ~4 characters per token on average (common for English text).
+        /// </summary>
+        private static int EstimateTokenCount(string content, string rolePrefix)
+        {
+            if (string.IsNullOrEmpty(content))
+                return rolePrefix.Length / 4;
+
+            // Estimate: role prefix + content + newline
+            int totalChars = rolePrefix.Length + content.Length + 1;
+            return (totalChars + 3) / 4; // Round up: ~4 chars per token
         }
 
         public void Dispose()
