@@ -1,6 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using SmallMind.Rag.Common;
 
 namespace SmallMind.Rag;
 
@@ -79,7 +80,7 @@ public sealed class Chunk
         if (text == null) throw new ArgumentNullException(nameof(text));
 
         // Normalize text: trim and collapse whitespace for stable hashing
-        string normalized = NormalizeText(text);
+        string normalized = TextHelper.NormalizeWhitespace(text);
 
         // Combine components into a stable string
         string combined = $"{docId}|{normalized}|{charStart}|{charEnd}";
@@ -92,40 +93,4 @@ public sealed class Chunk
         return Convert.ToHexString(hashBytes);
     }
 
-    /// <summary>
-    /// Normalizes text by trimming and collapsing consecutive whitespace into single spaces.
-    /// </summary>
-    private static string NormalizeText(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return string.Empty;
-
-        // Use StringBuilder for efficient string manipulation
-        var sb = new StringBuilder(text.Length);
-        bool lastWasWhitespace = false;
-
-        for (int i = 0; i < text.Length; i++)
-        {
-            char c = text[i];
-            if (char.IsWhiteSpace(c))
-            {
-                if (!lastWasWhitespace)
-                {
-                    sb.Append(' ');
-                    lastWasWhitespace = true;
-                }
-            }
-            else
-            {
-                sb.Append(c);
-                lastWasWhitespace = false;
-            }
-        }
-
-        // Trim trailing whitespace if added
-        if (sb.Length > 0 && sb[sb.Length - 1] == ' ')
-            sb.Length--;
-
-        return sb.ToString();
-    }
 }
