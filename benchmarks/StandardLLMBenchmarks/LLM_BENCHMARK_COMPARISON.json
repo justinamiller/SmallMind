@@ -4,65 +4,65 @@
       "Category": "Computational",
       "Name": "MatMul 256\u00D7256",
       "Label": "Small",
-      "Value": 0.7426486279635899,
+      "Value": 1.9203688452581742,
       "Unit": "GFLOPS",
-      "Details": "45.18 ms/op"
+      "Details": "17.47 ms/op"
     },
     {
       "Category": "Computational",
       "Name": "MatMul 512\u00D7512",
       "Label": "Medium",
-      "Value": 1.2519799495123216,
+      "Value": 1.9652742663389982,
       "Unit": "GFLOPS",
-      "Details": "214.41 ms/op"
+      "Details": "136.59 ms/op"
     },
     {
       "Category": "Computational",
       "Name": "MatMul 1024\u00D71024",
       "Label": "Large",
-      "Value": 1.9779935174925174,
+      "Value": 2.005413891116132,
       "Unit": "GFLOPS",
-      "Details": "1085.69 ms/op"
+      "Details": "1070.84 ms/op"
     },
     {
       "Category": "Computational",
       "Name": "MatMul 2048\u00D72048",
       "Label": "Extra Large",
-      "Value": 1.5899091565818075,
+      "Value": 1.7381506531332416,
       "Unit": "GFLOPS",
-      "Details": "10805.57 ms/op"
+      "Details": "9883.99 ms/op"
     },
     {
       "Category": "Computational",
       "Name": "Element-wise Add",
       "Label": "Memory Bandwidth",
-      "Value": 17.50009848677165,
+      "Value": 17.52405413606911,
       "Unit": "GB/s",
-      "Details": "6.386 ms/op"
+      "Details": "6.377 ms/op"
     },
     {
       "Category": "Computational",
       "Name": "ReLU Activation",
       "Label": "Neural Network",
-      "Value": 10.129319712055844,
+      "Value": 10.189331188758622,
       "Unit": "GB/s",
-      "Details": "0.736 ms/op"
+      "Details": "0.731 ms/op"
     },
     {
       "Category": "Computational",
       "Name": "GELU Activation",
       "Label": "Neural Network",
-      "Value": 1.991994090287309,
+      "Value": 1.998748370489449,
       "Unit": "GB/s",
-      "Details": "3.740 ms/op"
+      "Details": "3.728 ms/op"
     },
     {
       "Category": "Memory",
       "Name": "Allocation Rate",
       "Label": "GC Pressure",
-      "Value": 38.17787170410156,
+      "Value": 38.17005157470703,
       "Unit": "MB",
-      "Details": "0.0208 ms per 40KB allocation"
+      "Details": "0.0196 ms per 40KB allocation"
     },
     {
       "Category": "Memory",
@@ -76,17 +76,17 @@
       "Category": "Throughput",
       "Name": "Memory Copy",
       "Label": "Bandwidth",
-      "Value": 18.296923892996702,
+      "Value": 20.053140171033842,
       "Unit": "GB/s",
-      "Details": "5.090 ms/op"
+      "Details": "4.644 ms/op"
     },
     {
       "Category": "Throughput",
       "Name": "Dot Product",
       "Label": "Vector Math",
-      "Value": 2.1269608452031927,
+      "Value": 2.1321236516583286,
       "Unit": "GFLOPS",
-      "Details": "9.403 ms/op"
+      "Details": "9.380 ms/op"
     }
   ],
   "Comparison": {
@@ -96,8 +96,8 @@
         "Language": "C#",
         "Platform": ".NET 10",
         "Deployment": "Single DLL",
-        "MatMulGFLOPS": 1.2519799495123216,
-        "ElementWiseGBps": 17.50009848677165,
+        "MatMulGFLOPS": 1.9652742663389982,
+        "ElementWiseGBps": 17.52405413606911,
         "MemoryFootprintMB": 20,
         "TokensPerSecond": 50,
         "Dependencies": "Zero",
