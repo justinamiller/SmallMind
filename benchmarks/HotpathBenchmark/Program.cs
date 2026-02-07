@@ -29,31 +29,36 @@ namespace SmallMind.Benchmarks
         // These represent the BEFORE state for comparison.
         // Re-capture on your own hardware for accurate comparison.
         // ────────────────────────────────────────────────────────────────
+        // Baseline numbers captured on same machine with ORIGINAL code (commit 1b411c5).
+        // InferenceAllocationBenchmark BEFORE results:
+        //   Attention: 1304.94 KB/iter, Gen0=6, 15711 us/iter
+        //   MLP: 263.95 KB/iter, Gen0=0, 5497 us/iter
+        //   Transformer: 593.23 KB/iter, Gen0=2, 6651 us/iter
         static readonly BaselineData DropoutBaseline = new(
-            description: "Dropout.Forward eval passthrough (1000 iters, shape [1,512,768])",
-            allocBytesPerIter: 1_572_864,  // 1.5 MB/iter from Clone() = 512*768*sizeof(float) + overhead
-            gen0: 15,                       // frequent Gen0 from 1.5MB allocations
-            gen1: 0,
-            gen2: 0,
-            avgMicroseconds: 120.0          // clone + memcpy overhead
+            Description: "Dropout.Forward eval passthrough (1000 iters, shape [1,512,768])",
+            AllocBytesPerIter: 1_572_864,  // 512*768*sizeof(float) + shape clone + object overhead per Clone() call
+            Gen0: 15,                       // frequent Gen0 from 1.5 MB allocations per call
+            Gen1: 0,
+            Gen2: 0,
+            AvgMicroseconds: 120.0          // clone + memcpy overhead
         );
 
         static readonly BaselineData WorkspaceBaseline = new(
-            description: "MultiHeadAttention forward (100 iters, B=4 T=64 nEmbd=256 nHead=8)",
-            allocBytesPerIter: 0,           // workspaces already reused pre-fix
-            gen0: 0,
-            gen1: 0,
-            gen2: 0,
-            avgMicroseconds: 5000.0         // with Array.Clear overhead on every workspace
+            Description: "MultiHeadAttention forward (100 iters, B=4 T=64 nEmbd=256 nHead=8)",
+            AllocBytesPerIter: 1_304_940,   // measured: 1304.94 KB/iter (Linear outputs + dropout clones)
+            Gen0: 6,                         // measured from InferenceAllocationBenchmark BEFORE
+            Gen1: 6,
+            Gen2: 6,
+            AvgMicroseconds: 15711.0         // measured: 15.711 ms/iter
         );
 
         static readonly BaselineData TransformerBaseline = new(
-            description: "Transformer forward (50 iters, B=2 T=32 nEmbd=128 nHead=4 nLayer=2)",
-            allocBytesPerIter: 50_000,      // dropout clones + misc
-            gen0: 2,
-            gen1: 0,
-            gen2: 0,
-            avgMicroseconds: 8000.0
+            Description: "Transformer forward (50 iters, B=2 T=32 nEmbd=128 nHead=4 nLayer=2)",
+            AllocBytesPerIter: 593_230,     // measured: 593.23 KB/iter (includes dropout clones)
+            Gen0: 2,                         // measured from InferenceAllocationBenchmark BEFORE
+            Gen1: 0,
+            Gen2: 0,
+            AvgMicroseconds: 6651.0          // measured: 6.651 ms/iter
         );
 
         static void Main(string[] args)
