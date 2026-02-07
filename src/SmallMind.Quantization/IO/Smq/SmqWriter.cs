@@ -190,6 +190,10 @@ namespace SmallMind.Quantization.IO.Smq
             {
                 WriteQ4TensorData(q4);
             }
+            else if (tensor is Fp32Tensor fp32)
+            {
+                WriteFp32TensorData(fp32);
+            }
             else
             {
                 throw new ArgumentException($"Unsupported tensor type: {tensor.GetType()}");
@@ -223,6 +227,15 @@ namespace SmallMind.Quantization.IO.Smq
             }
         }
 
+        private void WriteFp32TensorData(Fp32Tensor tensor)
+        {
+            // Write float array directly
+            for (int i = 0; i < tensor.Data.Length; i++)
+            {
+                _writer.Write(tensor.Data[i]);
+            }
+        }
+
         private SmqFormat.TensorEntry CreateTensorEntry(string name, object tensor)
         {
             if (tensor is Q8Tensor q8)
@@ -251,6 +264,19 @@ namespace SmallMind.Quantization.IO.Smq
                     BlockSize = (uint)q4.BlockSize,
                     DataLength = (ulong)q4.Data.Length,
                     AuxLength = (ulong)(q4.Scales.Length * sizeof(float))
+                };
+            }
+            else if (tensor is Fp32Tensor fp32)
+            {
+                return new SmqFormat.TensorEntry
+                {
+                    Name = name,
+                    DataType = QuantScheme.F32,
+                    Rank = fp32.Rank,
+                    Dimensions = fp32.Dimensions,
+                    BlockSize = 0, // No blocking for FP32
+                    DataLength = (ulong)(fp32.Data.Length * sizeof(float)),
+                    AuxLength = 0 // No auxiliary data for FP32
                 };
             }
             else
