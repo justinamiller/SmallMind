@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 using SmallMind.Core;
+using SmallMind.Core.Core;
+using SmallMind.Transformers;
 
 namespace SmallMind.Tests
 {

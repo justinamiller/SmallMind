@@ -1,11 +1,13 @@
 using System;
 using Xunit;
 using SmallMind.Core;
-using CoreMatrixOps = SmallMind.Core.MatrixOps;
-using TrainingProfiler = SmallMind.Core.TrainingProfiler;
-using MemoryTracker = SmallMind.Core.MemoryTracker;
-using GradientDiagnostics = SmallMind.Core.GradientDiagnostics;
+using CoreMatrixOps = SmallMind.Core.Core.MatrixOps;
+using TrainingProfiler = SmallMind.Core.Core.TrainingProfiler;
+using MemoryTracker = SmallMind.Core.Core.MemoryTracker;
+using GradientDiagnostics = SmallMind.Core.Core.GradientDiagnostics;
 using CoreTensorPool = SmallMind.Core.Core.TensorPool;
+using SmallMind.Core.Core;
+using SmallMind.Runtime;
 
 namespace SmallMind.Tests
 {

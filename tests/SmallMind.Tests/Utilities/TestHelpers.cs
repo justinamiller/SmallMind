@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using SmallMind.Core.Core;
 
 namespace SmallMind.Tests.Utilities
 {

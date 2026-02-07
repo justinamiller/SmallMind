@@ -2,6 +2,7 @@ using System;
 using Xunit;
 using SmallMind.Runtime.Metrics;
 using SmallMind.Core.Core;
+using SmallMind.Runtime;
 
 namespace SmallMind.Tests.Metrics
 {

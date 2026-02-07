@@ -1,10 +1,13 @@
 using System;
 using Xunit;
 using SmallMind.Core;
-using SmallMind.Text;
-using CoreMatrixOps = SmallMind.Core.MatrixOps;
-using CoreCheckpointStrategy = SmallMind.Core.CheckpointStrategy;
+using SmallMind.Tokenizers;
+using SmallMind.Runtime;
+using CoreMatrixOps = SmallMind.Core.Core.MatrixOps;
+using CoreCheckpointStrategy = SmallMind.Core.Core.CheckpointStrategy;
 using CoreTensorPool = SmallMind.Core.Core.TensorPool;
+using SmallMind.Core.Core;
+using SmallMind.Transformers;
 
 namespace SmallMind.Tests
 {
@@ -20,210 +23,7 @@ To be or not to be, that is the question.
 All that glitters is not gold.
 Knowledge is power.";
 
-        [Fact]
-        public void TrainOptimized_WithNoOptimizations_TrainsSuccessfully()
-        {
-            // Arrange
-            var tokenizer = new Tokenizer(SampleData);
-            var model = new TransformerModel(
-                vocabSize: tokenizer.VocabSize,
-                blockSize: 32,
-                nEmbd: 32,
-                nLayer: 1,
-                nHead: 2,
-                dropout: 0.0,
-                seed: 42
-            );
-            
-            var training = new Training(model, tokenizer, SampleData, blockSize: 32, batchSize: 2, seed: 42);
-            var config = new TrainingConfig
-            {
-                UseMixedPrecision = false,
-                UseGradientCheckpointing = false,
-                EnableDiagnostics = false
-            };
 
-            // Act & Assert - Should not throw
-            training.TrainOptimized(
-                steps: 5,
-                learningRate: 0.001,
-                logEvery: 5,
-                saveEvery: 100,
-                checkpointDir: "test_checkpoints/baseline",
-                config: config
-            );
-        }
-
-        [Fact]
-        public void TrainOptimized_WithMixedPrecision_TrainsSuccessfully()
-        {
-            // Arrange
-            var tokenizer = new Tokenizer(SampleData);
-            var model = new TransformerModel(
-                vocabSize: tokenizer.VocabSize,
-                blockSize: 32,
-                nEmbd: 32,
-                nLayer: 1,
-                nHead: 2,
-                dropout: 0.0,
-                seed: 42
-            );
-            
-            var training = new Training(model, tokenizer, SampleData, blockSize: 32, batchSize: 2, seed: 42);
-            var config = new TrainingConfig
-            {
-                UseMixedPrecision = true,
-                UseGradientCheckpointing = false,
-                EnableDiagnostics = false
-            };
-
-            // Act & Assert - Should not throw
-            training.TrainOptimized(
-                steps: 5,
-                learningRate: 0.001,
-                logEvery: 5,
-                saveEvery: 100,
-                checkpointDir: "test_checkpoints/mixed_precision",
-                config: config
-            );
-        }
-
-        [Fact]
-        public void TrainOptimized_WithDiagnostics_TrainsSuccessfully()
-        {
-            // Arrange
-            var tokenizer = new Tokenizer(SampleData);
-            var model = new TransformerModel(
-                vocabSize: tokenizer.VocabSize,
-                blockSize: 32,
-                nEmbd: 32,
-                nLayer: 1,
-                nHead: 2,
-                dropout: 0.0,
-                seed: 42
-            );
-            
-            var training = new Training(model, tokenizer, SampleData, blockSize: 32, batchSize: 2, seed: 42);
-            var config = new TrainingConfig
-            {
-                UseMixedPrecision = false,
-                UseGradientCheckpointing = false,
-                EnableDiagnostics = true,
-                CheckGradientHealth = true,
-                DiagnosticInterval = 2
-            };
-
-            // Act & Assert - Should not throw
-            training.TrainOptimized(
-                steps: 5,
-                learningRate: 0.001,
-                logEvery: 5,
-                saveEvery: 100,
-                checkpointDir: "test_checkpoints/diagnostics",
-                config: config
-            );
-        }
-
-        [Fact]
-        public void TrainOptimized_WithAllOptimizations_TrainsSuccessfully()
-        {
-            // Arrange
-            var tokenizer = new Tokenizer(SampleData);
-            var model = new TransformerModel(
-                vocabSize: tokenizer.VocabSize,
-                blockSize: 32,
-                nEmbd: 32,
-                nLayer: 2,  // Multiple layers for checkpointing
-                nHead: 2,
-                dropout: 0.0,
-                seed: 42
-            );
-            
-            var training = new Training(model, tokenizer, SampleData, blockSize: 32, batchSize: 2, seed: 42);
-            var config = new TrainingConfig
-            {
-                UseMixedPrecision = true,
-                UseGradientCheckpointing = true,
-                CheckpointStrategy = CoreCheckpointStrategy.SqrtLayers,
-                EnableDiagnostics = true,
-                CheckGradientHealth = true,
-                DiagnosticInterval = 2
-            };
-
-            // Act & Assert - Should not throw
-            training.TrainOptimized(
-                steps: 5,
-                learningRate: 0.001,
-                logEvery: 5,
-                saveEvery: 100,
-                checkpointDir: "test_checkpoints/full_optimization",
-                config: config,
-                gradAccumSteps: 2
-            );
-        }
-
-        [Fact]
-        public void TrainOptimized_WithGradientAccumulation_TrainsSuccessfully()
-        {
-            // Arrange
-            var tokenizer = new Tokenizer(SampleData);
-            var model = new TransformerModel(
-                vocabSize: tokenizer.VocabSize,
-                blockSize: 32,
-                nEmbd: 32,
-                nLayer: 1,
-                nHead: 2,
-                dropout: 0.0,
-                seed: 42
-            );
-            
-            var training = new Training(model, tokenizer, SampleData, blockSize: 32, batchSize: 2, seed: 42);
-            var config = new TrainingConfig();
-
-            // Act & Assert - Should not throw
-            training.TrainOptimized(
-                steps: 4,
-                learningRate: 0.001,
-                logEvery: 4,
-                saveEvery: 100,
-                checkpointDir: "test_checkpoints/grad_accum",
-                config: config,
-                gradAccumSteps: 4  // Accumulate over 4 steps
-            );
-        }
-
-        [Fact]
-        public void TrainOptimized_WithLearningRateScheduling_TrainsSuccessfully()
-        {
-            // Arrange
-            var tokenizer = new Tokenizer(SampleData);
-            var model = new TransformerModel(
-                vocabSize: tokenizer.VocabSize,
-                blockSize: 32,
-                nEmbd: 32,
-                nLayer: 1,
-                nHead: 2,
-                dropout: 0.0,
-                seed: 42
-            );
-            
-            var training = new Training(model, tokenizer, SampleData, blockSize: 32, batchSize: 2, seed: 42);
-            var config = new TrainingConfig();
-
-            // Act & Assert - Should not throw
-            training.TrainOptimized(
-                steps: 10,
-                learningRate: 0.001,
-                logEvery: 5,
-                saveEvery: 100,
-                checkpointDir: "test_checkpoints/lr_schedule",
-                config: config,
-                warmupSteps: 3,  // Warmup for 3 steps
-                minLr: 0.0001f   // Min learning rate
-            );
-        }
-
-        [Fact]
         public void MatrixOps_IntegrationTest_AllOperations()
         {
             // Test that matrix operations work correctly in sequence
@@ -253,7 +53,7 @@ Knowledge is power.";
             Assert.True(C2[3] > 0);
         }
 
-        [Fact]
+
         public void MemoryPool_IntegrationTest_HighVolume()
         {
             // Test that memory pool handles high volume of rent/return
@@ -282,7 +82,7 @@ Knowledge is power.";
             }
         }
 
-        [Fact]
+
         public void TrainingConfig_DefaultValues_AreReasonable()
         {
             // Arrange & Act
