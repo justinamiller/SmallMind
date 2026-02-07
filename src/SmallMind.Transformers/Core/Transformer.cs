@@ -690,8 +690,9 @@ namespace SmallMind.Transformers
                 
                 if (shapeMatches)
                 {
-                    // MatMul and other operations clear their own output buffers.
-                    // Pre-clearing workspace tensors causes double-clear and 400%+ regression.
+                    // CRITICAL: Must zero workspace before reuse because MatMul uses accumulation (+=)
+                    // The comment about "MatMul clears buffers" was incorrect - MatMul uses FMA (multiply-add)
+                    Array.Clear(workspace.Data, 0, workspace.Data.Length);
                     return workspace;
                 }
             }
@@ -724,6 +725,8 @@ namespace SmallMind.Transformers
                 
                 if (shapeMatches)
                 {
+                    // CRITICAL: Must zero workspace before reuse because MatMul uses accumulation (+=)
+                    Array.Clear(workspace.Data, 0, workspace.Data.Length);
                     return workspace;
                 }
             }
