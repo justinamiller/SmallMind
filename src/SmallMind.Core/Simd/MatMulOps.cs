@@ -992,39 +992,22 @@ namespace SmallMind.Core.Simd
                 int aRowStart = i * K;
                 int cRowStart = i * N;
                 
-                // Process output row in tiles
+                // Process output row in tiles of 8 vectors (64 floats) for maximum ILP
                 int j = 0;
-                for (; j <= N - (vecSize * 4); j += vecSize * 4)
+                for (; j <= N - (vecSize * 8); j += vecSize * 8)
                 {
-                    // Register block: accumulate 4 vectors across K
+                    // Register block: accumulate 8 vectors across K 
                     Vector256<float> acc0 = Vector256<float>.Zero;
                     Vector256<float> acc1 = Vector256<float>.Zero;
                     Vector256<float> acc2 = Vector256<float>.Zero;
                     Vector256<float> acc3 = Vector256<float>.Zero;
+                    Vector256<float> acc4 = Vector256<float>.Zero;
+                    Vector256<float> acc5 = Vector256<float>.Zero;
+                    Vector256<float> acc6 = Vector256<float>.Zero;
+                    Vector256<float> acc7 = Vector256<float>.Zero;
 
-                    // Accumulate across K dimension with 2x unrolling for optimal ILP
-                    int k = 0;
-                    for (; k <= K - 2; k += 2)
-                    {
-                        // First K iteration
-                        Vector256<float> vA0 = Vector256.Create(pA[aRowStart + k]);
-                        int bRowStart0 = k * N;
-                        acc0 = Fma.MultiplyAdd(vA0, Avx.LoadVector256(pB + bRowStart0 + j), acc0);
-                        acc1 = Fma.MultiplyAdd(vA0, Avx.LoadVector256(pB + bRowStart0 + j + vecSize), acc1);
-                        acc2 = Fma.MultiplyAdd(vA0, Avx.LoadVector256(pB + bRowStart0 + j + vecSize * 2), acc2);
-                        acc3 = Fma.MultiplyAdd(vA0, Avx.LoadVector256(pB + bRowStart0 + j + vecSize * 3), acc3);
-                        
-                        // Second K iteration
-                        Vector256<float> vA1 = Vector256.Create(pA[aRowStart + k + 1]);
-                        int bRowStart1 = (k + 1) * N;
-                        acc0 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j), acc0);
-                        acc1 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize), acc1);
-                        acc2 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 2), acc2);
-                        acc3 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 3), acc3);
-                    }
-                    
-                    // Handle remaining K iterations (0-1 remaining)
-                    for (; k < K; k++)
+                    // Accumulate across K dimension
+                    for (int k = 0; k < K; k++)
                     {
                         Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
                         int bRowStart = k * N;
@@ -1032,13 +1015,21 @@ namespace SmallMind.Core.Simd
                         acc1 = Fma.MultiplyAdd(vA, Avx.LoadVector256(pB + bRowStart + j + vecSize), acc1);
                         acc2 = Fma.MultiplyAdd(vA, Avx.LoadVector256(pB + bRowStart + j + vecSize * 2), acc2);
                         acc3 = Fma.MultiplyAdd(vA, Avx.LoadVector256(pB + bRowStart + j + vecSize * 3), acc3);
+                        acc4 = Fma.MultiplyAdd(vA, Avx.LoadVector256(pB + bRowStart + j + vecSize * 4), acc4);
+                        acc5 = Fma.MultiplyAdd(vA, Avx.LoadVector256(pB + bRowStart + j + vecSize * 5), acc5);
+                        acc6 = Fma.MultiplyAdd(vA, Avx.LoadVector256(pB + bRowStart + j + vecSize * 6), acc6);
+                        acc7 = Fma.MultiplyAdd(vA, Avx.LoadVector256(pB + bRowStart + j + vecSize * 7), acc7);
                     }
 
-                    // Store once per tile (register → memory)
+                    // Store once per tile
                     Avx.Store(pC + cRowStart + j, acc0);
                     Avx.Store(pC + cRowStart + j + vecSize, acc1);
                     Avx.Store(pC + cRowStart + j + vecSize * 2, acc2);
                     Avx.Store(pC + cRowStart + j + vecSize * 3, acc3);
+                    Avx.Store(pC + cRowStart + j + vecSize * 4, acc4);
+                    Avx.Store(pC + cRowStart + j + vecSize * 5, acc5);
+                    Avx.Store(pC + cRowStart + j + vecSize * 6, acc6);
+                    Avx.Store(pC + cRowStart + j + vecSize * 7, acc7);
                 }
 
                 // Handle remaining full vectors (1-3 vectors)
