@@ -16,14 +16,21 @@ namespace SmallMind.ConsoleApp.Commands
         {
             _commands = new Dictionary<string, ICommand>(StringComparer.OrdinalIgnoreCase)
             {
-                ["quantize"] = new QuantizeCommand(),
-                ["import-gguf"] = new ImportGgufCommand(),
-                ["inspect"] = new InspectCommand(),
-                ["verify"] = new VerifyCommand(),
+                // Generation commands
+                ["generate"] = new GenerateCommand(),
+                
+                // Model management commands
+                ["model download"] = new ModelDownloadCommand(),
                 ["model add"] = new ModelAddCommand(),
                 ["model list"] = new ModelListCommand(),
                 ["model verify"] = new ModelVerifyCommand(),
-                ["model inspect"] = new ModelInspectCommand()
+                ["model inspect"] = new ModelInspectCommand(),
+                
+                // Quantization commands
+                ["quantize"] = new QuantizeCommand(),
+                ["import-gguf"] = new ImportGgufCommand(),
+                ["inspect"] = new InspectCommand(),
+                ["verify"] = new VerifyCommand()
             };
         }
 

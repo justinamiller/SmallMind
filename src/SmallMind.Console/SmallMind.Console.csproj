@@ -17,6 +17,7 @@
     <ProjectReference Include="..\SmallMind.Quantization\SmallMind.Quantization.csproj" />
     <ProjectReference Include="..\SmallMind\SmallMind.csproj" />
     <ProjectReference Include="..\SmallMind.ModelRegistry\SmallMind.ModelRegistry.csproj" />
+    <ProjectReference Include="..\SmallMind.Public\SmallMind.Public.csproj" />
   </ItemGroup>
 
 </Project>
