@@ -406,9 +406,11 @@ namespace SmallMind.Core
         {
             if (!_training || _p == 0)
             {
-                // During inference, we need to return the input.
-                // Clone is necessary to maintain tensor independence.
-                return input.Clone();
+                // TIER-1 OPTIMIZATION: Zero-copy passthrough in eval mode.
+                // Assumption: Callers must not mutate the returned tensor during inference.
+                // This is safe because eval mode typically flows data forward without modification.
+                // The Clone() was causing catastrophic allocations in the hot inference path.
+                return input;
             }
             
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
