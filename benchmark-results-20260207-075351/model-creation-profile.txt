@@ -1,0 +1,58 @@
+=== SmallMind Model Creation Profiling ===
+
+--- Tiny Model Creation ---
+TransformerModel initialized: vocab=50, block_size=64, n_embd=128, n_layer=2, n_head=4, dropout=0.1
+Total parameters: 417,792 (29 tensors)
+TransformerModel initialized: vocab=50, block_size=64, n_embd=128, n_layer=2, n_head=4, dropout=0.1
+Total parameters: 417,792 (29 tensors)
+TransformerModel initialized: vocab=50, block_size=64, n_embd=128, n_layer=2, n_head=4, dropout=0.1
+Total parameters: 417,792 (29 tensors)
+TransformerModel initialized: vocab=50, block_size=64, n_embd=128, n_layer=2, n_head=4, dropout=0.1
+Total parameters: 417,792 (29 tensors)
+TransformerModel initialized: vocab=50, block_size=64, n_embd=128, n_layer=2, n_head=4, dropout=0.1
+Total parameters: 417,792 (29 tensors)
+TransformerModel initialized: vocab=50, block_size=64, n_embd=128, n_layer=2, n_head=4, dropout=0.1
+Total parameters: 417,792 (29 tensors)
+  Min:    2.85 ms
+  Median: 2.89 ms
+  Avg:    3.62 ms
+  Max:    6.53 ms
+
+--- Small Model Creation ---
+TransformerModel initialized: vocab=100, block_size=128, n_embd=256, n_layer=4, n_head=4, dropout=0.1
+Total parameters: 3,243,520 (53 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=256, n_layer=4, n_head=4, dropout=0.1
+Total parameters: 3,243,520 (53 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=256, n_layer=4, n_head=4, dropout=0.1
+Total parameters: 3,243,520 (53 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=256, n_layer=4, n_head=4, dropout=0.1
+Total parameters: 3,243,520 (53 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=256, n_layer=4, n_head=4, dropout=0.1
+Total parameters: 3,243,520 (53 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=256, n_layer=4, n_head=4, dropout=0.1
+Total parameters: 3,243,520 (53 tensors)
+  Min:    21.30 ms
+  Median: 21.44 ms
+  Avg:    21.54 ms
+  Max:    22.14 ms
+
+--- Medium Model Creation ---
+TransformerModel initialized: vocab=100, block_size=128, n_embd=384, n_layer=6, n_head=6, dropout=0.1
+Total parameters: 10,773,504 (77 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=384, n_layer=6, n_head=6, dropout=0.1
+Total parameters: 10,773,504 (77 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=384, n_layer=6, n_head=6, dropout=0.1
+Total parameters: 10,773,504 (77 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=384, n_layer=6, n_head=6, dropout=0.1
+Total parameters: 10,773,504 (77 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=384, n_layer=6, n_head=6, dropout=0.1
+Total parameters: 10,773,504 (77 tensors)
+TransformerModel initialized: vocab=100, block_size=128, n_embd=384, n_layer=6, n_head=6, dropout=0.1
+Total parameters: 10,773,504 (77 tensors)
+  Min:    48.32 ms
+  Median: 59.45 ms
+  Avg:    63.86 ms
+  Max:    99.51 ms
+
+
+=== Profiling Complete ===
