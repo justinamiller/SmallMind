@@ -6,7 +6,26 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>SmallMind.Public</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Justin Miller</Authors>
+    <Company>Justin Miller</Company>
+    <Product>SmallMind</Product>
+    <Description>Production-ready public API for SmallMind - a pure C# local inference runtime for decoder-only Transformers (GPT-style) with zero dependencies. Provides stable, versioned access to text generation, streaming, resource governance, and model loading (.smq, .gguf).</Description>
+    <PackageTags>llm;inference;transformer;gpt;text-generation;local-ai;cpu-inference;production;api;stable-api;csharp</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/justinamiller/SmallMind</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/justinamiller/SmallMind</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SmallMind.Abstractions\SmallMind.Abstractions.csproj" />

@@ -8,6 +8,20 @@
     <RootNamespace>SmallMind.Quantization</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- NuGet Package Metadata -->
+    <PackageId>SmallMind.Quantization</PackageId>
+    <Version>0.3.0</Version>
+    <Authors>Justin Miller</Authors>
+    <Company>Justin Miller</Company>
+    <Product>SmallMind</Product>
+    <Description>Model quantization (Q8, Q4) for SmallMind with 87-93% memory reduction. Includes GGUF import and quantized inference with minimal accuracy loss. Zero external dependencies.</Description>
+    <PackageTags>llm;quantization;q8;q4;gguf;model-compression;memory-optimization;inference;csharp</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/justinamiller/SmallMind</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/justinamiller/SmallMind</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>

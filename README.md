@@ -81,17 +81,29 @@ See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guaran
 
 ## Installation
 
-### NuGet Packages
+### NuGet Packages (Recommended)
+
+**For production applications** - Use the stable public API:
 
 ```bash
-# Stable public API (recommended for production)
+# Primary entry point - stable, production-ready API (RECOMMENDED)
 dotnet add package SmallMind.Public
 
-# Optional: Core libraries for advanced scenarios
-dotnet add package SmallMind.Core        # Tensor operations, SIMD
-dotnet add package SmallMind.Transformers # Model implementations
-dotnet add package SmallMind.Runtime     # Inference runtime
+# Optional specialized features:
+dotnet add package SmallMind.Quantization  # Model compression (Q8/Q4), 87-93% memory reduction
+dotnet add package SmallMind.Rag           # Retrieval-Augmented Generation (RAG)
 ```
+
+**For advanced/educational use** - Direct access to components:
+
+```bash
+dotnet add package SmallMind.Core          # Tensor operations, SIMD kernels
+dotnet add package SmallMind.Transformers  # Transformer architecture components
+dotnet add package SmallMind.Runtime       # Text generation, sampling strategies
+dotnet add package SmallMind.Tokenizers    # Text tokenization (Char, BPE)
+```
+
+> 📦 **Package Selection Guide**: See [docs/NUGET_PACKAGES.md](docs/NUGET_PACKAGES.md) for detailed package descriptions and selection criteria.
 
 ### From Source
 
