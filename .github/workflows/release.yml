@@ -25,13 +25,13 @@ jobs:
         dotnet-version: '10.0.x'
     
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore SmallMind.sln
     
     - name: Build
-      run: dotnet build --configuration Release --no-restore
+      run: dotnet build SmallMind.sln --configuration Release --no-restore
     
     - name: Run Tests
-      run: dotnet test --configuration Release --no-build --verbosity normal
+      run: dotnet test SmallMind.sln --configuration Release --no-build --verbosity normal
     
     - name: Pack NuGet Packages
       run: |

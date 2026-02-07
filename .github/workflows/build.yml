@@ -43,10 +43,10 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore SmallMind.sln
 
       - name: Build (Release)
-        run: dotnet build --no-restore --configuration Release -maxcpucount
+        run: dotnet build SmallMind.sln --no-restore --configuration Release -maxcpucount
 
       - name: Run Unit Tests
         run: dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=unit-tests.trx"
@@ -95,10 +95,10 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore SmallMind.sln
 
       - name: Build (Release)
-        run: dotnet build --no-restore --configuration Release -maxcpucount
+        run: dotnet build SmallMind.sln --no-restore --configuration Release -maxcpucount
 
       - name: Run Performance Tests
         env:
