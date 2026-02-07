@@ -1218,6 +1218,11 @@ namespace SmallMind.Core.Simd
         /// where Q and K have shape (T × headSize) and we compute (T × T) scores.
         /// Uses tiling and SIMD for improved cache locality and throughput.
         /// </summary>
+        /// <summary>
+        /// Matrix multiplication with B transposed: C = A × B^T
+        /// A: (M × K), B: (N × K), C: (M × N)
+        /// TIER-2: Added parallelization for long sequences (M >= 64, K >= 64)
+        /// </summary>
         public static void MatMulTransposeB(
             ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
             int M, int K, int N)
@@ -1232,16 +1237,44 @@ namespace SmallMind.Core.Simd
             // We compute C = Q @ K^T (T × T)
             // This is more cache-friendly than transposing K first
             
-            // NOTE: Parallelization removed to avoid Span capture issues
-            // For attention, this is typically called with moderate M (T ≤ 2048)
-            // and high K (headSize = 64-128), making sequential acceptable
+            // TIER-2 OPTIMIZATION: Reintroduce parallelization with unsafe pointer-based approach
+            // Parallelize when profitable: M >= 64 AND K >= 64 AND have multiple processors
+            // For long sequences (T > 256), internal row-parallelism provides significant speedup
+            bool shouldParallelize = M >= 64 && K >= 64 && Environment.ProcessorCount > 1;
+            
             unsafe
             {
                 fixed (float* pA = A, pB = B, pC = C)
                 {
-                    for (int i = 0; i < M; i++)
+                    if (shouldParallelize)
                     {
-                        MatMulTransposeBRow(pA, pB, pC, i, K, N);
+                        // Use chunked parallelization to reduce Parallel.For overhead
+                        int rangeSize = Math.Max(4, M / (Environment.ProcessorCount * 2));
+                        
+                        // Copy pointers to local variables to capture in closure
+                        float* localPA = pA;
+                        float* localPB = pB;
+                        float* localPC = pC;
+                        int localK = K;
+                        int localN = N;
+                        
+                        Parallel.ForEach(
+                            System.Collections.Concurrent.Partitioner.Create(0, M, rangeSize),
+                            range =>
+                            {
+                                for (int i = range.Item1; i < range.Item2; i++)
+                                {
+                                    MatMulTransposeBRow(localPA, localPB, localPC, i, localK, localN);
+                                }
+                            });
+                    }
+                    else
+                    {
+                        // Sequential path for small matrices
+                        for (int i = 0; i < M; i++)
+                        {
+                            MatMulTransposeBRow(pA, pB, pC, i, K, N);
+                        }
                     }
                 }
             }
@@ -1255,8 +1288,13 @@ namespace SmallMind.Core.Simd
             int aRowStart = i * K;
             int cRowStart = i * N;
             
-            // Process output row with AVX2/AVX-512 if available
-            if (Avx2.IsSupported && Fma.IsSupported)
+            // TIER-2 OPTIMIZATION: Add AVX-512 dispatch
+            // Dispatch order: AVX-512 → AVX2+FMA → Scalar
+            if (Avx512F.IsSupported && K >= 16)
+            {
+                MatMulTransposeBRowAvx512(pA, pB, pC, aRowStart, cRowStart, K, N);
+            }
+            else if (Avx2.IsSupported && Fma.IsSupported)
             {
                 MatMulTransposeBRowAvx2(pA, pB, pC, aRowStart, cRowStart, K, N);
             }
@@ -1273,6 +1311,119 @@ namespace SmallMind.Core.Simd
         {
             const int vecSize = 8;
             
+            // TIER-2 OPTIMIZATION: 4-way register blocking
+            // Compute 4 dot products simultaneously to reduce horizontal sum overhead
+            const int BLOCK_SIZE = 4;
+            
+            int j = 0;
+            
+            // Process 4 columns at a time (register blocking)
+            for (; j <= N - BLOCK_SIZE; j += BLOCK_SIZE)
+            {
+                int bRowStart0 = (j + 0) * K;
+                int bRowStart1 = (j + 1) * K;
+                int bRowStart2 = (j + 2) * K;
+                int bRowStart3 = (j + 3) * K;
+                
+                // Four accumulators for 4 simultaneous dot products
+                Vector256<float> acc0 = Vector256<float>.Zero;
+                Vector256<float> acc1 = Vector256<float>.Zero;
+                Vector256<float> acc2 = Vector256<float>.Zero;
+                Vector256<float> acc3 = Vector256<float>.Zero;
+                
+                int k = 0;
+                
+                // Main SIMD loop - compute 4 dot products in parallel
+                for (; k <= K - vecSize; k += vecSize)
+                {
+                    Vector256<float> vA = Avx.LoadVector256(pA + aRowStart + k);
+                    
+                    Vector256<float> vB0 = Avx.LoadVector256(pB + bRowStart0 + k);
+                    Vector256<float> vB1 = Avx.LoadVector256(pB + bRowStart1 + k);
+                    Vector256<float> vB2 = Avx.LoadVector256(pB + bRowStart2 + k);
+                    Vector256<float> vB3 = Avx.LoadVector256(pB + bRowStart3 + k);
+                    
+                    acc0 = Fma.MultiplyAdd(vA, vB0, acc0);
+                    acc1 = Fma.MultiplyAdd(vA, vB1, acc1);
+                    acc2 = Fma.MultiplyAdd(vA, vB2, acc2);
+                    acc3 = Fma.MultiplyAdd(vA, vB3, acc3);
+                }
+                
+                // Horizontal sum for all 4 accumulators
+                float sum0 = HorizontalSumAvx2(acc0);
+                float sum1 = HorizontalSumAvx2(acc1);
+                float sum2 = HorizontalSumAvx2(acc2);
+                float sum3 = HorizontalSumAvx2(acc3);
+                
+                // Scalar remainder for all 4 columns
+                for (; k < K; k++)
+                {
+                    float aVal = pA[aRowStart + k];
+                    sum0 += aVal * pB[bRowStart0 + k];
+                    sum1 += aVal * pB[bRowStart1 + k];
+                    sum2 += aVal * pB[bRowStart2 + k];
+                    sum3 += aVal * pB[bRowStart3 + k];
+                }
+                
+                // Store results
+                pC[cRowStart + j + 0] = sum0;
+                pC[cRowStart + j + 1] = sum1;
+                pC[cRowStart + j + 2] = sum2;
+                pC[cRowStart + j + 3] = sum3;
+            }
+            
+            // Tail: process remaining columns one at a time
+            for (; j < N; j++)
+            {
+                int bRowStart = j * K;
+                
+                Vector256<float> acc = Vector256<float>.Zero;
+                int k = 0;
+                
+                for (; k <= K - vecSize; k += vecSize)
+                {
+                    Vector256<float> vA = Avx.LoadVector256(pA + aRowStart + k);
+                    Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + k);
+                    acc = Fma.MultiplyAdd(vA, vB, acc);
+                }
+                
+                float sum = HorizontalSumAvx2(acc);
+                
+                for (; k < K; k++)
+                {
+                    sum += pA[aRowStart + k] * pB[bRowStart + k];
+                }
+                
+                pC[cRowStart + j] = sum;
+            }
+        }
+        
+        /// <summary>
+        /// Fast horizontal sum for Vector256 using AVX
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static float HorizontalSumAvx2(Vector256<float> v)
+        {
+            // [a0 a1 a2 a3 a4 a5 a6 a7]
+            Vector128<float> lo = v.GetLower(); // [a0 a1 a2 a3]
+            Vector128<float> hi = v.GetUpper(); // [a4 a5 a6 a7]
+            Vector128<float> sum128 = Sse.Add(lo, hi); // [a0+a4 a1+a5 a2+a6 a3+a7]
+            Vector128<float> sum64 = Sse.Add(sum128, Sse.Shuffle(sum128, sum128, 0b_11_10_11_10));
+            Vector128<float> sum32 = Sse.Add(sum64, Sse.Shuffle(sum64, sum64, 0b_01_01_01_01));
+            return sum32.ToScalar();
+        }
+
+        /// <summary>
+        /// TIER-2: AVX-512 implementation for MatMulTransposeBRow
+        /// Uses 512-bit vectors (16 floats) with FMA for maximum performance
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void MatMulTransposeBRowAvx512(
+            float* pA, float* pB, float* pC,
+            int aRowStart, int cRowStart, int K, int N)
+        {
+            const int vecSize = 16; // AVX-512 processes 16 floats per vector
+            
             // Tile j loop for better cache reuse
             const int TILE_J = 64;
             
@@ -1285,24 +1436,29 @@ namespace SmallMind.Core.Simd
                 {
                     int bRowStart = j * K;
                     
-                    // Compute dot product using AVX2
-                    Vector256<float> acc = Vector256<float>.Zero;
+                    // Compute dot product using AVX-512
+                    Vector512<float> acc = Vector512<float>.Zero;
                     int k = 0;
                     
                     // Main SIMD loop
                     for (; k <= K - vecSize; k += vecSize)
                     {
-                        Vector256<float> vA = Avx.LoadVector256(pA + aRowStart + k);
-                        Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + k);
-                        acc = Fma.MultiplyAdd(vA, vB, acc);
+                        Vector512<float> vA = Avx512F.LoadVector512(pA + aRowStart + k);
+                        Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + k);
+                        acc = Avx512F.FusedMultiplyAdd(vA, vB, acc);
                     }
                     
-                    // Horizontal sum using AVX
-                    // [a0 a1 a2 a3 a4 a5 a6 a7]
-                    Vector128<float> lo = acc.GetLower(); // [a0 a1 a2 a3]
-                    Vector128<float> hi = acc.GetUpper(); // [a4 a5 a6 a7]
-                    Vector128<float> sum128 = Sse.Add(lo, hi); // [a0+a4 a1+a5 a2+a6 a3+a7]
-                    Vector128<float> sum64 = Sse.Add(sum128, Sse.Shuffle(sum128, sum128, 0b_11_10_11_10)); // [a0+a4+a2+a6 ...]
+                    // Horizontal sum using AVX-512
+                    // Reduce 512-bit vector to scalar
+                    Vector256<float> lo256 = acc.GetLower();
+                    Vector256<float> hi256 = acc.GetUpper();
+                    Vector256<float> sum256 = Avx.Add(lo256, hi256);
+                    
+                    // Continue reduction with AVX
+                    Vector128<float> lo128 = sum256.GetLower();
+                    Vector128<float> hi128 = sum256.GetUpper();
+                    Vector128<float> sum128 = Sse.Add(lo128, hi128);
+                    Vector128<float> sum64 = Sse.Add(sum128, Sse.Shuffle(sum128, sum128, 0b_11_10_11_10));
                     Vector128<float> sum32 = Sse.Add(sum64, Sse.Shuffle(sum64, sum64, 0b_01_01_01_01));
                     float sum = sum32.ToScalar();
                     

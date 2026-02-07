@@ -1045,31 +1045,35 @@ namespace SmallMind.Transformers
         /// <summary>
         /// Extract Q from concatenated QKV output (supports GQA).
         /// QKV layout: [Q(nEmbd), K(kvDim), V(kvDim)]
+        /// TIER-3 OPTIMIZATION: Restructured for cache locality + Buffer.BlockCopy
         /// </summary>
         private void ExtractAndReshapeQInPlace(Tensor qkv, Tensor q, int B, int T)
         {
             // Q is first nEmbd elements
             // dest Q: (B, nHead, T, headSize)
             
+            int qkvDim = _nEmbd + 2 * _nKvHead * _headSize;
+            
             if (B >= 4)
             {
                 Parallel.For(0, B, b =>
                 {
-                    int qkvDim = _nEmbd + 2 * _nKvHead * _headSize;
                     int batchInOffset = b * T * qkvDim;
                     int batchOutOffset = b * _nHead * T * _headSize;
                     
-                    for (int h = 0; h < _nHead; h++)
+                    // TIER-3: Restructure loops - timestep t outermost for sequential reads
+                    for (int t = 0; t < T; t++)
                     {
-                        int headInOffset = h * _headSize;
-                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        int srcBase = batchInOffset + t * qkvDim;
                         
-                        for (int t = 0; t < T; t++)
+                        // Copy all Q heads for this timestep
+                        for (int h = 0; h < _nHead; h++)
                         {
-                            int srcIdx = batchInOffset + t * qkvDim + headInOffset;
-                            int dstIdx = headOutOffset + t * _headSize;
+                            int srcIdx = srcBase + h * _headSize;
+                            int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
                             
-                            Array.Copy(qkv.Data, srcIdx, q.Data, dstIdx, _headSize);
+                            // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
+                            Buffer.BlockCopy(qkv.Data, srcIdx * 4, q.Data, dstIdx * 4, _headSize * 4);
                         }
                     }
                 });
@@ -1078,21 +1082,22 @@ namespace SmallMind.Transformers
             {
                 for (int b = 0; b < B; b++)
                 {
-                    int qkvDim = _nEmbd + 2 * _nKvHead * _headSize;
                     int batchInOffset = b * T * qkvDim;
                     int batchOutOffset = b * _nHead * T * _headSize;
                     
-                    for (int h = 0; h < _nHead; h++)
+                    // TIER-3: Restructure loops - timestep t outermost for sequential reads
+                    for (int t = 0; t < T; t++)
                     {
-                        int headInOffset = h * _headSize;
-                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        int srcBase = batchInOffset + t * qkvDim;
                         
-                        for (int t = 0; t < T; t++)
+                        // Copy all Q heads for this timestep
+                        for (int h = 0; h < _nHead; h++)
                         {
-                            int srcIdx = batchInOffset + t * qkvDim + headInOffset;
-                            int dstIdx = headOutOffset + t * _headSize;
+                            int srcIdx = srcBase + h * _headSize;
+                            int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
                             
-                            Array.Copy(qkv.Data, srcIdx, q.Data, dstIdx, _headSize);
+                            // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
+                            Buffer.BlockCopy(qkv.Data, srcIdx * 4, q.Data, dstIdx * 4, _headSize * 4);
                         }
                     }
                 }
@@ -1102,6 +1107,7 @@ namespace SmallMind.Transformers
         /// <summary>
         /// Extract K and V from concatenated QKV output (supports GQA).
         /// QKV layout: [Q(nEmbd), K(kvDim), V(kvDim)]
+        /// TIER-3 OPTIMIZATION: Restructured for cache locality + Buffer.BlockCopy
         /// </summary>
         private void ExtractAndReshapeKVInPlace(Tensor qkv, Tensor k, Tensor v, int B, int T)
         {
@@ -1110,29 +1116,30 @@ namespace SmallMind.Transformers
             // dest K, V: (B, nKvHead, T, headSize)
             
             int kvDim = _nKvHead * _headSize;
+            int qkvDim = _nEmbd + 2 * kvDim;
             
             if (B >= 4)
             {
                 Parallel.For(0, B, b =>
                 {
-                    int qkvDim = _nEmbd + 2 * kvDim;
                     int batchInOffset = b * T * qkvDim;
                     int batchOutOffset = b * _nKvHead * T * _headSize;
                     
-                    for (int h = 0; h < _nKvHead; h++)
+                    // TIER-3: Restructure loops - timestep t outermost for sequential reads
+                    for (int t = 0; t < T; t++)
                     {
-                        int kHeadInOffset = _nEmbd + h * _headSize;
-                        int vHeadInOffset = _nEmbd + kvDim + h * _headSize;
-                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        int srcBase = batchInOffset + t * qkvDim;
                         
-                        for (int t = 0; t < T; t++)
+                        // Copy all K and V heads for this timestep
+                        for (int h = 0; h < _nKvHead; h++)
                         {
-                            int kSrcIdx = batchInOffset + t * qkvDim + kHeadInOffset;
-                            int vSrcIdx = batchInOffset + t * qkvDim + vHeadInOffset;
-                            int dstIdx = headOutOffset + t * _headSize;
+                            int kSrcIdx = srcBase + _nEmbd + h * _headSize;
+                            int vSrcIdx = srcBase + _nEmbd + kvDim + h * _headSize;
+                            int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
                             
-                            Array.Copy(qkv.Data, kSrcIdx, k.Data, dstIdx, _headSize);
-                            Array.Copy(qkv.Data, vSrcIdx, v.Data, dstIdx, _headSize);
+                            // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
+                            Buffer.BlockCopy(qkv.Data, kSrcIdx * 4, k.Data, dstIdx * 4, _headSize * 4);
+                            Buffer.BlockCopy(qkv.Data, vSrcIdx * 4, v.Data, dstIdx * 4, _headSize * 4);
                         }
                     }
                 });
@@ -1141,24 +1148,24 @@ namespace SmallMind.Transformers
             {
                 for (int b = 0; b < B; b++)
                 {
-                    int qkvDim = _nEmbd + 2 * kvDim;
                     int batchInOffset = b * T * qkvDim;
                     int batchOutOffset = b * _nKvHead * T * _headSize;
                     
-                    for (int h = 0; h < _nKvHead; h++)
+                    // TIER-3: Restructure loops - timestep t outermost for sequential reads
+                    for (int t = 0; t < T; t++)
                     {
-                        int kHeadInOffset = _nEmbd + h * _headSize;
-                        int vHeadInOffset = _nEmbd + kvDim + h * _headSize;
-                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        int srcBase = batchInOffset + t * qkvDim;
                         
-                        for (int t = 0; t < T; t++)
+                        // Copy all K and V heads for this timestep
+                        for (int h = 0; h < _nKvHead; h++)
                         {
-                            int kSrcIdx = batchInOffset + t * qkvDim + kHeadInOffset;
-                            int vSrcIdx = batchInOffset + t * qkvDim + vHeadInOffset;
-                            int dstIdx = headOutOffset + t * _headSize;
+                            int kSrcIdx = srcBase + _nEmbd + h * _headSize;
+                            int vSrcIdx = srcBase + _nEmbd + kvDim + h * _headSize;
+                            int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
                             
-                            Array.Copy(qkv.Data, kSrcIdx, k.Data, dstIdx, _headSize);
-                            Array.Copy(qkv.Data, vSrcIdx, v.Data, dstIdx, _headSize);
+                            // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
+                            Buffer.BlockCopy(qkv.Data, kSrcIdx * 4, k.Data, dstIdx * 4, _headSize * 4);
+                            Buffer.BlockCopy(qkv.Data, vSrcIdx * 4, v.Data, dstIdx * 4, _headSize * 4);
                         }
                     }
                 }
