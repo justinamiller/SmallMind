@@ -228,7 +228,7 @@ namespace SmallMind.Core.Core
         /// Callers must handle proper indexing when accessing per-head data.
         /// For production use, implement proper strided access using unsafe pointers.
         /// </summary>
-        [MethodImpl(MethodImpl Options.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ReadOnlySpan<float> GetStridedView(
             ReadOnlySpan<float> source,
             int offset,
