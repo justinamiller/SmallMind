@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmallMind.Abstractions;
 
 namespace SmallMind.Transformers
 {
@@ -100,8 +101,8 @@ namespace SmallMind.Transformers
             if (config.Architecture != "llama")
             {
                 throw new UnsupportedModelException(
+                    "",
                     config.Architecture,
-                    "llama",
                     $"Unsupported architecture: {config.Architecture}. Only 'llama' architecture is currently supported.");
             }
 
@@ -238,22 +239,6 @@ namespace SmallMind.Transformers
             : base($"Required metadata key not found: {metadataKey}")
         {
             MetadataKey = metadataKey;
-        }
-    }
-
-    /// <summary>
-    /// Exception thrown when an unsupported model architecture is encountered.
-    /// </summary>
-    public class UnsupportedModelException : Exception
-    {
-        public string Architecture { get; }
-        public string SupportedArchitecture { get; }
-
-        public UnsupportedModelException(string architecture, string supportedArchitecture, string message)
-            : base(message)
-        {
-            Architecture = architecture;
-            SupportedArchitecture = supportedArchitecture;
         }
     }
 }
