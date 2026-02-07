@@ -61,7 +61,8 @@ namespace SmallMind.Core.Optimized
         private static float FastExp(float x)
         {
             // Clamp to safe range for softmax (after max subtraction, values are typically negative)
-            x = Math.Clamp(x, -87.3f, 88.7f); // ln(float.MaxValue) bounds
+            // Use branchless min/max instead of Math.Clamp to avoid branch mispredictions
+            x = MathF.Min(88.7f, MathF.Max(-87.3f, x)); // ln(float.MaxValue) bounds
             
             // Pade approximation: exp(x) ≈ (1 + x/2 + x²/12) / (1 - x/2 + x²/12)
             // More accurate than Taylor series for negative x
