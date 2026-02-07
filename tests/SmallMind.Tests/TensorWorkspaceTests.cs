@@ -14,7 +14,7 @@ namespace SmallMind.Tests
         private const float Tolerance = 1e-5f;
 
         [Fact]
-        public void WorkspaceReuse_DoesNotClearData_OperationsHandleClearing()
+        public void WorkspaceReuse_ClearsData_ForCorrectness()
         {
             // Arrange
             var workspace = new TensorWorkspace();
@@ -29,22 +29,20 @@ namespace SmallMind.Tests
             Assert.Equal(1.5f, tensor1.Data[1], precision: 5);
             Assert.Equal(3.0f, tensor1.Data[2], precision: 5);
             
-            // Act: Second use - reuse same tensor (should NOT clear the data)
+            // Act: Second use - reuse same tensor (SHOULD clear the data for correctness)
             var tensor2 = workspace.GetOrCreate("test", new[] { 100 }, requiresGrad: false);
             
             // Assert: Verify it's the same instance
             Assert.Same(tensor1, tensor2);
             
-            // Assert: Verify data was NOT cleared (workspace doesn't clear)
-            // Data should still have the pattern we wrote earlier
+            // Assert: Verify data WAS cleared (workspace clears to prevent accumulation bugs)
+            // MatMul uses accumulation (+=), so workspaces must be zeroed
             Assert.Equal(0f, tensor2.Data[0], precision: 5);
-            Assert.Equal(1.5f, tensor2.Data[1], precision: 5);
-            Assert.Equal(3.0f, tensor2.Data[2], precision: 5);
-            Assert.Equal(4.5f, tensor2.Data[3], precision: 5);
-            
-            // Verify some values in the middle
-            Assert.Equal(10.5f, tensor2.Data[7], precision: 5);
-            Assert.Equal(99 * 1.5f, tensor2.Data[99], precision: 5);
+            Assert.Equal(0f, tensor2.Data[1], precision: 5);
+            Assert.Equal(0f, tensor2.Data[2], precision: 5);
+            Assert.Equal(0f, tensor2.Data[3], precision: 5);
+            Assert.Equal(0f, tensor2.Data[7], precision: 5);
+            Assert.Equal(0f, tensor2.Data[99], precision: 5);
         }
 
         [Fact]

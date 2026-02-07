@@ -35,10 +35,9 @@ namespace SmallMind.Transformers
                 // Check if shape matches
                 if (ShapeMatches(existing.Shape, shape))
                 {
-                    // Operations handle their own output initialization.
-                    // DO NOT clear here - MatMul, Softmax, and other operations
-                    // clear their output buffers as the first step.
-                    // Pre-clearing causes 400%+ regression on large matrices.
+                    // CRITICAL: Must zero workspace before reuse because MatMul uses accumulation (+=)
+                    // The comment about "operations clear buffers" was incorrect - MatMul uses FMA (multiply-add)
+                    Array.Clear(existing.Data, 0, existing.Data.Length);
                     return existing;
                 }
                 
@@ -69,6 +68,8 @@ namespace SmallMind.Transformers
                 // Check if shape matches
                 if (ShapeMatchesSpan(existing.Shape, shape))
                 {
+                    // CRITICAL: Must zero workspace before reuse because MatMul uses accumulation (+=)
+                    Array.Clear(existing.Data, 0, existing.Data.Length);
                     return existing;
                 }
                 
