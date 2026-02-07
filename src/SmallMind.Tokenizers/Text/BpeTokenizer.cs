@@ -137,8 +137,6 @@ namespace SmallMind.Tokenizers
                     unkTokenId: unkId,
                     supportsByteFallback: false
                 );
-
-                Console.WriteLine($"BpeTokenizer: Loaded {_vocab.Count} tokens and {_merges.Count} merge rules from {assetsPath}");
             }
             catch (TokenizationException)
             {
@@ -149,6 +147,59 @@ namespace SmallMind.Tokenizers
                 throw new TokenizationException(
                     $"Failed to load BPE tokenizer from {assetsPath}: {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// Creates a new BpeTokenizer from in-memory vocabulary and merge rules.
+        /// Used when loading from GGUF metadata.
+        /// </summary>
+        /// <param name="vocab">Dictionary mapping tokens to IDs</param>
+        /// <param name="merges">List of merge pairs</param>
+        /// <param name="bosTokenId">BOS token ID (or -1 if not present)</param>
+        /// <param name="eosTokenId">EOS token ID (or -1 if not present)</param>
+        /// <param name="unkTokenId">UNK token ID (or -1 if not present)</param>
+        public BpeTokenizer(
+            Dictionary<string, int> vocab, 
+            List<(string, string)> merges,
+            int bosTokenId = -1,
+            int eosTokenId = -1,
+            int unkTokenId = -1)
+        {
+            if (vocab == null || vocab.Count == 0)
+                throw new ArgumentException("Vocabulary cannot be null or empty", nameof(vocab));
+            if (merges == null)
+                throw new ArgumentNullException(nameof(merges));
+
+            // Build inverse vocabulary
+            var inverseDict = new Dictionary<int, string>(vocab.Count);
+            foreach (var kvp in vocab)
+            {
+                inverseDict[kvp.Value] = kvp.Key;
+            }
+
+            // Build merge ranks
+            var mergeDict = new Dictionary<(string, string), int>();
+            for (int i = 0; i < merges.Count; i++)
+            {
+                mergeDict[merges[i]] = i;
+            }
+
+            _vocab = vocab.ToFrozenDictionary();
+            _inverseVocab = inverseDict.ToFrozenDictionary();
+            _merges = merges;
+            _mergeRanks = mergeDict.ToFrozenDictionary();
+
+            // Pre-tokenization regex
+            _preTokenizeRegex = new Regex(@"\w+|[^\w\s]|\s+", RegexOptions.Compiled);
+
+            Info = new TokenizerInfo(
+                name: "BpeTokenizer",
+                vocabSize: _vocab.Count,
+                bosTokenId: bosTokenId,
+                eosTokenId: eosTokenId,
+                unkTokenId: unkTokenId,
+                supportsByteFallback: false
+            );
         }
 
         /// <summary>

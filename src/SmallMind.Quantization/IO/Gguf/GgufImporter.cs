@@ -412,7 +412,7 @@ namespace SmallMind.Quantization.IO.Gguf
         {
             var smqMetadata = new Dictionary<string, object>();
 
-            // Copy relevant keys (common GGUF metadata keys)
+            // Copy model architecture metadata
             var relevantKeys = new[]
             {
                 "general.architecture",
@@ -426,6 +426,8 @@ namespace SmallMind.Quantization.IO.Gguf
                 "llama.attention.head_count",
                 "llama.attention.head_count_kv",
                 "llama.rope.dimension_count",
+                "llama.rope.freq_base",
+                "llama.attention.layer_norm_rms_epsilon",
                 "llama.vocab_size"
             };
 
@@ -435,6 +437,13 @@ namespace SmallMind.Quantization.IO.Gguf
                 {
                     smqMetadata[key] = value;
                 }
+            }
+
+            // Preserve tokenizer metadata
+            var tokenizerMetadata = GgufTokenizerExtractor.PreserveTokenizerMetadata(ggufMetadata);
+            foreach (var kvp in tokenizerMetadata)
+            {
+                smqMetadata[kvp.Key] = kvp.Value;
             }
 
             // Add conversion metadata
