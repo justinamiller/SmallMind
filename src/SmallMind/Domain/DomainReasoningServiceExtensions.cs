@@ -2,6 +2,8 @@ using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SmallMind.Core.Validation;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 
 namespace SmallMind.Domain
 {
@@ -28,8 +30,8 @@ namespace SmallMind.Domain
             services.TryAddScoped<IDomainReasoner>(sp =>
             {
                 // Try to resolve dependencies from the service provider
-                var model = sp.GetService<Core.TransformerModel>();
-                var tokenizer = sp.GetService<Text.ITokenizer>();
+                var model = sp.GetService<Transformers.TransformerModel>();
+                var tokenizer = sp.GetService<Tokenizers.ITokenizer>();
 
                 if (model == null || tokenizer == null)
                 {

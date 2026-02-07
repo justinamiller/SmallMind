@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
-using SmallMind.Embeddings;
+using SmallMind.Rag.Retrieval;
 using SmallMind.Core.Validation;
 
-namespace SmallMind.Indexing
+namespace SmallMind.Rag.Indexing
 {
     /// <summary>
     /// Represents a stored vector with its metadata.

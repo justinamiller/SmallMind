@@ -318,7 +318,7 @@ namespace SmallMind.Public.Internal
         private Abstractions.GenerationRequest MapToInternalRequest(TextGenerationRequest request)
         {
             var maxTokens = request.MaxOutputTokensOverride ?? _sessionOptions.MaxOutputTokens;
-            var stopSequences = request.StopSequencesOverride.Length > 0
+            var stopSequences = request.StopSequencesOverride.Count > 0
                 ? request.StopSequencesOverride.ToArray()
                 : _sessionOptions.StopSequences.ToArray();
 
@@ -333,7 +333,7 @@ namespace SmallMind.Public.Internal
                     Mode = request.Seed.HasValue
                         ? Abstractions.GenerationMode.Deterministic
                         : Abstractions.GenerationMode.Exploratory,
-                    Seed = request.Seed ?? 42,
+                    Seed = (uint)(request.Seed ?? 42),
                     Temperature = _sessionOptions.Temperature,
                     TopK = _sessionOptions.TopK,
                     TopP = _sessionOptions.TopP,

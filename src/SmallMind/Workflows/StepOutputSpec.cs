@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using SmallMind.Domain;
 
 namespace SmallMind.Workflows
 {

@@ -154,7 +154,7 @@ app.MapPost("/v1/chat/completions", async (
             TopP = request.TopP ?? opts.DefaultTopP,
             TopK = opts.DefaultTopK,
             MaxOutputTokens = request.MaxTokens ?? opts.DefaultMaxTokens,
-            StopSequences = stopSequences.Length > 0 ? stopSequences : ReadOnlyMemory<string>.Empty
+            StopSequences = stopSequences.Length > 0 ? stopSequences : Array.Empty<string>()
         };
         
         using var session = engine.CreateTextGenerationSession(genOptions);
@@ -162,7 +162,7 @@ app.MapPost("/v1/chat/completions", async (
         var genRequest = new TextGenerationRequest
         {
             Prompt = prompt.AsMemory(),
-            Seed = request.Seed
+            Seed = request.Seed.HasValue ? (int)request.Seed.Value : null
         };
         
         if (request.Stream)
@@ -260,7 +260,7 @@ app.MapPost("/v1/completions", async (
             TopP = request.TopP ?? opts.DefaultTopP,
             TopK = opts.DefaultTopK,
             MaxOutputTokens = request.MaxTokens ?? opts.DefaultMaxTokens,
-            StopSequences = stopSequences.Length > 0 ? stopSequences : ReadOnlyMemory<string>.Empty
+            StopSequences = stopSequences.Length > 0 ? stopSequences : Array.Empty<string>()
         };
         
         using var session = engine.CreateTextGenerationSession(genOptions);
@@ -268,7 +268,7 @@ app.MapPost("/v1/completions", async (
         var genRequest = new TextGenerationRequest
         {
             Prompt = request.Prompt.AsMemory(),
-            Seed = request.Seed
+            Seed = request.Seed.HasValue ? (int)request.Seed.Value : null
         };
         
         var result = await Task.Run(() => session.Generate(genRequest, cancellationToken), cancellationToken);

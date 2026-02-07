@@ -27,3 +27,8 @@ benchmark-results*.md
 benchmark-results*.json
 artifacts/
 perf/baselines/baseline.json
+
+# Cleanup artifacts
+DELETE_ME/
+benchmark-results-*/
+profiling-results-*/

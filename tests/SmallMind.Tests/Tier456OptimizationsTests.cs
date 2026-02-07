@@ -2,7 +2,7 @@ using System;
 using Xunit;
 using SmallMind.Core.Core;
 using SmallMind.Core.Utilities;
-using Tensor = SmallMind.Core.Tensor;
+using Tensor = SmallMind.Core.Core.Tensor;
 
 namespace SmallMind.Tests
 {

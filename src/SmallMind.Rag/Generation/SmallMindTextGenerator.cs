@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using SmallMind.Core;
-using SmallMind.Text;
+using SmallMind.Core.Core;
+using SmallMind.Runtime;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 
 namespace SmallMind.Rag.Generation
 {

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace SmallMind.Embeddings
+namespace SmallMind.Rag.Retrieval
 {
     /// <summary>
     /// TF-IDF based embedding provider.
