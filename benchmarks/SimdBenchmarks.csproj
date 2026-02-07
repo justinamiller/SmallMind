@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../src/SmallMind/SmallMind.csproj" />
+    <ProjectReference Include="../src/SmallMind.Core/SmallMind.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,6 +22,14 @@
     <Compile Remove="TrainingBenchmark/**/*.cs" />
     <Compile Remove="MemoryBenchmark/**/*.cs" />
     <Compile Remove="Q4ProfilerBenchmark/**/*.cs" />
+    <Compile Remove="Tier1HotpathBenchmark/**/*.cs" />
+    <Compile Remove="Tier2Tier3Benchmarks/**/*.cs" />
+    <Compile Remove="Tier4Tier5Tier6Benchmarks/**/*.cs" />
+    <Compile Remove="InferenceAllocationBenchmark/**/*.cs" />
+    <Compile Remove="InferenceFeaturesBenchmark/**/*.cs" />
+    <Compile Remove="ProfilerBenchmarks/**/*.cs" />
+    <Compile Remove="StandardLLMBenchmarks/**/*.cs" />
+    <Compile Remove="PerformanceOptimizationsBenchmark/**/*.cs" />
   </ItemGroup>
 
 </Project>
