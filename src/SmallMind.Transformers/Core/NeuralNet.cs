@@ -731,9 +731,13 @@ namespace SmallMind.Transformers
         {
             if (!_training || _p == 0)
             {
-                // During inference, we need to return the input.
-                // Clone is necessary to maintain tensor independence.
-                return input.Clone();
+                // TIER-1 OPTIMIZATION: Zero-copy passthrough in eval mode.
+                // During inference (eval), dropout is a no-op, so we return the input tensor directly.
+                // This eliminates a major allocation hotspot (Clone() created new float[] every call).
+                // 
+                // OWNERSHIP NOTE: Callers must not mutate the returned tensor when in eval mode.
+                // This is safe because inference flows are read-only; training flows create new tensors.
+                return input;
             }
             
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
