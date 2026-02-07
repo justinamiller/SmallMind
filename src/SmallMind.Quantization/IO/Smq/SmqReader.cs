@@ -216,7 +216,11 @@ namespace SmallMind.Quantization.IO.Smq
 
         private object LoadTensorFromEntry(SmqFormat.TensorEntry entry)
         {
-            if (entry.DataType == QuantScheme.Q8_0)
+            if (entry.DataType == QuantScheme.F32)
+            {
+                return LoadFp32Tensor(entry);
+            }
+            else if (entry.DataType == QuantScheme.Q8_0)
             {
                 return LoadQ8Tensor(entry);
             }
@@ -228,6 +232,30 @@ namespace SmallMind.Quantization.IO.Smq
             {
                 throw new NotSupportedException($"Unsupported data type: {entry.DataType}");
             }
+        }
+
+        private Fp32Tensor LoadFp32Tensor(SmqFormat.TensorEntry entry)
+        {
+            int totalElements = SmqFormat.GetTotalElements(entry.Dimensions);
+
+            // Validate data size
+            ulong expectedDataSize = (ulong)(totalElements * sizeof(float));
+            if (entry.DataLength != expectedDataSize)
+                throw new InvalidDataException($"Data length mismatch: expected {expectedDataSize}, got {entry.DataLength}");
+
+            // Validate no aux data for FP32
+            if (entry.AuxLength != 0)
+                throw new InvalidDataException($"FP32 tensor should not have auxiliary data, got {entry.AuxLength} bytes");
+
+            // Read float data
+            _stream.Position = (long)entry.DataOffset;
+            var data = new float[totalElements];
+            for (int i = 0; i < totalElements; i++)
+            {
+                data[i] = _reader.ReadSingle();
+            }
+
+            return new Fp32Tensor(data, entry.Dimensions);
         }
 
         private Q8Tensor LoadQ8Tensor(SmqFormat.TensorEntry entry)
