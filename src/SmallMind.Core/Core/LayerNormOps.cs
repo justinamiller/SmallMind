@@ -8,7 +8,9 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Fused LayerNorm operations with no intermediate allocations.
     /// Implements efficient two-pass normalization over last dimension.
+    /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on hot methods to avoid zero-initialization overhead.
     /// </summary>
+    [SkipLocalsInit]
     public static class LayerNormOps
     {
         /// <summary>

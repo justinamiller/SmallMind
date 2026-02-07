@@ -12,7 +12,9 @@ namespace SmallMind.Core.Simd
     /// SIMD-accelerated matrix multiplication operations.
     /// Provides optimized implementations using AVX-512, AVX2, and Vector&lt;T&gt; fallbacks.
     /// Uses cache-friendly algorithms and parallel processing for large matrices.
+    /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on class to avoid zero-initialization overhead in hot methods.
     /// </summary>
+    [SkipLocalsInit]
     public static class MatMulOps
     {
    // Parallelization threshold: Use Parallel.For only when M >= 128
@@ -1333,7 +1335,39 @@ namespace SmallMind.Core.Simd
                 
                 int k = 0;
                 
-                // Main SIMD loop - compute 4 dot products in parallel
+                // TIER-5 OPTIMIZATION: 2x loop unrolling in K dimension
+                // Process 16 floats per iteration (2 * vecSize) to reduce loop overhead
+                // and improve instruction-level parallelism
+                for (; k <= K - (vecSize * 2); k += vecSize * 2)
+                {
+                    // First unrolled iteration (k + 0)
+                    Vector256<float> vA0 = Avx.LoadVector256(pA + aRowStart + k);
+                    
+                    Vector256<float> vB0_0 = Avx.LoadVector256(pB + bRowStart0 + k);
+                    Vector256<float> vB0_1 = Avx.LoadVector256(pB + bRowStart1 + k);
+                    Vector256<float> vB0_2 = Avx.LoadVector256(pB + bRowStart2 + k);
+                    Vector256<float> vB0_3 = Avx.LoadVector256(pB + bRowStart3 + k);
+                    
+                    acc0 = Fma.MultiplyAdd(vA0, vB0_0, acc0);
+                    acc1 = Fma.MultiplyAdd(vA0, vB0_1, acc1);
+                    acc2 = Fma.MultiplyAdd(vA0, vB0_2, acc2);
+                    acc3 = Fma.MultiplyAdd(vA0, vB0_3, acc3);
+                    
+                    // Second unrolled iteration (k + vecSize)
+                    Vector256<float> vA1 = Avx.LoadVector256(pA + aRowStart + k + vecSize);
+                    
+                    Vector256<float> vB1_0 = Avx.LoadVector256(pB + bRowStart0 + k + vecSize);
+                    Vector256<float> vB1_1 = Avx.LoadVector256(pB + bRowStart1 + k + vecSize);
+                    Vector256<float> vB1_2 = Avx.LoadVector256(pB + bRowStart2 + k + vecSize);
+                    Vector256<float> vB1_3 = Avx.LoadVector256(pB + bRowStart3 + k + vecSize);
+                    
+                    acc0 = Fma.MultiplyAdd(vA1, vB1_0, acc0);
+                    acc1 = Fma.MultiplyAdd(vA1, vB1_1, acc1);
+                    acc2 = Fma.MultiplyAdd(vA1, vB1_2, acc2);
+                    acc3 = Fma.MultiplyAdd(vA1, vB1_3, acc3);
+                }
+                
+                // Handle remaining vecSize chunk (if K % 16 >= 8)
                 for (; k <= K - vecSize; k += vecSize)
                 {
                     Vector256<float> vA = Avx.LoadVector256(pA + aRowStart + k);
@@ -1379,6 +1413,18 @@ namespace SmallMind.Core.Simd
                 
                 Vector256<float> acc = Vector256<float>.Zero;
                 int k = 0;
+                
+                // TIER-5 OPTIMIZATION: 2x loop unrolling for tail columns as well
+                for (; k <= K - (vecSize * 2); k += vecSize * 2)
+                {
+                    Vector256<float> vA0 = Avx.LoadVector256(pA + aRowStart + k);
+                    Vector256<float> vB0 = Avx.LoadVector256(pB + bRowStart + k);
+                    acc = Fma.MultiplyAdd(vA0, vB0, acc);
+                    
+                    Vector256<float> vA1 = Avx.LoadVector256(pA + aRowStart + k + vecSize);
+                    Vector256<float> vB1 = Avx.LoadVector256(pB + bRowStart + k + vecSize);
+                    acc = Fma.MultiplyAdd(vA1, vB1, acc);
+                }
                 
                 for (; k <= K - vecSize; k += vecSize)
                 {

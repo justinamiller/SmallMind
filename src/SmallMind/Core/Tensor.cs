@@ -42,6 +42,28 @@ namespace SmallMind.Core
             }
         }
 
+        /// <summary>
+        /// Internal constructor for allocation-free tensor creation.
+        /// SAFETY: Caller MUST ensure data.Length >= logicalSize and shape array is owned by caller.
+        /// This constructor does NOT validate data length or clone shape to avoid per-token allocations.
+        /// Used ONLY in hot paths like Sampling.Generate() where shape is reused and owned.
+        /// </summary>
+        /// <param name="data">Data buffer (may be larger than logical size)</param>
+        /// <param name="shape">Shape array (NOT cloned, must be stable/owned by caller)</param>
+        /// <param name="logicalSize">Actual size to use from data buffer</param>
+        /// <param name="requiresGrad">Whether gradient tracking is needed</param>
+        internal Tensor(float[] data, int[] shape, int logicalSize, bool requiresGrad = false)
+        {
+            // Minimal validation for internal use - caller guarantees correctness
+            Data = data;
+            Shape = shape;
+            RequiresGrad = requiresGrad;
+            if (requiresGrad)
+            {
+                Grad = new float[logicalSize];
+            }
+        }
+
         public Tensor(int[] shape, bool requiresGrad = false)
         {
             Guard.NotNull(shape);
