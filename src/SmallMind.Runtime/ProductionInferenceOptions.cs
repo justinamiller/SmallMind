@@ -31,6 +31,62 @@ namespace SmallMind.Runtime
         public double TopP { get; set; } = 0.95;
         
         /// <summary>
+        /// Gets or sets the min-p sampling threshold (0.0 to disable).
+        /// Filters tokens with probability less than MinP * max_probability.
+        /// Default: 0.0 (disabled). Valid range: 0.0 to 1.0
+        /// </summary>
+        public double MinP { get; set; } = 0.0;
+        
+        /// <summary>
+        /// Gets or sets additional stop token IDs that end generation.
+        /// Generation stops if any of these token IDs are produced.
+        /// Default: empty array.
+        /// </summary>
+        public int[] StopTokenIds { get; set; } = Array.Empty<int>();
+        
+        /// <summary>
+        /// Gets or sets stop sequences (text patterns) that end generation.
+        /// Generation stops when any of these sequences appear in output.
+        /// Default: empty array.
+        /// </summary>
+        public string[] StopSequences { get; set; } = Array.Empty<string>();
+        
+        /// <summary>
+        /// Gets or sets whether to remove stop sequences from final output.
+        /// Default: true (stop sequences are removed).
+        /// </summary>
+        public bool RemoveStopSequenceFromOutput { get; set; } = true;
+        
+        /// <summary>
+        /// Gets or sets the repetition penalty (1.0 to disable).
+        /// Penalizes tokens that have already appeared in recent context.
+        /// Default: 1.0 (disabled). Typical values: 1.05-1.2
+        /// Valid range: greater than 0, not equal to 0.
+        /// </summary>
+        public float RepetitionPenalty { get; set; } = 1.0f;
+        
+        /// <summary>
+        /// Gets or sets the presence penalty (0.0 to disable).
+        /// Subtracts a fixed penalty from logits of tokens present in recent context.
+        /// Default: 0.0 (disabled). Typical values: 0.0-1.0
+        /// </summary>
+        public float PresencePenalty { get; set; } = 0.0f;
+        
+        /// <summary>
+        /// Gets or sets the frequency penalty (0.0 to disable).
+        /// Penalizes tokens proportionally to their frequency in recent context.
+        /// Default: 0.0 (disabled). Typical values: 0.0-1.0
+        /// </summary>
+        public float FrequencyPenalty { get; set; } = 0.0f;
+        
+        /// <summary>
+        /// Gets or sets the size of the context window for repetition penalties (0 = full context).
+        /// Only tokens within the last N tokens are considered for penalties.
+        /// Default: 0 (use full context, limited to reasonable default internally).
+        /// </summary>
+        public int RepetitionWindow { get; set; } = 0;
+        
+        /// <summary>
         /// Gets or sets the random seed for deterministic generation.
         /// When set, the same seed with same prompt and options produces identical output.
         /// Default: null (non-deterministic).
@@ -132,6 +188,21 @@ namespace SmallMind.Runtime
                 throw new ValidationException("TopP must be between 0.0 and 1.0", nameof(TopP));
             }
             
+            if (MinP < 0.0 || MinP > 1.0)
+            {
+                throw new ValidationException("MinP must be between 0.0 and 1.0", nameof(MinP));
+            }
+            
+            if (RepetitionPenalty <= 0.0f)
+            {
+                throw new ValidationException("RepetitionPenalty must be greater than 0", nameof(RepetitionPenalty));
+            }
+            
+            if (RepetitionWindow < 0)
+            {
+                throw new ValidationException("RepetitionWindow cannot be negative", nameof(RepetitionWindow));
+            }
+            
             // Validate that context limit is reasonable
             if (MaxContextTokens > 0 && MaxInputTokens > MaxContextTokens)
             {
@@ -151,6 +222,14 @@ namespace SmallMind.Runtime
                 Temperature = Temperature,
                 TopK = TopK,
                 TopP = TopP,
+                MinP = MinP,
+                StopTokenIds = StopTokenIds.Length > 0 ? (int[])StopTokenIds.Clone() : Array.Empty<int>(),
+                StopSequences = StopSequences.Length > 0 ? (string[])StopSequences.Clone() : Array.Empty<string>(),
+                RemoveStopSequenceFromOutput = RemoveStopSequenceFromOutput,
+                RepetitionPenalty = RepetitionPenalty,
+                PresencePenalty = PresencePenalty,
+                FrequencyPenalty = FrequencyPenalty,
+                RepetitionWindow = RepetitionWindow,
                 Seed = Seed,
                 MaxInputTokens = MaxInputTokens,
                 MaxContextTokens = MaxContextTokens,
