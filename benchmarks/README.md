@@ -173,7 +173,33 @@ static void BenchmarkMyOperation()
 - `BenchmarkResult.cs` - Benchmark result data structures
 - `MarkdownReportWriter.cs` - Markdown report generator
 - `JsonReportWriter.cs` - JSON report generator
+- `HotpathBenchmark/` - Tier-1 hotpath micro-benchmark (Dropout passthrough, workspace clearing, transformer forward)
 - `results/` - Historical benchmark results and test artifacts (excluded from git)
+
+## Tier-1 Hotpath Benchmark
+
+The `HotpathBenchmark` project measures the impact of Tier-1 performance fixes:
+
+```bash
+cd benchmarks/HotpathBenchmark
+dotnet run -c Release
+dotnet run -c Release -- --baseline   # show pre-change numbers
+```
+
+### What it measures
+
+| Scenario | Metric | Expected improvement |
+|----------|--------|---------------------|
+| Dropout eval passthrough | Alloc/iter, Gen0 | Alloc drops from ~1.5 MB/iter to 0; Gen0 drops to 0 |
+| Workspace reuse (attention) | Time/iter, alloc | Time decreases from avoided Array.Clear on 5 of 6 workspaces |
+| Transformer forward pass | Alloc/iter, Gen0, time | Combined benefit of both fixes |
+
+### Metrics captured
+
+- **Elapsed time** via `Stopwatch`
+- **GC allocated bytes** via `GC.GetTotalAllocatedBytes(precise: true)`
+- **GC collection counts** for Gen 0, 1, 2
+- **Working set delta** via `Process.GetCurrentProcess().WorkingSet64` (noisy but informative)
 
 ## Additional Documentation
 

@@ -673,7 +673,23 @@ namespace SmallMind.Transformers
         /// Reuses existing workspace if shape matches, otherwise allocates new one.
         /// Uses regular Tensor (not PooledTensor) because these workspaces persist across forward passes.
         /// </summary>
-        private Tensor GetOrAllocateWorkspace(ref Tensor? workspace, int[] shape)
+        /// <param name="workspace">Ref to the cached workspace field.</param>
+        /// <param name="shape">Desired shape.</param>
+        /// <param name="clearBeforeReuse">
+        /// When true (default), Array.Clear the backing data before returning a reused workspace.
+        /// Set to false ONLY when the caller fully overwrites every element before any read.
+        ///
+        /// Kernel clearing audit:
+        ///   clearBeforeReuse=false is safe for:
+        ///     - ExtractAndReshapeQInPlace / ExtractAndReshapeKVInPlace — Array.Copy overwrites every element.
+        ///     - ComputeAttentionScoresInPlace — MatMulTransposeB uses store-once dot-product pattern
+        ///       (accumulates in register, then `pC[j] = sum`), followed by in-place FusedScaleMaskSoftmax.
+        ///     - ReshapeAttentionOutputInPlace — Array.Copy overwrites every element.
+        ///   clearBeforeReuse=true is REQUIRED for:
+        ///     - ApplyAttentionInPlace — calls MatMul which uses FMA accumulation (C += A*B),
+        ///       so the output buffer must be zeroed before use.
+        /// </param>
+        private Tensor GetOrAllocateWorkspace(ref Tensor? workspace, int[] shape, bool clearBeforeReuse = true)
         {
             // Check if we can reuse existing workspace
             if (workspace != null && workspace.Shape.Length == shape.Length)
@@ -687,28 +703,40 @@ namespace SmallMind.Transformers
                         break;
                     }
                 }
-                
+
                 if (shapeMatches)
                 {
-                    // CRITICAL: Must zero workspace before reuse because MatMul uses accumulation (+=)
-                    // The comment about "MatMul clears buffers" was incorrect - MatMul uses FMA (multiply-add)
-                    Array.Clear(workspace.Data, 0, workspace.Data.Length);
+                    // Only clear when required: MatMul accumulates (C += A*B) and needs zeroed output.
+                    // Store-once kernels (MatMulTransposeB, Array.Copy-based reshapes) fully overwrite
+                    // and do not read prior contents, so clearing is wasted work.
+                    if (clearBeforeReuse)
+                    {
+                        Array.Clear(workspace.Data, 0, workspace.Data.Length);
+                    }
                     return workspace;
                 }
             }
-            
+
             // Allocate new workspace (use regular Tensor, not PooledTensor)
-            // These persist across forward passes so we don't want them returned to pool
+            // These persist across forward passes so we don't want them returned to pool.
+            // The runtime guarantees new float[] is zero-filled, so no Array.Clear needed.
             workspace = new Tensor(shape, requiresGrad: _isTraining);
             return workspace;
         }
-        
+
         /// <summary>
         /// Get or allocate workspace tensor for the given shape (span-based, zero-allocation).
         /// Reuses existing workspace if shape matches, otherwise allocates new one.
         /// Use with cached shape arrays to avoid per-forward allocations.
         /// </summary>
-        private Tensor GetOrAllocateWorkspace(ref Tensor? workspace, ReadOnlySpan<int> shape)
+        /// <param name="workspace">Ref to the cached workspace field.</param>
+        /// <param name="shape">Desired shape as span.</param>
+        /// <param name="clearBeforeReuse">
+        /// When true (default), Array.Clear the backing data before returning a reused workspace.
+        /// Set to false ONLY when the caller fully overwrites every element before any read.
+        /// See array-based overload for full kernel clearing audit.
+        /// </param>
+        private Tensor GetOrAllocateWorkspace(ref Tensor? workspace, ReadOnlySpan<int> shape, bool clearBeforeReuse = true)
         {
             // Check if we can reuse existing workspace
             if (workspace != null && workspace.Shape.Length == shape.Length)
@@ -722,16 +750,20 @@ namespace SmallMind.Transformers
                         break;
                     }
                 }
-                
+
                 if (shapeMatches)
                 {
-                    // CRITICAL: Must zero workspace before reuse because MatMul uses accumulation (+=)
-                    Array.Clear(workspace.Data, 0, workspace.Data.Length);
+                    // Only clear when required — see kernel audit in array-based overload.
+                    if (clearBeforeReuse)
+                    {
+                        Array.Clear(workspace.Data, 0, workspace.Data.Length);
+                    }
                     return workspace;
                 }
             }
-            
-            // Allocate new workspace (must create array here, but only on shape change)
+
+            // Allocate new workspace (must create array here, but only on shape change).
+            // The runtime guarantees new float[] is zero-filled, so no Array.Clear needed.
             var shapeArray = shape.ToArray();
             workspace = new Tensor(shapeArray, requiresGrad: _isTraining);
             return workspace;
@@ -762,9 +794,10 @@ namespace SmallMind.Transformers
             _vShapeCache[2] = T; 
             _vShapeCache[3] = _headSize;
             
-            var q = GetOrAllocateWorkspace(ref _qWorkspace, _qShapeCache);
-            var k = GetOrAllocateWorkspace(ref _kWorkspace, _kShapeCache);
-            var v = GetOrAllocateWorkspace(ref _vWorkspace, _vShapeCache);
+            // clearBeforeReuse: false — ExtractAndReshapeQInPlace/KVInPlace fully overwrite via Array.Copy
+            var q = GetOrAllocateWorkspace(ref _qWorkspace, _qShapeCache, clearBeforeReuse: false);
+            var k = GetOrAllocateWorkspace(ref _kWorkspace, _kShapeCache, clearBeforeReuse: false);
+            var v = GetOrAllocateWorkspace(ref _vWorkspace, _vShapeCache, clearBeforeReuse: false);
             
             // Split into Q, K, V and reshape
             // Q: (B, T, nEmbd) -> (B, nHead, T, headSize)
@@ -840,10 +873,12 @@ namespace SmallMind.Transformers
             _scoresShapeCache[1] = _nHead; 
             _scoresShapeCache[2] = T; 
             _scoresShapeCache[3] = fullSeqLen;
-            var att = GetOrAllocateWorkspace(ref _scoresWorkspace, _scoresShapeCache);
+            // clearBeforeReuse: false — MatMulTransposeB uses store-once dot-product pattern
+            var att = GetOrAllocateWorkspace(ref _scoresWorkspace, _scoresShapeCache, clearBeforeReuse: false);
             ComputeAttentionScoresInPlace(q, kFull, att, B, T, fullSeqLen);
 
             // Use workspace for attention output (reuse qShapeCache)
+            // clearBeforeReuse: true (default) — MatMul uses FMA accumulation (C += A*B)
             var y = GetOrAllocateWorkspace(ref _attnOutputWorkspace, _qShapeCache);
             ApplyAttentionInPlace(att, vFull, y, B, T, fullSeqLen);
 
@@ -852,7 +887,8 @@ namespace SmallMind.Transformers
             _reshapedShapeCache[0] = B; 
             _reshapedShapeCache[1] = T; 
             _reshapedShapeCache[2] = _nEmbd;
-            var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, _reshapedShapeCache);
+            // clearBeforeReuse: false — ReshapeAttentionOutputInPlace fully overwrites via Array.Copy
+            var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, _reshapedShapeCache, clearBeforeReuse: false);
             ReshapeAttentionOutputInPlace(y, yReshaped, B, T);
 
             // Final projection and dropout

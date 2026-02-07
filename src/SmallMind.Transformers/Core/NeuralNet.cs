@@ -731,9 +731,12 @@ namespace SmallMind.Transformers
         {
             if (!_training || _p == 0)
             {
-                // During inference, we need to return the input.
-                // Clone is necessary to maintain tensor independence.
-                return input.Clone();
+                // Zero-copy passthrough in eval mode: return the same tensor instance.
+                // This avoids a deep copy (float[] clone) on every forward call, which is
+                // critical for inference throughput.  The caller must NOT mutate the
+                // returned tensor; in eval mode all downstream operations are read-only
+                // (LayerNorm reads, MatMul reads, residual addition creates new tensors).
+                return input;
             }
             
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
