@@ -24,7 +24,7 @@ namespace SmallMind.Tests.Regression
             var tokenizer = _fixture.CreateTokenizer();
             var prompts = _fixture.GetKnownPrompts();
 
-            model.SetEvalMode(); // Disable dropout for determinism
+            model.Eval(); // Disable dropout for determinism
 
             foreach (var (key, promptInfo) in prompts)
             {
@@ -32,9 +32,9 @@ namespace SmallMind.Tests.Regression
                     continue; // Skip empty prompt for this test
 
                 // Act
-                var tokens = tokenizer.Encode(promptInfo.Prompt);
+                var tokens = tokenizer.Encode(promptInfo.Prompt).ToArray();
                 var inputTensor = CreateInputTensor(tokens);
-                var logits = model.Forward(inputTensor);
+                var logits = model.Forward(inputTensor, 0);
 
                 // Assert
                 Assert.NotNull(logits);
@@ -66,21 +66,21 @@ namespace SmallMind.Tests.Regression
             // Arrange
             var model = _fixture.CreateModel();
             var tokenizer = _fixture.CreateTokenizer();
-            model.SetEvalMode();
+            model.Eval();
 
             var prompt = "test";
-            var tokens = tokenizer.Encode(prompt);
+            var tokens = tokenizer.Encode(prompt).ToArray();
             var inputTensor = CreateInputTensor(tokens);
 
             // Act
-            var logits = model.Forward(inputTensor);
+            var logits = model.Forward(inputTensor, 0);
 
             // Assert
             Assert.NotNull(logits);
-            Assert.Equal(2, logits.Shape.Length); // [batch_size, vocab_size] or [seq_len, vocab_size]
+            Assert.Equal(3, logits.Shape.Length); // [batch_size, seq_len, vocab_size]
             
             // Last dimension should be vocab size
-            var lastDim = logits.Shape[^1];
+            var lastDim = logits.Shape[2];
             Assert.Equal(TinyModelFixture.VocabSize, lastDim);
         }
 
@@ -90,14 +90,14 @@ namespace SmallMind.Tests.Regression
             // Arrange
             var model = _fixture.CreateModel();
             var tokenizer = _fixture.CreateTokenizer();
-            model.SetEvalMode();
+            model.Eval();
 
             var prompt = "hello";
-            var tokens = tokenizer.Encode(prompt);
+            var tokens = tokenizer.Encode(prompt).ToArray();
             var inputTensor = CreateInputTensor(tokens);
 
             // Act
-            var logits = model.Forward(inputTensor);
+            var logits = model.Forward(inputTensor, 0);
             var nextTokenId = ArgMax(GetLastTokenLogits(logits));
 
             // Assert
@@ -119,7 +119,7 @@ namespace SmallMind.Tests.Regression
                 var tokens = tokenizer.Encode(promptInfo.Prompt);
 
                 // Assert
-                Assert.Equal(promptInfo.ExpectedTokenCount, tokens.Length);
+                Assert.Equal(promptInfo.ExpectedTokenCount, tokens.Count);
             }
         }
 
@@ -145,19 +145,21 @@ namespace SmallMind.Tests.Regression
 
         private Tensor CreateInputTensor(int[] tokens)
         {
+            // Create tensor with shape [1, seq_len] for batch size 1
             var data = new float[tokens.Length];
             for (int i = 0; i < tokens.Length; i++)
             {
                 data[i] = tokens[i];
             }
-            return new Tensor(new[] { tokens.Length }, data, requiresGrad: false);
+            return new Tensor(data, new int[] { 1, tokens.Length }, requiresGrad: false);
         }
 
         private float[] GetLastTokenLogits(Tensor logits)
         {
-            // Assuming logits shape is [seq_len, vocab_size]
-            int seqLen = logits.Shape[0];
-            int vocabSize = logits.Shape[1];
+            // Assuming logits shape is [batch, seq_len, vocab_size]
+            int batchSize = logits.Shape[0];
+            int seqLen = logits.Shape[1];
+            int vocabSize = logits.Shape[2];
             
             var lastLogits = new float[vocabSize];
             int offset = (seqLen - 1) * vocabSize;

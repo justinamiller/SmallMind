@@ -27,7 +27,7 @@ namespace SmallMind.Tests.Regression
                 MaxNewTokens = 10,
                 Temperature = 1.0,
                 Seed = 42,
-                TopK = null // Disable top-k for pure determinism
+                TopK = 0 // Disable top-k for pure determinism
             };
 
             var prompt = "hello";
@@ -60,7 +60,7 @@ namespace SmallMind.Tests.Regression
                 MaxNewTokens = 5,
                 Temperature = 1.0,
                 Seed = 12345,
-                TopK = null
+                TopK = 0
             };
 
             var prompt = "test";
@@ -77,8 +77,7 @@ namespace SmallMind.Tests.Regression
             // Assert - All results should be identical
             for (int i = 1; i < numRuns; i++)
             {
-                Assert.Equal(results[0], results[i],
-                    $"Run {i} produced different output. Expected: '{results[0]}', Actual: '{results[i]}'");
+                Assert.Equal(results[0], results[i]);
             }
         }
 
@@ -131,7 +130,7 @@ namespace SmallMind.Tests.Regression
             {
                 MaxNewTokens = 5,
                 Temperature = 0.001, // Near-zero for greedy
-                TopK = null
+                TopK = 0
             };
 
             var prompt = "hello";
