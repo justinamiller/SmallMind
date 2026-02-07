@@ -45,8 +45,8 @@ namespace SmallMind.Quantization.IO.Gguf
                     sb.AppendLine($"  - {name}: {type}");
                 }
                 sb.AppendLine();
-                sb.AppendLine("Supported types: Q8_0, Q4_0");
-                throw new NotSupportedException(sb.ToString());
+                sb.AppendLine("Supported types: F32, F16, Q8_0, Q4_0");
+                throw new UnsupportedQuantizationException(sb.ToString());
             }
 
             // Convert tensors
@@ -100,7 +100,10 @@ namespace SmallMind.Quantization.IO.Gguf
         /// </summary>
         private bool IsSupportedType(GgufTensorType type)
         {
-            return type == GgufTensorType.Q8_0 || type == GgufTensorType.Q4_0;
+            return type == GgufTensorType.F32 
+                || type == GgufTensorType.F16 
+                || type == GgufTensorType.Q8_0 
+                || type == GgufTensorType.Q4_0;
         }
 
         /// <summary>
@@ -113,10 +116,70 @@ namespace SmallMind.Quantization.IO.Gguf
 
             return tensorInfo.Type switch
             {
+                GgufTensorType.F32 => ConvertF32Tensor(rawData, tensorInfo.Dimensions),
+                GgufTensorType.F16 => ConvertF16Tensor(rawData, tensorInfo.Dimensions),
                 GgufTensorType.Q8_0 => ConvertQ8_0Tensor(rawData, tensorInfo.Dimensions),
                 GgufTensorType.Q4_0 => ConvertQ4_0Tensor(rawData, tensorInfo.Dimensions),
-                _ => throw new NotSupportedException($"Unsupported tensor type: {tensorInfo.Type}")
+                _ => throw new UnsupportedQuantizationException($"Unsupported tensor type: {tensorInfo.Type}")
             };
+        }
+
+        /// <summary>
+        /// Convert GGUF F32 tensor to Fp32Tensor.
+        /// F32 format: direct 32-bit float values.
+        /// </summary>
+        private Fp32Tensor ConvertF32Tensor(byte[] rawData, ulong[] dimensions)
+        {
+            // Calculate total elements from dimensions
+            int totalElements = 1;
+            foreach (var dim in dimensions)
+            {
+                totalElements *= (int)dim;
+            }
+
+            // F32 is 4 bytes per element
+            if (rawData.Length != totalElements * sizeof(float))
+                throw new InvalidDataException(
+                    $"F32 tensor size mismatch: expected {totalElements * sizeof(float)} bytes, got {rawData.Length} bytes");
+
+            // Direct conversion using Buffer.BlockCopy
+            var floatData = new float[totalElements];
+            Buffer.BlockCopy(rawData, 0, floatData, 0, rawData.Length);
+            
+            return Fp32Tensor.FromUlongDimensions(floatData, dimensions);
+        }
+
+        /// <summary>
+        /// Convert GGUF F16 tensor to Fp32Tensor.
+        /// F16 format: 16-bit half-precision float values.
+        /// </summary>
+        private Fp32Tensor ConvertF16Tensor(byte[] rawData, ulong[] dimensions)
+        {
+            // Calculate total elements from dimensions
+            int totalElements = 1;
+            foreach (var dim in dimensions)
+            {
+                totalElements *= (int)dim;
+            }
+
+            // F16 is 2 bytes per element
+            if (rawData.Length != totalElements * sizeof(ushort))
+                throw new InvalidDataException(
+                    $"F16 tensor size mismatch: expected {totalElements * sizeof(ushort)} bytes, got {rawData.Length} bytes");
+
+            var floatData = new float[totalElements];
+            
+            using (var ms = new MemoryStream(rawData))
+            using (var br = new BinaryReader(ms))
+            {
+                for (int i = 0; i < totalElements; i++)
+                {
+                    ushort halfBits = br.ReadUInt16();
+                    floatData[i] = HalfToFloat(halfBits);
+                }
+            }
+            
+            return Fp32Tensor.FromUlongDimensions(floatData, dimensions);
         }
 
         /// <summary>
@@ -126,13 +189,32 @@ namespace SmallMind.Quantization.IO.Gguf
         /// </summary>
         private Q8Tensor ConvertQ8_0Tensor(byte[] rawData, ulong[] dimensions)
         {
-            // Calculate tensor shape
-            if (dimensions.Length != 2)
-                throw new NotSupportedException($"Only 2D tensors supported, got {dimensions.Length}D");
-
-            int rows = (int)dimensions[0];
-            int cols = (int)dimensions[1];
-            int totalElements = rows * cols;
+            // Calculate total elements from dimensions (supports any number of dimensions)
+            int totalElements = 1;
+            foreach (var dim in dimensions)
+            {
+                totalElements *= (int)dim;
+            }
+            
+            // For SMQ, we need to provide rows and cols
+            // If 1D, treat as 1 x N; if 2D, use as is; if higher-D, flatten
+            int rows, cols;
+            if (dimensions.Length == 1)
+            {
+                rows = 1;
+                cols = (int)dimensions[0];
+            }
+            else if (dimensions.Length == 2)
+            {
+                rows = (int)dimensions[0];
+                cols = (int)dimensions[1];
+            }
+            else
+            {
+                // Flatten multi-dimensional tensors to 2D
+                rows = (int)dimensions[0];
+                cols = totalElements / rows;
+            }
 
             // GGUF uses block size 32
             int ggufNumBlocks = (totalElements + GgufBlockSize - 1) / GgufBlockSize;
@@ -186,13 +268,32 @@ namespace SmallMind.Quantization.IO.Gguf
         /// </summary>
         private Q4Tensor ConvertQ4_0Tensor(byte[] rawData, ulong[] dimensions)
         {
-            // Calculate tensor shape
-            if (dimensions.Length != 2)
-                throw new NotSupportedException($"Only 2D tensors supported, got {dimensions.Length}D");
-
-            int rows = (int)dimensions[0];
-            int cols = (int)dimensions[1];
-            int totalElements = rows * cols;
+            // Calculate total elements from dimensions (supports any number of dimensions)
+            int totalElements = 1;
+            foreach (var dim in dimensions)
+            {
+                totalElements *= (int)dim;
+            }
+            
+            // For SMQ, we need to provide rows and cols
+            // If 1D, treat as 1 x N; if 2D, use as is; if higher-D, flatten
+            int rows, cols;
+            if (dimensions.Length == 1)
+            {
+                rows = 1;
+                cols = (int)dimensions[0];
+            }
+            else if (dimensions.Length == 2)
+            {
+                rows = (int)dimensions[0];
+                cols = (int)dimensions[1];
+            }
+            else
+            {
+                // Flatten multi-dimensional tensors to 2D
+                rows = (int)dimensions[0];
+                cols = totalElements / rows;
+            }
 
             // GGUF uses block size 32
             int ggufNumBlocks = (totalElements + GgufBlockSize - 1) / GgufBlockSize;
