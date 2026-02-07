@@ -98,8 +98,18 @@ dotnet add package SmallMind.Runtime     # Inference runtime
 ```bash
 git clone https://github.com/justinamiller/SmallMind.git
 cd SmallMind
-dotnet build
+
+# Build using provided scripts
+./build.sh              # Linux/macOS
+# or
+.\build.ps1             # Windows PowerShell
+
+# Or build manually
+dotnet build SmallMind.sln -c Release
+dotnet test SmallMind.sln -c Release
 ```
+
+> 📖 **API Documentation**: See [docs/PublicApi.md](docs/PublicApi.md) for comprehensive examples and API reference.
 
 ## Quick Start (Stable API)
 

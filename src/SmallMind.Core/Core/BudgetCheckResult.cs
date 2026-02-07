@@ -185,6 +185,11 @@ namespace SmallMind.Core.Core
                    $"  Total:            {TotalBytes / 1024.0 / 1024.0:F2} MB";
         }
 
+        /// <summary>
+        /// Determines whether the specified MemoryBreakdown is equal to the current MemoryBreakdown.
+        /// </summary>
+        /// <param name="other">The MemoryBreakdown to compare with the current MemoryBreakdown.</param>
+        /// <returns>true if the specified MemoryBreakdown is equal to the current MemoryBreakdown; otherwise, false.</returns>
         public bool Equals(MemoryBreakdown other) =>
             ModelParametersBytes == other.ModelParametersBytes &&
             ActivationsBytes == other.ActivationsBytes &&
@@ -193,15 +198,37 @@ namespace SmallMind.Core.Core
             OptimizerStateBytes == other.OptimizerStateBytes &&
             OverheadBytes == other.OverheadBytes;
 
+        /// <summary>
+        /// Determines whether the specified object is equal to the current MemoryBreakdown.
+        /// </summary>
+        /// <param name="obj">The object to compare with the current MemoryBreakdown.</param>
+        /// <returns>true if the specified object is equal to the current MemoryBreakdown; otherwise, false.</returns>
         public override bool Equals(object? obj) =>
             obj is MemoryBreakdown other && Equals(other);
 
+        /// <summary>
+        /// Returns the hash code for this MemoryBreakdown.
+        /// </summary>
+        /// <returns>A 32-bit signed integer hash code.</returns>
         public override int GetHashCode() =>
             HashCode.Combine(
                 ModelParametersBytes, ActivationsBytes, KVCacheBytes,
                 GradientsBytes, OptimizerStateBytes, OverheadBytes);
 
+        /// <summary>
+        /// Determines whether two specified MemoryBreakdown instances are equal.
+        /// </summary>
+        /// <param name="left">The first MemoryBreakdown to compare.</param>
+        /// <param name="right">The second MemoryBreakdown to compare.</param>
+        /// <returns>true if left and right are equal; otherwise, false.</returns>
         public static bool operator ==(MemoryBreakdown left, MemoryBreakdown right) => left.Equals(right);
+        
+        /// <summary>
+        /// Determines whether two specified MemoryBreakdown instances are not equal.
+        /// </summary>
+        /// <param name="left">The first MemoryBreakdown to compare.</param>
+        /// <param name="right">The second MemoryBreakdown to compare.</param>
+        /// <returns>true if left and right are not equal; otherwise, false.</returns>
         public static bool operator !=(MemoryBreakdown left, MemoryBreakdown right) => !left.Equals(right);
     }
 }
