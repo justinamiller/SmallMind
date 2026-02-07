@@ -101,7 +101,7 @@ namespace SmallMind.Transformers
             if (config.Architecture != "llama")
             {
                 throw new UnsupportedModelException(
-                    "",
+                    "gguf-metadata",
                     config.Architecture,
                     $"Unsupported architecture: {config.Architecture}. Only 'llama' architecture is currently supported.");
             }
