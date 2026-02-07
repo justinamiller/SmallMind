@@ -48,7 +48,7 @@ namespace SmallMind.ModelRegistry.Tests
                 Assert.Equal("test-model", manifest.ModelId);
                 Assert.Single(manifest.Files);
                 
-                string modelFilePath = registry.GetModelFilePath(modelId);
+                string? modelFilePath = registry.GetModelFilePath(modelId);
                 Assert.NotNull(modelFilePath);
                 Assert.True(File.Exists(modelFilePath));
             }

@@ -81,7 +81,7 @@ namespace SmallMind.Core.Simd
         }
         
         /// <summary>
-        /// Fused attention for small sequences (seq_len <= 64).
+        /// Fused attention for small sequences (seq_len &lt;= 64).
         /// Computes full attention matrix in-place with fused operations.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]

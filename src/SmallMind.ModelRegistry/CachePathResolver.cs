@@ -46,7 +46,7 @@ namespace SmallMind.ModelRegistry
             {
                 // Linux/Unix: ~/.cache/smallmind/models
                 string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                string cacheBase = Environment.GetEnvironmentVariable("XDG_CACHE_HOME");
+                string? cacheBase = Environment.GetEnvironmentVariable("XDG_CACHE_HOME");
                 if (string.IsNullOrWhiteSpace(cacheBase))
                 {
                     cacheBase = Path.Combine(home, ".cache");

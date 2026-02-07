@@ -239,6 +239,11 @@ namespace SmallMind.Tests
             // Act - Warm up (allocates workspaces)
             var warmup = model.Forward(input);
             
+            // Force GC to stabilize memory before measurement
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            
             // Measure allocations for second call (should reuse workspaces)
             long beforeBytes = GC.GetTotalAllocatedBytes(precise: true);
             var output = model.Forward(input);
