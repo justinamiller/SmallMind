@@ -226,12 +226,23 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             var maxVec = new Vector<float>(max);
             int vectorSize = Vector<float>.Count;
-            for (; i <= length - vectorSize; i += vectorSize)
+            
+            if (i <= length - vectorSize)
             {
-                var v = new Vector<float>(values.Slice(i));
-                maxVec = Vector.Max(maxVec, v);
+                unsafe
+                {
+                    fixed (float* pValues = values)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var v = Unsafe.Read<Vector<float>>(pValues + i);
+                            maxVec = Vector.Max(maxVec, v);
+                        }
+                    }
+                }
             }
 
             // Horizontal max reduction
@@ -278,12 +289,23 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             var vScalar = new Vector<float>(scalar);
             int vectorSize = Vector<float>.Count;
-            for (; i <= length - vectorSize; i += vectorSize)
+            
+            if (i <= length - vectorSize)
             {
-                var v = new Vector<float>(values.Slice(i));
-                (v * vScalar).CopyTo(values.Slice(i));
+                unsafe
+                {
+                    fixed (float* pValues = values)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var v = Unsafe.Read<Vector<float>>(pValues + i);
+                            Unsafe.Write(pValues + i, v * vScalar);
+                        }
+                    }
+                }
             }
 
             // Scalar remainder

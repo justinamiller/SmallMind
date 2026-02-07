@@ -60,53 +60,63 @@ namespace SmallMind.Core.Core
                 if (System.Numerics.Vector.IsHardwareAccelerated && features >= 128)
                 {
                     // SIMD two-pass: faster for large feature dimensions
+                    // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                     int vecSize = System.Numerics.Vector<float>.Count;
                     
-                    // Pass 1a: Compute mean with SIMD
-                    var vSum = System.Numerics.Vector<float>.Zero;
-                    int f1 = 0;
-                    for (; f1 <= features - vecSize; f1 += vecSize)
+                    unsafe
                     {
-                        var v = new System.Numerics.Vector<float>(input.Slice(offset + f1, vecSize));
-                        vSum += v;
+                        fixed (float* pInput = input)
+                        {
+                            // Pass 1a: Compute mean with SIMD
+                            var vSum = System.Numerics.Vector<float>.Zero;
+                            float* pRow = pInput + offset;
+                            int f1 = 0;
+                            
+                            for (; f1 <= features - vecSize; f1 += vecSize)
+                            {
+                                var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f1);
+                                vSum += v;
+                            }
+                            
+                            // Horizontal sum reduction
+                            float sum = 0f;
+                            for (int vi = 0; vi < vecSize; vi++)
+                                sum += vSum[vi];
+                            
+                            // Add scalar remainder
+                            for (; f1 < features; f1++)
+                                sum += pRow[f1];
+                            
+                            mean = sum / features;
+                            
+                            // Pass 1b: Compute variance with SIMD
+                            var vMean = new System.Numerics.Vector<float>(mean);
+                            var vSqSum = System.Numerics.Vector<float>.Zero;
+                            int f2 = 0;
+                            
+                            for (; f2 <= features - vecSize; f2 += vecSize)
+                            {
+                                var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f2);
+                                var vDiff = v - vMean;
+                                vSqSum += vDiff * vDiff;
+                            }
+                            
+                            // Horizontal sum reduction
+                            float sqSum = 0f;
+                            for (int vi = 0; vi < vecSize; vi++)
+                                sqSum += vSqSum[vi];
+                            
+                            // Add scalar remainder
+                            for (; f2 < features; f2++)
+                            {
+                                float diff = pRow[f2] - mean;
+                                sqSum += diff * diff;
+                            }
+                            
+                            float variance = sqSum / features;
+                            invStd = 1f / MathF.Sqrt(variance + eps);
+                        }
                     }
-                    
-                    // Horizontal sum reduction
-                    float sum = 0f;
-                    for (int vi = 0; vi < vecSize; vi++)
-                        sum += vSum[vi];
-                    
-                    // Add scalar remainder
-                    for (; f1 < features; f1++)
-                        sum += input[offset + f1];
-                    
-                    mean = sum / features;
-                    
-                    // Pass 1b: Compute variance with SIMD
-                    var vMean = new System.Numerics.Vector<float>(mean);
-                    var vSqSum = System.Numerics.Vector<float>.Zero;
-                    int f2 = 0;
-                    for (; f2 <= features - vecSize; f2 += vecSize)
-                    {
-                        var v = new System.Numerics.Vector<float>(input.Slice(offset + f2, vecSize));
-                        var vDiff = v - vMean;
-                        vSqSum += vDiff * vDiff;
-                    }
-                    
-                    // Horizontal sum reduction
-                    float sqSum = 0f;
-                    for (int vi = 0; vi < vecSize; vi++)
-                        sqSum += vSqSum[vi];
-                    
-                    // Add scalar remainder
-                    for (; f2 < features; f2++)
-                    {
-                        float diff = input[offset + f2] - mean;
-                        sqSum += diff * diff;
-                    }
-                    
-                    float variance = sqSum / features;
-                    invStd = 1f / MathF.Sqrt(variance + eps);
                 }
                 else
                 {
@@ -182,27 +192,37 @@ namespace SmallMind.Core.Core
                 }
                 
                 // Vector<T> fallback
+                // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                 int vectorSize = System.Numerics.Vector<float>.Count;
                 if (System.Numerics.Vector.IsHardwareAccelerated && f <= features - vectorSize)
                 {
                     var vMean = new System.Numerics.Vector<float>(mean);
                     var vInvStd = new System.Numerics.Vector<float>(invStd);
                     
-                    // SIMD loop for normalization and affine transform
-                    for (; f <= features - vectorSize; f += vectorSize)
+                    unsafe
                     {
-                        // Load input, gamma, beta
-                        var vInput = new System.Numerics.Vector<float>(input.Slice(offset + f, vectorSize));
-                        var vGamma = new System.Numerics.Vector<float>(gamma.Slice(f, vectorSize));
-                        var vBeta = new System.Numerics.Vector<float>(beta.Slice(f, vectorSize));
-                        
-                        // Normalize: (input - mean) * invStd
-                        var vNormalized = (vInput - vMean) * vInvStd;
-                        
-                        // Affine: gamma * normalized + beta
-                        var vResult = vGamma * vNormalized + vBeta;
-                        
-                        vResult.CopyTo(output.Slice(offset + f, vectorSize));
+                        fixed (float* pInput = input, pGamma = gamma, pBeta = beta, pOutput = output)
+                        {
+                            float* pInRow = pInput + offset;
+                            float* pOutRow = pOutput + offset;
+                            
+                            // SIMD loop for normalization and affine transform
+                            for (; f <= features - vectorSize; f += vectorSize)
+                            {
+                                // Load input, gamma, beta using direct pointer reads
+                                var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f);
+                                var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f);
+                                var vBeta = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pBeta + f);
+                                
+                                // Normalize: (input - mean) * invStd
+                                var vNormalized = (vInput - vMean) * vInvStd;
+                                
+                                // Affine: gamma * normalized + beta
+                                var vResult = vGamma * vNormalized + vBeta;
+                                
+                                System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f, vResult);
+                            }
+                        }
                     }
                 }
                 
