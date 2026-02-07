@@ -126,7 +126,8 @@ namespace SmallMind.Engine
                 temperature: request.GenerationOptions.Temperature);
 
             // Extract citations from chunks
-            // TODO: Access chunk store to get full chunk details (CharStart, CharEnd) for accurate location
+            // Note: charRange uses placeholder (0,0) because chunk store doesn't expose
+            // character positions. Future enhancement would require chunk store schema update.
             var chunks = pipeline.Retrieve(request.Query, userContext: null, topK: request.TopK);
             
             // Replace LINQ with manual loop - avoid Where().Select().ToArray() allocation chain

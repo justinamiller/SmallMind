@@ -261,23 +261,20 @@ namespace SmallMind.Runtime.Batching
         /// <summary>
         /// Apply deterministic scheduling to a batch of requests.
         /// This ensures reproducible ordering and resource allocation.
-        /// 
-        /// NOTE: Current implementation uses placeholder token counts due to
-        /// InferenceRequest not exposing prompt tokens. Future enhancement should
-        /// add token information to InferenceRequest for accurate scheduling.
+        /// Uses the first request's prompt tokens as representative for batch scheduling.
+        /// Note: Assumes all requests in a batch have similar characteristics (validated by IsCompatibleWith).
         /// </summary>
         private void ApplyDeterministicScheduling(List<InferenceRequest> batch)
         {
             if (_deterministicScheduler == null || batch.Count == 0)
                 return;
 
-            // TODO: Enhance InferenceRequest to expose prompt tokens for accurate scheduling
-            // For now, we create a schedule to establish reproducible ordering infrastructure
-            var placeholderTokens = new int[10]; // Placeholder until request exposes tokens
+            // Use the first request's prompt tokens as representative for scheduling
+            var representativeRequest = batch[0];
             
             var schedule = _deterministicScheduler.Schedule(
-                placeholderTokens,
-                maxNewTokens: 100, // Placeholder until request exposes max tokens config
+                representativeRequest.PromptTokens,
+                maxNewTokens: representativeRequest.Options.MaxNewTokens,
                 _options.SchedulingPolicy,
                 _options.DeterministicSeed);
 
