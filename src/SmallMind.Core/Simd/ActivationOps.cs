@@ -62,12 +62,23 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             var zero = Vector<float>.Zero;
             int vectorSize = Vector<float>.Count;
-            for (; i <= length - vectorSize; i += vectorSize)
+            
+            if (i <= length - vectorSize)
             {
-                var v = new Vector<float>(input.Slice(i));
-                Vector.Max(v, zero).CopyTo(output.Slice(i));
+                unsafe
+                {
+                    fixed (float* pInput = input, pOutput = output)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var v = Unsafe.Read<Vector<float>>(pInput + i);
+                            Unsafe.Write(pOutput + i, Vector.Max(v, zero));
+                        }
+                    }
+                }
             }
 
             // Scalar remainder
@@ -140,19 +151,30 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             var zero = Vector<float>.Zero;
             int vectorSize = Vector<float>.Count;
-            for (; i <= length - vectorSize; i += vectorSize)
+            
+            if (i <= length - vectorSize)
             {
-                var vInput = new Vector<float>(input.Slice(i));
-                var vOutputGrad = new Vector<float>(outputGrad.Slice(i));
-                
-                // Mask: input > 0
-                var mask = Vector.GreaterThan(vInput, zero);
-                
-                // Apply mask: outputGrad where input > 0, else 0
-                var result = Vector.ConditionalSelect(mask, vOutputGrad, zero);
-                result.CopyTo(inputGrad.Slice(i));
+                unsafe
+                {
+                    fixed (float* pInput = input, pOutputGrad = outputGrad, pInputGrad = inputGrad)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var vInput = Unsafe.Read<Vector<float>>(pInput + i);
+                            var vOutputGrad = Unsafe.Read<Vector<float>>(pOutputGrad + i);
+                            
+                            // Mask: input > 0
+                            var mask = Vector.GreaterThan(vInput, zero);
+                            
+                            // Apply mask: outputGrad where input > 0, else 0
+                            var result = Vector.ConditionalSelect(mask, vOutputGrad, zero);
+                            Unsafe.Write(pInputGrad + i, result);
+                        }
+                    }
+                }
             }
 
             // Scalar remainder
@@ -201,28 +223,35 @@ namespace SmallMind.Core.Simd
                 var vClampMin = new Vector<float>(-10f);
                 var vClampMax = new Vector<float>(10f);
 
-                for (; i <= length - vectorSize; i += vectorSize)
+                // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
+                unsafe
                 {
-                    var vx = new Vector<float>(input.Slice(i));
+                    fixed (float* pInput = input, pOutput = output)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var vx = Unsafe.Read<Vector<float>>(pInput + i);
 
-                    // inner = sqrt(2/π) * (x + 0.044715 * x³)
-                    var vx2 = vx * vx;
-                    var vx3 = vx2 * vx;
-                    var vInner = vSqrt2OverPi * (vx + vCoeff * vx3);
+                            // inner = sqrt(2/π) * (x + 0.044715 * x³)
+                            var vx2 = vx * vx;
+                            var vx3 = vx2 * vx;
+                            var vInner = vSqrt2OverPi * (vx + vCoeff * vx3);
 
-                    // Clamp inner to [-10, 10] to keep Padé accurate
-                    vInner = Vector.Max(vClampMin, Vector.Min(vClampMax, vInner));
+                            // Clamp inner to [-10, 10] to keep Padé accurate
+                            vInner = Vector.Max(vClampMin, Vector.Min(vClampMax, vInner));
 
-                    // Padé tanh: tanh(z) ≈ z * (27 + z²) / (27 + 9 * z²)
-                    var vInner2 = vInner * vInner;
-                    var vNum = vInner * (vPadeA + vInner2);
-                    var vDen = vPadeA + vPadeB * vInner2;
-                    var vTanh = vNum / vDen;
+                            // Padé tanh: tanh(z) ≈ z * (27 + z²) / (27 + 9 * z²)
+                            var vInner2 = vInner * vInner;
+                            var vNum = vInner * (vPadeA + vInner2);
+                            var vDen = vPadeA + vPadeB * vInner2;
+                            var vTanh = vNum / vDen;
 
-                    // GELU = 0.5 * x * (1 + tanh)
-                    var vResult = vHalf * vx * (vOne + vTanh);
+                            // GELU = 0.5 * x * (1 + tanh)
+                            var vResult = vHalf * vx * (vOne + vTanh);
 
-                    vResult.CopyTo(output.Slice(i));
+                            Unsafe.Write(pOutput + i, vResult);
+                        }
+                    }
                 }
             }
 
@@ -287,31 +316,38 @@ namespace SmallMind.Core.Simd
                 var vClampMin = new Vector<float>(-10f);
                 var vClampMax = new Vector<float>(10f);
 
-                for (; i <= length - vectorSize; i += vectorSize)
+                // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
+                unsafe
                 {
-                    var vx = new Vector<float>(input.Slice(i));
-                    var vGrad = new Vector<float>(outputGrad.Slice(i));
+                    fixed (float* pInput = input, pGrad = outputGrad, pInputGrad = inputGrad)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var vx = Unsafe.Read<Vector<float>>(pInput + i);
+                            var vGrad = Unsafe.Read<Vector<float>>(pGrad + i);
 
-                    var vx2 = vx * vx;
-                    var vInner = vSqrt2OverPi * (vx + vCoeff * vx2 * vx);
-                    vInner = Vector.Max(vClampMin, Vector.Min(vClampMax, vInner));
+                            var vx2 = vx * vx;
+                            var vInner = vSqrt2OverPi * (vx + vCoeff * vx2 * vx);
+                            vInner = Vector.Max(vClampMin, Vector.Min(vClampMax, vInner));
 
-                    // Padé tanh
-                    var vInner2 = vInner * vInner;
-                    var vNum = vInner * (vPadeA + vInner2);
-                    var vDen = vPadeA + vPadeB * vInner2;
-                    var vTanh = vNum / vDen;
+                            // Padé tanh
+                            var vInner2 = vInner * vInner;
+                            var vNum = vInner * (vPadeA + vInner2);
+                            var vDen = vPadeA + vPadeB * vInner2;
+                            var vTanh = vNum / vDen;
 
-                    // sech²(z) = 1 - tanh²(z)
-                    var vSech2 = vOne - vTanh * vTanh;
+                            // sech²(z) = 1 - tanh²(z)
+                            var vSech2 = vOne - vTanh * vTanh;
 
-                    // dz/dx = sqrt(2/π) * (1 + 3 * 0.044715 * x²)
-                    var vDzDx = vSqrt2OverPi * (vOne + vCoeff3 * vx2);
+                            // dz/dx = sqrt(2/π) * (1 + 3 * 0.044715 * x²)
+                            var vDzDx = vSqrt2OverPi * (vOne + vCoeff3 * vx2);
 
-                    // d/dx GELU = 0.5 * (1 + tanh) + 0.5 * x * sech² * dz/dx
-                    var vDerivative = vHalf * (vOne + vTanh) + vHalf * vx * vSech2 * vDzDx;
+                            // d/dx GELU = 0.5 * (1 + tanh) + 0.5 * x * sech² * dz/dx
+                            var vDerivative = vHalf * (vOne + vTanh) + vHalf * vx * vSech2 * vDzDx;
 
-                    (vDerivative * vGrad).CopyTo(inputGrad.Slice(i));
+                            Unsafe.Write(pInputGrad + i, vDerivative * vGrad);
+                        }
+                    }
                 }
             }
 
