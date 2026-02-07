@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Xunit;
 using SmallMind.Core;
+using SmallMind.Core.Core;
 
 namespace SmallMind.Tests
 {

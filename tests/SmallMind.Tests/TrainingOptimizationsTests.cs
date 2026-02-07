@@ -6,6 +6,8 @@ using TrainingProfiler = SmallMind.Core.Core.TrainingProfiler;
 using MemoryTracker = SmallMind.Core.Core.MemoryTracker;
 using GradientDiagnostics = SmallMind.Core.Core.GradientDiagnostics;
 using CoreTensorPool = SmallMind.Core.Core.TensorPool;
+using SmallMind.Core.Core;
+using SmallMind.Runtime;
 
 namespace SmallMind.Tests
 {

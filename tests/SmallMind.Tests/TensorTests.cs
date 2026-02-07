@@ -3,6 +3,7 @@ using Xunit;
 using SmallMind.Core;
 using SmallMind.Core.Simd;
 using SmallMind.Core.Exceptions;
+using SmallMind.Core.Core;
 
 namespace SmallMind.Tests
 {
@@ -207,7 +208,7 @@ namespace SmallMind.Tests
             var b = new Tensor(new float[] { 5, 6, 7, 8 }, new int[] { 2, 2 });
 
             // Act
-            var c = Tensor.Add(a, b);
+            var c = Tensor.Add(a, b, requiresGrad: false);
 
             // Assert
             Assert.Equal(new int[] { 2, 2 }, c.Shape);
@@ -225,7 +226,7 @@ namespace SmallMind.Tests
             var b = new Tensor(new float[] { 10, 20 }, new int[] { 2 }); // Will broadcast to each row
 
             // Act
-            var c = Tensor.Add(a, b);
+            var c = Tensor.Add(a, b, requiresGrad: false);
 
             // Assert
             Assert.Equal(new int[] { 2, 2 }, c.Shape);
@@ -247,7 +248,7 @@ namespace SmallMind.Tests
 
             // Act - Should not throw (IsBroadcastable returns true)
             // The actual broadcasting might produce unexpected results, but won't error
-            var c = Tensor.Add(a, b);
+            var c = Tensor.Add(a, b, requiresGrad: false);
 
             // Assert - Just verify it didn't throw and has correct output shape
             Assert.NotNull(c);

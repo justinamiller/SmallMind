@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Xunit;
 using SmallMind.Abstractions;
+using SmallMind.Core.Core;
 
 namespace SmallMind.Tests
 {
