@@ -283,11 +283,17 @@ namespace SmallMind.Tests
 
             // Generate and check for timeout finish reason
             var tokens = new List<GeneratedToken>();
+            bool timedOut = false;
             try
             {
                 await foreach (var token in session.GenerateStreamAsync("test"))
                 {
                     tokens.Add(token);
+                    if (token.FinishReason == FinishReason.Timeout)
+                    {
+                        timedOut = true;
+                        break;
+                    }
                     if (token.FinishReason != FinishReason.None)
                     {
                         break;
@@ -297,13 +303,12 @@ namespace SmallMind.Tests
             catch (SmallMind.Core.Exceptions.InferenceTimeoutException)
             {
                 // Expected for non-streaming timeout
+                timedOut = true;
             }
 
-            // With very short timeout, we should get either:
-            // 1. A timeout finish reason in streaming
-            // 2. An InferenceTimeoutException
-            // Either is acceptable
-            Assert.True(tokens.Count >= 0); // At least we didn't crash
+            // With very short timeout, we should get timeout
+            // Either via FinishReason.Timeout in streaming or InferenceTimeoutException
+            Assert.True(timedOut, "Expected timeout to occur with 1ms limit");
         }
 
         [Fact]

@@ -31,10 +31,11 @@ namespace SmallMind.Benchmarks
             public TokenizerInfo Info => new TokenizerInfo(
                 name: "BenchmarkTokenizer",
                 vocabSize: _vocabSize,
-                eosTokenId: 0,
                 bosTokenId: -1,
+                eosTokenId: 0,
                 padTokenId: -1,
-                unkTokenId: -1
+                unkTokenId: -1,
+                supportsByteFallback: false
             );
 
             public List<int> Encode(string text)

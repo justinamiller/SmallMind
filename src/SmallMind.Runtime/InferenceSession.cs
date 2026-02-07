@@ -262,9 +262,7 @@ namespace SmallMind.Runtime
             }
             catch (OperationCanceledException) when (timeoutCts?.IsCancellationRequested == true)
             {
-                // Timeout occurred - decode what we have so far
-                var context = _tokenizer.Encode(prompt); // Re-encode to get partial result if needed
-                // Note: In a real implementation, we'd save the context before throwing
+                // Timeout occurred - throw timeout exception
                 throw new InferenceTimeoutException(_options.MaxTimeMs);
             }
             finally
@@ -982,8 +980,10 @@ namespace SmallMind.Runtime
             }
             
             // Build current window string (only as much as we've written)
-            int bufferContentLen = Math.Min(_stopSequenceBufferPos, _stopSequenceBufferSize);
-            if (_stopSequenceBufferPos > 0 && bufferContentLen < _stopSequenceBufferSize)
+            int totalWritten = Math.Min(_stopSequenceBufferPos, _stopSequenceBufferSize);
+            bool hasWrapped = (_stopSequenceBufferPos >= _stopSequenceBufferSize);
+            
+            if (!hasWrapped && totalWritten > 0)
             {
                 // Haven't wrapped yet, simple case
                 var windowSpan = new ReadOnlySpan<char>(_stopSequenceBuffer, 0, _stopSequenceBufferPos);
@@ -998,7 +998,7 @@ namespace SmallMind.Runtime
                     }
                 }
             }
-            else if (bufferContentLen == _stopSequenceBufferSize)
+            else if (hasWrapped)
             {
                 // Buffer is full, need to check with wrap-around
                 // Reconstruct the string from the ring buffer
