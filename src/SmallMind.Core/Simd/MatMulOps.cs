@@ -17,7 +17,7 @@ namespace SmallMind.Core.Simd
     [SkipLocalsInit]
     public static class MatMulOps
     {
-   // Parallelization threshold: Use Parallel.For only when M >= 128
+        // Parallelization threshold: Use Parallel.For only when M >= 128
         // Rationale: Thread overhead dominates for smaller matrices
         //   - 32×32: Parallel is 283% slower (overhead >> work)
         //   - 64×64: Parallel is 70% slower (overhead > work)
@@ -26,6 +26,26 @@ namespace SmallMind.Core.Simd
         private const int PARALLEL_THRESHOLD = 128;
         private const int TILE_SIZE = 32; // Cache tile size for blocking
         private const int VEC512_SIZE = 16; // AVX-512 vector width (16 floats)
+        
+        /// <summary>
+        /// Kernel selection telemetry for diagnostics.
+        /// Records which kernel was used for the last MatMul call.
+        /// </summary>
+        public enum MatMulKernel
+        {
+            Unknown,
+            Avx512Unsafe,
+            Avx2Unsafe,
+            AvxUnsafe,
+            NeonTiled,
+            VectorUnsafe
+        }
+        
+        /// <summary>
+        /// Gets the kernel used for the last MatMul operation.
+        /// Useful for benchmarking and diagnostics.
+        /// </summary>
+        public static MatMulKernel LastKernelUsed { get; private set; } = MatMulKernel.Unknown;
 
         /// <summary>
         /// Enhanced matrix multiplication: C = A × B
@@ -45,22 +65,27 @@ namespace SmallMind.Core.Simd
             // Select best implementation based on CPU capabilities
             if (Avx512F.IsSupported && K >= 16)
             {
+                LastKernelUsed = MatMulKernel.Avx512Unsafe;
                 MatMulAvx512(A, B, C, M, K, N);
             }
             else if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
             {
+                LastKernelUsed = MatMulKernel.Avx2Unsafe;
                 MatMulAvx2(A, B, C, M, K, N);
             }
             else if (Avx.IsSupported && K >= 8)
             {
+                LastKernelUsed = MatMulKernel.AvxUnsafe;
                 MatMulAvx(A, B, C, M, K, N);
             }
             else if (AdvSimd.Arm64.IsSupported)
             {
+                LastKernelUsed = MatMulKernel.NeonTiled;
                 MatMulNeonTiled(A, B, C, M, K, N);
             }
             else
             {
+                LastKernelUsed = MatMulKernel.VectorUnsafe;
                 MatMulVector(A, B, C, M, K, N);
             }
         }
@@ -88,18 +113,22 @@ namespace SmallMind.Core.Simd
                     // Select best implementation based on CPU capabilities
                     if (Avx512F.IsSupported && K >= 16)
                     {
+                        LastKernelUsed = MatMulKernel.Avx512Unsafe;
                         MatMulAvx512Unsafe(pA, pB, pC, M, K, N);
                     }
                     else if (Avx2.IsSupported && Fma.IsSupported && K >= 8)
                     {
+                        LastKernelUsed = MatMulKernel.Avx2Unsafe;
                         MatMulAvx2Unsafe(pA, pB, pC, M, K, N);
                     }
                     else if (Avx.IsSupported && K >= 8)
                     {
+                        LastKernelUsed = MatMulKernel.AvxUnsafe;
                         MatMulAvxUnsafe(pA, pB, pC, M, K, N);
                     }
                     else
                     {
+                        LastKernelUsed = MatMulKernel.VectorUnsafe;
                         MatMulVectorUnsafe(pA, pB, pC, M, K, N);
                     }
                 }

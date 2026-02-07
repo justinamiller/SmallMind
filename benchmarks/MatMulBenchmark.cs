@@ -89,6 +89,10 @@ namespace SmallMind.Benchmarks
                 MatMulOps.MatMul(A, B, C, M, K, N);
             }
             
+            // Report which kernel is being used
+            Console.WriteLine($"Kernel Selected: {MatMulOps.LastKernelUsed}");
+            Console.WriteLine();
+            
             // Force GC before measurement
             GC.Collect();
             GC.WaitForPendingFinalizers();
