@@ -5,6 +5,16 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    
+    <!-- NativeAOT Configuration (opt-in via -p:PublishAot=true) -->
+    <PublishAot Condition="'$(PublishAot)' == 'true'">true</PublishAot>
+    <InvariantGlobalization Condition="'$(PublishAot)' == 'true'">true</InvariantGlobalization>
+    <IlcOptimizationPreference Condition="'$(PublishAot)' == 'true'">Speed</IlcOptimizationPreference>
+    <IlcGenerateStackTraceData Condition="'$(PublishAot)' == 'true'">false</IlcGenerateStackTraceData>
+    
+    <!-- Performance optimizations for both JIT and AOT -->
+    <TieredCompilation>true</TieredCompilation>
+    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
   <ItemGroup>
