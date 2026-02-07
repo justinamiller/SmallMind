@@ -86,21 +86,15 @@ Time flies like an arrow.";
             );
 
             var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
-            var config = new TrainingConfig
-            {
-                UseMixedPrecision = false,
-                UseGradientCheckpointing = false,
-                EnableDiagnostics = false
-            };
 
-            // Act
-            training.TrainOptimized(
+            // Act - Use Train instead of TrainOptimized (which is disabled in v0.2)
+            training.Train(
                 steps: 5,
                 learningRate: 0.001,
                 logEvery: 10,
                 saveEvery: 100,
                 checkpointDir: _testOutputDir,
-                config: config
+                showPerf: false
             );
 
             // Assert - Loss should be finite (not NaN or Infinity)

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using Xunit;
-using SmallMind.Embeddings;
-using SmallMind.Indexing;
-using SmallMind.RAG;
+// SmallMind.Embeddings does not exist
+// SmallMind.Indexing does not exist
+// SmallMind.RAG namespace does not exist
 
 namespace SmallMind.Tests
 {

@@ -5,9 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using SmallMind.Core;
-using SmallMind.Domain;
-using SmallMind.Domain.Policies;
-using SmallMind.Text;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
+using SmallMind.Runtime;
 
 namespace SmallMind.Tests.Domain
 {

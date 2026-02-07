@@ -1,10 +1,10 @@
 using System;
 using Xunit;
 using SmallMind.Core;
-using SmallMind.Text;
-using CoreMatrixOps = SmallMind.Core.MatrixOps;
-using CoreCheckpointStrategy = SmallMind.Core.CheckpointStrategy;
-using CoreTensorPool = SmallMind.Core.Core.TensorPool;
+using SmallMind.Core.Core;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
+using SmallMind.Runtime;
 
 namespace SmallMind.Tests
 {

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using Xunit;
 using SmallMind.Core;
+using SmallMind.Core.Core;
+using Runtime = SmallMind.Runtime.Metrics;
 
 namespace SmallMind.Tests
 {
@@ -128,9 +130,9 @@ namespace SmallMind.Tests
             Assert.Equal(summary.CompletedRequests, result.CompletedRequests);
         }
 
-        private MetricsSummary CreateTestSummary()
+        private Runtime.Metrics.MetricsSummary CreateTestSummary()
         {
-            return new MetricsSummary
+            return new Runtime.Metrics.MetricsSummary
             {
                 Concurrency = 1,
                 MaxTokensRequested = 100,

@@ -1,6 +1,7 @@
 using System;
 using Xunit;
 using SmallMind.Core;
+using SmallMind.Core.Core;
 using SmallMind.Core.Simd;
 using SmallMind.Core.Exceptions;
 
