@@ -291,6 +291,7 @@ namespace SmallMind.Benchmarks
             var sw = Stopwatch.StartNew();
             for (int i = 0; i < iterations; i++)
             {
+                Array.Clear(C); // CRITICAL: Zero C before each iteration since kernels accumulate
                 MatMulOps.MatMul(A, B, C, M, K, N);
             }
             sw.Stop();

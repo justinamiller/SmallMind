@@ -39,8 +39,8 @@ namespace SmallMind.Core.Simd
             if (A.Length != M * K || B.Length != K * N || C.Length != M * N)
                 throw new ArgumentException("Matrix dimensions don't match buffer sizes");
 
-            // NOTE: C.Clear() removed - kernels now use store-once pattern (register blocking)
-            // This eliminates redundant zeroing since output is fully overwritten
+            // NOTE: Caller must ensure C is zeroed before calling
+            // Kernels use accumulation (C += A * B) via FMA operations
 
             // Select best implementation based on CPU capabilities
             if (Avx512F.IsSupported && K >= 16)
@@ -77,8 +77,8 @@ namespace SmallMind.Core.Simd
             if (A.Length < M * K || B.Length < K * N || C.Length < M * N)
                 throw new ArgumentException("Matrix dimensions don't match buffer sizes");
 
-            // NOTE: C.Clear() removed - kernels now use store-once pattern (register blocking)
-            // This eliminates redundant zeroing since output is fully overwritten
+            // NOTE: Caller must ensure C is zeroed before calling
+            // Kernels use accumulation (C += A * B) via FMA operations
 
             // Use unsafe fixed pointers for SIMD operations
             unsafe
@@ -108,8 +108,7 @@ namespace SmallMind.Core.Simd
 
         /// <summary>
         /// AVX-512 + FMA implementation (512-bit, 16 floats per vector)
-        /// Uses cache-friendly ikj loop order with tiled blocking for better cache utilization.
-        /// Follows the same adaptive strategy as AVX2 but with 16-float vectors.
+        /// Uses register-blocked microkernel for optimal performance.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [SkipLocalsInit]
@@ -117,81 +116,30 @@ namespace SmallMind.Core.Simd
             float[] A, float[] B, float[] C,
             int M, int K, int N)
         {
-            const int vecSize = VEC512_SIZE; // AVX-512 processes 16 floats
-            const int TILING_THRESHOLD = 192; // Use tiling for matrices >= 192×192 (36,864 elements)
-            
-            // Adaptive strategy:
-            // - Small matrices (<192×192): Direct SIMD, minimal overhead
-            // - Medium matrices (192-511): Tiling for cache efficiency
-            // - Large matrices (512+): Tiling + parallelization for max performance
-            
-            int totalElements = M * N;
-            bool shouldTile = (M >= TILING_THRESHOLD || N >= TILING_THRESHOLD || K >= TILING_THRESHOLD)
-                             && totalElements >= (TILING_THRESHOLD * TILING_THRESHOLD);
-            
-            if (shouldTile)
+            // Use the optimized unsafe implementation with register blocking
+            unsafe
             {
-                // Use tiled implementation for better cache utilization
-                MatMulAvx512Tiled(A, B, C, M, K, N, vecSize);
-            }
-            else if (M >= PARALLEL_THRESHOLD)
-            {
-                // Direct SIMD with parallelization (no tiling overhead)
-                Parallel.For(0, M, i =>
+                fixed (float* pA = A, pB = B, pC = C)
                 {
-                    MatMulAvx512RowIndexed(A, B, C, i, M, K, N, vecSize);
-                });
-            }
-            else
-            {
-                // Direct SIMD sequential (best for small matrices)
-                for (int i = 0; i < M; i++)
-                {
-                    MatMulAvx512Row(A, B, C, i, M, K, N, vecSize);
+                    MatMulAvx512Unsafe(pA, pB, pC, M, K, N);
                 }
             }
         }
 
         /// <summary>
         /// AVX2 + FMA implementation (256-bit, 8 floats per vector)
-        /// Uses cache-friendly ikj loop order with tiled blocking for better cache utilization.
-        /// For 512×512 matrices, always use tiling for optimal cache performance.
+        /// Uses register-blocked microkernel for optimal performance.
         /// </summary>
         private static void MatMulAvx2(
             float[] A, float[] B, float[] C,
             int M, int K, int N)
         {
-            const int vecSize = 8; // AVX2 processes 8 floats
-            const int TILING_THRESHOLD = 192; // Use tiling for matrices >= 192×192 (36,864 elements)
-            
-            // Adaptive strategy:
-            // - Small matrices (<192×192): Direct SIMD, minimal overhead
-            // - Medium matrices (192-511): Tiling for cache efficiency
-            // - Large matrices (512+): Tiling + parallelization for max performance
-            
-            int totalElements = M * N;
-            bool shouldTile = (M >= TILING_THRESHOLD || N >= TILING_THRESHOLD || K >= TILING_THRESHOLD)
-                             && totalElements >= (TILING_THRESHOLD * TILING_THRESHOLD);
-            
-            if (shouldTile)
+            // Use the optimized unsafe implementation with register blocking
+            unsafe
             {
-                // Use tiled implementation for better cache utilization
-                MatMulAvx2Tiled(A, B, C, M, K, N, vecSize);
-            }
-            else if (M >= PARALLEL_THRESHOLD)
-            {
-                // Direct SIMD with parallelization (no tiling overhead)
-                Parallel.For(0, M, i =>
+                fixed (float* pA = A, pB = B, pC = C)
                 {
-                    MatMulAvx2RowIndexed(A, B, C, i, M, K, N, vecSize);
-                });
-            }
-            else
-            {
-                // Direct SIMD sequential (best for small matrices)
-                for (int i = 0; i < M; i++)
-                {
-                    MatMulAvx2Row(A, B, C, i, M, K, N, vecSize);
+                    MatMulAvx2Unsafe(pA, pB, pC, M, K, N);
                 }
             }
         }
@@ -1025,8 +973,41 @@ namespace SmallMind.Core.Simd
                     Vector256<float> acc2 = Vector256<float>.Zero;
                     Vector256<float> acc3 = Vector256<float>.Zero;
 
-                    // Accumulate across K dimension
-                    for (int k = 0; k < K; k++)
+                    // Accumulate across K dimension with 2x unrolling
+                    int k = 0;
+                    for (; k <= K - 2; k += 2)
+                    {
+                        // First K iteration
+                        Vector256<float> vA0 = Vector256.Create(pA[aRowStart + k]);
+                        int bRowStart0 = k * N;
+
+                        Vector256<float> vB0_0 = Avx.LoadVector256(pB + bRowStart0 + j);
+                        Vector256<float> vB0_1 = Avx.LoadVector256(pB + bRowStart0 + j + vecSize);
+                        Vector256<float> vB0_2 = Avx.LoadVector256(pB + bRowStart0 + j + vecSize * 2);
+                        Vector256<float> vB0_3 = Avx.LoadVector256(pB + bRowStart0 + j + vecSize * 3);
+
+                        acc0 = Fma.MultiplyAdd(vA0, vB0_0, acc0);
+                        acc1 = Fma.MultiplyAdd(vA0, vB0_1, acc1);
+                        acc2 = Fma.MultiplyAdd(vA0, vB0_2, acc2);
+                        acc3 = Fma.MultiplyAdd(vA0, vB0_3, acc3);
+                        
+                        // Second K iteration
+                        Vector256<float> vA1 = Vector256.Create(pA[aRowStart + k + 1]);
+                        int bRowStart1 = (k + 1) * N;
+
+                        Vector256<float> vB1_0 = Avx.LoadVector256(pB + bRowStart1 + j);
+                        Vector256<float> vB1_1 = Avx.LoadVector256(pB + bRowStart1 + j + vecSize);
+                        Vector256<float> vB1_2 = Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 2);
+                        Vector256<float> vB1_3 = Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 3);
+
+                        acc0 = Fma.MultiplyAdd(vA1, vB1_0, acc0);
+                        acc1 = Fma.MultiplyAdd(vA1, vB1_1, acc1);
+                        acc2 = Fma.MultiplyAdd(vA1, vB1_2, acc2);
+                        acc3 = Fma.MultiplyAdd(vA1, vB1_3, acc3);
+                    }
+                    
+                    // Handle remaining K iteration
+                    for (; k < K; k++)
                     {
                         Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
                         int bRowStart = k * N;
@@ -1053,7 +1034,22 @@ namespace SmallMind.Core.Simd
                 for (; j <= N - vecSize; j += vecSize)
                 {
                     Vector256<float> acc = Vector256<float>.Zero;
-                    for (int k = 0; k < K; k++)
+                    int k = 0;
+                    
+                    // 2x unrolling for K loop
+                    for (; k <= K - 2; k += 2)
+                    {
+                        Vector256<float> vA0 = Vector256.Create(pA[aRowStart + k]);
+                        Vector256<float> vB0 = Avx.LoadVector256(pB + k * N + j);
+                        acc = Fma.MultiplyAdd(vA0, vB0, acc);
+                        
+                        Vector256<float> vA1 = Vector256.Create(pA[aRowStart + k + 1]);
+                        Vector256<float> vB1 = Avx.LoadVector256(pB + (k + 1) * N + j);
+                        acc = Fma.MultiplyAdd(vA1, vB1, acc);
+                    }
+                    
+                    // Handle remaining K
+                    for (; k < K; k++)
                     {
                         Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
                         Vector256<float> vB = Avx.LoadVector256(pB + k * N + j);
