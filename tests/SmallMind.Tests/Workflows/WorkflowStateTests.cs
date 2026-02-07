@@ -1,6 +1,7 @@
 using System;
 using Xunit;
 using SmallMind.Workflows;
+using SmallMind.Domain;
 
 namespace SmallMind.Tests.Workflows
 {
