@@ -45,7 +45,9 @@ namespace SmallMind.Runtime
             string prompt, 
             int maxNewTokens, 
             double temperature = 1.0, 
-            int topK = 0, 
+            int topK = 0,
+            double topP = 1.0,
+            double minP = 0.0,
             int? seed = null, 
             bool showPerf = false, 
             bool isPerfJsonMode = false, 
@@ -85,7 +87,7 @@ namespace SmallMind.Runtime
             if (!isPerfJsonMode)
             {
                 Console.WriteLine($"\nGenerating {maxNewTokens} tokens...");
-                Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}");
+                Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}, Top-p: {topP}, Min-p: {minP}");
                 Console.WriteLine($"Prompt: \"{prompt}\"");
                 if (showPerf)
                 {
@@ -214,15 +216,29 @@ namespace SmallMind.Runtime
                         }
                     }
 
-                    // Apply top-k filtering - returns reference to buffer or filtered buffer
+                    // Apply sampling strategies in order: temperature -> top-k -> min-p -> top-p
                     float[] logitsToSample = _logitsLastBuffer;
+                    
+                    // Apply top-k filtering
                     if (topK > 0)
                     {
                         logitsToSample = ApplyTopK(_logitsLastBuffer, vocabSize, topK);
                     }
 
-                    // Convert to probabilities (softmax)
+                    // Convert to probabilities (softmax) - needed for top-p and min-p
                     var probs = Softmax(logitsToSample, vocabSize);
+                    
+                    // Apply min-p filtering (remove tokens below min_p * max_prob)
+                    if (minP > 0.0)
+                    {
+                        probs = ApplyMinP(probs, vocabSize, (float)minP);
+                    }
+                    
+                    // Apply top-p (nucleus) filtering
+                    if (topP < 1.0)
+                    {
+                        probs = ApplyTopP(probs, vocabSize, (float)topP);
+                    }
 
                     // Sample from the distribution
                     var nextToken = SampleFromProbs(probs, random);
@@ -404,6 +420,127 @@ namespace SmallMind.Runtime
 
             // Fallback
             return probs.Length - 1;
+        }
+
+        /// <summary>
+        /// Apply top-p (nucleus) sampling - keep tokens with cumulative probability &lt;= p.
+        /// Industry standard sampling method used in GPT-3, GPT-4, and most modern LLMs.
+        /// </summary>
+        /// <param name="probs">Probability distribution (must be normalized)</param>
+        /// <param name="probsLength">Length of probability array</param>
+        /// <param name="p">Cumulative probability threshold (0.0 to 1.0)</param>
+        /// <returns>Filtered probability distribution</returns>
+        private float[] ApplyTopP(float[] probs, int probsLength, float p)
+        {
+            if (p >= 1.0f || p <= 0.0f)
+            {
+                return probs;
+            }
+
+            // Create sorted indices by probability (descending)
+            var indices = new int[probsLength];
+            for (int i = 0; i < probsLength; i++)
+            {
+                indices[i] = i;
+            }
+            
+            // Sort indices by probability (descending)
+            Array.Sort(indices, (a, b) => probs[b].CompareTo(probs[a]));
+            
+            // Find cutoff index where cumulative probability exceeds p
+            float cumProb = 0.0f;
+            int cutoffIndex = probsLength;
+            
+            for (int i = 0; i < probsLength; i++)
+            {
+                cumProb += probs[indices[i]];
+                if (cumProb > p)
+                {
+                    cutoffIndex = i + 1; // Include this token
+                    break;
+                }
+            }
+            
+            // Create filtered distribution
+            var filtered = new float[probsLength];
+            float sumFiltered = 0.0f;
+            
+            for (int i = 0; i < cutoffIndex; i++)
+            {
+                int idx = indices[i];
+                filtered[idx] = probs[idx];
+                sumFiltered += probs[idx];
+            }
+            
+            // Renormalize the filtered distribution
+            if (sumFiltered > 0)
+            {
+                for (int i = 0; i < probsLength; i++)
+                {
+                    if (filtered[i] > 0)
+                    {
+                        filtered[i] /= sumFiltered;
+                    }
+                }
+            }
+            
+            return filtered;
+        }
+
+        /// <summary>
+        /// Apply min-p sampling - remove tokens with probability below min_p * max_probability.
+        /// More adaptive than top-p as threshold adjusts based on confidence of top token.
+        /// </summary>
+        /// <param name="probs">Probability distribution (must be normalized)</param>
+        /// <param name="probsLength">Length of probability array</param>
+        /// <param name="minP">Minimum probability threshold relative to max (0.0 to 1.0)</param>
+        /// <returns>Filtered probability distribution</returns>
+        private float[] ApplyMinP(float[] probs, int probsLength, float minP)
+        {
+            if (minP <= 0.0f)
+            {
+                return probs;
+            }
+
+            // Find maximum probability
+            float maxProb = 0.0f;
+            for (int i = 0; i < probsLength; i++)
+            {
+                if (probs[i] > maxProb)
+                {
+                    maxProb = probs[i];
+                }
+            }
+            
+            // Calculate threshold
+            float threshold = minP * maxProb;
+            
+            // Filter and renormalize
+            var filtered = new float[probsLength];
+            float sumFiltered = 0.0f;
+            
+            for (int i = 0; i < probsLength; i++)
+            {
+                if (probs[i] >= threshold)
+                {
+                    filtered[i] = probs[i];
+                    sumFiltered += probs[i];
+                }
+            }
+            
+            // Renormalize
+            if (sumFiltered > 0)
+            {
+                for (int i = 0; i < probsLength; i++)
+                {
+                    if (filtered[i] > 0)
+                    {
+                        filtered[i] /= sumFiltered;
+                    }
+                }
+            }
+            
+            return filtered;
         }
 
     }

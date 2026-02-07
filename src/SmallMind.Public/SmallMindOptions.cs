@@ -89,6 +89,15 @@ namespace SmallMind.Public
         public float TopP { get; set; } = 0.95f;
 
         /// <summary>
+        /// Gets or sets the min-p (minimum probability) value.
+        /// Removes tokens with probability below min_p * max_probability.
+        /// More adaptive than top-p as threshold adjusts based on confidence.
+        /// Range: 0.0 to 1.0.
+        /// Default: 0.0 (disabled).
+        /// </summary>
+        public float MinP { get; set; } = 0.0f;
+
+        /// <summary>
         /// Gets or sets the top-k value for sampling (0 to disable).
         /// Default: 40.
         /// </summary>

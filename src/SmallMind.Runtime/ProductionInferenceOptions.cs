@@ -31,6 +31,14 @@ namespace SmallMind.Runtime
         public double TopP { get; set; } = 0.95;
         
         /// <summary>
+        /// Gets or sets the min-p (minimum probability) value (0.0 to disable).
+        /// Removes tokens with probability below min_p * max_probability.
+        /// More adaptive than top-p as threshold adjusts based on confidence.
+        /// Default: 0.0 (disabled). Valid range: 0.0 to 1.0
+        /// </summary>
+        public double MinP { get; set; } = 0.0;
+        
+        /// <summary>
         /// Gets or sets the random seed for deterministic generation.
         /// When set, the same seed with same prompt and options produces identical output.
         /// Default: null (non-deterministic).
@@ -132,6 +140,11 @@ namespace SmallMind.Runtime
                 throw new ValidationException("TopP must be between 0.0 and 1.0", nameof(TopP));
             }
             
+            if (MinP < 0.0 || MinP > 1.0)
+            {
+                throw new ValidationException("MinP must be between 0.0 and 1.0", nameof(MinP));
+            }
+            
             // Validate that context limit is reasonable
             if (MaxContextTokens > 0 && MaxInputTokens > MaxContextTokens)
             {
@@ -151,6 +164,7 @@ namespace SmallMind.Runtime
                 Temperature = Temperature,
                 TopK = TopK,
                 TopP = TopP,
+                MinP = MinP,
                 Seed = Seed,
                 MaxInputTokens = MaxInputTokens,
                 MaxContextTokens = MaxContextTokens,
