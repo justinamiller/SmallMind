@@ -145,6 +145,11 @@ namespace SmallMind.Abstractions
             Confidence = confidence;
         }
 
+        /// <summary>
+        /// Determines whether the specified RagCitation is equal to the current RagCitation.
+        /// </summary>
+        /// <param name="other">The RagCitation to compare with the current RagCitation.</param>
+        /// <returns>true if the specified RagCitation is equal to the current RagCitation; otherwise, false.</returns>
         public bool Equals(RagCitation other) =>
             SourceUri == other.SourceUri &&
             CharRange == other.CharRange &&
@@ -152,13 +157,35 @@ namespace SmallMind.Abstractions
             Snippet == other.Snippet &&
             Confidence.Equals(other.Confidence);
 
+        /// <summary>
+        /// Determines whether the specified object is equal to the current RagCitation.
+        /// </summary>
+        /// <param name="obj">The object to compare with the current RagCitation.</param>
+        /// <returns>true if the specified object is equal to the current RagCitation; otherwise, false.</returns>
         public override bool Equals(object? obj) =>
             obj is RagCitation other && Equals(other);
 
+        /// <summary>
+        /// Returns the hash code for this RagCitation.
+        /// </summary>
+        /// <returns>A 32-bit signed integer hash code.</returns>
         public override int GetHashCode() =>
             HashCode.Combine(SourceUri, CharRange, LineRange, Snippet, Confidence);
 
+        /// <summary>
+        /// Determines whether two specified RagCitation instances are equal.
+        /// </summary>
+        /// <param name="left">The first RagCitation to compare.</param>
+        /// <param name="right">The second RagCitation to compare.</param>
+        /// <returns>true if left and right are equal; otherwise, false.</returns>
         public static bool operator ==(RagCitation left, RagCitation right) => left.Equals(right);
+        
+        /// <summary>
+        /// Determines whether two specified RagCitation instances are not equal.
+        /// </summary>
+        /// <param name="left">The first RagCitation to compare.</param>
+        /// <param name="right">The second RagCitation to compare.</param>
+        /// <returns>true if left and right are not equal; otherwise, false.</returns>
         public static bool operator !=(RagCitation left, RagCitation right) => !left.Equals(right);
     }
 

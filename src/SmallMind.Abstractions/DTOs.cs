@@ -328,6 +328,11 @@ namespace SmallMind.Abstractions
             Error = error;
         }
 
+        /// <summary>
+        /// Determines whether the specified TokenEvent is equal to the current TokenEvent.
+        /// </summary>
+        /// <param name="other">The TokenEvent to compare with the current TokenEvent.</param>
+        /// <returns>true if the specified TokenEvent is equal to the current TokenEvent; otherwise, false.</returns>
         public bool Equals(TokenEvent other) =>
             Kind == other.Kind &&
             Text.Span.SequenceEqual(other.Text.Span) &&
@@ -336,13 +341,35 @@ namespace SmallMind.Abstractions
             IsFinal == other.IsFinal &&
             Error == other.Error;
 
+        /// <summary>
+        /// Determines whether the specified object is equal to the current TokenEvent.
+        /// </summary>
+        /// <param name="obj">The object to compare with the current TokenEvent.</param>
+        /// <returns>true if the specified object is equal to the current TokenEvent; otherwise, false.</returns>
         public override bool Equals(object? obj) =>
             obj is TokenEvent other && Equals(other);
 
+        /// <summary>
+        /// Returns the hash code for this TokenEvent.
+        /// </summary>
+        /// <returns>A 32-bit signed integer hash code.</returns>
         public override int GetHashCode() =>
             HashCode.Combine(Kind, TokenId, GeneratedTokens, IsFinal, Error);
 
+        /// <summary>
+        /// Determines whether two specified TokenEvent instances are equal.
+        /// </summary>
+        /// <param name="left">The first TokenEvent to compare.</param>
+        /// <param name="right">The second TokenEvent to compare.</param>
+        /// <returns>true if left and right are equal; otherwise, false.</returns>
         public static bool operator ==(TokenEvent left, TokenEvent right) => left.Equals(right);
+        
+        /// <summary>
+        /// Determines whether two specified TokenEvent instances are not equal.
+        /// </summary>
+        /// <param name="left">The first TokenEvent to compare.</param>
+        /// <param name="right">The second TokenEvent to compare.</param>
+        /// <returns>true if left and right are not equal; otherwise, false.</returns>
         public static bool operator !=(TokenEvent left, TokenEvent right) => !left.Equals(right);
     }
 
@@ -443,19 +470,46 @@ namespace SmallMind.Abstractions
             KvCacheTokens = kvCacheTokens;
         }
 
+        /// <summary>
+        /// Determines whether the specified SessionInfo is equal to the current SessionInfo.
+        /// </summary>
+        /// <param name="other">The SessionInfo to compare with the current SessionInfo.</param>
+        /// <returns>true if the specified SessionInfo is equal to the current SessionInfo; otherwise, false.</returns>
         public bool Equals(SessionInfo other) =>
             SessionId == other.SessionId &&
             CreatedAt == other.CreatedAt &&
             TurnCount == other.TurnCount &&
             KvCacheTokens == other.KvCacheTokens;
 
+        /// <summary>
+        /// Determines whether the specified object is equal to the current SessionInfo.
+        /// </summary>
+        /// <param name="obj">The object to compare with the current SessionInfo.</param>
+        /// <returns>true if the specified object is equal to the current SessionInfo; otherwise, false.</returns>
         public override bool Equals(object? obj) =>
             obj is SessionInfo other && Equals(other);
 
+        /// <summary>
+        /// Returns the hash code for this SessionInfo.
+        /// </summary>
+        /// <returns>A 32-bit signed integer hash code.</returns>
         public override int GetHashCode() =>
             HashCode.Combine(SessionId, CreatedAt, TurnCount, KvCacheTokens);
 
+        /// <summary>
+        /// Determines whether two specified SessionInfo instances are equal.
+        /// </summary>
+        /// <param name="left">The first SessionInfo to compare.</param>
+        /// <param name="right">The second SessionInfo to compare.</param>
+        /// <returns>true if left and right are equal; otherwise, false.</returns>
         public static bool operator ==(SessionInfo left, SessionInfo right) => left.Equals(right);
+        
+        /// <summary>
+        /// Determines whether two specified SessionInfo instances are not equal.
+        /// </summary>
+        /// <param name="left">The first SessionInfo to compare.</param>
+        /// <param name="right">The second SessionInfo to compare.</param>
+        /// <returns>true if left and right are not equal; otherwise, false.</returns>
         public static bool operator !=(SessionInfo left, SessionInfo right) => !left.Equals(right);
     }
 
