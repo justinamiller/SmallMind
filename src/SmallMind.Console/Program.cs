@@ -278,7 +278,7 @@ namespace SmallMind.ConsoleApp
                 var tokenizer = new Tokenizer(trainingText);
 
                 // Create model with selected preset configuration
-                var model = new SmallMind.Core.TransformerModel(
+                var model = new SmallMind.Transformers.TransformerModel(
                     vocabSize: tokenizer.VocabSize,
                     blockSize: blockSize,
                     nEmbd: selectedPreset.NEmbedding,
@@ -289,7 +289,7 @@ namespace SmallMind.ConsoleApp
                 );
 
                 // Training
-                var trainer = new SmallMind.Core.Training(
+                var trainer = new SmallMind.Runtime.Training(
                     model: model,
                     tokenizer: tokenizer,
                     trainingText: trainingText,
@@ -398,7 +398,7 @@ namespace SmallMind.ConsoleApp
         /// <summary>
         /// Run interactive conversation mode with session context
         /// </summary>
-        private static void RunInteractiveMode(SmallMind.Core.TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText)
+        private static void RunInteractiveMode(SmallMind.Transformers.TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText)
         {
             Console.WriteLine("\n=== Interactive Conversation Mode ===");
             Console.WriteLine("This feature is not yet fully implemented.");
@@ -408,7 +408,7 @@ namespace SmallMind.ConsoleApp
         /// <summary>
         /// Run Q&A mode for answering single questions
         /// </summary>
-        private static void RunQAMode(SmallMind.Core.TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText, 
+        private static void RunQAMode(SmallMind.Transformers.TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText, 
                                       string question, int maxTokens, double temperature, int topK)
         {
             Console.WriteLine("\n=== Question-Answering Mode ===");
@@ -419,7 +419,7 @@ namespace SmallMind.ConsoleApp
         /// <summary>
         /// Run benchmark mode - sweep over concurrency and max_tokens configurations.
         /// </summary>
-        private static void RunBenchmarkMode(SmallMind.Core.TransformerModel model, Tokenizer tokenizer, int blockSize, string prompt, double temperature, int topK)
+        private static void RunBenchmarkMode(SmallMind.Transformers.TransformerModel model, Tokenizer tokenizer, int blockSize, string prompt, double temperature, int topK)
         {
             Console.WriteLine("\n=== Benchmark Mode ===");
             Console.WriteLine("This feature is not yet fully implemented.");

@@ -22,10 +22,10 @@ namespace SmallMind.DependencyInjection
         /// <returns>The service collection for chaining.</returns>
         public static IServiceCollection AddSmallMind(
             this IServiceCollection services,
-            Action<Configuration.SmallMindOptions>? configure = null)
+            Action<Abstractions.SmallMindOptions>? configure = null)
         {
             // Register options
-            var optionsBuilder = services.AddOptions<Configuration.SmallMindOptions>();
+            var optionsBuilder = services.AddOptions<Abstractions.SmallMindOptions>();
             
             if (configure != null)
             {
