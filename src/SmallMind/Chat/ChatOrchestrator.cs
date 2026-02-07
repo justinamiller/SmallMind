@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SmallMind.Core;
+using SmallMind.Core.Core;
 using SmallMind.Retrieval;
-using SmallMind.Text;
+using SmallMind.Runtime;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 using SmallMind.Workflows;
 
 namespace SmallMind.Chat

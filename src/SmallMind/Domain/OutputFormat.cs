@@ -16,6 +16,11 @@ namespace SmallMind.Domain
         JsonOnly,
 
         /// <summary>
+        /// Enum-only output (single value from allowed list).
+        /// </summary>
+        EnumOnly,
+
+        /// <summary>
         /// Output must match a specified regular expression pattern.
         /// </summary>
         RegexConstrained

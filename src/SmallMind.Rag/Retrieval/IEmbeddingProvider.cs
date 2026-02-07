@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace SmallMind.Embeddings
+namespace SmallMind.Rag.Retrieval
 {
     /// <summary>
     /// Abstraction for embedding providers.

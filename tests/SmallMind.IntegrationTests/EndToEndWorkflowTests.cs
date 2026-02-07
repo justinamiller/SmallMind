@@ -3,8 +3,10 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
-using SmallMind.Core;
-using SmallMind.Text;
+using SmallMind.Core.Core;
+using SmallMind.Runtime;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 
 namespace SmallMind.IntegrationTests
 {

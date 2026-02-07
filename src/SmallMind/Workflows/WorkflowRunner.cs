@@ -7,8 +7,11 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using SmallMind.Core;
-using SmallMind.Text;
+using SmallMind.Core.Core;
+using SmallMind.Domain;
+using SmallMind.Runtime;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 
 namespace SmallMind.Workflows
 {
