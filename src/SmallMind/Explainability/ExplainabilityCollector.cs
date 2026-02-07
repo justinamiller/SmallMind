@@ -187,7 +187,7 @@ namespace SmallMind.Explainability
                 requestId: requestId,
                 totalDuration: _summary.TotalDuration,
                 perplexityEstimate: perplexity,
-                inputAttributions: null  // TODO: implement saliency
+                inputAttributions: null  // Saliency/attribution not implemented (future enhancement)
             );
         }
     }
