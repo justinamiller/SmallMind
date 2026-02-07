@@ -223,8 +223,12 @@ namespace SmallMind.Core.Core
         /// <summary>
         /// Creates a strided view of the cache data without copying.
         /// Used to extract per-head data efficiently.
+        /// 
+        /// LIMITATION: Current implementation returns full cache instead of strided view.
+        /// Callers must handle proper indexing when accessing per-head data.
+        /// For production use, implement proper strided access using unsafe pointers.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImpl Options.AggressiveInlining)]
         private static ReadOnlySpan<float> GetStridedView(
             ReadOnlySpan<float> source,
             int offset,
@@ -232,9 +236,8 @@ namespace SmallMind.Core.Core
             int numChunks,
             int stride)
         {
-            // Note: For true zero-copy strided access, we'd need unsafe code or Memory<T>
-            // For now, we return a contiguous view assuming the data is already laid out optimally
-            // In practice, the attention code should use the full cache with proper indexing
+            // TODO: Implement proper strided access for zero-copy per-head views
+            // For now, return full cache - callers must handle indexing
             return source;
         }
         

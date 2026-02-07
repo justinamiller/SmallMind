@@ -291,8 +291,9 @@ namespace SmallMind.Core.Simd
                         }
                         
                         // Apply softmax within this block (incremental softmax for full seq)
-                        // For simplicity, we'll use per-block softmax here
-                        // In a full flash-attention implementation, we'd use online softmax
+                        // LIMITATION: Simplified block-wise softmax (not full flash-attention)
+                        // For production accuracy, implement online softmax with running max/sum
+                        // Current implementation is approximate for demonstration purposes
                         for (int qi = 0; qi < qBlockSize; qi++)
                         {
                             float* scoreRow = blockScores + qi * kBlockSize;
