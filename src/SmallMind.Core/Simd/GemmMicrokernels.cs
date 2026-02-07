@@ -437,9 +437,9 @@ namespace SmallMind.Core.Simd
                         
                         for (; j < simdEnd; j += Vector<float>.Count)
                         {
-                            var vB = new Vector<float>(bRow + j);
-                            var vC = new Vector<float>(cRow + j);
-                            (vC + vAik * vB).CopyTo(cRow + j);
+                            var vB = new Vector<float>(new ReadOnlySpan<float>(bRow + j, Vector<float>.Count));
+                            var vC = new Vector<float>(new Span<float>(cRow + j, Vector<float>.Count));
+                            (vC + vAik * vB).CopyTo(new Span<float>(cRow + j, Vector<float>.Count));
                         }
                     }
                     

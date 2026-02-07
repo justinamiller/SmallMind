@@ -311,9 +311,9 @@ namespace SmallMind.Quantization.Kernels
                                 }
                                 
                                 // SIMD FMA
-                                var vB = new Vector<float>(bDequant);
-                                var vC = new Vector<float>(cRow + j);
-                                (vC + vAik * vB).CopyTo(cRow + j);
+                                var vB = new Vector<float>(new ReadOnlySpan<float>(bDequant, vecSize));
+                                var vC = new Vector<float>(new Span<float>(cRow + j, vecSize));
+                                (vC + vAik * vB).CopyTo(new Span<float>(cRow + j, vecSize));
                             }
                         }
                         
