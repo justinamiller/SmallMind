@@ -8,7 +8,7 @@ namespace SmallMind.Engine
     /// <summary>
     /// Fluent builder for configuring and creating chat sessions.
     /// </summary>
-    public sealed class ChatSessionBuilder
+    internal sealed class ChatSessionBuilder
     {
         private readonly ModelHandle _modelHandle;
         private readonly SmallMindOptions _engineOptions;

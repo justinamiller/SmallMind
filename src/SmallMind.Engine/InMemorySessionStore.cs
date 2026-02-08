@@ -10,7 +10,7 @@ namespace SmallMind.Engine
     /// In-memory session store implementation.
     /// Moved from SmallMind.Chat to SmallMind.Engine for unified chat pipeline.
     /// </summary>
-    public class InMemorySessionStore : ISessionStore
+    internal sealed class InMemorySessionStore : ISessionStore
     {
         private readonly ConcurrentDictionary<string, ChatSessionData> _sessions;
 

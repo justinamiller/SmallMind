@@ -6,7 +6,7 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Represents a single turn in a chat conversation (persisted data).
     /// </summary>
-    public class ChatTurnData
+    public sealed class ChatTurnData
     {
         /// <summary>
         /// The user's message.
@@ -43,7 +43,7 @@ namespace SmallMind.Abstractions
     /// Represents a multi-turn chat session with persistent state (data model).
     /// Moved from SmallMind.Chat to SmallMind.Abstractions for unified chat pipeline.
     /// </summary>
-    public class ChatSessionData
+    public sealed class ChatSessionData
     {
         /// <summary>
         /// Unique session identifier.
