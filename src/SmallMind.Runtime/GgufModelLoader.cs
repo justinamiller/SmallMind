@@ -26,10 +26,12 @@ namespace SmallMind.Runtime
         /// </summary>
         /// <param name="ggufPath">Path to GGUF file</param>
         /// <param name="seed">Random seed for model initialization</param>
+        /// <param name="useMmap">Whether to use memory-mapped file reading for faster loading</param>
         /// <returns>Tuple of (model, tokenizer, config)</returns>
         public static (TransformerModel model, ITokenizer tokenizer, ModelConfig config) LoadFromGguf(
             string ggufPath, 
-            int seed = 42)
+            int seed = 42,
+            bool useMmap = false)
         {
             if (string.IsNullOrEmpty(ggufPath))
                 throw new ArgumentNullException(nameof(ggufPath));
@@ -67,8 +69,8 @@ namespace SmallMind.Runtime
             var model = new TransformerModel(config, seed);
 
             // Load weights from GGUF into model
-            Console.WriteLine("Loading weights from GGUF...");
-            LoadWeights(ggufPath, model, modelInfo, config);
+            Console.WriteLine($"Loading weights from GGUF{(useMmap ? " (using mmap)" : "")}...");
+            LoadWeights(ggufPath, model, modelInfo, config, useMmap);
             Console.WriteLine("Model loaded successfully.");
 
             return (model, tokenizer, config);
@@ -78,7 +80,7 @@ namespace SmallMind.Runtime
         /// Load weights from GGUF file into TransformerModel.
         /// Reads tensors, dequantizes them, and injects into model parameters.
         /// </summary>
-        private static void LoadWeights(string ggufPath, TransformerModel model, GgufModelInfo modelInfo, ModelConfig config)
+        private static void LoadWeights(string ggufPath, TransformerModel model, GgufModelInfo modelInfo, ModelConfig config, bool useMmap)
         {
             // Get named parameters from model
             var namedParams = model.GetNamedParameters();
@@ -94,58 +96,26 @@ namespace SmallMind.Runtime
             int qkvSkipped = 0;
             int qkvReads = 0;
 
-            // Read and load tensors
-            using (var stream = File.OpenRead(ggufPath))
-            using (var reader = new GgufReader(stream))
+            // Read and load tensors using appropriate reader
+            if (useMmap)
             {
-                // Re-read model info to position stream correctly
-                reader.ReadModelInfo();
-
-                foreach (var tensorInfo in modelInfo.Tensors)
+                using (var mmapReader = new GgufMmapReader(ggufPath))
                 {
-                    string ggufName = tensorInfo.Name;
-
-                    // Skip if this tensor isn't in our mapping
-                    if (!tensorMapping.ContainsKey(ggufName))
-                    {
-                        Console.WriteLine($"  Skipping unmapped tensor: {ggufName}");
-                        continue;
-                    }
-
-                    string smName = tensorMapping[ggufName];
-
-                    // Handle special cases BEFORE reading/dequantizing to avoid double-read
-                    if (smName == "MERGE_QKV")
-                    {
-                        // Q/K/V tensors need to be merged - handled separately
-                        qkvSkipped++;
-                        continue;
-                    }
-                    else if (smName.StartsWith("PENDING_"))
-                    {
-                        // This is a Q/K/V component - will be merged later
-                        qkvSkipped++;
-                        continue;
-                    }
-
-                    // Read and dequantize tensor
-                    float[] data = ReadAndDequantizeTensor(reader, tensorInfo);
-                    mainLoopReads++;
-
-                    // Get target parameter
-                    if (!namedParams.TryGetValue(smName, out var targetParam))
-                    {
-                        Console.WriteLine($"  Warning: No parameter found for {smName} (from {ggufName})");
-                        continue;
-                    }
-
-                    // Copy weights with shape validation
-                    CopyWeights(data, targetParam, ggufName, smName, tensorInfo.Dimensions);
-                    loadedParams.Add(smName);
+                    LoadWeightsWithReader(mmapReader, modelInfo, tensorMapping, namedParams, loadedParams, 
+                        ref mainLoopReads, ref qkvSkipped, ref qkvReads);
                 }
-
-                // Handle QKV merging
-                qkvReads = MergeQKVWeights(reader, modelInfo, namedParams, tensorMapping, loadedParams);
+            }
+            else
+            {
+                using (var stream = File.OpenRead(ggufPath))
+                using (var reader = new GgufReader(stream))
+                {
+                    // Re-read model info to position stream correctly
+                    reader.ReadModelInfo();
+                    
+                    LoadWeightsWithReader(reader, modelInfo, tensorMapping, namedParams, loadedParams,
+                        ref mainLoopReads, ref qkvSkipped, ref qkvReads);
+                }
             }
 
             // Handle weight tying (copy token embeddings to output if missing)
@@ -158,17 +128,76 @@ namespace SmallMind.Runtime
 
             // Check for missing critical parameters
             var missingCritical = namedParams.Keys
-                .Where(k => !loadedParams.Contains(k) && IsCriticalParameter(k))
+                .Where(k => !loadedParams.Contains(k) && 
+                           (k.Contains("token_embd") || k.Contains("output_norm") || k.Contains("attn")))
                 .ToList();
 
-            if (missingCritical.Any())
+            if (missingCritical.Count > 0)
             {
-                Console.WriteLine("WARNING: Missing critical parameters:");
-                foreach (var name in missingCritical)
+                Console.WriteLine($"Warning: {missingCritical.Count} critical parameters not loaded:");
+                foreach (var p in missingCritical.Take(10))
                 {
-                    Console.WriteLine($"  - {name}");
+                    Console.WriteLine($"  - {p}");
+                }
+                if (missingCritical.Count > 10)
+                {
+                    Console.WriteLine($"  ... and {missingCritical.Count - 10} more");
                 }
             }
+        }
+
+        /// <summary>
+        /// Load weights using the provided tensor data reader (stream-based or mmap).
+        /// </summary>
+        private static void LoadWeightsWithReader(ITensorDataReader reader, GgufModelInfo modelInfo, 
+            Dictionary<string, string> tensorMapping, Dictionary<string, Tensor> namedParams,
+            HashSet<string> loadedParams, ref int mainLoopReads, ref int qkvSkipped, ref int qkvReads)
+        {
+            foreach (var tensorInfo in modelInfo.Tensors)
+            {
+                string ggufName = tensorInfo.Name;
+
+                // Skip if this tensor isn't in our mapping
+                if (!tensorMapping.ContainsKey(ggufName))
+                {
+                    Console.WriteLine($"  Skipping unmapped tensor: {ggufName}");
+                    continue;
+                }
+
+                string smName = tensorMapping[ggufName];
+
+                // Handle special cases BEFORE reading/dequantizing to avoid double-read
+                if (smName == "MERGE_QKV")
+                {
+                    // Q/K/V tensors need to be merged - handled separately
+                    qkvSkipped++;
+                    continue;
+                }
+                else if (smName.StartsWith("PENDING_"))
+                {
+                    // This is a Q/K/V component - will be merged later
+                    qkvSkipped++;
+                    continue;
+                }
+
+                // Read and dequantize tensor
+                float[] data = ReadAndDequantizeTensor(reader, tensorInfo);
+                mainLoopReads++;
+
+                // Get target parameter
+                if (!namedParams.TryGetValue(smName, out var targetParam))
+                {
+                    Console.WriteLine($"  Warning: No parameter found for {smName} (from {ggufName})");
+                    continue;
+                }
+
+                // Copy weights with shape validation
+                CopyWeights(data, targetParam, ggufName, smName, tensorInfo.Dimensions);
+                loadedParams.Add(smName);
+            }
+
+            // Handle QKV merging
+            qkvReads = MergeQKVWeights(reader, modelInfo, namedParams, tensorMapping, loadedParams);
         }
 
         /// <summary>
@@ -330,7 +359,7 @@ namespace SmallMind.Runtime
         /// <summary>
         /// Read and dequantize a GGUF tensor to float array.
         /// </summary>
-        private static float[] ReadAndDequantizeTensor(GgufReader reader, GgufTensorInfo tensorInfo)
+        private static float[] ReadAndDequantizeTensor(ITensorDataReader reader, GgufTensorInfo tensorInfo)
         {
             byte[] rawData = reader.ReadTensorData(tensorInfo.Offset, tensorInfo.Size);
 
@@ -908,7 +937,7 @@ namespace SmallMind.Runtime
         /// Merge separate Q/K/V weight tensors from GGUF into combined QKV tensor in SmallMind.
         /// Returns the count of Q/K/V tensor reads.
         /// </summary>
-        private static int MergeQKVWeights(GgufReader reader, GgufModelInfo modelInfo, 
+        private static int MergeQKVWeights(ITensorDataReader reader, GgufModelInfo modelInfo, 
             Dictionary<string, Tensor> namedParams, 
             Dictionary<string, string> tensorMapping, HashSet<string> loadedParams)
         {
