@@ -229,9 +229,9 @@ namespace SmallMind.Tokenizers.Text
             }
 
             // SmolLM2/Llama expects BOS — GGUF tokenizer doesn't auto-add
-            if (Info.AddBos)
+            if (Info.AddBos && result.Count > 0)
             {
-                if (result.Count == 0 || result[0] != Info.BosTokenId)
+                if (result[0] != Info.BosTokenId)
                 {
                     result.Insert(0, Info.BosTokenId);
                 }

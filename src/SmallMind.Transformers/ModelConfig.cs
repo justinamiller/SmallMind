@@ -288,7 +288,7 @@ namespace SmallMind.Transformers
 
         private static int? InferVocabSizeFromTokenizer(Dictionary<string, object> metadata)
         {
-            if (metadata.TryGetValue("tokenizer.ggml.tokens", out var tokensObj))
+            if (metadata.TryGetValue("tokenizer.ggml.tokens", out var tokensObj) && tokensObj != null)
             {
                 // Handle different possible types for tokens array
                 if (tokensObj is object[] objArray)
@@ -299,9 +299,9 @@ namespace SmallMind.Transformers
                 {
                     return strArray.Length;
                 }
-                else if (tokensObj is System.Collections.IList list)
+                else if (tokensObj is System.Collections.ICollection collection)
                 {
-                    return list.Count;
+                    return collection.Count;
                 }
             }
             return null;
