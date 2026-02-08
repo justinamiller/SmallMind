@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Abstractions;
 using SmallMind.Runtime;
+using SmallMind.Runtime.Cache;
 using SmallMind.Tokenizers;
 using PublicGenerationOptions = SmallMind.Abstractions.GenerationOptions;
 
@@ -25,8 +26,11 @@ namespace SmallMind.Engine
         private readonly string _sessionId;
         private readonly DateTimeOffset _createdAt;
         private readonly ChatTemplateType _templateType;
+        private readonly IKvCacheStore _kvCacheStore;
+        private readonly ModelShape _modelShape;
         private int _turnCount;
-        private int _cachedTokenCount; // Actual cached token count (0 for Phase 1, KV cache in Phase 2)
+        private int _cachedTokenCount; // Actual cached token count from KV cache
+        private int[]? _lastPromptTokenIds; // Last tokenized prompt for delta calculation
         private bool _disposed;
 
         public ChatSession(
@@ -46,6 +50,31 @@ namespace SmallMind.Engine
             _templateType = options.ChatTemplateType == ChatTemplateType.Auto
                 ? ChatTemplates.DetectTemplate(modelHandle.Info.Name, metadata: null)
                 : options.ChatTemplateType;
+
+            // Initialize KV cache store (from options or create default)
+            if (options.KvCacheStore != null)
+            {
+                _kvCacheStore = options.KvCacheStore;
+            }
+            else
+            {
+                // Create default LRU cache store with reasonable limits
+                var cacheOptions = new KvCacheOptions
+                {
+                    Enabled = options.EnableKvCache,
+                    MaxTokensPerSession = options.MaxKvCacheTokens ?? modelHandle.Model.BlockSize,
+                    MaxSessions = 100,
+                    MaxBytesTotal = 512L * 1024 * 1024 // 512MB default
+                };
+                _kvCacheStore = new LruKvCacheStore(cacheOptions);
+            }
+
+            // Compute model shape for KV cache validation
+            _modelShape = new ModelShape(
+                layers: modelHandle.Model.NumLayers,
+                heads: modelHandle.Model.NumHeads,
+                headDim: modelHandle.Model.EmbedDim / modelHandle.Model.NumHeads
+            );
         }
 
         public SessionInfo Info => new SessionInfo(
@@ -90,14 +119,65 @@ namespace SmallMind.Engine
             // Build full conversation prompt with truncation
             var prompt = BuildConversationPrompt(options.MaxNewTokens);
 
+            // Tokenize current prompt
+            var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
+
+            // Calculate KV cache delta and determine prefill strategy
+            SessionId sessionId = new SessionId(_sessionId);
+            KvCacheEntry? kvCache = null;
+            int startPosition = 0;
+            int maxTokens = _options.MaxKvCacheTokens ?? _modelHandle.Model.BlockSize;
+
+            if (_options.EnableKvCache)
+            {
+                // Get or create KV cache entry
+                kvCache = _kvCacheStore.GetOrCreate(sessionId, _modelShape, maxTokens);
+
+                // Calculate longest common prefix (LCP) with last prompt
+                if (_lastPromptTokenIds != null && kvCache.CurrentTokenCount > 0)
+                {
+                    int lcp = CalculateLongestCommonPrefix(_lastPromptTokenIds, promptTokenIds);
+
+                    // If LCP matches cached count, we can use incremental prefill
+                    if (lcp == _cachedTokenCount && lcp == kvCache.CurrentTokenCount)
+                    {
+                        startPosition = lcp;
+                    }
+                    else
+                    {
+                        // Cache mismatch or evicted - reset and do full prefill
+                        kvCache.Reset();
+                        startPosition = 0;
+                        _cachedTokenCount = 0;
+                    }
+                }
+            }
+
             // Generate response
             var session = _modelHandle.CreateInferenceSession(options, _engineOptions);
             try
             {
-                var response = await session.GenerateAsync(
-                    prompt,
-                    metrics: null,
-                    cancellationToken: cancellationToken);
+                string response;
+                if (startPosition > 0 && kvCache != null)
+                {
+                    // Incremental prefill: only process new tokens
+                    var deltaTokenIds = new int[promptTokenIds.Length - startPosition];
+                    Array.Copy(promptTokenIds, startPosition, deltaTokenIds, 0, deltaTokenIds.Length);
+                    var deltaPrompt = _tokenizer.Decode(new List<int>(deltaTokenIds));
+
+                    response = await session.GenerateAsync(
+                        prompt: deltaPrompt,
+                        metrics: null,
+                        cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    // Full prefill
+                    response = await session.GenerateAsync(
+                        prompt: prompt,
+                        metrics: null,
+                        cancellationToken: cancellationToken);
+                }
 
                 // Add assistant response to history
                 _conversationHistory.Add(new ChatMessage
@@ -107,6 +187,14 @@ namespace SmallMind.Engine
                 });
 
                 _turnCount++;
+
+                // Update cache tracking
+                if (_options.EnableKvCache && kvCache != null)
+                {
+                    _lastPromptTokenIds = promptTokenIds;
+                    _cachedTokenCount = promptTokenIds.Length;
+                    _kvCacheStore.Touch(sessionId);
+                }
 
                 return new GenerationResult
                 {
@@ -140,6 +228,40 @@ namespace SmallMind.Engine
             // Build full conversation prompt with truncation
             var prompt = BuildConversationPrompt(options.MaxNewTokens);
 
+            // Tokenize current prompt
+            var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
+
+            // Calculate KV cache delta and determine prefill strategy
+            SessionId sessionId = new SessionId(_sessionId);
+            KvCacheEntry? kvCache = null;
+            int startPosition = 0;
+            int maxTokens = _options.MaxKvCacheTokens ?? _modelHandle.Model.BlockSize;
+
+            if (_options.EnableKvCache)
+            {
+                // Get or create KV cache entry
+                kvCache = _kvCacheStore.GetOrCreate(sessionId, _modelShape, maxTokens);
+
+                // Calculate longest common prefix (LCP) with last prompt
+                if (_lastPromptTokenIds != null && kvCache.CurrentTokenCount > 0)
+                {
+                    int lcp = CalculateLongestCommonPrefix(_lastPromptTokenIds, promptTokenIds);
+
+                    // If LCP matches cached count, we can use incremental prefill
+                    if (lcp == _cachedTokenCount && lcp == kvCache.CurrentTokenCount)
+                    {
+                        startPosition = lcp;
+                    }
+                    else
+                    {
+                        // Cache mismatch or evicted - reset and do full prefill
+                        kvCache.Reset();
+                        startPosition = 0;
+                        _cachedTokenCount = 0;
+                    }
+                }
+            }
+
             // Generate streaming response
             var session = _modelHandle.CreateInferenceSession(options, _engineOptions);
             try
@@ -156,10 +278,30 @@ namespace SmallMind.Engine
                     isFinal: false);
 
                 bool isLast = false;
-                await foreach (var token in session.GenerateStreamAsync(
-                    prompt,
-                    metrics: null,
-                    cancellationToken: cancellationToken))
+                IAsyncEnumerable<GeneratedToken> tokenStream;
+
+                if (startPosition > 0 && kvCache != null)
+                {
+                    // Incremental prefill: only process new tokens
+                    var deltaTokenIds = new int[promptTokenIds.Length - startPosition];
+                    Array.Copy(promptTokenIds, startPosition, deltaTokenIds, 0, deltaTokenIds.Length);
+                    var deltaPrompt = _tokenizer.Decode(new List<int>(deltaTokenIds));
+
+                    tokenStream = session.GenerateStreamAsync(
+                        prompt: deltaPrompt,
+                        metrics: null,
+                        cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    // Full prefill
+                    tokenStream = session.GenerateStreamAsync(
+                        prompt: prompt,
+                        metrics: null,
+                        cancellationToken: cancellationToken);
+                }
+
+                await foreach (var token in tokenStream)
                 {
                     tokenCount++;
                     responseBuilder.Append(token.Text);
@@ -188,6 +330,14 @@ namespace SmallMind.Engine
 
                 _turnCount++;
 
+                // Update cache tracking
+                if (_options.EnableKvCache && kvCache != null)
+                {
+                    _lastPromptTokenIds = promptTokenIds;
+                    _cachedTokenCount = promptTokenIds.Length;
+                    _kvCacheStore.Touch(sessionId);
+                }
+
                 // Emit completed event
                 yield return new TokenEvent(
                     kind: TokenEventKind.Completed,
@@ -209,6 +359,14 @@ namespace SmallMind.Engine
             _conversationHistory.Clear();
             _turnCount = 0;
             _cachedTokenCount = 0;
+            _lastPromptTokenIds = null;
+
+            // Remove from KV cache store
+            if (_options.EnableKvCache)
+            {
+                SessionId sessionId = new SessionId(_sessionId);
+                _kvCacheStore.Remove(sessionId);
+            }
         }
 
         /// <summary>
@@ -475,6 +633,27 @@ namespace SmallMind.Engine
             };
         }
 
+        /// <summary>
+        /// Calculates the longest common prefix between two token arrays.
+        /// Used for delta calculation in incremental prefill.
+        /// </summary>
+        private int CalculateLongestCommonPrefix(int[] previous, int[] current)
+        {
+            int minLength = Math.Min(previous.Length, current.Length);
+            int lcp = 0;
+
+            for (int i = 0; i < minLength; i++)
+            {
+                if (previous[i] != current[i])
+                {
+                    break;
+                }
+                lcp++;
+            }
+
+            return lcp;
+        }
+
         private void ThrowIfDisposed()
         {
             if (_disposed)
@@ -488,6 +667,13 @@ namespace SmallMind.Engine
             if (_disposed)
             {
                 return;
+            }
+
+            // Remove from KV cache store on disposal
+            if (_options.EnableKvCache)
+            {
+                SessionId sessionId = new SessionId(_sessionId);
+                _kvCacheStore.Remove(sessionId);
             }
 
             _disposed = true;
