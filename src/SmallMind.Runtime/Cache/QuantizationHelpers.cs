@@ -33,6 +33,16 @@ namespace SmallMind.Runtime.Cache
             
             // Compute scale and offset
             float range = max - min;
+            
+            // Handle degenerate case where all values are identical
+            if (range < 1e-7f)
+            {
+                scale = 1.0f;
+                offset = min;
+                Array.Fill(output.ToArray(), (byte)127); // Mid-range value
+                return;
+            }
+            
             scale = range / 255.0f;
             offset = min;
             

@@ -47,14 +47,19 @@ namespace SmallMind.Core.Validation
                 {
                     Vector256<float> vec = Avx.LoadVector256(ptr + i);
                     
-                    // Check if any lane is NaN or Inf
-                    // NaN: any comparison returns false
-                    // Inf: check against max float
-                    var cmp = Avx.Compare(vec, vec, FloatComparisonMode.UnorderedNonSignaling);
+                    // Check for NaN using self-comparison
+                    var nanCheck = Avx.Compare(vec, vec, FloatComparisonMode.UnorderedNonSignaling);
                     
-                    if (!Avx.TestZ(cmp.AsInt32(), cmp.AsInt32()))
+                    // Check for Inf by comparing absolute value against max float
+                    var absVec = Avx.And(vec, Vector256.Create(0x7FFFFFFF).AsSingle());
+                    var infCheck = Avx.Compare(absVec, Vector256.Create(float.MaxValue), FloatComparisonMode.OrderedGreaterThanNonSignaling);
+                    
+                    // Combine checks
+                    var invalidCheck = Avx.Or(nanCheck.AsSingle(), infCheck.AsSingle());
+                    
+                    if (!Avx.TestZ(invalidCheck.AsInt32(), invalidCheck.AsInt32()))
                     {
-                        // Found NaN - locate which lane
+                        // Found invalid value - locate which lane
                         for (int j = 0; j < 8; j++)
                         {
                             if (!float.IsFinite(values[i + j]))

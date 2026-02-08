@@ -41,17 +41,7 @@ namespace SmallMind.Runtime.Constraints
                 if (openParen < 0) return false; // More closing than opening
             }
             
-            // Check quote balance (simple check for single and double quotes)
-            int singleQuotes = 0;
-            int doubleQuotes = 0;
-            foreach (char c in combined)
-            {
-                if (c == '\'') singleQuotes++;
-                else if (c == '"') doubleQuotes++;
-            }
-            
-            // Allow only if quotes are balanced or can be closed
-            return true; // Simplified - full SQL validation is complex
+            return true; // Simplified validation - parentheses check is primary constraint
         }
         
         public bool IsComplete(string generatedSoFar)

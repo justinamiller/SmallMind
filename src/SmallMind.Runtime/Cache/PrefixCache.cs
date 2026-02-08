@@ -67,7 +67,7 @@ namespace SmallMind.Runtime.Cache
         {
             if (_prefixes.TryGetValue(prefixHash, out var prefix))
             {
-                prefix.ReferenceCount++;
+                prefix.IncrementReference();
                 prefix.LastUsed = DateTime.UtcNow;
             }
         }
@@ -79,7 +79,7 @@ namespace SmallMind.Runtime.Cache
         {
             if (_prefixes.TryGetValue(prefixHash, out var prefix))
             {
-                prefix.ReferenceCount = Math.Max(0, prefix.ReferenceCount - 1);
+                prefix.DecrementReference();
             }
         }
         

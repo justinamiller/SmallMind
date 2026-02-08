@@ -47,7 +47,7 @@ namespace SmallMind.Runtime.Constraints
                         if (tagStack.Count == 0) return false; // Closing without opening
                         
                         string expected = tagStack.Pop();
-                        if (!tagName.Equals(expected, StringComparison.OrdinalIgnoreCase))
+                        if (!tagName.Equals(expected, StringComparison.Ordinal))
                             return false; // Mismatched tags
                     }
                     else if (tag.EndsWith("/")) // Self-closing tag
