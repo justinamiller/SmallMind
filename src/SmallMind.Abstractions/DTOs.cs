@@ -194,6 +194,21 @@ namespace SmallMind.Abstractions
         /// Gets or sets output constraints (e.g., JSON schema).
         /// </summary>
         public OutputConstraints? Constraints { get; set; }
+
+        /// <summary>
+        /// Creates generation options configured for JSON mode output.
+        /// </summary>
+        /// <param name="maxTokens">Maximum tokens to generate. Default: 500.</param>
+        /// <returns>GenerationOptions configured for JSON generation.</returns>
+        public static GenerationOptions JsonMode(int maxTokens = 500)
+        {
+            return new GenerationOptions
+            {
+                MaxNewTokens = maxTokens,
+                Temperature = 0.3,
+                Stop = new[] { "\n\n" }
+            };
+        }
     }
 
     /// <summary>
@@ -210,6 +225,32 @@ namespace SmallMind.Abstractions
         /// Gets or sets the regex pattern for output validation.
         /// </summary>
         public string? RegexPattern { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a source citation in RAG responses.
+    /// </summary>
+    public sealed class Citation
+    {
+        /// <summary>
+        /// Gets the source identifier or URI.
+        /// </summary>
+        public string Source { get; init; } = string.Empty;
+
+        /// <summary>
+        /// Gets the optional title of the source document.
+        /// </summary>
+        public string? Title { get; init; }
+
+        /// <summary>
+        /// Gets the optional snippet/excerpt from the source.
+        /// </summary>
+        public string? Snippet { get; init; }
+
+        /// <summary>
+        /// Gets the relevance score (0.0 to 1.0).
+        /// </summary>
+        public float RelevanceScore { get; init; }
     }
 
     /// <summary>
@@ -240,7 +281,7 @@ namespace SmallMind.Abstractions
         /// <summary>
         /// Gets the citations (for RAG).
         /// </summary>
-        public RagCitation[]? Citations { get; init; }
+        public IReadOnlyList<Citation>? Citations { get; init; }
 
         /// <summary>
         /// Gets warnings from the generation process (e.g., context truncation).

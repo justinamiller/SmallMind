@@ -1,14 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Abstractions;
+using SmallMind.Rag;
+using SmallMind.Rag.Pipeline;
+using SmallMind.Rag.Prompting;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Cache;
 using SmallMind.Tokenizers;
 using PublicGenerationOptions = SmallMind.Abstractions.GenerationOptions;
+using RagRetrievalOptions = SmallMind.Rag.RagOptions.RetrievalOptions;
 
 namespace SmallMind.Engine
 {
@@ -62,16 +68,28 @@ namespace SmallMind.Engine
         private readonly ChatTemplateType _templateType;
         private readonly IKvCacheStore _kvCacheStore;
         private readonly ModelShape _modelShape;
+        private readonly RagPipeline? _ragPipeline;
         private int _turnCount;
         private int _cachedTokenCount; // Actual cached token count from KV cache
         private int[]? _lastPromptTokenIds; // Last tokenized prompt for delta calculation
         private bool _lastTurnWasTruncated; // Track if last turn required truncation
         private bool _disposed;
+        
+        // Diagnostic counters
+        private int _truncatedTurns;
+        private int _kvCacheHits;
+        private int _kvCacheMisses;
+        private int _nanRecoveries;
+        private int _degenerateOutputRecoveries;
+        private long _totalTokensGenerated;
+        private long _totalTokensFromCache;
+        private readonly Stopwatch _totalInferenceTimer = new Stopwatch();
 
         public ChatSession(
             ModelHandle modelHandle,
             ChatSessionOptions options,
-            SmallMindOptions engineOptions)
+            SmallMindOptions engineOptions,
+            RagPipeline? ragPipeline = null)
         {
             _modelHandle = modelHandle ?? throw new ArgumentNullException(nameof(modelHandle));
             _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -80,6 +98,7 @@ namespace SmallMind.Engine
             _conversationHistory = new List<ChatMessage>();
             _sessionId = options.SessionId ?? Guid.NewGuid().ToString("N");
             _createdAt = DateTimeOffset.UtcNow;
+            _ragPipeline = ragPipeline;
 
             // Detect or use configured chat template
             _templateType = options.ChatTemplateType == ChatTemplateType.Auto
@@ -148,12 +167,68 @@ namespace SmallMind.Engine
                 throw new ArgumentNullException(nameof(message));
             }
 
+            _totalInferenceTimer.Start();
+
             // Add user message to history
             _conversationHistory.Add(message);
 
-            // Apply overflow strategy and build conversation prompt
+            // RAG integration
+            List<Citation>? citations = null;
+            string prompt;
             List<string>? warnings = null;
-            var prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
+
+            if (_options.EnableRag && _ragPipeline != null && message.Role == ChatRole.User)
+            {
+                // Retrieve relevant chunks
+                var topK = _options.RagOptions?.TopK ?? 5;
+                var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
+
+                // Build RAG prompt
+                var chunkStore = new Dictionary<string, Chunk>();
+                foreach (var chunk in chunks)
+                {
+                    if (!chunkStore.ContainsKey(chunk.ChunkId))
+                    {
+                        chunkStore[chunk.ChunkId] = new Chunk
+                        {
+                            ChunkId = chunk.ChunkId,
+                            DocId = chunk.DocId,
+                            Text = chunk.Excerpt,
+                            SourceUri = chunk.DocId,
+                            Title = chunk.DocId
+                        };
+                    }
+                }
+
+                var composer = new PromptComposer(new RagRetrievalOptions { TopK = topK });
+                var ragPrompt = composer.ComposePrompt(message.Content, chunks, chunkStore);
+
+                // Build conversation context with RAG prompt
+                var tempHistory = new List<ChatMessage>(_conversationHistory);
+                tempHistory[tempHistory.Count - 1] = new ChatMessage
+                {
+                    Role = ChatRole.User,
+                    Content = ragPrompt
+                };
+                prompt = BuildPromptFromMessages(tempHistory);
+
+                // Extract citations
+                if (_options.RagOptions?.IncludeCitations ?? true)
+                {
+                    citations = chunks.Select((c, idx) => new Citation
+                    {
+                        Source = c.DocId,
+                        Title = c.DocId,
+                        Snippet = c.Excerpt,
+                        RelevanceScore = c.Score
+                    }).ToList();
+                }
+            }
+            else
+            {
+                // Apply overflow strategy and build conversation prompt
+                prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
+            }
 
             // Tokenize current prompt
             var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
@@ -178,6 +253,8 @@ namespace SmallMind.Engine
                     if (lcp == _cachedTokenCount && lcp == kvCache.CurrentTokenCount)
                     {
                         startPosition = lcp;
+                        _kvCacheHits++;
+                        _totalTokensFromCache += lcp;
                     }
                     else
                     {
@@ -185,8 +262,35 @@ namespace SmallMind.Engine
                         kvCache.Reset();
                         startPosition = 0;
                         _cachedTokenCount = 0;
+                        _kvCacheMisses++;
                     }
                 }
+                else
+                {
+                    _kvCacheMisses++;
+                }
+            }
+
+            // OOM protection: rough estimate of memory needed
+            long estimatedMemoryBytes = (long)options.MaxNewTokens * _modelHandle.Model.EmbedDim * 4; // rough estimate
+            var gcInfo = GC.GetGCMemoryInfo();
+            if (gcInfo.TotalAvailableMemoryBytes > 0)
+            {
+                double usageRatio = (double)estimatedMemoryBytes / gcInfo.TotalAvailableMemoryBytes;
+                if (usageRatio > 0.9)
+                {
+                    throw new Abstractions.InsufficientMemoryException(estimatedMemoryBytes, gcInfo.TotalAvailableMemoryBytes);
+                }
+            }
+
+            // Timeout support
+            CancellationTokenSource? timeoutCts = null;
+            CancellationToken effectiveToken = cancellationToken;
+            if (options.TimeoutMs > 0)
+            {
+                timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(options.TimeoutMs);
+                effectiveToken = timeoutCts.Token;
             }
 
             // Generate response
@@ -204,7 +308,7 @@ namespace SmallMind.Engine
                     response = await session.GenerateAsync(
                         prompt: deltaPrompt,
                         metrics: null,
-                        cancellationToken: cancellationToken);
+                        cancellationToken: effectiveToken);
                 }
                 else
                 {
@@ -212,7 +316,15 @@ namespace SmallMind.Engine
                     response = await session.GenerateAsync(
                         prompt: prompt,
                         metrics: null,
-                        cancellationToken: cancellationToken);
+                        cancellationToken: effectiveToken);
+                }
+
+                // Degenerate output detection
+                var (cleanedResponse, stopReason) = DetectAndCleanDegenerateOutput(response, options);
+                if (stopReason != "completed")
+                {
+                    _degenerateOutputRecoveries++;
+                    response = cleanedResponse;
                 }
 
                 // Add assistant response to history
@@ -223,6 +335,8 @@ namespace SmallMind.Engine
                 });
 
                 _turnCount++;
+                _totalTokensGenerated += options.MaxNewTokens; // Approximate
+                _totalInferenceTimer.Stop();
 
                 // Update cache tracking
                 if (_options.EnableKvCache && kvCache != null)
@@ -237,12 +351,28 @@ namespace SmallMind.Engine
                     Text = response,
                     GeneratedTokens = options.MaxNewTokens, // Approximate
                     StoppedByBudget = false,
-                    StopReason = "completed",
+                    StopReason = stopReason,
+                    Citations = citations,
+                    Warnings = warnings
+                };
+            }
+            catch (OperationCanceledException) when (options.TimeoutMs > 0)
+            {
+                _totalInferenceTimer.Stop();
+                // Timeout - return partial result if available
+                return new GenerationResult
+                {
+                    Text = string.Empty,
+                    GeneratedTokens = 0,
+                    StoppedByBudget = true,
+                    StopReason = "timeout",
+                    Citations = citations,
                     Warnings = warnings
                 };
             }
             finally
             {
+                timeoutCts?.Dispose();
                 session.Dispose();
             }
         }
@@ -259,12 +389,68 @@ namespace SmallMind.Engine
                 throw new ArgumentNullException(nameof(message));
             }
 
+            _totalInferenceTimer.Start();
+
             // Add user message to history
             _conversationHistory.Add(message);
 
-            // Apply overflow strategy and build conversation prompt
+            // RAG integration
+            List<Citation>? citations = null;
+            string prompt;
             List<string>? warnings = null;
-            var prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
+
+            if (_options.EnableRag && _ragPipeline != null && message.Role == ChatRole.User)
+            {
+                // Retrieve relevant chunks
+                var topK = _options.RagOptions?.TopK ?? 5;
+                var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
+
+                // Build RAG prompt
+                var chunkStore = new Dictionary<string, Chunk>();
+                foreach (var chunk in chunks)
+                {
+                    if (!chunkStore.ContainsKey(chunk.ChunkId))
+                    {
+                        chunkStore[chunk.ChunkId] = new Chunk
+                        {
+                            ChunkId = chunk.ChunkId,
+                            DocId = chunk.DocId,
+                            Text = chunk.Excerpt,
+                            SourceUri = chunk.DocId,
+                            Title = chunk.DocId
+                        };
+                    }
+                }
+
+                var composer = new PromptComposer(new RagRetrievalOptions { TopK = topK });
+                var ragPrompt = composer.ComposePrompt(message.Content, chunks, chunkStore);
+
+                // Build conversation context with RAG prompt
+                var tempHistory = new List<ChatMessage>(_conversationHistory);
+                tempHistory[tempHistory.Count - 1] = new ChatMessage
+                {
+                    Role = ChatRole.User,
+                    Content = ragPrompt
+                };
+                prompt = BuildPromptFromMessages(tempHistory);
+
+                // Extract citations
+                if (_options.RagOptions?.IncludeCitations ?? true)
+                {
+                    citations = chunks.Select((c, idx) => new Citation
+                    {
+                        Source = c.DocId,
+                        Title = c.DocId,
+                        Snippet = c.Excerpt,
+                        RelevanceScore = c.Score
+                    }).ToList();
+                }
+            }
+            else
+            {
+                // Apply overflow strategy and build conversation prompt
+                prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
+            }
 
             // Tokenize current prompt
             var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
@@ -369,6 +555,8 @@ namespace SmallMind.Engine
                 });
 
                 _turnCount++;
+                _totalTokensGenerated += tokenCount;
+                _totalInferenceTimer.Stop();
 
                 // Update cache tracking
                 if (_options.EnableKvCache && kvCache != null)
@@ -378,13 +566,22 @@ namespace SmallMind.Engine
                     _kvCacheStore.Touch(sessionId);
                 }
 
-                // Emit completed event
+                // Emit completed event with citations if RAG was used
+                // Note: For streaming, we use the error field to pass citation JSON as metadata
+                string? citationMetadata = null;
+                if (citations != null && citations.Count > 0)
+                {
+                    // Simplified: just include source count
+                    citationMetadata = $"Citations: {citations.Count} sources";
+                }
+
                 yield return new TokenEvent(
                     kind: TokenEventKind.Completed,
                     text: ReadOnlyMemory<char>.Empty,
                     tokenId: -1,
                     generatedTokens: tokenCount,
-                    isFinal: true);
+                    isFinal: true,
+                    error: citationMetadata);
             }
             finally
             {
@@ -408,6 +605,93 @@ namespace SmallMind.Engine
                 SessionId sessionId = new SessionId(_sessionId);
                 _kvCacheStore.Remove(sessionId);
             }
+        }
+
+        /// <summary>
+        /// Gets diagnostic metrics for this chat session.
+        /// </summary>
+        public ChatSessionDiagnostics GetDiagnostics()
+        {
+            ThrowIfDisposed();
+
+            double avgTokensPerSecond = 0;
+            if (_totalInferenceTimer.Elapsed.TotalSeconds > 0)
+            {
+                avgTokensPerSecond = _totalTokensGenerated / _totalInferenceTimer.Elapsed.TotalSeconds;
+            }
+
+            return new ChatSessionDiagnostics
+            {
+                TotalTurns = _turnCount,
+                TruncatedTurns = _truncatedTurns,
+                KvCacheHits = _kvCacheHits,
+                KvCacheMisses = _kvCacheMisses,
+                NaNRecoveries = _nanRecoveries, // TODO: Implement NaN detection in attention layers
+                DegenerateOutputRecoveries = _degenerateOutputRecoveries,
+                TotalTokensGenerated = _totalTokensGenerated,
+                TotalTokensFromCache = _totalTokensFromCache,
+                AverageTokensPerSecond = avgTokensPerSecond,
+                TotalInferenceTime = _totalInferenceTimer.Elapsed
+            };
+        }
+
+        /// <summary>
+        /// Detects and cleans degenerate output (repetition, prompt leakage).
+        /// Returns cleaned text and stop reason.
+        /// </summary>
+        private (string cleanedText, string stopReason) DetectAndCleanDegenerateOutput(string text, PublicGenerationOptions options)
+        {
+            if (string.IsNullOrEmpty(text))
+                return (text, "completed");
+
+            // Tokenize to check for repetition
+            var tokens = _tokenizer.Encode(text).ToArray();
+
+            // Check for degenerate repetition (last 20 tokens identical)
+            if (tokens.Length >= 40)
+            {
+                bool isRepetitive = true;
+                int checkLength = Math.Min(20, tokens.Length / 2);
+                for (int i = 0; i < checkLength; i++)
+                {
+                    if (tokens[tokens.Length - checkLength + i] != tokens[tokens.Length - 2 * checkLength + i])
+                    {
+                        isRepetitive = false;
+                        break;
+                    }
+                }
+
+                if (isRepetitive)
+                {
+                    // Truncate to remove repetition
+                    int truncateAt = tokens.Length - checkLength;
+                    var cleanedTokens = tokens.Take(truncateAt).ToList();
+                    return (_tokenizer.Decode(cleanedTokens), "degenerate_repetition");
+                }
+            }
+
+            // Check for prompt leakage
+            if (text.Contains("User:") || text.Contains("System:") || text.Contains("USER:") || text.Contains("SYSTEM:"))
+            {
+                // Find boundary and truncate
+                int userIdx = text.IndexOf("User:", StringComparison.OrdinalIgnoreCase);
+                int systemIdx = text.IndexOf("System:", StringComparison.OrdinalIgnoreCase);
+                int truncateIdx = -1;
+
+                if (userIdx >= 0 && systemIdx >= 0)
+                    truncateIdx = Math.Min(userIdx, systemIdx);
+                else if (userIdx >= 0)
+                    truncateIdx = userIdx;
+                else if (systemIdx >= 0)
+                    truncateIdx = systemIdx;
+
+                if (truncateIdx > 0)
+                {
+                    return (text.Substring(0, truncateIdx).TrimEnd(), "prompt_leakage");
+                }
+            }
+
+            return (text, "completed");
         }
 
         /// <summary>
@@ -569,6 +853,7 @@ namespace SmallMind.Engine
             if (removedCount > 0)
             {
                 _lastTurnWasTruncated = true;
+                _truncatedTurns++; // Track for diagnostics
 
                 if (warnings == null)
                 {
