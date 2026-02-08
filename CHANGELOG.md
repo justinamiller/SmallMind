@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added - Level 3.0 Enhancements
+
+#### GGUF Loading Improvements
+- **QKV Double-Read Fix**: Q/K/V tensors in GGUF models are now read exactly once during merging, eliminating redundant dequantization
+  - Added tensor read counters and logging for transparency
+  - Moved PENDING_/MERGE_QKV check before ReadAndDequantizeTensor for efficiency
+  - For SmolLM2-135M: Q/K/V tensors read only during merge, not in main loop
+
+#### GGUF Validation Command
+- **run-gguf Command**: End-to-end GGUF model validation with coherence checking
+  - Loads GGUF models directly using GgufModelLoader.LoadFromGguf
+  - Creates InferenceSession and generates text
+  - Reports load time, generation time, and tokens/sec metrics
+  - Minimal coherence check validates English text output
+  - Exit codes: 0 (coherent output), 1 (error/usage), 2 (garbage output)
+  - Example: `dotnet run --project src/SmallMind.Console -- run-gguf model.gguf "prompt"`
+
+#### Sampling Enhancements
+- **Top-P (Nucleus) Sampling**: Added nucleus sampling support to legacy Sampling class
+  - New `topP` parameter in Generate method (default: 1.0)
+  - ApplyTopP method implements efficient nucleus sampling with probability filtering
+  - Uses ArrayPool to minimize allocations in hot path
+  - Re-normalizes filtered probability distribution for correctness
+
+### Deprecated
+- **Sampling Class**: Marked as obsolete in favor of InferenceSession
+  - Obsolete warning directs users to InferenceSession for TopP, MinP, repetition penalties, and async streaming
+  - Will be removed in v1.0
+
+### Changed
+- **GgufModelLoader.LoadWeights**: Optimized to avoid reading Q/K/V tensors twice
+- **GgufModelLoader.MergeQKVWeights**: Now returns count of Q/K/V tensor reads for metrics
+
 ## [0.3.0] - 2026-02-01
 
 ### Added - Advanced Training & Usability Enhancements

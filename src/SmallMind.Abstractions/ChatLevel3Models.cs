@@ -402,7 +402,12 @@ namespace SmallMind.Abstractions
     /// </summary>
     public sealed class NoOpTelemetry : IChatTelemetry
     {
-        public static readonly NoOpTelemetry Instance = new NoOpTelemetry();
+        /// <summary>
+        /// Singleton instance of NoOpTelemetry.
+        /// </summary>
+        public static NoOpTelemetry Instance { get; } = new NoOpTelemetry();
+
+        private NoOpTelemetry() { }
 
         public void OnRequestStart(string sessionId, int messageCount) { }
         public void OnFirstToken(string sessionId, double elapsedMs) { }
@@ -501,7 +506,12 @@ namespace SmallMind.Abstractions
     /// </summary>
     public sealed class NoOpRetrievalProvider : IRetrievalProvider
     {
-        public static readonly NoOpRetrievalProvider Instance = new NoOpRetrievalProvider();
+        /// <summary>
+        /// Singleton instance of NoOpRetrievalProvider.
+        /// </summary>
+        public static NoOpRetrievalProvider Instance { get; } = new NoOpRetrievalProvider();
+
+        private NoOpRetrievalProvider() { }
 
         public IReadOnlyList<RetrievedChunk> Retrieve(string query, int topK = 5)
         {
