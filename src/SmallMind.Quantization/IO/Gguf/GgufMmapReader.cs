@@ -17,7 +17,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// Expected TTFT improvement: 5-20x faster load time for multi-GB models
     /// Memory overhead: ~metadata size only (vs full model size)
     /// </summary>
-    public sealed class GgufMmapReader : IDisposable
+    public sealed class GgufMmapReader : ITensorDataReader, IDisposable
     {
         private const string ExpectedMagic = "GGUF";
         private const uint SupportedVersionMin = 2;

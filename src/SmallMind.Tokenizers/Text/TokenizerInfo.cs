@@ -41,6 +41,11 @@ namespace SmallMind.Tokenizers
         public bool SupportsByteFallback { get; }
 
         /// <summary>
+        /// Whether to automatically prepend BOS token during encoding (Llama-family models).
+        /// </summary>
+        public bool AddBos { get; }
+
+        /// <summary>
         /// Creates a new TokenizerInfo instance.
         /// </summary>
         public TokenizerInfo(
@@ -50,7 +55,8 @@ namespace SmallMind.Tokenizers
             int eosTokenId = -1,
             int padTokenId = -1,
             int unkTokenId = -1,
-            bool supportsByteFallback = false)
+            bool supportsByteFallback = false,
+            bool addBos = true)
         {
             Name = name;
             VocabSize = vocabSize;
@@ -59,6 +65,8 @@ namespace SmallMind.Tokenizers
             PadTokenId = padTokenId;
             UnkTokenId = unkTokenId;
             SupportsByteFallback = supportsByteFallback;
+            // Only add BOS if explicitly requested and BOS token is available
+            AddBos = addBos && bosTokenId >= 0;
         }
     }
 }

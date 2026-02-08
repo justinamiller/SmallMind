@@ -190,4 +190,91 @@ public class GgufBpeTokenizerTests
         Assert.NotEmpty(tokens);
         Assert.Equal(bosTokenId, tokens[0]);
     }
+
+    [Fact]
+    public void GgufBpeTokenizer_Decode_SkipsBosToken()
+    {
+        // Arrange
+        var vocab = new Dictionary<string, int>
+        {
+            ["<s>"] = 1,      // BOS token
+            ["h"] = 100,
+            ["e"] = 101,
+            ["l"] = 102,
+            ["o"] = 103,
+        };
+        
+        var merges = new List<(string, string)>();
+        int bosTokenId = 1;
+        
+        var tokenizer = new GgufBpeTokenizer(
+            vocab, 
+            merges, 
+            bosTokenId, 
+            eosTokenId: 2, 
+            unkTokenId: -1, 
+            isByteLevelBpe: false);
+
+        // Act - Decode tokens with BOS at start
+        var tokensWithBos = new List<int> { 1, 100, 101, 102, 103 }; // <s> h e l o
+        var decoded = tokenizer.Decode(tokensWithBos);
+        
+        // Assert - BOS should be stripped, only "helo" remains
+        Assert.Equal("helo", decoded);
+    }
+
+    [Fact]
+    public void GgufBpeTokenizer_Decode_WithoutBosToken()
+    {
+        // Arrange
+        var vocab = new Dictionary<string, int>
+        {
+            ["<s>"] = 1,
+            ["t"] = 100,
+            ["e"] = 101,
+            ["s"] = 102,
+        };
+        
+        var merges = new List<(string, string)>();
+        int bosTokenId = 1;
+        
+        var tokenizer = new GgufBpeTokenizer(
+            vocab, 
+            merges, 
+            bosTokenId, 
+            eosTokenId: 2, 
+            unkTokenId: -1, 
+            isByteLevelBpe: false);
+
+        // Act - Decode tokens without BOS at start
+        var tokensNoBos = new List<int> { 100, 101, 102 }; // t e s
+        var decoded = tokenizer.Decode(tokensNoBos);
+        
+        // Assert - All tokens should be decoded
+        Assert.Equal("tes", decoded);
+    }
+
+    [Fact]
+    public void GgufBpeTokenizer_AddBosProperty_IsTrueWhenBosTokenConfigured()
+    {
+        // Arrange & Act
+        var vocab = new Dictionary<string, int> { ["<s>"] = 1, ["a"] = 100 };
+        var merges = new List<(string, string)>();
+        var tokenizer = new GgufBpeTokenizer(vocab, merges, bosTokenId: 1);
+
+        // Assert
+        Assert.True(tokenizer.Info.AddBos);
+    }
+
+    [Fact]
+    public void GgufBpeTokenizer_AddBosProperty_IsFalseWhenBosTokenNotConfigured()
+    {
+        // Arrange & Act
+        var vocab = new Dictionary<string, int> { ["a"] = 100 };
+        var merges = new List<(string, string)>();
+        var tokenizer = new GgufBpeTokenizer(vocab, merges, bosTokenId: -1);
+
+        // Assert
+        Assert.False(tokenizer.Info.AddBos);
+    }
 }
