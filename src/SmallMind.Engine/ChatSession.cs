@@ -273,13 +273,13 @@ namespace SmallMind.Engine
             var includedTurns = new List<string>();
             int currentTokens = systemTokens;
 
+            // Calculate assistant prefix tokens once
+            int assistantPrefixTokens = _tokenizer.Encode("Assistant:").Count;
+
             for (int i = turnStrings.Count - 1; i >= 0; i--)
             {
                 string turn = turnStrings[i];
                 int turnTokens = _tokenizer.Encode(turn + "\n").Count;
-
-                // Reserve space for "Assistant:" prefix
-                int assistantPrefixTokens = _tokenizer.Encode("Assistant:").Count;
 
                 if (currentTokens + turnTokens + assistantPrefixTokens > contextLimit)
                 {
@@ -428,10 +428,6 @@ namespace SmallMind.Engine
                 ChatRole.Assistant => "assistant",
                 _ => "user"
             };
-            if (msg.Role == ChatRole.Assistant)
-            {
-                return $"<|start_header_id|>{role}<|end_header_id|>\n\n{msg.Content}<|eot_id|>";
-            }
             return $"<|start_header_id|>{role}<|end_header_id|>\n\n{msg.Content}<|eot_id|>";
         }
 
