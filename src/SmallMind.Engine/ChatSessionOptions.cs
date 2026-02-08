@@ -113,6 +113,18 @@ namespace SmallMind.Engine
         /// Only used when EnableRag is true.
         /// </summary>
         public RagOptions? RagOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the default context policy for Level 3 chat requests.
+        /// If null, no policy is applied by default.
+        /// </summary>
+        public IContextPolicy? DefaultContextPolicy { get; set; }
+
+        /// <summary>
+        /// Gets or sets the default telemetry implementation for Level 3 chat requests.
+        /// If null, NoOpTelemetry is used.
+        /// </summary>
+        public IChatTelemetry? DefaultTelemetry { get; set; }
     }
 
     /// <summary>

@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using SmallMind.Abstractions;
 
 namespace SmallMind.Runtime.Cache
 {
     /// <summary>
     /// LRU-based KV cache store with O(1) get/touch/remove operations.
     /// Thread-safe implementation with bounded memory and session count.
+    /// Supports per-session memory budgets with budget telemetry events.
     /// </summary>
     public sealed class LruKvCacheStore : IKvCacheStore, IDisposable
     {
@@ -27,6 +29,7 @@ namespace SmallMind.Runtime.Cache
         private readonly KvCacheOptions _options;
         private readonly Dictionary<SessionId, LruNode> _cache;
         private readonly ReaderWriterLockSlim _lock;
+        private readonly IChatTelemetry? _telemetry;
         
         // LRU list (head = most recent, tail = least recent)
         private LruNode? _head;
@@ -41,10 +44,11 @@ namespace SmallMind.Runtime.Cache
         private long _reusedTokens;
         private bool _disposed;
 
-        public LruKvCacheStore(KvCacheOptions options)
+        public LruKvCacheStore(KvCacheOptions options, IChatTelemetry? telemetry = null)
         {
             _options = options?.Clone() ?? throw new ArgumentNullException(nameof(options));
             _options.Validate();
+            _telemetry = telemetry;
             
             _cache = new Dictionary<SessionId, LruNode>();
             _lock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
@@ -123,6 +127,22 @@ namespace SmallMind.Runtime.Cache
                     Interlocked.Increment(ref _misses);
                     
                     var entry = new KvCacheEntry(sessionId, modelShape, maxTokens);
+                    
+                    // Check per-session budget
+                    if (entry.SizeBytes > _options.MaxBytesPerSession)
+                    {
+                        // Emit telemetry event
+                        _telemetry?.OnKvCacheBudgetExceeded(
+                            sessionId.ToString(), 
+                            entry.SizeBytes, 
+                            _options.MaxBytesPerSession);
+                        
+                        entry.Dispose();
+                        throw new InvalidOperationException(
+                            $"Session cache size {entry.SizeBytes / 1024 / 1024}MB exceeds " +
+                            $"per-session budget {_options.MaxBytesPerSession / 1024 / 1024}MB");
+                    }
+                    
                     var newNode = new LruNode(sessionId, entry);
                     
                     // Evict if necessary before adding
@@ -307,7 +327,15 @@ namespace SmallMind.Runtime.Cache
             RemoveNode(lruNode);
             _cache.Remove(lruNode.SessionId);
             
-            _currentBytes -= lruNode.Entry.SizeBytes;
+            long freedBytes = lruNode.Entry.SizeBytes;
+            _currentBytes -= freedBytes;
+            
+            // Emit telemetry event
+            _telemetry?.OnKvCacheEviction(
+                lruNode.SessionId.ToString(), 
+                "LRU eviction", 
+                freedBytes);
+            
             lruNode.Entry.Dispose();
             
             Interlocked.Increment(ref _evictions);

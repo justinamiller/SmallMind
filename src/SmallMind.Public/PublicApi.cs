@@ -27,6 +27,11 @@ namespace SmallMind.Public
         /// Creates an embedding session with the specified options.
         /// </summary>
         IEmbeddingSession CreateEmbeddingSession(EmbeddingOptions options);
+
+        /// <summary>
+        /// Creates a Level 3 chat client with the specified options.
+        /// </summary>
+        IChatClient CreateChatClient(ChatClientOptions options);
     }
 
     // ============================================================
@@ -410,6 +415,71 @@ namespace SmallMind.Public
         /// Token usage statistics.
         /// </summary>
         public required Usage Usage { get; init; }
+    }
+
+    // ============================================================
+    // LEVEL 3 CHAT CLIENT API
+    // ============================================================
+
+    /// <summary>
+    /// Level 3 chat client interface for product-grade chat sessions.
+    /// Supports messages-first design, context policies, tools, and RAG.
+    /// </summary>
+    public interface IChatClient : IDisposable
+    {
+        /// <summary>
+        /// Sends a chat request and returns the response.
+        /// </summary>
+        Abstractions.ChatResponse SendChat(Abstractions.ChatRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Adds a system message to the conversation context.
+        /// </summary>
+        void AddSystemMessage(string content);
+
+        /// <summary>
+        /// Gets the session information (ID, turn count, cache stats).
+        /// </summary>
+        Abstractions.SessionInfo GetSessionInfo();
+    }
+
+    /// <summary>
+    /// Options for creating a chat client.
+    /// </summary>
+    public sealed class ChatClientOptions
+    {
+        /// <summary>
+        /// Gets or sets the session ID. If null, a new ID is generated.
+        /// </summary>
+        public string? SessionId { get; init; }
+
+        /// <summary>
+        /// Gets or sets whether to enable KV cache.
+        /// Default: true.
+        /// </summary>
+        public bool EnableKvCache { get; init; } = true;
+
+        /// <summary>
+        /// Gets or sets the maximum KV cache size in tokens.
+        /// If null, uses the model's max context.
+        /// </summary>
+        public int? MaxKvCacheTokens { get; init; }
+
+        /// <summary>
+        /// Gets or sets the default context policy for requests.
+        /// </summary>
+        public Abstractions.IContextPolicy? DefaultContextPolicy { get; init; }
+
+        /// <summary>
+        /// Gets or sets the default telemetry implementation.
+        /// </summary>
+        public Abstractions.IChatTelemetry? DefaultTelemetry { get; init; }
+
+        /// <summary>
+        /// Gets or sets whether to enable RAG.
+        /// Default: false.
+        /// </summary>
+        public bool EnableRag { get; init; } = false;
     }
 
     // ============================================================

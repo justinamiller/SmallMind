@@ -46,6 +46,13 @@ namespace SmallMind.Runtime.Cache
         public long MaxBytesTotal { get; set; } = 1L * 1024 * 1024 * 1024;
 
         /// <summary>
+        /// Gets or sets the maximum memory (bytes) per individual session.
+        /// Prevents a single session from consuming all available cache memory.
+        /// Default: 100MB.
+        /// </summary>
+        public long MaxBytesPerSession { get; set; } = 100L * 1024 * 1024;
+
+        /// <summary>
         /// Gets or sets the eviction policy.
         /// Default: LRU.
         /// </summary>
@@ -84,6 +91,13 @@ namespace SmallMind.Runtime.Cache
             
             if (MaxBytesTotal <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxBytesTotal), "Must be greater than 0");
+
+            if (MaxBytesPerSession <= 0)
+                throw new ArgumentOutOfRangeException(nameof(MaxBytesPerSession), "Must be greater than 0");
+
+            if (MaxBytesPerSession > MaxBytesTotal)
+                throw new ArgumentOutOfRangeException(nameof(MaxBytesPerSession), 
+                    "Cannot exceed MaxBytesTotal");
         }
 
         /// <summary>
@@ -97,6 +111,7 @@ namespace SmallMind.Runtime.Cache
                 MaxTokensPerSession = MaxTokensPerSession,
                 MaxSessions = MaxSessions,
                 MaxBytesTotal = MaxBytesTotal,
+                MaxBytesPerSession = MaxBytesPerSession,
                 Policy = Policy,
                 PersistAcrossRequests = PersistAcrossRequests,
                 EnablePrefixSharing = EnablePrefixSharing,

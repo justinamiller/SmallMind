@@ -125,6 +125,18 @@ namespace SmallMind.Abstractions
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Sends a chat request with Level 3 features (messages, tools, format, telemetry).
+        /// </summary>
+        /// <param name="request">Chat request with messages and options.</param>
+        /// <param name="telemetry">Optional telemetry implementation.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Chat response.</returns>
+        ValueTask<ChatResponse> SendAsync(
+            ChatRequest request,
+            IChatTelemetry? telemetry = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Resets the session (clears conversation and KV cache).
         /// </summary>
         void Reset();

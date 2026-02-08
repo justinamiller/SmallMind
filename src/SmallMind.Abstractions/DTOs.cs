@@ -469,7 +469,12 @@ namespace SmallMind.Abstractions
         /// <summary>
         /// Assistant role (model output).
         /// </summary>
-        Assistant
+        Assistant,
+
+        /// <summary>
+        /// Tool role (tool execution results for function calling).
+        /// </summary>
+        Tool
     }
 
     /// <summary>
