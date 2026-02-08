@@ -5,14 +5,20 @@ using SmallMind.Abstractions;
 namespace SmallMind.Transformers
 {
     /// <summary>
-    /// Configuration for transformer models, particularly Llama-based architectures.
+    /// Unified configuration for transformer models supporting multiple architectures.
+    /// Supports: Llama, Mistral, Phi, GPT-2.
     /// </summary>
     public sealed class ModelConfig
     {
         /// <summary>
-        /// Model architecture name (e.g., "llama", "gpt2").
+        /// Model architecture name (e.g., "llama", "mistral", "phi3", "gpt2").
         /// </summary>
         public string Architecture { get; set; } = "llama";
+
+        /// <summary>
+        /// Model name (optional, for documentation).
+        /// </summary>
+        public string? Name { get; set; }
 
         /// <summary>
         /// Vocabulary size (number of unique tokens).
@@ -20,12 +26,12 @@ namespace SmallMind.Transformers
         public int VocabSize { get; set; }
 
         /// <summary>
-        /// Context length (maximum sequence length).
+        /// Maximum sequence length (context window).
         /// </summary>
         public int ContextLength { get; set; }
 
         /// <summary>
-        /// Embedding dimension (model width).
+        /// Embedding dimension (model width / hidden size).
         /// </summary>
         public int EmbeddingLength { get; set; }
 
@@ -47,34 +53,74 @@ namespace SmallMind.Transformers
         public int HeadCountKv { get; set; }
 
         /// <summary>
-        /// Feed-forward hidden dimension (typically 4x EmbeddingLength for standard, ~2.66x for SwiGLU).
+        /// Feed-forward intermediate dimension (typically 4x EmbeddingLength for standard, ~2.66x for SwiGLU).
         /// </summary>
         public int FeedForwardLength { get; set; }
 
         /// <summary>
-        /// RoPE frequency base (theta).
+        /// Head dimension (computed as EmbeddingLength / HeadCount).
+        /// </summary>
+        public int HeadDim => EmbeddingLength / HeadCount;
+
+        /// <summary>
+        /// RoPE frequency base (theta). Default is 10000.0 for Llama.
         /// </summary>
         public double RopeFreqBase { get; set; } = 10000.0;
 
         /// <summary>
-        /// RMSNorm epsilon value.
+        /// RoPE scaling type (null, "linear", "yarn", etc.). Null means no scaling.
         /// </summary>
-        public double RmsNormEps { get; set; } = 1e-5;
+        public string? RopeScalingType { get; set; }
 
         /// <summary>
-        /// Whether to use RoPE (Rotary Position Embeddings).
+        /// RoPE scaling factor (for extending context length). 1.0 means no scaling.
+        /// </summary>
+        public double RopeScalingFactor { get; set; } = 1.0;
+
+        /// <summary>
+        /// Normalization epsilon value (for RMSNorm or LayerNorm).
+        /// </summary>
+        public double NormEps { get; set; } = 1e-5;
+
+        /// <summary>
+        /// Normalization type: "rms" for RMSNorm, "layer" for LayerNorm.
+        /// </summary>
+        public string NormType { get; set; } = "rms";
+
+        /// <summary>
+        /// Whether to use RoPE (Rotary Position Embeddings). False means learned positional embeddings.
         /// </summary>
         public bool UseRope { get; set; } = true;
 
         /// <summary>
-        /// Whether to use RMSNorm instead of LayerNorm.
+        /// MLP activation type: "gelu", "swiglu", "geglu".
         /// </summary>
-        public bool UseRmsNorm { get; set; } = true;
+        public string MlpType { get; set; } = "swiglu";
 
         /// <summary>
-        /// Whether to use SwiGLU activation (gated MLP) instead of standard MLP.
+        /// Whether to use bias in linear layers.
         /// </summary>
-        public bool UseSwiGlu { get; set; } = true;
+        public bool UseBias { get; set; } = false;
+
+        /// <summary>
+        /// BOS (beginning-of-sequence) token ID.
+        /// </summary>
+        public int BosTokenId { get; set; } = -1;
+
+        /// <summary>
+        /// EOS (end-of-sequence) token ID.
+        /// </summary>
+        public int EosTokenId { get; set; } = -1;
+
+        /// <summary>
+        /// PAD (padding) token ID.
+        /// </summary>
+        public int PadTokenId { get; set; } = -1;
+
+        /// <summary>
+        /// Mistral: Sliding window attention size (0 = disabled).
+        /// </summary>
+        public int SlidingWindowSize { get; set; } = 0;
 
         /// <summary>
         /// Dropout rate (typically 0.0 for inference).
@@ -82,7 +128,18 @@ namespace SmallMind.Transformers
         public double Dropout { get; set; } = 0.0;
 
         /// <summary>
+        /// Convenience property: whether to use RMSNorm (derived from NormType).
+        /// </summary>
+        public bool UseRmsNorm => NormType == "rms";
+
+        /// <summary>
+        /// Convenience property: whether to use SwiGLU (derived from MlpType).
+        /// </summary>
+        public bool UseSwiGlu => MlpType == "swiglu";
+
+        /// <summary>
         /// Creates a ModelConfig from GGUF metadata.
+        /// Supports: llama, mistral, phi3 (and compatible architectures).
         /// </summary>
         public static ModelConfig FromGgufMetadata(Dictionary<string, object> metadata)
         {
@@ -97,55 +154,104 @@ namespace SmallMind.Transformers
                 config.Architecture = archObj?.ToString() ?? "llama";
             }
 
+            // Normalize architecture name (mistral and phi use llama format)
+            var archPrefix = config.Architecture.ToLowerInvariant();
+            
+            // Mistral and Phi variants use the same keys as Llama
+            if (archPrefix.StartsWith("mistral") || archPrefix.StartsWith("phi"))
+            {
+                archPrefix = "llama";
+            }
+
             // Validate architecture
-            if (config.Architecture != "llama")
+            var supportedArchs = new[] { "llama", "gpt2" };
+            if (!supportedArchs.Contains(archPrefix) && !config.Architecture.StartsWith("mistral") && !config.Architecture.StartsWith("phi"))
             {
                 throw new UnsupportedModelException(
                     "gguf-metadata",
                     config.Architecture,
-                    $"Unsupported architecture: {config.Architecture}. Only 'llama' architecture is currently supported.");
+                    $"Unsupported architecture: {config.Architecture}. Supported: llama, mistral, phi, gpt2");
             }
 
-            // Extract Llama-specific parameters
-            config.VocabSize = ExtractInt(metadata, "llama.vocab_size") 
-                ?? throw new MissingMetadataException("llama.vocab_size");
+            // Extract general metadata
+            config.Name = GetMetadataValue(metadata, "general.name", null);
 
-            config.ContextLength = ExtractInt(metadata, "llama.context_length")
-                ?? throw new MissingMetadataException("llama.context_length");
+            // Extract architecture-specific parameters using archPrefix for key lookups
+            config.VocabSize = ExtractInt(metadata, $"{archPrefix}.vocab_size")
+                ?? throw new MissingMetadataException($"{archPrefix}.vocab_size");
 
-            config.EmbeddingLength = ExtractInt(metadata, "llama.embedding_length")
-                ?? throw new MissingMetadataException("llama.embedding_length");
+            config.ContextLength = ExtractInt(metadata, $"{archPrefix}.context_length")
+                ?? throw new MissingMetadataException($"{archPrefix}.context_length");
 
-            config.BlockCount = ExtractInt(metadata, "llama.block_count")
-                ?? throw new MissingMetadataException("llama.block_count");
+            config.EmbeddingLength = ExtractInt(metadata, $"{archPrefix}.embedding_length")
+                ?? throw new MissingMetadataException($"{archPrefix}.embedding_length");
 
-            config.HeadCount = ExtractInt(metadata, "llama.attention.head_count")
-                ?? throw new MissingMetadataException("llama.attention.head_count");
+            config.BlockCount = ExtractInt(metadata, $"{archPrefix}.block_count")
+                ?? throw new MissingMetadataException($"{archPrefix}.block_count");
+
+            config.HeadCount = ExtractInt(metadata, $"{archPrefix}.attention.head_count")
+                ?? throw new MissingMetadataException($"{archPrefix}.attention.head_count");
 
             // Head count KV (for GQA) - defaults to HeadCount if not specified
-            config.HeadCountKv = ExtractInt(metadata, "llama.attention.head_count_kv")
+            config.HeadCountKv = ExtractInt(metadata, $"{archPrefix}.attention.head_count_kv")
                 ?? config.HeadCount;
 
-            config.FeedForwardLength = ExtractInt(metadata, "llama.feed_forward_length")
+            config.FeedForwardLength = ExtractInt(metadata, $"{archPrefix}.feed_forward_length")
                 ?? (config.EmbeddingLength * 4); // Default to 4x if not specified
 
-            // RoPE frequency base
-            config.RopeFreqBase = ExtractDouble(metadata, "llama.rope.freq_base")
+            // RoPE configuration
+            config.RopeFreqBase = ExtractDouble(metadata, $"{archPrefix}.rope.freq_base")
                 ?? 10000.0;
+            
+            config.RopeScalingType = GetMetadataValue(metadata, $"{archPrefix}.rope.scaling.type", null);
+            config.RopeScalingFactor = ExtractDouble(metadata, $"{archPrefix}.rope.scaling.factor")
+                ?? 1.0;
 
-            // RMSNorm epsilon
-            config.RmsNormEps = ExtractDouble(metadata, "llama.attention.layer_norm_rms_epsilon")
+            // Normalization epsilon
+            config.NormEps = ExtractDouble(metadata, $"{archPrefix}.attention.layer_norm_rms_epsilon")
+                ?? ExtractDouble(metadata, $"{archPrefix}.attention.layer_norm_epsilon")
                 ?? 1e-5;
 
-            // Llama always uses RoPE, RMSNorm, and SwiGLU
-            config.UseRope = true;
-            config.UseRmsNorm = true;
-            config.UseSwiGlu = true;
+            // Special token IDs
+            config.BosTokenId = ExtractInt(metadata, "tokenizer.ggml.bos_token_id") ?? -1;
+            config.EosTokenId = ExtractInt(metadata, "tokenizer.ggml.eos_token_id") ?? -1;
+            config.PadTokenId = ExtractInt(metadata, "tokenizer.ggml.padding_token_id") ?? -1;
+
+            // Mistral-specific: sliding window attention
+            if (config.Architecture.StartsWith("mistral"))
+            {
+                config.SlidingWindowSize = ExtractInt(metadata, $"{archPrefix}.attention.sliding_window") ?? 0;
+            }
+
+            // Set architecture defaults
+            if (archPrefix == "llama" || config.Architecture.StartsWith("mistral") || config.Architecture.StartsWith("phi"))
+            {
+                config.UseRope = true;
+                config.NormType = "rms";
+                config.MlpType = "swiglu";
+                config.UseBias = false;
+            }
+            else if (archPrefix == "gpt2")
+            {
+                config.UseRope = false;
+                config.NormType = "layer";
+                config.MlpType = "gelu";
+                config.UseBias = true;
+            }
 
             // Validate configuration
             ValidateConfig(config);
 
             return config;
+        }
+
+        private static string? GetMetadataValue(Dictionary<string, object> metadata, string key, string? defaultValue)
+        {
+            if (metadata.TryGetValue(key, out var value))
+            {
+                return value?.ToString() ?? defaultValue;
+            }
+            return defaultValue;
         }
 
         private static int? ExtractInt(Dictionary<string, object> metadata, string key)
@@ -221,9 +327,83 @@ namespace SmallMind.Transformers
                 HeadCountKv = headCount, // Standard MHA
                 FeedForwardLength = embeddingLength * 4,
                 UseRope = false,
-                UseRmsNorm = false,
-                UseSwiGlu = false,
+                NormType = "layer",
+                MlpType = "gelu",
+                UseBias = true,
                 Dropout = dropout
+            };
+        }
+
+        /// <summary>
+        /// Creates a preset ModelConfig for Llama-style architecture.
+        /// </summary>
+        public static ModelConfig ForLlama(int vocabSize, int contextLength, int embeddingLength, int blockCount, int headCount, int? headCountKv = null)
+        {
+            return new ModelConfig
+            {
+                Architecture = "llama",
+                VocabSize = vocabSize,
+                ContextLength = contextLength,
+                EmbeddingLength = embeddingLength,
+                BlockCount = blockCount,
+                HeadCount = headCount,
+                HeadCountKv = headCountKv ?? headCount,
+                FeedForwardLength = (int)(embeddingLength * 2.66667 * 2), // ~2.66x * 2 for up and gate projections
+                UseRope = true,
+                NormType = "rms",
+                MlpType = "swiglu",
+                UseBias = false,
+                RopeFreqBase = 10000.0,
+                NormEps = 1e-5
+            };
+        }
+
+        /// <summary>
+        /// Creates a preset ModelConfig for Mistral architecture.
+        /// </summary>
+        public static ModelConfig ForMistral(int vocabSize, int contextLength, int embeddingLength, int blockCount, int headCount, int headCountKv, int slidingWindow = 4096)
+        {
+            return new ModelConfig
+            {
+                Architecture = "mistral",
+                VocabSize = vocabSize,
+                ContextLength = contextLength,
+                EmbeddingLength = embeddingLength,
+                BlockCount = blockCount,
+                HeadCount = headCount,
+                HeadCountKv = headCountKv,
+                FeedForwardLength = (int)(embeddingLength * 2.66667 * 2),
+                UseRope = true,
+                NormType = "rms",
+                MlpType = "swiglu",
+                UseBias = false,
+                RopeFreqBase = 10000.0,
+                NormEps = 1e-5,
+                SlidingWindowSize = slidingWindow
+            };
+        }
+
+        /// <summary>
+        /// Creates a preset ModelConfig for Phi-3 architecture.
+        /// </summary>
+        public static ModelConfig ForPhi3(int vocabSize, int contextLength, int embeddingLength, int blockCount, int headCount, int headCountKv)
+        {
+            return new ModelConfig
+            {
+                Architecture = "phi3",
+                VocabSize = vocabSize,
+                ContextLength = contextLength,
+                EmbeddingLength = embeddingLength,
+                BlockCount = blockCount,
+                HeadCount = headCount,
+                HeadCountKv = headCountKv,
+                FeedForwardLength = (int)(embeddingLength * 2.66667 * 2),
+                UseRope = true,
+                NormType = "rms",
+                MlpType = "swiglu",
+                UseBias = false,
+                RopeFreqBase = 10000.0,
+                NormEps = 1e-5
             };
         }
     }
