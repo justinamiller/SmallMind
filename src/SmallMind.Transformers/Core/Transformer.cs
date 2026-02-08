@@ -2292,13 +2292,23 @@ namespace SmallMind.Transformers
             var upOut = _workspace.GetOrCreate("upOut", hiddenShape, _isTraining);
             _upProj.Forward(x, upOut);
             
-            // Apply SiLU activation to gate
-            var gateAct = _workspace.GetOrCreate("gateAct", hiddenShape, _isTraining);
-            Activations.SiLU(gateOut, gateAct);
-            
-            // Element-wise multiply: gateAct * upOut
-            var hidden = _workspace.GetOrCreate("hidden", hiddenShape, _isTraining);
-            ElementwiseMultiply(gateAct, upOut, hidden);
+            Tensor hidden;
+            if (_isTraining)
+            {
+                // Training: Keep separate operations for backward pass
+                var gateAct = _workspace.GetOrCreate("gateAct", hiddenShape, _isTraining);
+                Activations.SiLU(gateOut, gateAct);
+                
+                // Element-wise multiply: gateAct * upOut
+                hidden = _workspace.GetOrCreate("hidden", hiddenShape, _isTraining);
+                ElementwiseMultiply(gateAct, upOut, hidden);
+            }
+            else
+            {
+                // Inference: Use fused SiLU×Up operation (avoids gateAct allocation)
+                hidden = _workspace.GetOrCreate("hidden", hiddenShape, _isTraining);
+                ActivationOps.FusedSiLUMul(gateOut.Data, upOut.Data, hidden.Data);
+            }
             
             // Down projection: (B, T, hiddenDim) -> (B, T, n_embd)
             var downOut = _workspace.GetOrCreate("downOut", outputShape, _isTraining);
