@@ -13,7 +13,7 @@ namespace SmallMind.Engine
     /// File-based session store with atomic writes and schema versioning.
     /// Uses safe temp-file-then-rename pattern for atomic writes.
     /// </summary>
-    public sealed class FileSessionStore : ISessionStore
+    internal sealed class FileSessionStore : ISessionStore
     {
         private readonly string _storageDirectory;
         private readonly JsonSerializerOptions _jsonOptions;
@@ -161,7 +161,7 @@ namespace SmallMind.Engine
     /// Enhanced chat session data with schema version.
     /// This is V2 of the schema.
     /// </summary>
-    public sealed class ChatSessionDataV2
+    internal sealed class ChatSessionDataV2
     {
         /// <summary>
         /// Schema version for migration support.

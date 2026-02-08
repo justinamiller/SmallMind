@@ -6,7 +6,7 @@ namespace SmallMind.Engine
     /// Diagnostic metrics for a chat session.
     /// Tracks performance, caching efficiency, and recovery events.
     /// </summary>
-    public sealed class ChatSessionDiagnostics
+    internal sealed class ChatSessionDiagnostics
     {
         /// <summary>
         /// Gets the total number of conversation turns.

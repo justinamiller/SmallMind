@@ -18,6 +18,7 @@ namespace SmallMind.ConsoleApp.Commands
             {
                 // Generation commands
                 ["generate"] = new GenerateCommand(),
+                ["run-gguf"] = new RunGgufCommand(),
                 
                 // Model management commands
                 ["model download"] = new ModelDownloadCommand(),

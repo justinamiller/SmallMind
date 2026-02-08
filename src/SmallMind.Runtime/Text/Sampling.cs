@@ -10,6 +10,7 @@ namespace SmallMind.Runtime
     /// Implements text generation with greedy decoding, temperature sampling, and top-k filtering.
     /// Pure C# implementation.
     /// </summary>
+    [Obsolete("Use InferenceSession instead. InferenceSession provides TopP, MinP, repetition penalties, output constraints, and async streaming. This class will be removed in v1.0.")]
     public class Sampling
     {
         private readonly TransformerModel _model;
@@ -45,7 +46,8 @@ namespace SmallMind.Runtime
             string prompt, 
             int maxNewTokens, 
             double temperature = 1.0, 
-            int topK = 0, 
+            int topK = 0,
+            double topP = 1.0,
             int? seed = null, 
             bool showPerf = false, 
             bool isPerfJsonMode = false, 
@@ -85,7 +87,7 @@ namespace SmallMind.Runtime
             if (!isPerfJsonMode)
             {
                 Console.WriteLine($"\nGenerating {maxNewTokens} tokens...");
-                Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}");
+                Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}, Top-p: {topP}");
                 Console.WriteLine($"Prompt: \"{prompt}\"");
                 if (showPerf)
                 {
@@ -224,6 +226,12 @@ namespace SmallMind.Runtime
                     // Convert to probabilities (softmax)
                     var probs = Softmax(logitsToSample, vocabSize);
 
+                    // Apply top-p (nucleus) filtering if configured
+                    if (topP < 1.0)
+                    {
+                        probs = ApplyTopP(probs, vocabSize, topP);
+                    }
+
                     // Sample from the distribution
                     var nextToken = SampleFromProbs(probs, random);
 
@@ -333,6 +341,87 @@ namespace SmallMind.Runtime
                 {
                     System.Buffers.ArrayPool<float>.Shared.Return(rentedBuffer);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Apply top-p (nucleus) sampling to probabilities.
+        /// Keeps only the smallest set of tokens whose cumulative probability exceeds topP.
+        /// Re-normalizes the filtered distribution.
+        /// </summary>
+        /// <param name="probs">Probability distribution (must sum to 1.0)</param>
+        /// <param name="probsLength">Length of the probability array</param>
+        /// <param name="topP">Cumulative probability threshold (0.0 to 1.0)</param>
+        /// <returns>Filtered and re-normalized probability distribution</returns>
+        private float[] ApplyTopP(float[] probs, int probsLength, double topP)
+        {
+            // Sort probabilities in descending order while tracking original indices
+            // Use ArrayPool to avoid allocation
+            var sortedProbs = System.Buffers.ArrayPool<float>.Shared.Rent(probsLength);
+            var sortedIndices = System.Buffers.ArrayPool<int>.Shared.Rent(probsLength);
+
+            try
+            {
+                // Initialize with probabilities and indices
+                for (int i = 0; i < probsLength; i++)
+                {
+                    sortedProbs[i] = probs[i];
+                    sortedIndices[i] = i;
+                }
+
+                // Sort descending by probability (using simple bubble sort for small vocab or insertion sort)
+                // For better performance with large vocab, could use Array.Sort with custom comparer
+                Array.Sort(sortedProbs, sortedIndices, 0, probsLength);
+                Array.Reverse(sortedProbs, 0, probsLength);
+                Array.Reverse(sortedIndices, 0, probsLength);
+
+                // Find the cutoff index where cumulative probability exceeds topP
+                float cumSum = 0.0f;
+                int cutoffIndex = probsLength;
+                
+                for (int i = 0; i < probsLength; i++)
+                {
+                    cumSum += sortedProbs[i];
+                    if (cumSum >= topP)
+                    {
+                        cutoffIndex = i + 1; // Include this token
+                        break;
+                    }
+                }
+
+                // Zero out probabilities below the cutoff
+                for (int i = 0; i < probsLength; i++)
+                {
+                    probs[i] = 0.0f;
+                }
+
+                // Keep only top-p tokens and re-normalize
+                float newSum = 0.0f;
+                for (int i = 0; i < cutoffIndex; i++)
+                {
+                    int originalIndex = sortedIndices[i];
+                    probs[originalIndex] = sortedProbs[i];
+                    newSum += sortedProbs[i];
+                }
+
+                // Re-normalize to ensure probabilities sum to 1.0
+                if (newSum > 0.0f)
+                {
+                    for (int i = 0; i < probsLength; i++)
+                    {
+                        if (probs[i] > 0.0f)
+                        {
+                            probs[i] /= newSum;
+                        }
+                    }
+                }
+
+                return probs;
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<float>.Shared.Return(sortedProbs);
+                System.Buffers.ArrayPool<int>.Shared.Return(sortedIndices);
             }
         }
 

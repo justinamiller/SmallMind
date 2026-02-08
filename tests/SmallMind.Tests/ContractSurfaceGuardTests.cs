@@ -26,6 +26,7 @@ namespace SmallMind.Tests
             "SmallMind.Abstractions.IChatSession",
             "SmallMind.Abstractions.IRagEngine",
             "SmallMind.Abstractions.IRagIndex",
+            "SmallMind.Abstractions.ISessionStore",
 
             // Request DTOs
             "SmallMind.Abstractions.ModelLoadRequest",
@@ -42,6 +43,7 @@ namespace SmallMind.Tests
             "SmallMind.Abstractions.ModelInfo",
             "SmallMind.Abstractions.RagIndexInfo",  // RAG index metadata
             "SmallMind.Abstractions.SessionInfo",   // Chat session metadata
+            "SmallMind.Abstractions.Citation",      // Citation for RAG/generated text
 
             // Options DTOs
             "SmallMind.Abstractions.SmallMindOptions",
@@ -54,6 +56,7 @@ namespace SmallMind.Tests
             "SmallMind.Abstractions.GenerationMode",
             "SmallMind.Abstractions.ChatRole",
             "SmallMind.Abstractions.TokenEventKind",
+            "SmallMind.Abstractions.ResponseFormatType",
 
             // Exceptions
             "SmallMind.Abstractions.SmallMindException",
@@ -63,6 +66,35 @@ namespace SmallMind.Tests
             "SmallMind.Abstractions.BudgetExceededException",
             "SmallMind.Abstractions.RagInsufficientEvidenceException",
             "SmallMind.Abstractions.SecurityViolationException",
+            "SmallMind.Abstractions.InsufficientMemoryException",
+
+            // Chat session data models
+            "SmallMind.Abstractions.ChatTurnData",
+            "SmallMind.Abstractions.ChatSessionData",
+
+            // Chat Level 3 models - structured output and tool calling
+            "SmallMind.Abstractions.ResponseFormat",
+            "SmallMind.Abstractions.ToolDefinition",
+            "SmallMind.Abstractions.ToolCall",
+            "SmallMind.Abstractions.ToolResult",
+            "SmallMind.Abstractions.ChatMessageV3",
+            "SmallMind.Abstractions.ChatRequest",
+            "SmallMind.Abstractions.ChatResponse",
+            "SmallMind.Abstractions.UsageStats",
+            "SmallMind.Abstractions.RetrievedChunk",
+
+            // Chat Level 3 interfaces
+            "SmallMind.Abstractions.IContextPolicy",
+            "SmallMind.Abstractions.ITokenCounter",
+            "SmallMind.Abstractions.ISummarizer",
+            "SmallMind.Abstractions.IChatTelemetry",
+            "SmallMind.Abstractions.IToolExecutor",
+            "SmallMind.Abstractions.IRetrievalProvider",
+
+            // Chat Level 3 implementations
+            "SmallMind.Abstractions.NoOpTelemetry",
+            "SmallMind.Abstractions.ConsoleTelemetry",
+            "SmallMind.Abstractions.NoOpRetrievalProvider",
         };
 
         /// <summary>

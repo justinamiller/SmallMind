@@ -6,7 +6,7 @@ namespace SmallMind.Engine
     /// <summary>
     /// Chat template types for different model architectures.
     /// </summary>
-    public enum ChatTemplateType
+    internal enum ChatTemplateType
     {
         /// <summary>No template formatting.</summary>
         None,
@@ -27,7 +27,7 @@ namespace SmallMind.Engine
     /// <summary>
     /// Strategy for handling context window overflow.
     /// </summary>
-    public enum ContextOverflowStrategy
+    internal enum ContextOverflowStrategy
     {
         /// <summary>Remove oldest non-system turns to fit context.</summary>
         TruncateOldest,
@@ -41,7 +41,7 @@ namespace SmallMind.Engine
     /// Extended session options for chat sessions.
     /// Wraps base SessionOptions with chat-specific configuration.
     /// </summary>
-    public sealed class ChatSessionOptions
+    internal sealed class ChatSessionOptions
     {
         /// <summary>
         /// Gets or sets the base session options.
@@ -131,7 +131,7 @@ namespace SmallMind.Engine
     /// Options for RAG (Retrieval Augmented Generation).
     /// Placeholder for future RAG configuration.
     /// </summary>
-    public sealed class RagOptions
+    internal sealed class RagOptions
     {
         /// <summary>
         /// Gets or sets the number of documents to retrieve.

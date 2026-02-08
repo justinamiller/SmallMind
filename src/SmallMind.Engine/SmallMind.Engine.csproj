@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GgufInferenceDemo" />
+    <InternalsVisibleTo Include="SmallMind.Tests" />
   </ItemGroup>
 
   <ItemGroup>

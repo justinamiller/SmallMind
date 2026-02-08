@@ -9,7 +9,7 @@ namespace SmallMind.Engine
     /// Context policy that keeps the last N turns, always pinning system messages.
     /// A "turn" consists of a user message and optionally its assistant response.
     /// </summary>
-    public sealed class KeepLastNTurnsPolicy : IContextPolicy
+    internal sealed class KeepLastNTurnsPolicy : IContextPolicy
     {
         private readonly int _maxTurns;
 
@@ -157,7 +157,7 @@ namespace SmallMind.Engine
     /// Simple sliding window policy that keeps most recent messages within budget.
     /// Always pins system messages at the start.
     /// </summary>
-    public sealed class SlidingWindowPolicy : IContextPolicy
+    internal sealed class SlidingWindowPolicy : IContextPolicy
     {
         public bool IsDeterministic => true;
 
@@ -220,7 +220,7 @@ namespace SmallMind.Engine
     /// Policy that keeps all messages (no truncation).
     /// Will fail if messages exceed budget - use for testing or when budget is guaranteed.
     /// </summary>
-    public sealed class KeepAllPolicy : IContextPolicy
+    internal sealed class KeepAllPolicy : IContextPolicy
     {
         public static readonly KeepAllPolicy Instance = new KeepAllPolicy();
 
