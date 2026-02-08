@@ -1,6 +1,7 @@
 using System;
 using SmallMind.Core.Exceptions;
 using SmallMind.Runtime.Scheduling;
+using SmallMind.Runtime.Constraints;
 
 namespace SmallMind.Runtime
 {
@@ -153,6 +154,13 @@ namespace SmallMind.Runtime
         public SchedulingPolicy SchedulingPolicy { get; set; } = SchedulingPolicy.FIFO;
         
         /// <summary>
+        /// Gets or sets the output constraint for structured generation (JSON mode, regex, etc).
+        /// When set, constrains token sampling to enforce specific output formats.
+        /// Default: null (no constraints).
+        /// </summary>
+        public IOutputConstraint? OutputConstraint { get; set; }
+        
+        /// <summary>
         /// Validates the inference options and throws if invalid.
         /// </summary>
         /// <exception cref="ValidationException">Thrown when options are invalid.</exception>
@@ -238,7 +246,8 @@ namespace SmallMind.Runtime
                 TruncateInput = TruncateInput,
                 IncludeLogProbs = IncludeLogProbs,
                 EnableScheduleTracking = EnableScheduleTracking,
-                SchedulingPolicy = SchedulingPolicy
+                SchedulingPolicy = SchedulingPolicy,
+                OutputConstraint = OutputConstraint
             };
         }
     }

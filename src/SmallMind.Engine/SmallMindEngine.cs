@@ -103,6 +103,26 @@ namespace SmallMind.Engine
             return new ChatSession(internalHandle, chatOptions, _options);
         }
 
+        /// <summary>
+        /// Creates a chat session builder for fluent configuration.
+        /// </summary>
+        public ChatSessionBuilder CreateChatSessionBuilder(IModelHandle model)
+        {
+            ThrowIfDisposed();
+
+            if (model == null)
+            {
+                throw new ArgumentNullException(nameof(model));
+            }
+
+            if (model is not ModelHandle internalHandle)
+            {
+                throw new ArgumentException("Model handle must be created by this engine", nameof(model));
+            }
+
+            return new ChatSessionBuilder(internalHandle, _options);
+        }
+
         public async ValueTask<GenerationResult> GenerateAsync(
             IModelHandle model,
             GenerationRequest request,

@@ -75,6 +75,10 @@ namespace SmallMind.Engine
         private bool _lastTurnWasTruncated; // Track if last turn required truncation
         private bool _disposed;
         
+        // Persistent InferenceSession for KV cache reuse (Phase 2.1)
+        private InferenceSession? _persistentInferenceSession;
+        private int _persistentSessionPosition = 0;
+        
         // Diagnostic counters
         private int _truncatedTurns;
         private int _kvCacheHits;
@@ -263,6 +267,14 @@ namespace SmallMind.Engine
                         startPosition = 0;
                         _cachedTokenCount = 0;
                         _kvCacheMisses++;
+                        
+                        // Invalidate persistent session (Phase 2.1)
+                        if (_persistentInferenceSession != null)
+                        {
+                            _persistentInferenceSession.Dispose();
+                            _persistentInferenceSession = null;
+                            _persistentSessionPosition = 0;
+                        }
                     }
                 }
                 else
@@ -294,7 +306,23 @@ namespace SmallMind.Engine
             }
 
             // Generate response
-            var session = _modelHandle.CreateInferenceSession(options, _engineOptions);
+            InferenceSession session;
+            bool isNewSession = false;
+
+            if (_persistentInferenceSession == null)
+            {
+                // First turn: create new session
+                session = _modelHandle.CreateInferenceSession(options, _engineOptions);
+                _persistentInferenceSession = session;
+                _persistentSessionPosition = 0;
+                isNewSession = true;
+            }
+            else
+            {
+                // Subsequent turns: reuse existing session
+                session = _persistentInferenceSession;
+            }
+            
             try
             {
                 string response;
@@ -373,7 +401,8 @@ namespace SmallMind.Engine
             finally
             {
                 timeoutCts?.Dispose();
-                session.Dispose();
+                // Don't dispose persistent session - it will be reused across turns
+                // session.Dispose(); // REMOVED for Phase 2.1
             }
         }
 
@@ -482,6 +511,14 @@ namespace SmallMind.Engine
                         kvCache.Reset();
                         startPosition = 0;
                         _cachedTokenCount = 0;
+                        
+                        // Invalidate persistent session (Phase 2.1)
+                        if (_persistentInferenceSession != null)
+                        {
+                            _persistentInferenceSession.Dispose();
+                            _persistentInferenceSession = null;
+                            _persistentSessionPosition = 0;
+                        }
                     }
                 }
             }
@@ -599,6 +636,14 @@ namespace SmallMind.Engine
             _cachedTokenCount = 0;
             _lastPromptTokenIds = null;
             _lastTurnWasTruncated = false;
+
+            // Dispose persistent session (Phase 2.1)
+            if (_persistentInferenceSession != null)
+            {
+                _persistentInferenceSession.Dispose();
+                _persistentInferenceSession = null;
+                _persistentSessionPosition = 0;
+            }
 
             // Remove from KV cache store
             if (_options.EnableKvCache)
@@ -761,6 +806,14 @@ namespace SmallMind.Engine
                     _kvCacheStore.Remove(sessionId);
                     _cachedTokenCount = 0;
                     _lastPromptTokenIds = null;
+                    
+                    // Invalidate persistent session (Phase 2.1)
+                    if (_persistentInferenceSession != null)
+                    {
+                        _persistentInferenceSession.Dispose();
+                        _persistentInferenceSession = null;
+                        _persistentSessionPosition = 0;
+                    }
                 }
             }
         }
@@ -869,6 +922,14 @@ namespace SmallMind.Engine
                     _kvCacheStore.Remove(sessionId);
                     _cachedTokenCount = 0;
                     _lastPromptTokenIds = null;
+                    
+                    // Invalidate persistent session (Phase 2.1)
+                    if (_persistentInferenceSession != null)
+                    {
+                        _persistentInferenceSession.Dispose();
+                        _persistentInferenceSession = null;
+                        _persistentSessionPosition = 0;
+                    }
                 }
             }
             else
@@ -952,6 +1013,14 @@ namespace SmallMind.Engine
                     _kvCacheStore.Remove(sessionId);
                     _cachedTokenCount = 0;
                     _lastPromptTokenIds = null;
+                    
+                    // Invalidate persistent session (Phase 2.1)
+                    if (_persistentInferenceSession != null)
+                    {
+                        _persistentInferenceSession.Dispose();
+                        _persistentInferenceSession = null;
+                        _persistentSessionPosition = 0;
+                    }
                 }
             }
             else
@@ -1388,6 +1457,13 @@ namespace SmallMind.Engine
             if (_disposed)
             {
                 return;
+            }
+
+            // Dispose persistent session (Phase 2.1)
+            if (_persistentInferenceSession != null)
+            {
+                _persistentInferenceSession.Dispose();
+                _persistentInferenceSession = null;
             }
 
             // Remove from KV cache store on disposal
