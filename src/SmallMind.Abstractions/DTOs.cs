@@ -197,6 +197,8 @@ namespace SmallMind.Abstractions
 
         /// <summary>
         /// Creates generation options configured for JSON mode output.
+        /// Uses low temperature for more deterministic generation.
+        /// Note: Stop sequences are not set to allow multi-line JSON.
         /// </summary>
         /// <param name="maxTokens">Maximum tokens to generate. Default: 500.</param>
         /// <returns>GenerationOptions configured for JSON generation.</returns>
@@ -205,8 +207,8 @@ namespace SmallMind.Abstractions
             return new GenerationOptions
             {
                 MaxNewTokens = maxTokens,
-                Temperature = 0.3,
-                Stop = new[] { "\n\n" }
+                Temperature = 0.3
+                // Note: Stop sequences intentionally not set to allow multi-line JSON
             };
         }
     }

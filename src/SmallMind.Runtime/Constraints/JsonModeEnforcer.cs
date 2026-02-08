@@ -80,7 +80,10 @@ namespace SmallMind.Runtime.Constraints
             // Must start with { or [
             if (generatedSoFar.Length == 0)
             {
-                char first = candidateTokenText.TrimStart()[0];
+                string trimmed = candidateTokenText.TrimStart();
+                if (trimmed.Length == 0)
+                    return false;
+                char first = trimmed[0];
                 return first == '{' || first == '[';
             }
 

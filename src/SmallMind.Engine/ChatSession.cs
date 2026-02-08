@@ -218,7 +218,7 @@ namespace SmallMind.Engine
                     citations = chunks.Select((c, idx) => new Citation
                     {
                         Source = c.DocId,
-                        Title = c.DocId,
+                        Title = null, // TODO: Extract from chunk metadata if available
                         Snippet = c.Excerpt,
                         RelevanceScore = c.Score
                     }).ToList();
@@ -271,8 +271,8 @@ namespace SmallMind.Engine
                 }
             }
 
-            // OOM protection: rough estimate of memory needed
-            long estimatedMemoryBytes = (long)options.MaxNewTokens * _modelHandle.Model.EmbedDim * 4; // rough estimate
+            // OOM protection: estimate memory for KV cache (maxTokens * embedDim * 4 bytes per float)
+            long estimatedMemoryBytes = (long)options.MaxNewTokens * _modelHandle.Model.EmbedDim * 4;
             var gcInfo = GC.GetGCMemoryInfo();
             if (gcInfo.TotalAvailableMemoryBytes > 0)
             {
@@ -440,7 +440,7 @@ namespace SmallMind.Engine
                     citations = chunks.Select((c, idx) => new Citation
                     {
                         Source = c.DocId,
-                        Title = c.DocId,
+                        Title = null, // TODO: Extract from chunk metadata if available
                         Snippet = c.Excerpt,
                         RelevanceScore = c.Score
                     }).ToList();
@@ -567,7 +567,8 @@ namespace SmallMind.Engine
                 }
 
                 // Emit completed event with citations if RAG was used
-                // Note: For streaming, we use the error field to pass citation JSON as metadata
+                // NOTE: Using the error field to pass citation metadata for backward compatibility
+                // with existing TokenEvent struct. In future, consider adding dedicated Metadata field.
                 string? citationMetadata = null;
                 if (citations != null && citations.Count > 0)
                 {
