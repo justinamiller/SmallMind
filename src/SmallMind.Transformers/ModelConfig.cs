@@ -177,6 +177,7 @@ namespace SmallMind.Transformers
             config.Name = GetMetadataValue(metadata, "general.name", null);
 
             // Extract architecture-specific parameters using archPrefix for key lookups
+            // Note: ?? operator ensures InferVocabSizeFromTokenizer is only called if ExtractInt returns null
             config.VocabSize = ExtractInt(metadata, $"{archPrefix}.vocab_size")
                 ?? InferVocabSizeFromTokenizer(metadata)
                 ?? throw new MissingMetadataException($"{archPrefix}.vocab_size");
