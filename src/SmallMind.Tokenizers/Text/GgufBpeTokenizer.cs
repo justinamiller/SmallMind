@@ -228,10 +228,13 @@ namespace SmallMind.Tokenizers.Text
                 }
             }
 
-            // Prepend BOS token for Llama-family models if configured and not already present
-            if (Info.BosTokenId >= 0 && (result.Count == 0 || result[0] != Info.BosTokenId))
+            // SmolLM2/Llama expects BOS — GGUF tokenizer doesn't auto-add
+            if (Info.AddBos)
             {
-                result.Insert(0, Info.BosTokenId);
+                if (result.Count == 0 || result[0] != Info.BosTokenId)
+                {
+                    result.Insert(0, Info.BosTokenId);
+                }
             }
 
             return result;
@@ -263,10 +266,18 @@ namespace SmallMind.Tokenizers.Text
                 return string.Empty;
             }
 
+            // Skip BOS token at start if present
+            int startIdx = 0;
+            if (tokens.Count > 0 && tokens[0] == Info.BosTokenId)
+            {
+                startIdx = 1;
+            }
+
             var sb = new StringBuilder();
 
-            foreach (int id in tokens)
+            for (int i = startIdx; i < tokens.Count; i++)
             {
+                int id = tokens[i];
                 if (_inverseVocab.TryGetValue(id, out string? token))
                 {
                     sb.Append(token);
