@@ -7,6 +7,7 @@ namespace SmallMind.Engine
 {
     /// <summary>
     /// Context policy that keeps the last N turns, always pinning system messages.
+    /// A "turn" consists of a user message and optionally its assistant response.
     /// </summary>
     public sealed class KeepLastNTurnsPolicy : IContextPolicy
     {
@@ -15,7 +16,7 @@ namespace SmallMind.Engine
         /// <summary>
         /// Initializes a new instance with the specified maximum turns.
         /// </summary>
-        /// <param name="maxTurns">Maximum number of turns to keep (excludes system messages).</param>
+        /// <param name="maxTurns">Maximum number of turns to keep (a turn = user + optional assistant).</param>
         public KeepLastNTurnsPolicy(int maxTurns)
         {
             if (maxTurns <= 0)
@@ -45,10 +46,9 @@ namespace SmallMind.Engine
                     conversationMessages.Add(msg);
             }
 
-            // Keep last N conversation messages
-            var keptConversation = conversationMessages.Count > _maxTurns
-                ? conversationMessages.Skip(conversationMessages.Count - _maxTurns).ToList()
-                : conversationMessages;
+            // Count turns and keep last N
+            // A turn is: User (required) + Assistant (optional) + Tool messages (optional)
+            var keptConversation = KeepLastTurns(conversationMessages, _maxTurns);
 
             // Combine: system messages first, then conversation
             var result = new List<ChatMessageV3>(systemMessages.Count + keptConversation.Count);
@@ -57,6 +57,46 @@ namespace SmallMind.Engine
 
             // Now apply token budget
             return FitToBudget(result, maxTokens, tokenizer);
+        }
+
+        private static List<ChatMessageV3> KeepLastTurns(List<ChatMessageV3> messages, int maxTurns)
+        {
+            if (messages.Count == 0 || maxTurns <= 0)
+                return new List<ChatMessageV3>();
+
+            // Group messages into turns (user message starts a turn)
+            var turns = new List<List<ChatMessageV3>>();
+            List<ChatMessageV3>? currentTurn = null;
+
+            foreach (var msg in messages)
+            {
+                if (msg.Role == ChatRole.User)
+                {
+                    // Start a new turn
+                    currentTurn = new List<ChatMessageV3> { msg };
+                    turns.Add(currentTurn);
+                }
+                else if (currentTurn != null)
+                {
+                    // Add to current turn (assistant or tool)
+                    currentTurn.Add(msg);
+                }
+                // else: orphaned assistant/tool message, skip (shouldn't happen)
+            }
+
+            // Keep last N turns
+            var turnsToKeep = turns.Count > maxTurns
+                ? turns.Skip(turns.Count - maxTurns).ToList()
+                : turns;
+
+            // Flatten back to message list
+            var result = new List<ChatMessageV3>();
+            foreach (var turn in turnsToKeep)
+            {
+                result.AddRange(turn);
+            }
+
+            return result;
         }
 
         private static IReadOnlyList<ChatMessageV3> FitToBudget(
@@ -74,7 +114,7 @@ namespace SmallMind.Engine
             if (totalTokens <= maxTokens)
                 return messages;
 
-            // Need to truncate - keep system messages, then as many conversation messages as fit
+            // Need to truncate - keep system messages first
             var systemMessages = messages.Where(m => m.Role == ChatRole.System).ToList();
             var conversationMessages = messages.Where(m => m.Role != ChatRole.System).ToList();
 
@@ -91,19 +131,20 @@ namespace SmallMind.Engine
             }
 
             int remainingBudget = maxTokens - systemTokens;
+            
+            // Add conversation messages in chronological order until budget exhausted
             var result = new List<ChatMessageV3>(systemMessages);
-
-            // Add conversation messages from most recent, going backwards
-            for (int i = conversationMessages.Count - 1; i >= 0; i--)
+            for (int i = 0; i < conversationMessages.Count; i++)
             {
                 int msgTokens = tokenizer.CountTokens(conversationMessages[i].Content);
                 if (msgTokens <= remainingBudget)
                 {
-                    result.Insert(systemMessages.Count, conversationMessages[i]);
+                    result.Add(conversationMessages[i]);
                     remainingBudget -= msgTokens;
                 }
                 else
                 {
+                    // Can't fit this message, stop
                     break;
                 }
             }
