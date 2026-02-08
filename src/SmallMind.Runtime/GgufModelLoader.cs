@@ -182,6 +182,7 @@ namespace SmallMind.Runtime
             bool isLlamaFamily = config.Architecture.StartsWith("llama") || 
                                 config.Architecture.StartsWith("mistral") || 
                                 config.Architecture.StartsWith("phi");
+            bool isGpt2 = config.Architecture.StartsWith("gpt");
 
             if (isLlamaFamily)
             {
@@ -229,6 +230,96 @@ namespace SmallMind.Runtime
                     {
                         mapping[$"{ggufPrefix}ffn_up.weight"] = $"{smPrefix}ffn_up.weight";
                         mapping[$"{ggufPrefix}ffn_down.weight"] = $"{smPrefix}ffn_down.weight";
+                    }
+                }
+            }
+            else if (isGpt2)
+            {
+                // GPT-2 tensor naming (uses different conventions)
+                // Token embeddings
+                mapping["token_embd.weight"] = "token_embd.weight";
+                
+                // Position embeddings (GPT-2 uses learned, not RoPE)
+                if (modelInfo.Tensors.Any(t => t.Name == "position_embd.weight"))
+                {
+                    mapping["position_embd.weight"] = "position_embd.weight";
+                }
+                
+                // Output norm (LayerNorm with bias)
+                mapping["output_norm.weight"] = "output_norm.weight";
+                if (modelInfo.Tensors.Any(t => t.Name == "output_norm.bias"))
+                {
+                    mapping["output_norm.bias"] = "output_norm.bias";
+                }
+                
+                // Output head (may be tied to token embeddings)
+                if (modelInfo.Tensors.Any(t => t.Name == "output.weight"))
+                {
+                    mapping["output.weight"] = "output.weight";
+                }
+
+                // Per-layer mappings for GPT-2
+                for (int i = 0; i < config.BlockCount; i++)
+                {
+                    string ggufPrefix = $"blk.{i}.";
+                    string smPrefix = $"blk.{i}.";
+
+                    // Attention LayerNorm (with bias for GPT-2)
+                    mapping[$"{ggufPrefix}attn_norm.weight"] = $"{smPrefix}attn_norm.weight";
+                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_norm.bias"))
+                    {
+                        mapping[$"{ggufPrefix}attn_norm.bias"] = $"{smPrefix}attn_norm.bias";
+                    }
+
+                    // Attention weights - GPT-2 may have combined or separate Q/K/V
+                    // Check if combined qkv exists
+                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_qkv.weight"))
+                    {
+                        // Combined QKV (needs to be split in SmallMind)
+                        mapping[$"{ggufPrefix}attn_qkv.weight"] = $"PENDING_QKV_{i}";
+                        if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_qkv.bias"))
+                        {
+                            mapping[$"{ggufPrefix}attn_qkv.bias"] = $"PENDING_QKV_BIAS_{i}";
+                        }
+                    }
+                    else
+                    {
+                        // Separate Q/K/V (need to be merged in SmallMind)
+                        mapping[$"{ggufPrefix}attn_q.weight"] = $"PENDING_Q_{i}";
+                        mapping[$"{ggufPrefix}attn_k.weight"] = $"PENDING_K_{i}";
+                        mapping[$"{ggufPrefix}attn_v.weight"] = $"PENDING_V_{i}";
+                        
+                        // GPT-2 has biases
+                        if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_q.bias"))
+                        {
+                            mapping[$"{ggufPrefix}attn_q.bias"] = $"PENDING_Q_BIAS_{i}";
+                            mapping[$"{ggufPrefix}attn_k.bias"] = $"PENDING_K_BIAS_{i}";
+                            mapping[$"{ggufPrefix}attn_v.bias"] = $"PENDING_V_BIAS_{i}";
+                        }
+                    }
+
+                    // Attention output projection
+                    mapping[$"{ggufPrefix}attn_output.weight"] = $"{smPrefix}attn_output.weight";
+                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_output.bias"))
+                    {
+                        mapping[$"{ggufPrefix}attn_output.bias"] = $"{smPrefix}attn_output.bias";
+                    }
+
+                    // FFN LayerNorm (with bias)
+                    mapping[$"{ggufPrefix}ffn_norm.weight"] = $"{smPrefix}ffn_norm.weight";
+                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}ffn_norm.bias"))
+                    {
+                        mapping[$"{ggufPrefix}ffn_norm.bias"] = $"{smPrefix}ffn_norm.bias";
+                    }
+
+                    // FFN projections (GPT-2 uses GELU, not SwiGLU)
+                    mapping[$"{ggufPrefix}ffn_up.weight"] = $"{smPrefix}ffn_up.weight";
+                    mapping[$"{ggufPrefix}ffn_down.weight"] = $"{smPrefix}ffn_down.weight";
+                    
+                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}ffn_up.bias"))
+                    {
+                        mapping[$"{ggufPrefix}ffn_up.bias"] = $"{smPrefix}ffn_up.bias";
+                        mapping[$"{ggufPrefix}ffn_down.bias"] = $"{smPrefix}ffn_down.bias";
                     }
                 }
             }
