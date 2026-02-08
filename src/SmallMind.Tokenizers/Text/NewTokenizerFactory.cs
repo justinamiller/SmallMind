@@ -90,12 +90,34 @@ namespace SmallMind.Tokenizers
 
         private static ITokenizer CreateByteLevelBpeTokenizer(TokenizerConfig config)
         {
-            if (string.IsNullOrEmpty(config.VocabPath))
-                throw new TokenizationException("VocabPath is required for ByteLevelBpe tokenizer");
-            if (string.IsNullOrEmpty(config.MergesPath))
-                throw new TokenizationException("MergesPath is required for ByteLevelBpe tokenizer");
+            // Option 1: Load from saved vocabulary file
+            if (!string.IsNullOrEmpty(config.VocabPath) && File.Exists(config.VocabPath))
+            {
+                var tokenizer = new ByteLevelBpeTokenizer();
+                tokenizer.LoadVocabulary(config.VocabPath);
+                return tokenizer;
+            }
 
-            return new ByteLevelBpeTokenizer(config.VocabPath, config.MergesPath, config.SpecialTokens);
+            // Option 2: Train from training text
+            if (!string.IsNullOrEmpty(config.TrainingText))
+            {
+                int vocabSize = 1024; // Default
+                if (config.Options != null && config.Options.TryGetValue("vocabSize", out object? vocabSizeObj))
+                {
+                    if (vocabSizeObj is int vs)
+                        vocabSize = vs;
+                    else if (vocabSizeObj is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        vocabSize = je.GetInt32();
+                }
+
+                var tokenizer = new ByteLevelBpeTokenizer();
+                tokenizer.Train(config.TrainingText, vocabSize);
+                return tokenizer;
+            }
+
+            throw new TokenizationException(
+                "ByteLevelBpeTokenizer requires either VocabPath (to load) or TrainingText (to train).\n" +
+                "Provide one of these in the TokenizerConfig.");
         }
 
         private static ITokenizer CreateBpeTokenizer(TokenizerConfig config)
