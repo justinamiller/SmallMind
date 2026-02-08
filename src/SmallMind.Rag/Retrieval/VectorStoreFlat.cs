@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using SmallMind.Core.Simd;
 
 namespace SmallMind.Rag.Retrieval;
 
@@ -162,49 +163,13 @@ public sealed class VectorStoreFlat : IVectorStore
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private float CosineSimilarity(float[] a, float[] b, float normA)
     {
-        float dotProduct = DotProduct(a, b);
+        float dotProduct = MatMulOps.DotProduct(a.AsSpan(), b.AsSpan());
         float normB = ComputeNorm(b);
 
         if (normB == 0f)
             return 0f;
 
         return dotProduct / (normA * normB);
-    }
-
-    /// <summary>
-    /// Computes dot product using SIMD when available.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private float DotProduct(float[] a, float[] b)
-    {
-        int vectorSize = Vector<float>.Count;
-        int length = a.Length;
-        int i = 0;
-
-        Vector<float> sumVec = Vector<float>.Zero;
-
-        // Process SIMD-width chunks
-        for (; i <= length - vectorSize; i += vectorSize)
-        {
-            var va = new Vector<float>(a, i);
-            var vb = new Vector<float>(b, i);
-            sumVec += va * vb;
-        }
-
-        // Sum the vector elements
-        float sum = 0f;
-        for (int j = 0; j < vectorSize; j++)
-        {
-            sum += sumVec[j];
-        }
-
-        // Handle remainder
-        for (; i < length; i++)
-        {
-            sum += a[i] * b[i];
-        }
-
-        return sum;
     }
 
     /// <summary>
