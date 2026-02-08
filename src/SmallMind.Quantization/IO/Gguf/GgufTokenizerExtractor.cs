@@ -101,8 +101,59 @@ namespace SmallMind.Quantization.IO.Gguf
                 padTokenId = FindTokenId(vocab, "<pad>", "[PAD]");
             }
 
-            // Create BPE tokenizer with in-memory vocab and merges
-            return new BpeTokenizer(vocab, merges, bosTokenId, eosTokenId, unkTokenId);
+            // Determine if this is byte-level BPE by checking token format
+            // Byte-level BPE tokens often contain UTF-8 byte sequences or special char representations
+            bool isByteLevelBpe = DetectByteLevelBpe(vocab);
+
+            // Create GGUF BPE tokenizer (supports both character and byte-level)
+            return new SmallMind.Tokenizers.Text.GgufBpeTokenizer(
+                vocab, 
+                merges, 
+                bosTokenId, 
+                eosTokenId, 
+                unkTokenId,
+                isByteLevelBpe);
+        }
+
+        /// <summary>
+        /// Detect if this is byte-level BPE by examining token patterns.
+        /// Byte-level BPE often has tokens with UTF-8 byte sequences.
+        /// </summary>
+        private static bool DetectByteLevelBpe(Dictionary<string, int> vocab)
+        {
+            // Check for common byte-level BPE patterns:
+            // 1. Tokens starting with "Ġ" (GPT-2 space marker)
+            // 2. High Unicode characters (used for byte mapping)
+            // 3. Byte-level tokens like "Ċ", "ĉ", etc.
+            
+            int byteLevelIndicators = 0;
+            int sampleSize = Math.Min(1000, vocab.Count);
+            
+            foreach (var kvp in vocab.Take(sampleSize))
+            {
+                string token = kvp.Key;
+                if (string.IsNullOrEmpty(token))
+                    continue;
+
+                // Check for GPT-2 style space marker
+                if (token.StartsWith("Ġ"))
+                    byteLevelIndicators++;
+                
+                // Check for high Unicode (often used in byte-level mapping)
+                foreach (char c in token)
+                {
+                    if (c >= 256 && c < 512)
+                    {
+                        byteLevelIndicators++;
+                        break;
+                    }
+                }
+
+                if (byteLevelIndicators > 10) // Found enough indicators
+                    return true;
+            }
+
+            return byteLevelIndicators > 5; // Threshold for detection
         }
 
         private static int ExtractTokenId(Dictionary<string, object> metadata, string key)
