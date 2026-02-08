@@ -13,6 +13,40 @@ using PublicGenerationOptions = SmallMind.Abstractions.GenerationOptions;
 namespace SmallMind.Engine
 {
     /// <summary>
+    /// Context budget information for a chat session.
+    /// </summary>
+    public readonly struct ContextBudget
+    {
+        /// <summary>Maximum context tokens (model.BlockSize).</summary>
+        public readonly int MaxContextTokens;
+        
+        /// <summary>Current history tokens (from tokenizer).</summary>
+        public readonly int CurrentHistoryTokens;
+        
+        /// <summary>Reserved tokens for generation (maxNewTokens).</summary>
+        public readonly int ReservedForGeneration;
+        
+        /// <summary>Available tokens for prompt (MaxContext - CurrentHistory - Reserved).</summary>
+        public readonly int AvailableTokens;
+        
+        /// <summary>Number of conversation turns.</summary>
+        public readonly int TurnCount;
+        
+        /// <summary>True if overflow would trigger truncation.</summary>
+        public readonly bool WouldTruncate;
+
+        public ContextBudget(int maxContext, int currentHistory, int reserved, int turnCount)
+        {
+            MaxContextTokens = maxContext;
+            CurrentHistoryTokens = currentHistory;
+            ReservedForGeneration = reserved;
+            AvailableTokens = maxContext - currentHistory - reserved;
+            TurnCount = turnCount;
+            WouldTruncate = AvailableTokens < 0;
+        }
+    }
+
+    /// <summary>
     /// Internal implementation of IChatSession.
     /// Maintains conversation context and KV cache across multiple turns.
     /// </summary>
@@ -31,6 +65,7 @@ namespace SmallMind.Engine
         private int _turnCount;
         private int _cachedTokenCount; // Actual cached token count from KV cache
         private int[]? _lastPromptTokenIds; // Last tokenized prompt for delta calculation
+        private bool _lastTurnWasTruncated; // Track if last turn required truncation
         private bool _disposed;
 
         public ChatSession(
@@ -116,8 +151,9 @@ namespace SmallMind.Engine
             // Add user message to history
             _conversationHistory.Add(message);
 
-            // Build full conversation prompt with truncation
-            var prompt = BuildConversationPrompt(options.MaxNewTokens);
+            // Apply overflow strategy and build conversation prompt
+            List<string>? warnings = null;
+            var prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
 
             // Tokenize current prompt
             var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
@@ -201,7 +237,8 @@ namespace SmallMind.Engine
                     Text = response,
                     GeneratedTokens = options.MaxNewTokens, // Approximate
                     StoppedByBudget = false,
-                    StopReason = "completed"
+                    StopReason = "completed",
+                    Warnings = warnings
                 };
             }
             finally
@@ -225,8 +262,9 @@ namespace SmallMind.Engine
             // Add user message to history
             _conversationHistory.Add(message);
 
-            // Build full conversation prompt with truncation
-            var prompt = BuildConversationPrompt(options.MaxNewTokens);
+            // Apply overflow strategy and build conversation prompt
+            List<string>? warnings = null;
+            var prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
 
             // Tokenize current prompt
             var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
@@ -269,13 +307,15 @@ namespace SmallMind.Engine
                 var responseBuilder = new StringBuilder();
                 int tokenCount = 0;
 
-                // Emit started event
+                // Emit started event (with warnings if truncation occurred)
+                // Note: Using error field for informational warnings about truncation
                 yield return new TokenEvent(
                     kind: TokenEventKind.Started,
                     text: ReadOnlyMemory<char>.Empty,
                     tokenId: -1,
                     generatedTokens: 0,
-                    isFinal: false);
+                    isFinal: false,
+                    error: warnings != null ? string.Join("; ", warnings) : null);
 
                 bool isLast = false;
                 IAsyncEnumerable<GeneratedToken> tokenStream;
@@ -360,6 +400,7 @@ namespace SmallMind.Engine
             _turnCount = 0;
             _cachedTokenCount = 0;
             _lastPromptTokenIds = null;
+            _lastTurnWasTruncated = false;
 
             // Remove from KV cache store
             if (_options.EnableKvCache)
@@ -367,6 +408,400 @@ namespace SmallMind.Engine
                 SessionId sessionId = new SessionId(_sessionId);
                 _kvCacheStore.Remove(sessionId);
             }
+        }
+
+        /// <summary>
+        /// Gets the current context budget for this session.
+        /// </summary>
+        public ContextBudget GetContextBudget()
+        {
+            ThrowIfDisposed();
+
+            // Build current prompt to measure token count
+            var prompt = BuildConversationPrompt(0); // 0 = no generation reserved
+            var tokens = _tokenizer.Encode(prompt).Count;
+
+            return new ContextBudget(
+                maxContext: _modelHandle.Model.BlockSize,
+                currentHistory: tokens,
+                reserved: 0,
+                turnCount: _turnCount
+            );
+        }
+
+        /// <summary>
+        /// Manually trims conversation history to a maximum number of turns.
+        /// Preserves system messages, removes oldest user/assistant pairs.
+        /// </summary>
+        public void TrimHistory(int maxTurns)
+        {
+            ThrowIfDisposed();
+
+            if (maxTurns < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maxTurns), "maxTurns must be non-negative");
+            }
+
+            // Separate system messages from conversation turns
+            var systemMessages = new List<ChatMessage>();
+            var conversationTurns = new List<ChatMessage>();
+
+            foreach (var msg in _conversationHistory)
+            {
+                if (msg.Role == ChatRole.System)
+                {
+                    systemMessages.Add(msg);
+                }
+                else
+                {
+                    conversationTurns.Add(msg);
+                }
+            }
+
+            // If we have more turns than maxTurns, remove oldest
+            if (conversationTurns.Count > maxTurns)
+            {
+                int toRemove = conversationTurns.Count - maxTurns;
+                conversationTurns.RemoveRange(0, toRemove);
+
+                // Rebuild history
+                _conversationHistory.Clear();
+                _conversationHistory.AddRange(systemMessages);
+                _conversationHistory.AddRange(conversationTurns);
+
+                // Invalidate KV cache since we modified history
+                if (_options.EnableKvCache)
+                {
+                    SessionId sessionId = new SessionId(_sessionId);
+                    _kvCacheStore.Remove(sessionId);
+                    _cachedTokenCount = 0;
+                    _lastPromptTokenIds = null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies the configured context overflow strategy and builds the conversation prompt.
+        /// Returns the prompt and any warnings generated.
+        /// </summary>
+        private string ApplyOverflowStrategyAndBuildPrompt(int maxNewTokens, ref List<string>? warnings)
+        {
+            int maxAllowedPromptTokens = _modelHandle.Model.BlockSize - maxNewTokens;
+
+            switch (_options.ContextOverflowStrategy)
+            {
+                case ContextOverflowStrategy.TruncateOldest:
+                    return ApplyTruncateOldestStrategy(maxAllowedPromptTokens, ref warnings);
+
+                case ContextOverflowStrategy.SlidingWindow:
+                    return ApplySlidingWindowStrategy(maxAllowedPromptTokens, ref warnings);
+
+                case ContextOverflowStrategy.Error:
+                    return ApplyErrorStrategy(maxAllowedPromptTokens);
+
+                default:
+                    return ApplyTruncateOldestStrategy(maxAllowedPromptTokens, ref warnings);
+            }
+        }
+
+        /// <summary>
+        /// TruncateOldest strategy: Remove oldest non-system turns one at a time until prompt fits.
+        /// </summary>
+        private string ApplyTruncateOldestStrategy(int maxAllowedPromptTokens, ref List<string>? warnings)
+        {
+            // Separate system messages from conversation turns
+            var systemMessages = new List<ChatMessage>();
+            var conversationTurns = new List<ChatMessage>();
+
+            foreach (var msg in _conversationHistory)
+            {
+                if (msg.Role == ChatRole.System)
+                {
+                    systemMessages.Add(msg);
+                }
+                else
+                {
+                    conversationTurns.Add(msg);
+                }
+            }
+
+            // Try full conversation first
+            var workingHistory = new List<ChatMessage>(_conversationHistory);
+            string prompt = BuildPromptFromMessages(workingHistory);
+            int tokenCount = _tokenizer.Encode(prompt).Count;
+
+            int removedCount = 0;
+
+            // Remove oldest turns until we fit
+            // Note: Keep at least 1 turn (the current user message at the end)
+            while (tokenCount > maxAllowedPromptTokens && conversationTurns.Count > 1)
+            {
+                // Remove oldest conversation turn (preserve last turn which is the current user message)
+                conversationTurns.RemoveAt(0);
+                removedCount++;
+
+                // Rebuild and recount
+                workingHistory.Clear();
+                workingHistory.AddRange(systemMessages);
+                workingHistory.AddRange(conversationTurns);
+                prompt = BuildPromptFromMessages(workingHistory);
+                tokenCount = _tokenizer.Encode(prompt).Count;
+            }
+
+            // If still doesn't fit with only system + current message, throw exception
+            if (tokenCount > maxAllowedPromptTokens)
+            {
+                // Calculate breakdown
+                var systemPrompt = BuildPromptFromMessages(systemMessages);
+                int systemTokens = systemMessages.Count > 0 ? _tokenizer.Encode(systemPrompt).Count : 0;
+                int messageTokens = tokenCount - systemTokens;
+
+                throw new ContextLimitExceededException(
+                    message: $"System prompt ({systemTokens} tokens) + current message ({messageTokens} tokens) exceeds context window ({_modelHandle.Model.BlockSize} tokens). Reduce your system prompt or message length.",
+                    totalTokens: tokenCount,
+                    contextLimit: _modelHandle.Model.BlockSize,
+                    systemTokens: systemTokens,
+                    messageTokens: messageTokens
+                );
+            }
+
+            // If we removed turns, record warning and invalidate cache
+            if (removedCount > 0)
+            {
+                _lastTurnWasTruncated = true;
+
+                if (warnings == null)
+                {
+                    warnings = new List<string>();
+                }
+                warnings.Add($"Context truncated: removed {removedCount} oldest turns to fit within {_modelHandle.Model.BlockSize} token limit");
+
+                // Invalidate KV cache if truncation affected cached content
+                if (_options.EnableKvCache && _cachedTokenCount > 0)
+                {
+                    SessionId sessionId = new SessionId(_sessionId);
+                    _kvCacheStore.Remove(sessionId);
+                    _cachedTokenCount = 0;
+                    _lastPromptTokenIds = null;
+                }
+            }
+            else
+            {
+                _lastTurnWasTruncated = false;
+            }
+
+            return prompt;
+        }
+
+        /// <summary>
+        /// SlidingWindow strategy: Keep system + last N turns that fit using binary search.
+        /// </summary>
+        private string ApplySlidingWindowStrategy(int maxAllowedPromptTokens, ref List<string>? warnings)
+        {
+            // Separate system messages from conversation turns
+            var systemMessages = new List<ChatMessage>();
+            var conversationTurns = new List<ChatMessage>();
+
+            foreach (var msg in _conversationHistory)
+            {
+                if (msg.Role == ChatRole.System)
+                {
+                    systemMessages.Add(msg);
+                }
+                else
+                {
+                    conversationTurns.Add(msg);
+                }
+            }
+
+            // Binary search for optimal number of recent turns to keep
+            int left = 1; // Must keep at least current message
+            int right = conversationTurns.Count;
+            int bestN = 1;
+            string bestPrompt = "";
+
+            while (left <= right)
+            {
+                int mid = (left + right) / 2;
+
+                // Build prompt with last 'mid' turns
+                var candidateHistory = new List<ChatMessage>();
+                candidateHistory.AddRange(systemMessages);
+                candidateHistory.AddRange(conversationTurns.Skip(conversationTurns.Count - mid));
+
+                string candidatePrompt = BuildPromptFromMessages(candidateHistory);
+                int tokenCount = _tokenizer.Encode(candidatePrompt).Count;
+
+                if (tokenCount <= maxAllowedPromptTokens)
+                {
+                    // This fits, try to include more
+                    bestN = mid;
+                    bestPrompt = candidatePrompt;
+                    left = mid + 1;
+                }
+                else
+                {
+                    // Too many tokens, try fewer turns
+                    right = mid - 1;
+                }
+            }
+
+            // Check if we had to truncate
+            int removedCount = conversationTurns.Count - bestN;
+
+            if (removedCount > 0)
+            {
+                _lastTurnWasTruncated = true;
+
+                if (warnings == null)
+                {
+                    warnings = new List<string>();
+                }
+                warnings.Add($"Context truncated: removed {removedCount} oldest turns to fit within {_modelHandle.Model.BlockSize} token limit");
+
+                // Invalidate KV cache
+                if (_options.EnableKvCache && _cachedTokenCount > 0)
+                {
+                    SessionId sessionId = new SessionId(_sessionId);
+                    _kvCacheStore.Remove(sessionId);
+                    _cachedTokenCount = 0;
+                    _lastPromptTokenIds = null;
+                }
+            }
+            else
+            {
+                _lastTurnWasTruncated = false;
+            }
+
+            // Verify the best prompt still fits (edge case: even 1 turn is too large)
+            if (bestN == 0 || string.IsNullOrEmpty(bestPrompt))
+            {
+                // Even the current message alone doesn't fit - need to validate
+                var minimalHistory = new List<ChatMessage>();
+                minimalHistory.AddRange(systemMessages);
+                if (conversationTurns.Count > 0)
+                {
+                    minimalHistory.Add(conversationTurns[conversationTurns.Count - 1]);
+                }
+                bestPrompt = BuildPromptFromMessages(minimalHistory);
+
+                int tokenCount = _tokenizer.Encode(bestPrompt).Count;
+                if (tokenCount > maxAllowedPromptTokens)
+                {
+                    var systemPrompt = BuildPromptFromMessages(systemMessages);
+                    int systemTokens = systemMessages.Count > 0 ? _tokenizer.Encode(systemPrompt).Count : 0;
+                    int messageTokens = tokenCount - systemTokens;
+
+                    throw new ContextLimitExceededException(
+                        message: $"System prompt ({systemTokens} tokens) + current message ({messageTokens} tokens) exceeds context window ({_modelHandle.Model.BlockSize} tokens). Reduce your system prompt or message length.",
+                        totalTokens: tokenCount,
+                        contextLimit: _modelHandle.Model.BlockSize,
+                        systemTokens: systemTokens,
+                        messageTokens: messageTokens
+                    );
+                }
+            }
+
+            return bestPrompt;
+        }
+
+        /// <summary>
+        /// Error strategy: Throw exception immediately if context is exceeded.
+        /// </summary>
+        private string ApplyErrorStrategy(int maxAllowedPromptTokens)
+        {
+            string prompt = BuildPromptFromMessages(_conversationHistory);
+            int totalTokens = _tokenizer.Encode(prompt).Count;
+
+            if (totalTokens > maxAllowedPromptTokens)
+            {
+                // Build diagnostic breakdown
+                var breakdown = new StringBuilder();
+                breakdown.AppendLine($"Conversation ({totalTokens} tokens) exceeds context window ({_modelHandle.Model.BlockSize} tokens). Per-turn breakdown:");
+
+                foreach (var msg in _conversationHistory)
+                {
+                    var msgList = new List<ChatMessage> { msg };
+                    var msgPrompt = BuildPromptFromMessages(msgList);
+                    int msgTokens = _tokenizer.Encode(msgPrompt).Count;
+                    breakdown.AppendLine($"  - {msg.Role}: {msgTokens} tokens");
+                }
+
+                throw new ContextLimitExceededException(
+                    message: breakdown.ToString().TrimEnd(),
+                    totalTokens: totalTokens,
+                    contextLimit: _modelHandle.Model.BlockSize
+                );
+            }
+
+            _lastTurnWasTruncated = false;
+            return prompt;
+        }
+
+        /// <summary>
+        /// Builds a prompt from a list of messages (helper for overflow strategies).
+        /// </summary>
+        private string BuildPromptFromMessages(List<ChatMessage> messages)
+        {
+            if (_templateType == ChatTemplateType.None)
+            {
+                return BuildPlainPromptFromMessages(messages);
+            }
+            else
+            {
+                return BuildTemplatePromptFromMessages(messages);
+            }
+        }
+
+        /// <summary>
+        /// Appends assistant prefix to StringBuilder if needed (last message is not assistant).
+        /// </summary>
+        private void AppendAssistantPrefixIfNeeded(StringBuilder sb, List<ChatMessage> messages)
+        {
+            if (messages.Count == 0 || messages[messages.Count - 1].Role != ChatRole.Assistant)
+            {
+                sb.Append(_templateType == ChatTemplateType.None ? "Assistant:" : GetAssistantPrefix());
+            }
+        }
+
+        /// <summary>
+        /// Build plain text prompt from messages.
+        /// </summary>
+        private string BuildPlainPromptFromMessages(List<ChatMessage> messages)
+        {
+            var sb = new StringBuilder();
+
+            foreach (var msg in messages)
+            {
+                if (msg.Role == ChatRole.System)
+                {
+                    sb.AppendLine($"System: {msg.Content}");
+                }
+                else
+                {
+                    string rolePrefix = msg.Role == ChatRole.User ? "User: " : "Assistant: ";
+                    sb.AppendLine($"{rolePrefix}{msg.Content}");
+                }
+            }
+
+            AppendAssistantPrefixIfNeeded(sb, messages);
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Build templated prompt from messages.
+        /// </summary>
+        private string BuildTemplatePromptFromMessages(List<ChatMessage> messages)
+        {
+            var sb = new StringBuilder();
+
+            foreach (var msg in messages)
+            {
+                sb.Append(FormatMessageForTemplate(msg));
+            }
+
+            AppendAssistantPrefixIfNeeded(sb, messages);
+            return sb.ToString();
         }
 
         /// <summary>

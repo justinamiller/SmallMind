@@ -109,7 +109,7 @@ namespace SmallMind.Public.Internal
                         DurationMs = stopwatch.Elapsed.TotalMilliseconds,
                         ErrorMessage = ex.Message
                     });
-                    throw new ContextOverflowException(ex.RequestedSize, ex.MaxAllowed);
+                    throw new ContextOverflowException(ex.TotalTokens, ex.ContextLimit);
                 }
                 catch (Abstractions.SmallMindException ex)
                 {
@@ -215,7 +215,7 @@ namespace SmallMind.Public.Internal
                     SessionId = _sessionId,
                     ErrorMessage = ex.Message
                 });
-                throw new ContextOverflowException(ex.RequestedSize, ex.MaxAllowed);
+                throw new ContextOverflowException(ex.TotalTokens, ex.ContextLimit);
             }
             catch (Exception ex)
             {

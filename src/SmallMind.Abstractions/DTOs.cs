@@ -241,6 +241,11 @@ namespace SmallMind.Abstractions
         /// Gets the citations (for RAG).
         /// </summary>
         public RagCitation[]? Citations { get; init; }
+
+        /// <summary>
+        /// Gets warnings from the generation process (e.g., context truncation).
+        /// </summary>
+        public IReadOnlyList<string>? Warnings { get; init; }
     }
 
     /// <summary>

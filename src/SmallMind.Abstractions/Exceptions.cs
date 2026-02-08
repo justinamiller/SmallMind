@@ -93,24 +93,35 @@ namespace SmallMind.Abstractions
     public class ContextLimitExceededException : SmallMindException
     {
         /// <summary>
-        /// Gets the requested context size.
+        /// Gets the total tokens in the conversation.
         /// </summary>
-        public int RequestedSize { get; }
+        public int TotalTokens { get; }
 
         /// <summary>
-        /// Gets the maximum allowed context size.
+        /// Gets the context limit.
         /// </summary>
-        public int MaxAllowed { get; }
+        public int ContextLimit { get; }
+
+        /// <summary>
+        /// Gets the system message tokens.
+        /// </summary>
+        public int SystemTokens { get; }
+
+        /// <summary>
+        /// Gets the current message tokens.
+        /// </summary>
+        public int MessageTokens { get; }
 
         /// <summary>
         /// Creates a new ContextLimitExceededException.
         /// </summary>
-        public ContextLimitExceededException(int requestedSize, int maxAllowed)
-            : base($"Context limit exceeded: requested {requestedSize} tokens, max allowed is {maxAllowed}. " +
-                   $"Remediation: reduce input length or increase MaxContextTokens.", "CONTEXT_LIMIT_EXCEEDED")
+        public ContextLimitExceededException(string message, int totalTokens, int contextLimit, int systemTokens = 0, int messageTokens = 0)
+            : base(message, "CONTEXT_LIMIT_EXCEEDED")
         {
-            RequestedSize = requestedSize;
-            MaxAllowed = maxAllowed;
+            TotalTokens = totalTokens;
+            ContextLimit = contextLimit;
+            SystemTokens = systemTokens;
+            MessageTokens = messageTokens;
         }
     }
 
