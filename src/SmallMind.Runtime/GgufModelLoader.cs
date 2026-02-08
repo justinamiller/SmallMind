@@ -51,6 +51,8 @@ namespace SmallMind.Runtime
             Console.WriteLine($"Model architecture: {config.Architecture}");
             Console.WriteLine($"Context length: {config.ContextLength}, Embedding: {config.EmbeddingLength}");
             Console.WriteLine($"Layers: {config.BlockCount}, Heads: {config.HeadCount} (KV: {config.HeadCountKv})");
+            Console.WriteLine($"RoPE freq base: {config.RopeFreqBase}");
+            Console.WriteLine($"Vocab size: {config.VocabSize}");
 
             // Extract tokenizer from metadata
             var tokenizer = GgufTokenizerExtractor.ExtractTokenizer(modelInfo.Metadata);

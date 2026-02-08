@@ -228,6 +228,12 @@ namespace SmallMind.Tokenizers.Text
                 }
             }
 
+            // Prepend BOS token for Llama-family models if configured and not already present
+            if (Info.BosTokenId >= 0 && (result.Count == 0 || result[0] != Info.BosTokenId))
+            {
+                result.Insert(0, Info.BosTokenId);
+            }
+
             return result;
         }
 
