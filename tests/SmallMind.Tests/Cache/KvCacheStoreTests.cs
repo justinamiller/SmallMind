@@ -102,7 +102,8 @@ namespace SmallMind.Tests.Cache
             {
                 MaxSessions = 10,
                 MaxTokensPerSession = 100,
-                MaxBytesTotal = 10 * 1024 * 1024
+                MaxBytesTotal = 10 * 1024 * 1024,
+                MaxBytesPerSession = 5 * 1024 * 1024  // 5MB per session (less than total)
             };
             
             using var store = new LruKvCacheStore(options);
