@@ -6,6 +6,7 @@ using SmallMind.Quantization.IO.Gguf;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
 using SmallMind.Quantization.Tensors;
+using Tensor = SmallMind.Core.Core.Tensor;
 
 namespace SmallMind.Runtime
 {
@@ -391,7 +392,7 @@ namespace SmallMind.Runtime
         /// Copy weights from source array to target tensor with shape validation.
         /// Handles transposition if needed based on Linear weight layout (outFeatures, inFeatures).
         /// </summary>
-        private static void CopyWeights(float[] source, SmallMind.Core.Core.Tensor target, 
+        private static void CopyWeights(float[] source, Tensor target, 
             string ggufName, string smName, ulong[] ggufDims)
         {
             // Validate total element count matches
@@ -446,7 +447,7 @@ namespace SmallMind.Runtime
         /// Merge separate Q/K/V weight tensors from GGUF into combined QKV tensor in SmallMind.
         /// </summary>
         private static void MergeQKVWeights(GgufReader reader, GgufModelInfo modelInfo, 
-            Dictionary<string, SmallMind.Core.Core.Tensor> namedParams, 
+            Dictionary<string, Tensor> namedParams, 
             Dictionary<string, string> tensorMapping, HashSet<string> loadedParams)
         {
             // Group Q/K/V tensors by layer
@@ -539,7 +540,7 @@ namespace SmallMind.Runtime
         /// <summary>
         /// Handle weight tying: copy token embeddings to output head if missing.
         /// </summary>
-        private static void HandleWeightTying(Dictionary<string, SmallMind.Core.Core.Tensor> namedParams, 
+        private static void HandleWeightTying(Dictionary<string, Tensor> namedParams, 
             HashSet<string> loadedParams, ModelConfig config)
         {
             // Check if output.weight is loaded

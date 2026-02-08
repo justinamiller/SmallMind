@@ -679,7 +679,12 @@ namespace SmallMind.Transformers
         private readonly MLP? _mlp;
         private readonly GatedMLP? _gatedMlp;
         
-        // Property to get the active MLP (for compatibility)
+        /// <summary>
+        /// Gets the active MLP module (either MLP or GatedMLP).
+        /// Returns object type because MLP and GatedMLP don't share a common base class.
+        /// Used internally for parameter extraction in GetNamedParameters().
+        /// Consumers should not need to access this directly.
+        /// </summary>
         internal object MlpModule => (object?)_mlp ?? _gatedMlp ?? throw new InvalidOperationException("No MLP configured");
         
         private bool _isTraining = true;
