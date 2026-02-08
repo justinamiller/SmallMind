@@ -20,6 +20,26 @@ namespace SmallMind.Tokenizers
         TokenizerInfo Info { get; }
 
         /// <summary>
+        /// ID of the padding token, or -1 if not supported.
+        /// </summary>
+        int PadTokenId => Info.PadTokenId;
+
+        /// <summary>
+        /// ID of the beginning-of-sequence token, or -1 if not supported.
+        /// </summary>
+        int BosTokenId => Info.BosTokenId;
+
+        /// <summary>
+        /// ID of the end-of-sequence token, or -1 if not supported.
+        /// </summary>
+        int EosTokenId => Info.EosTokenId;
+
+        /// <summary>
+        /// ID of the unknown token, or -1 if not supported.
+        /// </summary>
+        int UnkTokenId => Info.UnkTokenId;
+
+        /// <summary>
         /// Encode a string into a list of token IDs (convenience method, may allocate).
         /// </summary>
         /// <param name="text">Text to encode</param>
@@ -55,5 +75,14 @@ namespace SmallMind.Tokenizers
         /// <param name="tokens">Token IDs to decode</param>
         /// <returns>Decoded text</returns>
         string DecodeToString(ReadOnlySpan<int> tokens);
+
+        /// <summary>
+        /// Save tokenizer state to a file (if supported).
+        /// </summary>
+        /// <param name="path">Path to save the tokenizer state</param>
+        void Save(string path)
+        {
+            throw new NotSupportedException($"Save operation not supported by {GetType().Name}");
+        }
     }
 }

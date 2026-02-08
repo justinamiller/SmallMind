@@ -901,7 +901,7 @@ All files contain identical content to demonstrate format equivalence.
 
 ## Tokenization
 
-SmallMind supports **two tokenization strategies** to balance simplicity and production readiness:
+SmallMind supports **three tokenization strategies** to balance simplicity, flexibility, and production readiness:
 
 ### 1. CharTokenizer (Default)
 **Character-level tokenization** - Simple and works with any text without external assets.
@@ -910,7 +910,7 @@ SmallMind supports **two tokenization strategies** to balance simplicity and pro
 - **No assets required**: Works out-of-the-box
 
 ```csharp
-using SmallMind.Text;
+using SmallMind.Tokenizers;
 
 // Create from training text
 var tokenizer = new CharTokenizer("Hello World");
@@ -918,15 +918,67 @@ var tokens = tokenizer.Encode("Hello");
 var text = tokenizer.Decode(tokens);
 ```
 
-### 2. BpeTokenizer (Production)
-**Byte Pair Encoding** - Production-oriented subword tokenization for better compression and generalization.
-- **Best for**: Production deployments, larger models, multilingual text
-- **Vocabulary**: Loaded from `vocab.json` and `merges.txt` files
-- **Better compression**: Typically 3-5x fewer tokens than character-level
-- **Requires assets**: `vocab.json` (token→ID mapping) and `merges.txt` (merge rules)
+### 2. ByteLevelBpeTokenizer (Recommended)
+**Byte-Level Byte Pair Encoding** - Trainable subword tokenization with byte-level coverage (GPT-2 style).
+- **Best for**: Production deployments, multilingual text, any Unicode content
+- **Vocabulary**: Trained from scratch OR loaded from saved vocabulary
+- **Better compression**: Typically 2-4x fewer tokens than character-level
+- **Byte-level**: Handles any input - no unknown tokens ever needed
+- **Special tokens**: Includes `<|pad|>`, `<|unk|>`, `<|bos|>`, `<|eos|>` (IDs 256-259)
+
+**Training a new tokenizer:**
 
 ```csharp
-using SmallMind.Text;
+using SmallMind.Tokenizers;
+
+// Train on your text data
+var trainingText = File.ReadAllText("data.txt");
+var tokenizer = TokenizerFactory.CreateByteLevelBpe(
+    trainingText, 
+    vocabSize: 1024  // 256 bytes + 4 special + 764 learned merges
+);
+
+// Encode text to token IDs
+int[] tokens = tokenizer.Encode("Hello, world!").ToArray();
+// Fewer tokens than character-level due to learned subword patterns
+
+// Decode back to string
+string decoded = tokenizer.Decode(tokens.ToList());
+// "Hello, world!"
+
+// Save for reuse
+tokenizer.SaveVocabulary("my-tokenizer.json");
+```
+
+**Loading a saved tokenizer:**
+
+```csharp
+// Load from saved vocabulary
+var loadedTokenizer = TokenizerFactory.Load("my-tokenizer.json");
+
+// Or load explicitly
+var tokenizer = new ByteLevelBpeTokenizer();
+tokenizer.LoadVocabulary("my-tokenizer.json");
+```
+
+**Using with training from command line:**
+
+```bash
+# Train with Byte-Level BPE tokenizer (default vocab size: 1024)
+dotnet run --project src/SmallMind.Console -- --tokenizer bpe --vocab-size 2048
+
+# Train with character-level tokenizer (default)
+dotnet run --project src/SmallMind.Console -- --tokenizer char
+```
+
+### 3. BpeTokenizer (Legacy)
+**Traditional BPE** - Loads pre-computed vocabularies from GPT-2 style assets.
+- **Best for**: Using existing GPT-2 / GGUF model vocabularies
+- **Vocabulary**: Loaded from `vocab.json` and `merges.txt` files
+- **Requires assets**: Pre-computed vocabulary files
+
+```csharp
+using SmallMind.Tokenizers;
 
 // Load from assets directory
 var tokenizer = new BpeTokenizer("assets/tokenizers/default");
@@ -934,38 +986,39 @@ var tokens = tokenizer.Encode("Hello World");
 var text = tokenizer.Decode(tokens);
 ```
 
-### TokenizerFactory - Automatic Selection
+### TokenizerFactory - Simplified Creation
 
-Use `TokenizerFactory` to automatically select the right tokenizer based on available assets:
+Use `TokenizerFactory` for simplified tokenizer creation:
 
 ```csharp
-using SmallMind.Text;
+using SmallMind.Tokenizers;
 
-// Auto mode: Uses BPE if assets exist, otherwise falls back to CharTokenizer
-var options = new TokenizerOptions 
-{ 
-    Mode = TokenizerMode.Auto,  // Auto | Char | Bpe
-    TokenizerName = "default",
-    Strict = false  // false = fallback to Char if BPE fails
-};
+// Create character-level tokenizer
+var charTokenizer = TokenizerFactory.CreateCharLevel(trainingText);
 
-var tokenizer = TokenizerFactory.Create(options, trainingText);
+// Create byte-level BPE tokenizer (trains from scratch)
+var bpeTokenizer = TokenizerFactory.CreateByteLevelBpe(
+    trainingText, 
+    vocabSize: 1024, 
+    minFrequency: 2  // Minimum pair frequency for merging
+);
+
+// Load any saved tokenizer (auto-detects format)
+var loaded = TokenizerFactory.Load("path/to/tokenizer.json");
 ```
 
-### Tokenizer Modes
+### Tokenizer Comparison
 
-| Mode | Behavior |
-|------|----------|
-| `Auto` | Tries BPE if assets exist, falls back to CharTokenizer otherwise |
-| `Char` | Always uses CharTokenizer (requires training text) |
-| `Bpe` | Always uses BPE (throws if assets missing in strict mode, falls back if non-strict) |
-
-### Asset Discovery
-
-TokenizerFactory searches for assets in this order:
-1. **Explicit path**: `options.TokenizerPath` (if specified)
-2. **Relative path**: `./assets/tokenizers/<TokenizerName>/`
-3. **App directory**: `<AppContext.BaseDirectory>/assets/tokenizers/<TokenizerName>/`
+| Feature | CharTokenizer | ByteLevelBpeTokenizer | BpeTokenizer |
+|---------|--------------|----------------------|--------------|
+| Training Required | ✅ Automatic | ✅ Automatic | ❌ Pre-computed |
+| Asset Files Needed | ❌ None | ❌ None (optional) | ✅ Required |
+| Vocab Size | ~50-500 | 260-10000+ | Fixed from assets |
+| Compression Ratio | 1.0x (baseline) | 2-4x | 3-5x |
+| Unknown Tokens | Skipped | Never (byte fallback) | `[UNK]` |
+| Multilingual | Limited | ✅ Excellent | Depends on assets |
+| Setup Complexity | Minimal | Low | Medium |
+| Best For | Prototyping | Production | Pre-trained models |
 
 ### Creating BPE Assets
 
@@ -1104,7 +1157,7 @@ dotnet add package SmallMind
 Example usage:
 ```csharp
 using SmallMind.Core;
-using SmallMind.Text;
+using SmallMind.Tokenizers;
 
 // Create and train a model
 var tokenizer = new Tokenizer(trainingText);

@@ -152,5 +152,74 @@ namespace SmallMind.Tokenizers
             string mergesPath = Path.Combine(path, "merges.txt");
             return File.Exists(vocabPath) && File.Exists(mergesPath);
         }
+
+        /// <summary>
+        /// Create a character-level tokenizer from training text.
+        /// </summary>
+        /// <param name="trainingText">Text to build vocabulary from</param>
+        /// <returns>Character-level tokenizer</returns>
+        public static ITokenizer CreateCharLevel(string trainingText)
+        {
+            if (string.IsNullOrEmpty(trainingText))
+            {
+                throw new ArgumentException("Training text is required for character-level tokenizer", nameof(trainingText));
+            }
+
+            return new CharTokenizer(trainingText);
+        }
+
+        /// <summary>
+        /// Create a byte-level BPE tokenizer and train it on the provided text.
+        /// </summary>
+        /// <param name="trainingText">Text to train BPE on</param>
+        /// <param name="vocabSize">Target vocabulary size (default: 1024, min: 260)</param>
+        /// <param name="minFrequency">Minimum pair frequency for merging (default: 2)</param>
+        /// <returns>Trained byte-level BPE tokenizer</returns>
+        public static ITokenizer CreateByteLevelBpe(string trainingText, int vocabSize = 1024, int minFrequency = 2)
+        {
+            if (string.IsNullOrEmpty(trainingText))
+            {
+                throw new ArgumentException("Training text is required for BPE tokenizer", nameof(trainingText));
+            }
+
+            if (vocabSize < 260)
+            {
+                throw new ArgumentException("Vocabulary size must be at least 260 (256 bytes + 4 special tokens)", nameof(vocabSize));
+            }
+
+            var tokenizer = new ByteLevelBpeTokenizer();
+            tokenizer.Train(trainingText, vocabSize, minFrequency);
+            return tokenizer;
+        }
+
+        /// <summary>
+        /// Load a tokenizer from a saved file and auto-detect its type.
+        /// </summary>
+        /// <param name="path">Path to the tokenizer file</param>
+        /// <returns>Loaded tokenizer instance</returns>
+        public static ITokenizer Load(string path)
+        {
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException($"Tokenizer file not found: {path}");
+            }
+
+            // Try to detect tokenizer type from file content
+            string content = File.ReadAllText(path);
+
+            // Check for ByteLevelBpe format
+            if (content.Contains("\"version\"") && content.Contains("smallmind-bpe-v1"))
+            {
+                var tokenizer = new ByteLevelBpeTokenizer();
+                tokenizer.LoadVocabulary(path);
+                return tokenizer;
+            }
+
+            // Add other tokenizer type detection here as needed
+            
+            throw new NotSupportedException(
+                $"Unable to auto-detect tokenizer type from file: {path}\n" +
+                "The file format is not recognized.");
+        }
     }
 }
