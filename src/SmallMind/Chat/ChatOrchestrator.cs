@@ -15,6 +15,7 @@ namespace SmallMind.Chat
     /// <summary>
     /// Orchestrates multi-turn RAG chat sessions with workflow integration.
     /// </summary>
+    [Obsolete("Use SmallMind.Engine.ChatSession instead. This class will be removed in a future version.")]
     public class ChatOrchestrator : IChatCompletionService
     {
         private readonly ISessionStore _sessionStore;
