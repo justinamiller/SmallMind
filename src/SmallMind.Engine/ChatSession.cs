@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Abstractions;
 using SmallMind.Runtime;
+using SmallMind.Tokenizers;
 using PublicGenerationOptions = SmallMind.Abstractions.GenerationOptions;
 
 namespace SmallMind.Engine
@@ -17,33 +18,41 @@ namespace SmallMind.Engine
     internal sealed class ChatSession : IChatSession
     {
         private readonly ModelHandle _modelHandle;
-        private readonly SessionOptions _options;
+        private readonly ChatSessionOptions _options;
         private readonly SmallMindOptions _engineOptions;
+        private readonly ITokenizer _tokenizer;
         private readonly List<ChatMessage> _conversationHistory;
         private readonly string _sessionId;
         private readonly DateTimeOffset _createdAt;
+        private readonly ChatTemplateType _templateType;
         private int _turnCount;
-        private int _approximateTokenCount; // Approximate token count for conversation history
+        private int _cachedTokenCount; // Actual cached token count (0 for Phase 1, KV cache in Phase 2)
         private bool _disposed;
 
         public ChatSession(
             ModelHandle modelHandle,
-            SessionOptions options,
+            ChatSessionOptions options,
             SmallMindOptions engineOptions)
         {
             _modelHandle = modelHandle ?? throw new ArgumentNullException(nameof(modelHandle));
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _engineOptions = engineOptions ?? throw new ArgumentNullException(nameof(engineOptions));
+            _tokenizer = modelHandle.Tokenizer ?? throw new InvalidOperationException("Model handle does not have a tokenizer");
             _conversationHistory = new List<ChatMessage>();
             _sessionId = options.SessionId ?? Guid.NewGuid().ToString("N");
             _createdAt = DateTimeOffset.UtcNow;
+
+            // Detect or use configured chat template
+            _templateType = options.ChatTemplateType == ChatTemplateType.Auto
+                ? ChatTemplates.DetectTemplate(modelHandle.Info.Name, metadata: null)
+                : options.ChatTemplateType;
         }
 
         public SessionInfo Info => new SessionInfo(
             sessionId: _sessionId,
             createdAt: _createdAt,
             turnCount: _turnCount,
-            kvCacheTokens: _approximateTokenCount); // Approximate based on conversation history
+            kvCacheTokens: _cachedTokenCount); // Actual cached token count (0 for Phase 1)
 
         public ValueTask AddSystemAsync(string systemPrompt, CancellationToken cancellationToken = default)
         {
@@ -59,9 +68,6 @@ namespace SmallMind.Engine
                 Role = ChatRole.System,
                 Content = systemPrompt
             });
-
-            // Approximate tokens: ~4 characters per token + role prefix
-            _approximateTokenCount += EstimateTokenCount(systemPrompt, "System: ");
 
             return ValueTask.CompletedTask;
         }
@@ -81,8 +87,8 @@ namespace SmallMind.Engine
             // Add user message to history
             _conversationHistory.Add(message);
 
-            // Build full conversation prompt
-            var prompt = BuildConversationPrompt();
+            // Build full conversation prompt with truncation
+            var prompt = BuildConversationPrompt(options.MaxNewTokens);
 
             // Generate response
             var session = _modelHandle.CreateInferenceSession(options, _engineOptions);
@@ -99,8 +105,6 @@ namespace SmallMind.Engine
                     Role = ChatRole.Assistant,
                     Content = response
                 });
-
-                _approximateTokenCount += EstimateTokenCount(response, "Assistant: ");
 
                 _turnCount++;
 
@@ -132,10 +136,9 @@ namespace SmallMind.Engine
 
             // Add user message to history
             _conversationHistory.Add(message);
-            _approximateTokenCount += EstimateTokenCount(message.Content, "User: ");
 
-            // Build full conversation prompt
-            var prompt = BuildConversationPrompt();
+            // Build full conversation prompt with truncation
+            var prompt = BuildConversationPrompt(options.MaxNewTokens);
 
             // Generate streaming response
             var session = _modelHandle.CreateInferenceSession(options, _engineOptions);
@@ -183,8 +186,6 @@ namespace SmallMind.Engine
                     Content = response
                 });
 
-                _approximateTokenCount += EstimateTokenCount(response, "Assistant: ");
-
                 _turnCount++;
 
                 // Emit completed event
@@ -207,35 +208,275 @@ namespace SmallMind.Engine
 
             _conversationHistory.Clear();
             _turnCount = 0;
-            _approximateTokenCount = 0;
+            _cachedTokenCount = 0;
         }
 
-        private string BuildConversationPrompt()
+        /// <summary>
+        /// Builds the conversation prompt with intelligent truncation.
+        /// Applies chat template formatting and ensures the prompt fits within context limits.
+        /// </summary>
+        private string BuildConversationPrompt(int maxNewTokens)
+        {
+            int contextLimit = _modelHandle.Model.BlockSize - maxNewTokens;
+
+            // For templates that don't do individual message formatting,
+            // we need to build the full conversation differently
+            if (_templateType == ChatTemplateType.None)
+            {
+                return BuildPlainPromptWithTruncation(contextLimit);
+            }
+
+            return BuildTemplatePromptWithTruncation(contextLimit);
+        }
+
+        /// <summary>
+        /// Build plain text prompt (no template) with truncation.
+        /// </summary>
+        private string BuildPlainPromptWithTruncation(int contextLimit)
         {
             var sb = new StringBuilder();
 
-            for (int i = 0; i < _conversationHistory.Count; i++)
-            {
-                var msg = _conversationHistory[i];
+            // First, separate system messages from conversation turns
+            var systemMessages = new List<ChatMessage>();
+            var conversationTurns = new List<ChatMessage>();
 
-                switch (msg.Role)
+            foreach (var msg in _conversationHistory)
+            {
+                if (msg.Role == ChatRole.System)
                 {
-                    case ChatRole.System:
-                        sb.AppendLine($"System: {msg.Content}");
-                        break;
-                    case ChatRole.User:
-                        sb.AppendLine($"User: {msg.Content}");
-                        break;
-                    case ChatRole.Assistant:
-                        sb.AppendLine($"Assistant: {msg.Content}");
-                        break;
+                    systemMessages.Add(msg);
+                }
+                else
+                {
+                    conversationTurns.Add(msg);
                 }
             }
 
-            // Add assistant prefix for next response
+            // Build system prompt (always included)
+            foreach (var msg in systemMessages)
+            {
+                sb.AppendLine($"System: {msg.Content}");
+            }
+
+            string systemPrompt = sb.ToString();
+            int systemTokens = _tokenizer.Encode(systemPrompt).Count;
+
+            // Build conversation history with truncation
+            var turnStrings = new List<string>();
+            foreach (var msg in conversationTurns)
+            {
+                string rolePrefix = msg.Role == ChatRole.User ? "User: " : "Assistant: ";
+                turnStrings.Add($"{rolePrefix}{msg.Content}");
+            }
+
+            // Add turns from most recent, working backwards until we hit the limit
+            var includedTurns = new List<string>();
+            int currentTokens = systemTokens;
+
+            for (int i = turnStrings.Count - 1; i >= 0; i--)
+            {
+                string turn = turnStrings[i];
+                int turnTokens = _tokenizer.Encode(turn + "\n").Count;
+
+                // Reserve space for "Assistant:" prefix
+                int assistantPrefixTokens = _tokenizer.Encode("Assistant:").Count;
+
+                if (currentTokens + turnTokens + assistantPrefixTokens > contextLimit)
+                {
+                    break;
+                }
+
+                includedTurns.Insert(0, turn);
+                currentTokens += turnTokens;
+            }
+
+            // Build final prompt
+            sb.Clear();
+            sb.Append(systemPrompt);
+            foreach (var turn in includedTurns)
+            {
+                sb.AppendLine(turn);
+            }
             sb.Append("Assistant:");
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Build templated prompt with truncation.
+        /// </summary>
+        private string BuildTemplatePromptWithTruncation(int contextLimit)
+        {
+            // Separate system messages from conversation turns
+            var systemMessages = new List<ChatMessage>();
+            var conversationTurns = new List<ChatMessage>();
+
+            foreach (var msg in _conversationHistory)
+            {
+                if (msg.Role == ChatRole.System)
+                {
+                    systemMessages.Add(msg);
+                }
+                else
+                {
+                    conversationTurns.Add(msg);
+                }
+            }
+
+            // Build and measure system messages (always included)
+            var sb = new StringBuilder();
+            foreach (var msg in systemMessages)
+            {
+                sb.Append(FormatMessageForTemplate(msg));
+            }
+
+            string systemPrompt = sb.ToString();
+            int systemTokens = _tokenizer.Encode(systemPrompt).Count;
+
+            // Build conversation turns with truncation
+            var includedTurns = new List<string>();
+            int currentTokens = systemTokens;
+
+            // Process turns from most recent backwards
+            for (int i = conversationTurns.Count - 1; i >= 0; i--)
+            {
+                var msg = conversationTurns[i];
+                string formattedTurn = FormatMessageForTemplate(msg);
+                int turnTokens = _tokenizer.Encode(formattedTurn).Count;
+
+                // Reserve space for assistant prefix (varies by template)
+                string assistantPrefix = GetAssistantPrefix();
+                int prefixTokens = _tokenizer.Encode(assistantPrefix).Count;
+
+                if (currentTokens + turnTokens + prefixTokens > contextLimit)
+                {
+                    break;
+                }
+
+                includedTurns.Insert(0, formattedTurn);
+                currentTokens += turnTokens;
+            }
+
+            // Build final prompt
+            sb.Clear();
+            sb.Append(systemPrompt);
+            foreach (var turn in includedTurns)
+            {
+                sb.Append(turn);
+            }
+            sb.Append(GetAssistantPrefix());
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Format a single message according to the template.
+        /// </summary>
+        private string FormatMessageForTemplate(ChatMessage msg)
+        {
+            switch (_templateType)
+            {
+                case ChatTemplateType.ChatML:
+                    return FormatChatMLMessage(msg);
+                case ChatTemplateType.Llama2:
+                    return FormatLlama2Message(msg);
+                case ChatTemplateType.Llama3:
+                    return FormatLlama3Message(msg);
+                case ChatTemplateType.Mistral:
+                    return FormatMistralMessage(msg);
+                case ChatTemplateType.Phi:
+                    return FormatPhiMessage(msg);
+                default:
+                    return msg.Content;
+            }
+        }
+
+        private string FormatChatMLMessage(ChatMessage msg)
+        {
+            string role = msg.Role switch
+            {
+                ChatRole.System => "system",
+                ChatRole.User => "user",
+                ChatRole.Assistant => "assistant",
+                _ => "user"
+            };
+            return $"<|im_start|>{role}\n{msg.Content}<|im_end|>\n";
+        }
+
+        private string FormatLlama2Message(ChatMessage msg)
+        {
+            if (msg.Role == ChatRole.System)
+            {
+                return $"<<SYS>>\n{msg.Content}\n<</SYS>>\n\n";
+            }
+            else if (msg.Role == ChatRole.User)
+            {
+                return $"[INST] {msg.Content} [/INST] ";
+            }
+            else // Assistant
+            {
+                return msg.Content + " ";
+            }
+        }
+
+        private string FormatLlama3Message(ChatMessage msg)
+        {
+            string role = msg.Role switch
+            {
+                ChatRole.System => "system",
+                ChatRole.User => "user",
+                ChatRole.Assistant => "assistant",
+                _ => "user"
+            };
+            if (msg.Role == ChatRole.Assistant)
+            {
+                return $"<|start_header_id|>{role}<|end_header_id|>\n\n{msg.Content}<|eot_id|>";
+            }
+            return $"<|start_header_id|>{role}<|end_header_id|>\n\n{msg.Content}<|eot_id|>";
+        }
+
+        private string FormatMistralMessage(ChatMessage msg)
+        {
+            if (msg.Role == ChatRole.System)
+            {
+                return $"{msg.Content}\n\n";
+            }
+            else if (msg.Role == ChatRole.User)
+            {
+                return $"[INST] {msg.Content} [/INST]";
+            }
+            else // Assistant
+            {
+                return msg.Content + " ";
+            }
+        }
+
+        private string FormatPhiMessage(ChatMessage msg)
+        {
+            string role = msg.Role switch
+            {
+                ChatRole.System => "System",
+                ChatRole.User => "User",
+                ChatRole.Assistant => "Assistant",
+                _ => "User"
+            };
+            return $"{role}: {msg.Content}\n";
+        }
+
+        /// <summary>
+        /// Get the assistant prefix for the current template.
+        /// </summary>
+        private string GetAssistantPrefix()
+        {
+            return _templateType switch
+            {
+                ChatTemplateType.ChatML => "<|im_start|>assistant\n",
+                ChatTemplateType.Llama2 => "",
+                ChatTemplateType.Llama3 => "<|start_header_id|>assistant<|end_header_id|>\n\n",
+                ChatTemplateType.Mistral => "",
+                ChatTemplateType.Phi => "Assistant:",
+                _ => "Assistant:"
+            };
         }
 
         private void ThrowIfDisposed()
@@ -244,20 +485,6 @@ namespace SmallMind.Engine
             {
                 throw new ObjectDisposedException(nameof(ChatSession));
             }
-        }
-
-        /// <summary>
-        /// Estimates token count for a message using a simple heuristic.
-        /// Assumes ~4 characters per token on average (common for English text).
-        /// </summary>
-        private static int EstimateTokenCount(string content, string rolePrefix)
-        {
-            if (string.IsNullOrEmpty(content))
-                return rolePrefix.Length / 4;
-
-            // Estimate: role prefix + content + newline
-            int totalChars = rolePrefix.Length + content.Length + 1;
-            return (int)Math.Ceiling(totalChars / 4.0); // Round up: ~4 chars per token
         }
 
         public void Dispose()
