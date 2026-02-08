@@ -31,15 +31,18 @@ namespace SmallMind.Transformers
 
         // Embedding layers
         private readonly Embedding _tokenEmbedding;
-        private readonly Embedding _positionEmbedding;
+        private readonly Embedding? _positionEmbedding;  // Nullable for RoPE models
         private readonly Dropout _embDropout;
 
         // Transformer blocks
         private readonly List<TransformerBlock> _blocks;
 
         // Final layer norm and linear head
-        private readonly LayerNorm _lnFinal;
+        private readonly Module _lnFinal;  // LayerNorm or RMSNorm
         private readonly Linear _lmHead;
+        
+        // RoPE configuration
+        private readonly bool _useRope;
         
         // Cached position indices to avoid recreating each forward pass
         private readonly Dictionary<int, Tensor> _positionIndicesCache;
@@ -97,6 +100,7 @@ namespace SmallMind.Transformers
             _nHead = nHead;
             _dropout = dropout;
             _random = new Random(seed);
+            _useRope = false;  // GPT-2 uses learned positional embeddings
             
             // Initialize position indices cache
             _positionIndicesCache = new Dictionary<int, Tensor>();
@@ -144,6 +148,99 @@ namespace SmallMind.Transformers
             }
         }
 
+        /// <summary>
+        /// ModelConfig-based constructor for Llama/Mistral/Phi architectures.
+        /// Supports RoPE, RMSNorm, GQA, and SwiGLU based on config.
+        /// </summary>
+        public TransformerModel(ModelConfig config, int seed = 42)
+        {
+            if (config == null)
+                throw new ArgumentNullException(nameof(config));
+            
+            Guard.GreaterThan(config.VocabSize, 0);
+            Guard.GreaterThan(config.ContextLength, 0);
+            Guard.GreaterThan(config.EmbeddingLength, 0);
+            Guard.GreaterThan(config.BlockCount, 0);
+            Guard.GreaterThan(config.HeadCount, 0);
+            Guard.InRange(config.Dropout, 0.0, 1.0);
+            
+            _vocabSize = config.VocabSize;
+            _blockSize = config.ContextLength;
+            _nEmbd = config.EmbeddingLength;
+            _nLayer = config.BlockCount;
+            _nHead = config.HeadCount;
+            _dropout = config.Dropout;
+            _random = new Random(seed);
+            _useRope = config.UseRope;
+            
+            // Initialize position indices cache
+            _positionIndicesCache = new Dictionary<int, Tensor>();
+            
+            // Initialize tensor workspace for reusing intermediate tensors
+            _workspace = new TensorWorkspace();
+
+            // Token embeddings (always needed)
+            _tokenEmbedding = new Embedding(_vocabSize, _nEmbd, _random);
+            _embDropout = new Dropout((float)_dropout, _random);
+            
+            // Position embeddings (only for non-RoPE models)
+            if (!_useRope)
+            {
+                _positionEmbedding = new Embedding(_blockSize, _nEmbd, _random);
+            }
+            else
+            {
+                _positionEmbedding = null;  // RoPE models don't use learned positional embeddings
+            }
+
+            // Stack of transformer blocks
+            _blocks = new List<TransformerBlock>(_nLayer);
+            for (int i = 0; i < _nLayer; i++)
+            {
+                _blocks.Add(new TransformerBlock(config, _random));
+            }
+
+            // Final layer norm
+            if (config.UseRmsNorm)
+            {
+                _lnFinal = new RMSNorm(_nEmbd, (float)config.NormEps);
+            }
+            else
+            {
+                _lnFinal = new LayerNorm(_nEmbd);
+            }
+            
+            // Language model head
+            _lmHead = new Linear(_nEmbd, _vocabSize, useBias: config.UseBias, _random);
+
+            // Collect all parameters
+            Parameters = new List<Tensor>();
+            Parameters.AddRange(_tokenEmbedding.Parameters);
+            if (_positionEmbedding != null)
+            {
+                Parameters.AddRange(_positionEmbedding.Parameters);
+            }
+            for (int i = 0; i < _blocks.Count; i++)
+            {
+                Parameters.AddRange(_blocks[i].Parameters);
+            }
+            Parameters.AddRange(_lnFinal.Parameters);
+            Parameters.AddRange(_lmHead.Parameters);
+
+            long totalParams = GetTotalParameterCount();
+            Console.WriteLine($"TransformerModel initialized from ModelConfig:");
+            Console.WriteLine($"  Architecture: {config.Architecture}");
+            Console.WriteLine($"  Vocab: {_vocabSize}, Context: {_blockSize}, Embedding: {_nEmbd}");
+            Console.WriteLine($"  Layers: {_nLayer}, Heads: {_nHead} (KV heads: {config.HeadCountKv})");
+            Console.WriteLine($"  Features: RoPE={_useRope}, RMSNorm={config.UseRmsNorm}, SwiGLU={config.UseSwiGlu}");
+            Console.WriteLine($"  Total parameters: {totalParams:N0} ({Parameters.Count} tensors)");
+            
+            if (totalParams > 500_000_000)
+            {
+                Console.WriteLine($"WARNING: Large model detected ({totalParams / 1_000_000}M parameters).");
+            }
+        }
+
         public Tensor Forward(Tensor idx)
         {
             return Forward(idx, positionOffset: 0);
@@ -174,30 +271,42 @@ namespace SmallMind.Transformers
             var tokEmbDest = _workspace.GetOrCreate("tokEmb", embedShape, _isTraining);
             var tokEmb = _tokenEmbedding.Forward(idx, tokEmbDest);
 
-            // Position embeddings: get cached position indices or create new
-            // Tier-0 optimization: Use positionOffset to support incremental decode
-            int cacheKey = T * 100000 + positionOffset; // Unique key combining T and offset
-            if (!_positionIndicesCache.TryGetValue(cacheKey, out var posIndices))
-            {
-                // Position indices are cached, so one-time allocation is acceptable
-                posIndices = new Tensor(new float[T], new int[] { T });
-                for (int i = 0; i < T; i++)
-                {
-                    posIndices.Data[i] = positionOffset + i; // Apply offset for absolute position
-                }
-                _positionIndicesCache[cacheKey] = posIndices;
-            }
+            Tensor x;
             
-            // Reuse workspace tensor for position embeddings
-            Span<int> posEmbShape = stackalloc int[2] { T, _nEmbd };
-            var posEmbDest = _workspace.GetOrCreate("posEmb", posEmbShape, _isTraining);
-            var posEmb = _positionEmbedding.Forward(posIndices, posEmbDest);
+            if (_useRope)
+            {
+                // RoPE models: no learned positional embeddings
+                // Position information is added via RoPE in attention layers
+                x = _embDropout.Forward(tokEmb);
+            }
+            else
+            {
+                // GPT-2 style: add learned positional embeddings
+                // Position embeddings: get cached position indices or create new
+                // Tier-0 optimization: Use positionOffset to support incremental decode
+                int cacheKey = T * 100000 + positionOffset; // Unique key combining T and offset
+                if (!_positionIndicesCache.TryGetValue(cacheKey, out var posIndices))
+                {
+                    // Position indices are cached, so one-time allocation is acceptable
+                    posIndices = new Tensor(new float[T], new int[] { T });
+                    for (int i = 0; i < T; i++)
+                    {
+                        posIndices.Data[i] = positionOffset + i; // Apply offset for absolute position
+                    }
+                    _positionIndicesCache[cacheKey] = posIndices;
+                }
+                
+                // Reuse workspace tensor for position embeddings
+                Span<int> posEmbShape = stackalloc int[2] { T, _nEmbd };
+                var posEmbDest = _workspace.GetOrCreate("posEmb", posEmbShape, _isTraining);
+                var posEmb = _positionEmbedding!.Forward(posIndices, posEmbDest);
 
-            // Add token and position embeddings: (B, T, n_embd)
-            // Reuse workspace for the result (reuse embedShape)
-            var addEmbDest = _workspace.GetOrCreate("addEmb", embedShape, _isTraining);
-            var x = AddPositionEmbeddings(tokEmb, posEmb, addEmbDest, B, T, _nEmbd);
-            x = _embDropout.Forward(x);
+                // Add token and position embeddings: (B, T, n_embd)
+                // Reuse workspace for the result (reuse embedShape)
+                var addEmbDest = _workspace.GetOrCreate("addEmb", embedShape, _isTraining);
+                x = AddPositionEmbeddings(tokEmb, posEmb, addEmbDest, B, T, _nEmbd);
+                x = _embDropout.Forward(x);
+            }
 
             // Pass through transformer blocks
             for (int i = 0; i < _blocks.Count; i++)
@@ -206,12 +315,35 @@ namespace SmallMind.Transformers
             }
 
             // Final layer norm: (B, T, n_embd)
-            x = _lnFinal.Forward(x);
+            var lnFinalOut = _workspace.GetOrCreate("lnFinalOut", x.Shape, _isTraining);
+            ForwardNorm(_lnFinal, x, lnFinalOut);
 
             // Language model head: (B, T, n_embd) -> (B, T, vocab_size)
-            var logits = _lmHead.Forward(x);
+            var logits = _lmHead.Forward(lnFinalOut);
 
             return logits;
+        }
+
+        /// <summary>
+        /// Helper to forward through norm layer with destination tensor.
+        /// Supports both LayerNorm and RMSNorm which have dest-overload methods.
+        /// </summary>
+        private static void ForwardNorm(Module norm, Tensor input, Tensor dest)
+        {
+            if (norm is LayerNorm layerNorm)
+            {
+                layerNorm.Forward(input, dest);
+            }
+            else if (norm is RMSNorm rmsNorm)
+            {
+                rmsNorm.Forward(input, dest);
+            }
+            else
+            {
+                // Fallback: use base Forward and copy result
+                var result = norm.Forward(input);
+                result.Data.CopyTo(dest.Data, 0);
+            }
         }
 
         private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, Tensor dest, int B, int T, int nEmbd)
@@ -281,7 +413,7 @@ namespace SmallMind.Transformers
         {
             _isTraining = true;
             _tokenEmbedding.Train();
-            _positionEmbedding.Train();
+            _positionEmbedding?.Train();
             _embDropout.Train();
             _lnFinal.Train();
             _lmHead.Train();
@@ -295,7 +427,7 @@ namespace SmallMind.Transformers
         {
             _isTraining = false;
             _tokenEmbedding.Eval();
-            _positionEmbedding.Eval();
+            _positionEmbedding?.Eval();
             _embDropout.Eval();
             _lnFinal.Eval();
             _lmHead.Eval();
@@ -380,10 +512,10 @@ namespace SmallMind.Transformers
     /// </summary>
     public sealed class TransformerBlock
     {
-        private readonly LayerNorm _ln1;
+        private readonly Module _ln1;
         private readonly MultiHeadAttention _attn;
-        private readonly LayerNorm _ln2;
-        private readonly MLP _mlp;
+        private readonly Module _ln2;
+        private readonly Module _mlp;
         
         private bool _isTraining = true;
         
@@ -392,12 +524,73 @@ namespace SmallMind.Transformers
 
         public List<Tensor> Parameters { get; private set; }
 
+        /// <summary>
+        /// GPT-2 style constructor (backward compatibility).
+        /// Uses LayerNorm and standard MLP with GELU.
+        /// </summary>
         public TransformerBlock(int nEmbd, int nHead, int blockSize, float dropout, Random random)
         {
             _ln1 = new LayerNorm(nEmbd);
             _attn = new MultiHeadAttention(nEmbd, nHead, blockSize, dropout, random);
             _ln2 = new LayerNorm(nEmbd);
             _mlp = new MLP(nEmbd, dropout, random);
+            
+            _workspace = new TensorWorkspace();
+
+            Parameters = new List<Tensor>();
+            Parameters.AddRange(_ln1.Parameters);
+            Parameters.AddRange(_attn.Parameters);
+            Parameters.AddRange(_ln2.Parameters);
+            Parameters.AddRange(_mlp.Parameters);
+        }
+
+        /// <summary>
+        /// ModelConfig-based constructor for Llama/Mistral/Phi architectures.
+        /// Supports RMSNorm, RoPE, GQA, and SwiGLU based on config.
+        /// </summary>
+        public TransformerBlock(ModelConfig config, Random random)
+        {
+            if (config == null)
+                throw new ArgumentNullException(nameof(config));
+            
+            int nEmbd = config.EmbeddingLength;
+            int nHead = config.HeadCount;
+            int nKvHead = config.HeadCountKv;
+            int blockSize = config.ContextLength;
+            float dropout = (float)config.Dropout;
+            
+            // Create normalization layers based on config
+            if (config.UseRmsNorm)
+            {
+                _ln1 = new RMSNorm(nEmbd, (float)config.NormEps);
+                _ln2 = new RMSNorm(nEmbd, (float)config.NormEps);
+            }
+            else
+            {
+                _ln1 = new LayerNorm(nEmbd);
+                _ln2 = new LayerNorm(nEmbd);
+            }
+            
+            // Create attention layer with optional RoPE and GQA
+            _attn = new MultiHeadAttention(
+                nEmbd, 
+                nHead, 
+                blockSize, 
+                dropout, 
+                random,
+                nKvHead: nKvHead,
+                useRope: config.UseRope,
+                ropeTheta: (float)config.RopeFreqBase);
+            
+            // Create MLP based on config
+            if (config.UseSwiGlu)
+            {
+                _mlp = new GatedMLP(nEmbd, config.FeedForwardLength, dropout, random);
+            }
+            else
+            {
+                _mlp = new MLP(nEmbd, dropout, random);
+            }
             
             _workspace = new TensorWorkspace();
 
@@ -415,7 +608,7 @@ namespace SmallMind.Transformers
             
             // Use workspace tensors for LayerNorm outputs and residual connections
             var ln1Out = _workspace.GetOrCreate("ln1Out", x.Shape, _isTraining);
-            _ln1.Forward(x, ln1Out);
+            ForwardNorm(_ln1, x, ln1Out);
             
             var attnOut = _attn.Forward(ln1Out);
             
@@ -425,7 +618,7 @@ namespace SmallMind.Transformers
             
             // Second residual connection
             var ln2Out = _workspace.GetOrCreate("ln2Out", x.Shape, _isTraining);
-            _ln2.Forward(x, ln2Out);
+            ForwardNorm(_ln2, x, ln2Out);
             
             var mlpOut = _mlp.Forward(ln2Out);
             
@@ -433,6 +626,28 @@ namespace SmallMind.Transformers
             x = AddTensors(x, mlpOut, residual2);
             
             return x;
+        }
+
+        /// <summary>
+        /// Helper to forward through norm layer with destination tensor.
+        /// Supports both LayerNorm and RMSNorm which have dest-overload methods.
+        /// </summary>
+        private static void ForwardNorm(Module norm, Tensor input, Tensor dest)
+        {
+            if (norm is LayerNorm layerNorm)
+            {
+                layerNorm.Forward(input, dest);
+            }
+            else if (norm is RMSNorm rmsNorm)
+            {
+                rmsNorm.Forward(input, dest);
+            }
+            else
+            {
+                // Fallback: use base Forward and copy result
+                var result = norm.Forward(input);
+                result.Data.CopyTo(dest.Data, 0);
+            }
         }
 
         private Tensor AddTensors(Tensor a, Tensor b, Tensor? dest = null)
