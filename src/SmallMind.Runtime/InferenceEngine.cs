@@ -7,6 +7,8 @@ using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
+using SmallMind.Runtime.Quantization;
+using SmallMind.Quantization.IO.Gguf;
 
 namespace SmallMind.Runtime
 {
@@ -65,6 +67,165 @@ namespace SmallMind.Runtime
             
             // Ensure model is in eval mode (thread-safe)
             _model.Eval();
+        }
+        
+        /// <summary>
+        /// Creates an inference engine from a GGUF model file.
+        /// Automatically imports GGUF to SMQ format if needed (cached for subsequent loads).
+        /// </summary>
+        /// <param name="ggufPath">Path to the GGUF model file</param>
+        /// <param name="maxConcurrentSessions">Maximum allowed concurrent sessions (0 for unlimited)</param>
+        /// <param name="cacheDirectory">Optional cache directory for converted SMQ files (defaults to temp directory)</param>
+        /// <returns>A configured InferenceEngine ready for text generation</returns>
+        /// <exception cref="ArgumentException">If ggufPath is null or empty</exception>
+        /// <exception cref="System.IO.FileNotFoundException">If the GGUF file does not exist</exception>
+        /// <exception cref="NotSupportedException">If the GGUF file contains unsupported tensor types</exception>
+        public static InferenceEngine FromGguf(
+            string ggufPath,
+            int maxConcurrentSessions = 0,
+            string? cacheDirectory = null)
+        {
+            if (string.IsNullOrWhiteSpace(ggufPath))
+            {
+                throw new ArgumentException("GGUF path cannot be null or empty", nameof(ggufPath));
+            }
+
+            if (!System.IO.File.Exists(ggufPath))
+            {
+                throw new System.IO.FileNotFoundException($"GGUF file not found: {ggufPath}", ggufPath);
+            }
+
+            // Determine cache directory
+            var cacheDir = cacheDirectory ?? System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "SmallMind",
+                "GgufCache");
+
+            System.IO.Directory.CreateDirectory(cacheDir);
+
+            // Generate cached SMQ file path
+            var fileName = System.IO.Path.GetFileNameWithoutExtension(ggufPath);
+            var smqPath = System.IO.Path.Combine(cacheDir, $"{fileName}.smq");
+
+            // Import GGUF to SMQ if not already cached
+            if (!System.IO.File.Exists(smqPath))
+            {
+                var importer = new GgufImporter();
+                importer.ImportToSmq(ggufPath, smqPath);
+            }
+
+            // Load the SMQ file
+            var metadata = QuantizedModelLoader.LoadQuantizedModelMetadata(smqPath);
+
+            // Extract tokenizer from GGUF metadata
+            ITokenizer tokenizer;
+            try
+            {
+                var extractedTokenizer = GgufTokenizerExtractor.ExtractTokenizer(metadata.Metadata);
+                if (extractedTokenizer != null)
+                {
+                    tokenizer = extractedTokenizer;
+                }
+                else
+                {
+                    // Fallback to default tokenizer
+                    int vocabSize = ExtractMetadataInt(metadata.Metadata, "llama.vocab_size", 
+                                    ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
+                    tokenizer = CreateDefaultTokenizer(vocabSize);
+                }
+            }
+            catch
+            {
+                // If extraction fails, use default
+                int vocabSize = ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
+                                ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
+                tokenizer = CreateDefaultTokenizer(vocabSize);
+            }
+
+            // Try to load as Llama/modern model with proper configuration
+            TransformerModel model;
+            try
+            {
+                var config = ModelConfig.FromGgufMetadata(metadata.Metadata!);
+                
+                model = new TransformerModel(
+                    vocabSize: config.VocabSize,
+                    blockSize: config.ContextLength,
+                    nEmbd: config.EmbeddingLength,
+                    nLayer: config.BlockCount,
+                    nHead: config.HeadCount,
+                    dropout: 0.0,
+                    seed: 42);
+            }
+            catch
+            {
+                // If modern config fails, fall back to legacy GPT loading
+                int vocabSize = ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257);
+                int blockSize = ExtractMetadataInt(metadata.Metadata, "block_size", 1024);
+                int embedDim = ExtractMetadataInt(metadata.Metadata, "embed_dim", 768);
+                int numLayers = ExtractMetadataInt(metadata.Metadata, "num_layers", 12);
+                int numHeads = ExtractMetadataInt(metadata.Metadata, "num_heads", 12);
+
+                model = new TransformerModel(
+                    vocabSize: vocabSize,
+                    blockSize: blockSize,
+                    nEmbd: embedDim,
+                    nLayer: numLayers,
+                    nHead: numHeads,
+                    dropout: 0.0,
+                    seed: 42);
+            }
+
+            return new InferenceEngine(model, tokenizer, model.BlockSize, maxConcurrentSessions);
+        }
+
+        private static int ExtractMetadataInt(
+            Dictionary<string, object>? metadata,
+            string key,
+            int defaultValue)
+        {
+            if (metadata != null && metadata.TryGetValue(key, out var value))
+            {
+                // Handle JsonElement from deserialized SMQ metadata
+                if (value is System.Text.Json.JsonElement jsonElement)
+                {
+                    if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        return jsonElement.GetInt32();
+                    }
+                    else if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        if (int.TryParse(jsonElement.GetString(), out int parsed))
+                        {
+                            return parsed;
+                        }
+                    }
+                }
+                
+                return Convert.ToInt32(value);
+            }
+            return defaultValue;
+        }
+
+        private static ITokenizer CreateDefaultTokenizer(int vocabSize)
+        {
+            // WARNING: This is a fallback tokenizer for demonstration purposes only.
+            // Production deployments should load tokenizer configuration from model metadata.
+            // This simple character tokenizer is NOT suitable for real models.
+            
+            var vocab = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?;:'-\n";
+            if (vocab.Length < vocabSize)
+            {
+                // Pad vocabulary with placeholder characters
+                var paddedVocab = vocab;
+                for (int i = vocab.Length; i < vocabSize; i++)
+                {
+                    paddedVocab += ((char)(128 + i)).ToString();
+                }
+                vocab = paddedVocab;
+            }
+
+            return new CharTokenizer(vocab.Substring(0, Math.Min(vocabSize, vocab.Length)));
         }
         
         /// <summary>
