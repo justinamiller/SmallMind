@@ -153,6 +153,39 @@ namespace SmallMind.Public.Internal
             throw new InternalErrorException("Embeddings are not yet supported. Check SupportsEmbeddings capability before calling.");
         }
 
+        public IChatClient CreateChatClient(ChatClientOptions options)
+        {
+            ThrowIfDisposed();
+
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+
+            var sessionId = options.SessionId ?? Guid.NewGuid().ToString();
+
+            EmitDiagnostic(new SmallMindDiagnosticEvent
+            {
+                EventType = DiagnosticEventType.SessionCreated,
+                Timestamp = DateTimeOffset.UtcNow,
+                RequestId = Guid.NewGuid(),
+                SessionId = sessionId,
+                Metadata = $"ChatClient,EnableKvCache={options.EnableKvCache}"
+            });
+
+            // Create session options
+            var sessionOptions = new Abstractions.SessionOptions
+            {
+                SessionId = sessionId,
+                EnableKvCache = options.EnableKvCache,
+                MaxKvCacheTokens = options.MaxKvCacheTokens
+            };
+
+            // Create internal chat session
+            var chatSession = _internalEngine.CreateChatSession(_model, sessionOptions);
+
+            // Wrap in public API
+            return new ChatClient(chatSession, options.DefaultTelemetry);
+        }
+
         private static void ValidateOptions(SmallMindOptions options)
         {
             if (string.IsNullOrWhiteSpace(options.ModelPath))

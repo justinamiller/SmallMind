@@ -1,0 +1,75 @@
+using System;
+using System.Threading;
+using SmallMind.Abstractions;
+
+namespace SmallMind.Public
+{
+    /// <summary>
+    /// Level 3 chat client implementation.
+    /// Wraps ChatSession with a clean public API.
+    /// </summary>
+    internal sealed class ChatClient : IChatClient
+    {
+        private readonly IChatSession _session;
+        private readonly IChatTelemetry _telemetry;
+        private bool _disposed;
+
+        public ChatClient(IChatSession session, IChatTelemetry? telemetry)
+        {
+            _session = session ?? throw new ArgumentNullException(nameof(session));
+            _telemetry = telemetry ?? NoOpTelemetry.Instance;
+        }
+
+        public ChatResponse SendChat(ChatRequest request, CancellationToken cancellationToken = default)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(ChatClient));
+
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            try
+            {
+                // Use the IChatSession's Level 3 API
+                var response = _session.SendAsync(request, _telemetry, cancellationToken)
+                    .AsTask()
+                    .GetAwaiter()
+                    .GetResult();
+
+                return response;
+            }
+            catch (Exception ex) when (ex is not ObjectDisposedException)
+            {
+                throw new InferenceFailedException($"Chat request failed: {ex.Message}", ex);
+            }
+        }
+
+        public void AddSystemMessage(string content)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(ChatClient));
+
+            if (string.IsNullOrWhiteSpace(content))
+                throw new ArgumentException("System message cannot be empty", nameof(content));
+
+            _session.AddSystemAsync(content).AsTask().GetAwaiter().GetResult();
+        }
+
+        public SessionInfo GetSessionInfo()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(ChatClient));
+
+            return _session.Info;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            _session?.Dispose();
+            _disposed = true;
+        }
+    }
+}

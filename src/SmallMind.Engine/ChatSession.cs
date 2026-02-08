@@ -1441,6 +1441,195 @@ namespace SmallMind.Engine
             return lcp;
         }
 
+        // ============================================================================
+        // LEVEL 3 CHAT API - ChatRequest/ChatResponse support
+        // ============================================================================
+
+        /// <summary>
+        /// Sends a chat request with Level 3 features (messages, tools, format, telemetry).
+        /// </summary>
+        public async ValueTask<ChatResponse> SendAsync(
+            ChatRequest request,
+            IChatTelemetry? telemetry = null,
+            CancellationToken cancellationToken = default)
+        {
+            ThrowIfDisposed();
+
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+            if (request.Messages == null || request.Messages.Count == 0)
+                throw new ArgumentException("Request must contain at least one message", nameof(request));
+
+            telemetry ??= NoOpTelemetry.Instance;
+            
+            var sw = Stopwatch.StartNew();
+            telemetry.OnRequestStart(_sessionId, request.Messages.Count);
+
+            // Apply context policy if configured
+            var messages = request.Messages;
+            if (request.ContextPolicy != null)
+            {
+                var tokenCounter = new TokenizerAdapter(_tokenizer);
+                int originalTokens = CountTokensInMessages(messages, tokenCounter);
+                int maxTokens = request.Options?.MaxContextTokens ?? _modelHandle.Model.BlockSize;
+                
+                messages = request.ContextPolicy.Apply(messages, maxTokens, tokenCounter);
+                
+                int finalTokens = CountTokensInMessages(messages, tokenCounter);
+                telemetry.OnContextPolicyApplied(
+                    _sessionId, 
+                    request.ContextPolicy.GetType().Name, 
+                    originalTokens, 
+                    finalTokens);
+            }
+
+            // Convert Level 3 messages to legacy format for existing logic
+            var legacyMessages = ConvertToLegacyMessages(messages);
+            
+            // Build prompt from messages
+            var prompt = BuildPromptFromMessages(legacyMessages);
+            
+            // Convert options
+            var options = request.Options ?? new PublicGenerationOptions();
+            
+            // Use existing generation logic
+            var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
+            
+            // Get KV cache if enabled
+            SessionId sessionId = new SessionId(_sessionId);
+            KvCacheEntry? kvCache = null;
+            int startPosition = 0;
+            
+            if (_options.EnableKvCache)
+            {
+                int maxTokens = _options.MaxKvCacheTokens ?? _modelHandle.Model.BlockSize;
+                kvCache = _kvCacheStore.GetOrCreate(sessionId, _modelShape, maxTokens);
+                
+                bool cacheHit = false;
+                if (_lastPromptTokenIds != null && kvCache.CurrentTokenCount > 0)
+                {
+                    int lcp = CalculateLongestCommonPrefix(_lastPromptTokenIds, promptTokenIds);
+                    if (lcp == _cachedTokenCount && lcp == kvCache.CurrentTokenCount)
+                    {
+                        startPosition = lcp;
+                        cacheHit = true;
+                        _kvCacheHits++;
+                    }
+                    else
+                    {
+                        kvCache.Reset();
+                        _kvCacheMisses++;
+                    }
+                }
+                else
+                {
+                    _kvCacheMisses++;
+                }
+                
+                telemetry.OnKvCacheAccess(_sessionId, cacheHit, startPosition);
+            }
+
+            // Create or reuse inference session
+            if (_persistentInferenceSession == null)
+            {
+                _persistentInferenceSession = _modelHandle.CreateInferenceSession(options, _engineOptions);
+            }
+
+            double? ttftMs = null;
+            int completionTokens = 0;
+            
+            try
+            {
+                // Generate response
+                string responseText = await _persistentInferenceSession.GenerateAsync(
+                    prompt: prompt,
+                    metrics: null,
+                    cancellationToken: cancellationToken);
+
+                ttftMs = sw.Elapsed.TotalMilliseconds;
+                telemetry.OnFirstToken(_sessionId, ttftMs.Value);
+
+                // Clean degenerate output
+                var (cleanedResponse, stopReason) = DetectAndCleanDegenerateOutput(responseText, options);
+                
+                // Estimate completion tokens
+                completionTokens = _tokenizer.Encode(cleanedResponse).Count;
+
+                // Update cache tracking
+                if (_options.EnableKvCache && kvCache != null)
+                {
+                    _lastPromptTokenIds = promptTokenIds;
+                    _cachedTokenCount = promptTokenIds.Length;
+                    _kvCacheStore.Touch(sessionId);
+                }
+
+                _turnCount++;
+                sw.Stop();
+
+                // Build response
+                var usage = new UsageStats
+                {
+                    PromptTokens = promptTokenIds.Length,
+                    CompletionTokens = completionTokens,
+                    TimeToFirstTokenMs = ttftMs.Value,
+                    TokensPerSecond = completionTokens / (sw.Elapsed.TotalSeconds > 0 ? sw.Elapsed.TotalSeconds : 1)
+                };
+
+                telemetry.OnRequestComplete(_sessionId, usage);
+
+                return new ChatResponse
+                {
+                    Message = new ChatMessageV3
+                    {
+                        Role = ChatRole.Assistant,
+                        Content = cleanedResponse
+                    },
+                    FinishReason = stopReason,
+                    Usage = usage,
+                    Citations = null, // TODO: Extract from request.RetrievedContext
+                    Warnings = null
+                };
+            }
+            catch (Exception ex)
+            {
+                throw new SmallMindException($"Chat request failed: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Converts Level 3 messages to legacy ChatMessage format.
+        /// </summary>
+        private List<ChatMessage> ConvertToLegacyMessages(IReadOnlyList<ChatMessageV3> messages)
+        {
+            var legacy = new List<ChatMessage>();
+            foreach (var msg in messages)
+            {
+                // Skip tool messages for now (not supported in legacy format)
+                if (msg.Role == ChatRole.Tool)
+                    continue;
+
+                legacy.Add(new ChatMessage
+                {
+                    Role = msg.Role,
+                    Content = msg.Content
+                });
+            }
+            return legacy;
+        }
+
+        /// <summary>
+        /// Counts total tokens in a list of messages.
+        /// </summary>
+        private int CountTokensInMessages(IReadOnlyList<ChatMessageV3> messages, ITokenCounter tokenizer)
+        {
+            int total = 0;
+            foreach (var msg in messages)
+            {
+                total += tokenizer.CountTokens(msg.Content);
+            }
+            return total;
+        }
+
         private void ThrowIfDisposed()
         {
             if (_disposed)

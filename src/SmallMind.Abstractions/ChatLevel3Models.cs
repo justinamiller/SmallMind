@@ -178,7 +178,7 @@ namespace SmallMind.Abstractions
         /// <summary>
         /// Gets or sets the generation options.
         /// </summary>
-        public GenerationOptions Options { get; set; } = new GenerationOptions();
+        public GenerationOptions? Options { get; set; }
 
         /// <summary>
         /// Gets or sets available tools for function calling.
@@ -200,6 +200,12 @@ namespace SmallMind.Abstractions
         /// Gets or sets optional retrieved context chunks (for RAG).
         /// </summary>
         public IReadOnlyList<RetrievedChunk>? RetrievedContext { get; set; }
+
+        /// <summary>
+        /// Gets or sets the context policy to apply for this request.
+        /// If null, uses the session's default policy or no policy.
+        /// </summary>
+        public IContextPolicy? ContextPolicy { get; set; }
     }
 
     /// <summary>
