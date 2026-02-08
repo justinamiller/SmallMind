@@ -176,6 +176,10 @@ namespace SmallMind.ConsoleApp
                 double temperature = double.Parse(GetArgValue(args, "--temperature", "1.0"));
                 int topK = int.Parse(GetArgValue(args, "--top-k", "0"));
                 
+                // Tokenizer selection
+                string tokenizerType = GetArgValue(args, "--tokenizer", "char").ToLower();
+                int vocabSize = int.Parse(GetArgValue(args, "--vocab-size", "1024"));
+                
                 // List available model presets and exit if requested
                 if (listPresets)
                 {
@@ -274,8 +278,26 @@ namespace SmallMind.ConsoleApp
                 string trainingText = File.ReadAllText(DATA_FILE);
                 Console.WriteLine($"Loaded {trainingText.Length} characters from {DATA_FILE}");
 
-                // Build tokenizer
-                var tokenizer = new Tokenizer(trainingText);
+                // Build tokenizer based on selected type
+                ITokenizer tokenizer;
+                switch (tokenizerType)
+                {
+                    case "bpe":
+                    case "byte-bpe":
+                    case "byte-level-bpe":
+                        Console.WriteLine($"Creating Byte-Level BPE tokenizer with vocab size {vocabSize}...");
+                        tokenizer = TokenizerFactory.CreateByteLevelBpe(trainingText, vocabSize);
+                        Console.WriteLine($"BPE tokenizer ready. Vocabulary size: {tokenizer.VocabSize}");
+                        break;
+                    
+                    case "char":
+                    case "character":
+                    default:
+                        Console.WriteLine("Creating character-level tokenizer...");
+                        tokenizer = TokenizerFactory.CreateCharLevel(trainingText);
+                        Console.WriteLine($"Character tokenizer ready. Vocabulary size: {tokenizer.VocabSize}");
+                        break;
+                }
 
                 // Create model with selected preset configuration
                 var model = new SmallMind.Transformers.TransformerModel(
@@ -398,7 +420,7 @@ namespace SmallMind.ConsoleApp
         /// <summary>
         /// Run interactive conversation mode with session context
         /// </summary>
-        private static void RunInteractiveMode(SmallMind.Transformers.TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText)
+        private static void RunInteractiveMode(SmallMind.Transformers.TransformerModel model, ITokenizer tokenizer, int blockSize, string trainingText)
         {
             Console.WriteLine("\n=== Interactive Conversation Mode ===");
             Console.WriteLine("This feature is not yet fully implemented.");
@@ -408,7 +430,7 @@ namespace SmallMind.ConsoleApp
         /// <summary>
         /// Run Q&A mode for answering single questions
         /// </summary>
-        private static void RunQAMode(SmallMind.Transformers.TransformerModel model, Tokenizer tokenizer, int blockSize, string trainingText, 
+        private static void RunQAMode(SmallMind.Transformers.TransformerModel model, ITokenizer tokenizer, int blockSize, string trainingText, 
                                       string question, int maxTokens, double temperature, int topK)
         {
             Console.WriteLine("\n=== Question-Answering Mode ===");
@@ -419,7 +441,7 @@ namespace SmallMind.ConsoleApp
         /// <summary>
         /// Run benchmark mode - sweep over concurrency and max_tokens configurations.
         /// </summary>
-        private static void RunBenchmarkMode(SmallMind.Transformers.TransformerModel model, Tokenizer tokenizer, int blockSize, string prompt, double temperature, int topK)
+        private static void RunBenchmarkMode(SmallMind.Transformers.TransformerModel model, ITokenizer tokenizer, int blockSize, string prompt, double temperature, int topK)
         {
             Console.WriteLine("\n=== Benchmark Mode ===");
             Console.WriteLine("This feature is not yet fully implemented.");
