@@ -385,6 +385,16 @@ namespace SmallMind.Abstractions
         /// Called when a tool is invoked.
         /// </summary>
         void OnToolCall(string sessionId, string toolName, double elapsedMs);
+
+        /// <summary>
+        /// Called when a session's KV cache budget is exceeded.
+        /// </summary>
+        void OnKvCacheBudgetExceeded(string sessionId, long currentBytes, long maxBytes);
+
+        /// <summary>
+        /// Called when a KV cache entry is evicted.
+        /// </summary>
+        void OnKvCacheEviction(string evictedSessionId, string reason, long freedBytes);
     }
 
     /// <summary>
@@ -400,6 +410,8 @@ namespace SmallMind.Abstractions
         public void OnContextPolicyApplied(string sessionId, string policyName, int originalTokens, int finalTokens) { }
         public void OnKvCacheAccess(string sessionId, bool hit, int cachedTokens) { }
         public void OnToolCall(string sessionId, string toolName, double elapsedMs) { }
+        public void OnKvCacheBudgetExceeded(string sessionId, long currentBytes, long maxBytes) { }
+        public void OnKvCacheEviction(string evictedSessionId, string reason, long freedBytes) { }
     }
 
     /// <summary>
@@ -436,6 +448,16 @@ namespace SmallMind.Abstractions
         public void OnToolCall(string sessionId, string toolName, double elapsedMs)
         {
             Console.WriteLine($"[{sessionId}] Tool call '{toolName}': {elapsedMs:F2}ms");
+        }
+
+        public void OnKvCacheBudgetExceeded(string sessionId, long currentBytes, long maxBytes)
+        {
+            Console.WriteLine($"[{sessionId}] KV cache budget EXCEEDED: {currentBytes / 1024 / 1024}MB / {maxBytes / 1024 / 1024}MB");
+        }
+
+        public void OnKvCacheEviction(string evictedSessionId, string reason, long freedBytes)
+        {
+            Console.WriteLine($"[EVICTION] Session '{evictedSessionId}' evicted ({reason}): freed {freedBytes / 1024 / 1024}MB");
         }
     }
 
