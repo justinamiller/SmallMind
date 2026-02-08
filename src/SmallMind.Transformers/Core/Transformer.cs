@@ -505,6 +505,167 @@ namespace SmallMind.Transformers
             
             return bytes;
         }
+
+        /// <summary>
+        /// Get named parameters for weight loading.
+        /// Returns a dictionary mapping GGUF-style canonical names to tensor references.
+        /// </summary>
+        internal Dictionary<string, Tensor> GetNamedParameters()
+        {
+            var namedParams = new Dictionary<string, Tensor>();
+            
+            // Token embeddings
+            namedParams["token_embd.weight"] = _tokenEmbedding.Parameters[0];
+            
+            // Position embeddings (only for non-RoPE models)
+            if (_positionEmbedding != null)
+            {
+                namedParams["pos_embd.weight"] = _positionEmbedding.Parameters[0];
+            }
+            
+            // Transformer blocks
+            for (int i = 0; i < _blocks.Count; i++)
+            {
+                var blockParams = GetBlockNamedParameters(_blocks[i], i);
+                foreach (var kvp in blockParams)
+                {
+                    namedParams[kvp.Key] = kvp.Value;
+                }
+            }
+            
+            // Final layer norm
+            var finalNormParams = GetNormNamedParameters(_lnFinal, "output_norm");
+            foreach (var kvp in finalNormParams)
+            {
+                namedParams[kvp.Key] = kvp.Value;
+            }
+            
+            // Output head
+            namedParams["output.weight"] = _lmHead.Weight;
+            if (_lmHead.Bias != null)
+            {
+                namedParams["output.bias"] = _lmHead.Bias;
+            }
+            
+            return namedParams;
+        }
+
+        private Dictionary<string, Tensor> GetBlockNamedParameters(TransformerBlock block, int layerIndex)
+        {
+            var namedParams = new Dictionary<string, Tensor>();
+            string prefix = $"blk.{layerIndex}.";
+            
+            // Attention norm
+            var attnNormParams = GetNormNamedParameters(block._ln1, $"{prefix}attn_norm");
+            foreach (var kvp in attnNormParams)
+            {
+                namedParams[kvp.Key] = kvp.Value;
+            }
+            
+            // Attention QKV and output projection
+            var attnParams = GetAttentionNamedParameters(block._attn, prefix);
+            foreach (var kvp in attnParams)
+            {
+                namedParams[kvp.Key] = kvp.Value;
+            }
+            
+            // FFN norm
+            var ffnNormParams = GetNormNamedParameters(block._ln2, $"{prefix}ffn_norm");
+            foreach (var kvp in ffnNormParams)
+            {
+                namedParams[kvp.Key] = kvp.Value;
+            }
+            
+            // MLP/FFN
+            var mlpParams = GetMlpNamedParameters(block._mlp, prefix);
+            foreach (var kvp in mlpParams)
+            {
+                namedParams[kvp.Key] = kvp.Value;
+            }
+            
+            return namedParams;
+        }
+
+        private Dictionary<string, Tensor> GetNormNamedParameters(Module norm, string baseName)
+        {
+            var namedParams = new Dictionary<string, Tensor>();
+            
+            if (norm is LayerNorm layerNorm)
+            {
+                namedParams[$"{baseName}.weight"] = layerNorm.Gamma;
+                namedParams[$"{baseName}.bias"] = layerNorm.Beta;
+            }
+            else if (norm is RMSNorm rmsNorm)
+            {
+                namedParams[$"{baseName}.weight"] = rmsNorm.Gamma;
+            }
+            
+            return namedParams;
+        }
+
+        private Dictionary<string, Tensor> GetAttentionNamedParameters(MultiHeadAttention attn, string prefix)
+        {
+            var namedParams = new Dictionary<string, Tensor>();
+            
+            // Combined QKV tensor (SmallMind uses single Linear for QKV)
+            // This will be filled by merging separate Q/K/V tensors from GGUF
+            namedParams[$"{prefix}attn_qkv.weight"] = attn._qkv.Weight;
+            if (attn._qkv.Bias != null)
+            {
+                namedParams[$"{prefix}attn_qkv.bias"] = attn._qkv.Bias;
+            }
+            
+            // Output projection
+            namedParams[$"{prefix}attn_output.weight"] = attn._proj.Weight;
+            if (attn._proj.Bias != null)
+            {
+                namedParams[$"{prefix}attn_output.bias"] = attn._proj.Bias;
+            }
+            
+            return namedParams;
+        }
+
+        private Dictionary<string, Tensor> GetMlpNamedParameters(Module mlp, string prefix)
+        {
+            var namedParams = new Dictionary<string, Tensor>();
+            
+            if (mlp is MLP standardMlp)
+            {
+                namedParams[$"{prefix}ffn_up.weight"] = standardMlp._fc1.Weight;
+                if (standardMlp._fc1.Bias != null)
+                {
+                    namedParams[$"{prefix}ffn_up.bias"] = standardMlp._fc1.Bias;
+                }
+                
+                namedParams[$"{prefix}ffn_down.weight"] = standardMlp._fc2.Weight;
+                if (standardMlp._fc2.Bias != null)
+                {
+                    namedParams[$"{prefix}ffn_down.bias"] = standardMlp._fc2.Bias;
+                }
+            }
+            else if (mlp is GatedMLP gatedMlp)
+            {
+                namedParams[$"{prefix}ffn_gate.weight"] = gatedMlp._gateProj.Weight;
+                if (gatedMlp._gateProj.Bias != null)
+                {
+                    namedParams[$"{prefix}ffn_gate.bias"] = gatedMlp._gateProj.Bias;
+                }
+                
+                namedParams[$"{prefix}ffn_up.weight"] = gatedMlp._upProj.Weight;
+                if (gatedMlp._upProj.Bias != null)
+                {
+                    namedParams[$"{prefix}ffn_up.bias"] = gatedMlp._upProj.Bias;
+                }
+                
+                namedParams[$"{prefix}ffn_down.weight"] = gatedMlp._downProj.Weight;
+                if (gatedMlp._downProj.Bias != null)
+                {
+                    namedParams[$"{prefix}ffn_down.bias"] = gatedMlp._downProj.Bias;
+                }
+            }
+            
+            return namedParams;
+        }
     }
 
     /// <summary>
@@ -512,10 +673,10 @@ namespace SmallMind.Transformers
     /// </summary>
     public sealed class TransformerBlock
     {
-        private readonly Module _ln1;
-        private readonly MultiHeadAttention _attn;
-        private readonly Module _ln2;
-        private readonly Module _mlp;
+        internal readonly Module _ln1;
+        internal readonly MultiHeadAttention _attn;
+        internal readonly Module _ln2;
+        internal readonly Module _mlp;
         
         private bool _isTraining = true;
         
@@ -754,8 +915,8 @@ namespace SmallMind.Transformers
         private readonly int _nHead;
         private readonly int _nKvHead;  // Number of key/value heads (for GQA)
         private readonly int _headSize;
-        private readonly Linear _qkv;
-        private readonly Linear _proj;
+        internal readonly Linear _qkv;
+        internal readonly Linear _proj;
         private readonly Dropout _attnDropout;
         private readonly Dropout _projDropout;
         private readonly bool[,] _causalMask;
@@ -1976,8 +2137,8 @@ namespace SmallMind.Transformers
     /// </summary>
     public sealed class MLP
     {
-        private readonly Linear _fc1;
-        private readonly Linear _fc2;
+        internal readonly Linear _fc1;
+        internal readonly Linear _fc2;
         private readonly Dropout _dropout;
         private readonly int _nEmbd;
         
@@ -2055,9 +2216,9 @@ namespace SmallMind.Transformers
     /// </summary>
     public sealed class GatedMLP
     {
-        private readonly Linear _gateProj;
-        private readonly Linear _upProj;
-        private readonly Linear _downProj;
+        internal readonly Linear _gateProj;
+        internal readonly Linear _upProj;
+        internal readonly Linear _downProj;
         private readonly Dropout _dropout;
         private readonly int _nEmbd;
         private readonly int _hiddenDim;
