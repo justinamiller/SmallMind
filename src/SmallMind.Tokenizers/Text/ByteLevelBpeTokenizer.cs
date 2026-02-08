@@ -205,7 +205,7 @@ public sealed class ByteLevelBpeTokenizer : ITokenizer
             {
                 Console.WriteLine(
                     $"Vocab size: {currentVocabSize}, " +
-                    $"Last merge: ({tokenA},{tokenB})->{ newTokenId}, " +
+                    $"Last merge: ({tokenA},{tokenB})->{newTokenId}, " +
                     $"Frequency: {frequency}");
             }
         }
@@ -318,49 +318,45 @@ public sealed class ByteLevelBpeTokenizer : ITokenizer
     }
 
     /// <summary>
-    /// Apply BPE merges iteratively: find highest-priority merge, apply it, repeat.
+    /// Apply BPE merges: find pairs in merge dict, apply in greedy left-to-right order.
+    /// Uses O(1) dictionary lookup for efficiency.
     /// </summary>
     private int ApplyMergesIterative(Span<int> tokens, int currentLength)
     {
-        while (currentLength > 1)
-        {
-            // Find the highest-priority merge in current sequence
-            int bestPriority = int.MaxValue;
-            int bestPos = -1;
+        if (_mergeDict.Count == 0 || currentLength < 2)
+            return currentLength;
 
-            for (int i = 0; i < currentLength - 1; i++)
+        bool changed = true;
+        while (changed && currentLength > 1)
+        {
+            changed = false;
+            int i = 0;
+            
+            while (i < currentLength - 1)
             {
                 var pair = (tokens[i], tokens[i + 1]);
                 
-                // Check if this pair has a merge rule
-                // Priority = index in _merges list (lower = higher priority)
-                for (int mergeIdx = 0; mergeIdx < _merges.Count; mergeIdx++)
+                // Check if this pair has a merge rule (O(1) lookup)
+                if (_mergeDict.TryGetValue(pair, out int mergedTokenId))
                 {
-                    if (_merges[mergeIdx] == pair && mergeIdx < bestPriority)
+                    // Replace pair with merged token
+                    tokens[i] = mergedTokenId;
+                    
+                    // Shift remaining tokens left
+                    for (int j = i + 1; j < currentLength - 1; j++)
                     {
-                        bestPriority = mergeIdx;
-                        bestPos = i;
-                        break; // Found this pair, move to next position
+                        tokens[j] = tokens[j + 1];
                     }
+                    currentLength--;
+                    changed = true;
+                    
+                    // Don't increment i - check new pair at same position
+                }
+                else
+                {
+                    i++;
                 }
             }
-
-            if (bestPos == -1)
-                break; // No more merges
-
-            // Apply the merge
-            var mergePair = _merges[bestPriority];
-            int newTokenId = _mergeDict[mergePair];
-
-            // Replace pair at bestPos
-            tokens[bestPos] = newTokenId;
-
-            // Shift remaining tokens left
-            for (int i = bestPos + 1; i < currentLength - 1; i++)
-            {
-                tokens[i] = tokens[i + 1];
-            }
-            currentLength--;
         }
 
         return currentLength;
