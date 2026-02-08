@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using SmallMind.Quantization.IO.Gguf;
+using SmallMind.Runtime;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
 
@@ -12,6 +13,7 @@ namespace SmallMind.ValidationRunner
     /// <summary>
     /// Validation runner for SmallMind maturity level 3/5.
     /// Validates GGUF model loading, tokenization, and generation.
+    /// Phase 3-5 implementation.
     /// </summary>
     class Program
     {
@@ -21,7 +23,7 @@ namespace SmallMind.ValidationRunner
             Console.WriteLine("Target: Maturity Level 3/5\n");
 
             // Parse command line arguments
-            if (!TryParseArgs(args, out var modelPath, out var kvCacheEnabled))
+            if (!TryParseArgs(args, out var modelPath, out var kvCacheEnabled, out var generateText))
             {
                 PrintUsage();
                 return 1;
@@ -54,17 +56,34 @@ namespace SmallMind.ValidationRunner
                 TestTokenizerRoundtrip(tokenizer);
                 Console.WriteLine("✓ Tokenizer roundtrip passed\n");
 
-                // TODO: Phase 3+ - Model construction and generation
-                Console.WriteLine("Note: Generation testing requires Phase 3+ implementation\n");
+                // Validation Step 5: Build model from config
+                Console.WriteLine("Step 5: Building model from configuration...");
+                var (model, loadedTokenizer, config) = GgufModelLoader.LoadFromGguf(modelPath);
+                Console.WriteLine($"✓ Model built: {config.Architecture}");
+                Console.WriteLine($"  Parameters: {model.NumLayers} layers, {model.NumHeads} heads");
+                Console.WriteLine($"  Context: {model.BlockSize} tokens\n");
 
-                // Validation Step 5: Performance metrics
-                Console.WriteLine("Step 5: Performance Metrics");
+                // Validation Step 6: Test generation (if requested)
+                if (generateText)
+                {
+                    Console.WriteLine("Step 6: Testing text generation...");
+                    TestGeneration(model, loadedTokenizer, kvCacheEnabled);
+                    Console.WriteLine();
+                }
+
+                // Validation Step 7: Performance metrics
+                Console.WriteLine("Step 7: Performance Metrics");
                 DisplayPerformanceMetrics();
                 Console.WriteLine();
 
                 Console.WriteLine("=== Validation Complete ===");
-                Console.WriteLine("Status: Partial (Phase 0-2 only)");
-                Console.WriteLine("Next: Implement Phase 3+ for full generation testing");
+                Console.WriteLine("Status: Phase 3-5 Complete");
+                Console.WriteLine("✓ Model loading working");
+                Console.WriteLine("✓ Tokenization working");
+                if (generateText)
+                {
+                    Console.WriteLine($"✓ Generation working (KV cache: {(kvCacheEnabled ? "enabled" : "disabled")})");
+                }
 
                 return 0;
             }
@@ -76,10 +95,11 @@ namespace SmallMind.ValidationRunner
             }
         }
 
-        static bool TryParseArgs(string[] args, out string modelPath, out bool kvCacheEnabled)
+        static bool TryParseArgs(string[] args, out string modelPath, out bool kvCacheEnabled, out bool generateText)
         {
             modelPath = string.Empty;
             kvCacheEnabled = true; // Default to enabled
+            generateText = false;  // Default to no generation
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -92,6 +112,10 @@ namespace SmallMind.ValidationRunner
                 {
                     kvCacheEnabled = false;
                 }
+                else if (args[i] == "--generate")
+                {
+                    generateText = true;
+                }
             }
 
             return !string.IsNullOrEmpty(modelPath);
@@ -99,14 +123,15 @@ namespace SmallMind.ValidationRunner
 
         static void PrintUsage()
         {
-            Console.WriteLine("Usage: SmallMind.ValidationRunner --model <path> [--no-kv-cache]");
+            Console.WriteLine("Usage: SmallMind.ValidationRunner --model <path> [--no-kv-cache] [--generate]");
             Console.WriteLine();
             Console.WriteLine("Arguments:");
             Console.WriteLine("  --model <path>      Path to GGUF model file (required)");
             Console.WriteLine("  --no-kv-cache       Disable KV cache (for comparison)");
+            Console.WriteLine("  --generate          Test text generation (Phase 3+)");
             Console.WriteLine();
             Console.WriteLine("Example:");
-            Console.WriteLine("  SmallMind.ValidationRunner --model smollm2-135m-instruct.Q8_0.gguf");
+            Console.WriteLine("  SmallMind.ValidationRunner --model smollm2-135m-instruct.Q8_0.gguf --generate");
         }
 
         static (GgufModelInfo modelInfo, Dictionary<string, object> metadata) LoadGgufModel(string path)
@@ -229,6 +254,68 @@ namespace SmallMind.ValidationRunner
                 {
                     throw new Exception("Decoded text is empty but input was not");
                 }
+            }
+        }
+
+        static void TestGeneration(TransformerModel model, ITokenizer tokenizer, bool kvCacheEnabled)
+        {
+            var prompt = "Hello";
+            var maxTokens = 20;
+
+            Console.WriteLine($"  Prompt: \"{prompt}\"");
+            Console.WriteLine($"  Max tokens: {maxTokens}");
+            Console.WriteLine($"  KV cache: {(kvCacheEnabled ? "enabled" : "disabled")}");
+            Console.WriteLine();
+
+            try
+            {
+                // Set model to eval mode
+                model.Eval();
+
+                // Create inference options
+                var options = new ProductionInferenceOptions
+                {
+                    Temperature = 1.0,
+                    TopK = 50,
+                    TopP = 0.95,
+                    MaxNewTokens = maxTokens,
+                    MaxContextTokens = model.BlockSize,
+                    Seed = 42
+                };
+
+                // Create inference session
+                using var session = new InferenceSession(
+                    model,
+                    tokenizer,
+                    options,
+                    model.BlockSize);
+
+                // Measure generation time
+                var sw = Stopwatch.StartNew();
+
+                // Generate (synchronous)
+                var result = session.GenerateAsync(prompt).GetAwaiter().GetResult();
+
+                sw.Stop();
+
+                Console.WriteLine($"  Generated: \"{result}\"");
+                Console.WriteLine($"  Time: {sw.ElapsedMilliseconds} ms");
+
+                // Calculate approximate tokens/sec
+                var tokens = tokenizer.Encode(result);
+                var generatedTokens = tokens.Count - tokenizer.Encode(prompt).Count;
+                if (generatedTokens > 0 && sw.ElapsedMilliseconds > 0)
+                {
+                    var tokensPerSec = generatedTokens / (sw.ElapsedMilliseconds / 1000.0);
+                    Console.WriteLine($"  Throughput: ~{tokensPerSec:F2} tokens/sec");
+                }
+
+                Console.WriteLine("  ✓ Generation successful");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  ✗ Generation failed: {ex.Message}");
+                throw;
             }
         }
 
