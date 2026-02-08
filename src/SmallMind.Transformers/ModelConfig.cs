@@ -178,6 +178,7 @@ namespace SmallMind.Transformers
 
             // Extract architecture-specific parameters using archPrefix for key lookups
             config.VocabSize = ExtractInt(metadata, $"{archPrefix}.vocab_size")
+                ?? InferVocabSizeFromTokenizer(metadata)
                 ?? throw new MissingMetadataException($"{archPrefix}.vocab_size");
 
             config.ContextLength = ExtractInt(metadata, $"{archPrefix}.context_length")
@@ -280,6 +281,27 @@ namespace SmallMind.Transformers
                     return fltVal;
                 if (value is int intVal)
                     return intVal;
+            }
+            return null;
+        }
+
+        private static int? InferVocabSizeFromTokenizer(Dictionary<string, object> metadata)
+        {
+            if (metadata.TryGetValue("tokenizer.ggml.tokens", out var tokensObj))
+            {
+                // Handle different possible types for tokens array
+                if (tokensObj is object[] objArray)
+                {
+                    return objArray.Length;
+                }
+                else if (tokensObj is string[] strArray)
+                {
+                    return strArray.Length;
+                }
+                else if (tokensObj is System.Collections.IList list)
+                {
+                    return list.Count;
+                }
             }
             return null;
         }
