@@ -76,8 +76,9 @@ internal sealed class BudgetEnforcer : IDisposable
         if (_options.MaxContextTokens > 0 && promptTokens > _options.MaxContextTokens)
         {
             throw new ContextLimitExceededException(
-                promptTokens,
-                _options.MaxContextTokens);
+                message: $"Context limit exceeded: {promptTokens} tokens exceeds maximum of {_options.MaxContextTokens} tokens",
+                totalTokens: promptTokens,
+                contextLimit: _options.MaxContextTokens);
         }
     }
 

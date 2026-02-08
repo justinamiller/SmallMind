@@ -59,6 +59,19 @@ namespace SmallMind.Runtime.Cache
         public bool PersistAcrossRequests { get; set; } = true;
 
         /// <summary>
+        /// Enables cross-session prefix sharing for common prompts.
+        /// Default: false.
+        /// </summary>
+        public bool EnablePrefixSharing { get; set; } = false;
+
+        /// <summary>
+        /// Quantization type for KV cache storage.
+        /// Default: None (full FP32 precision).
+        /// FP16 provides 2x memory reduction, INT8 provides 4x.
+        /// </summary>
+        public QuantizationType CacheQuantization { get; set; } = QuantizationType.None;
+
+        /// <summary>
         /// Validates the options.
         /// </summary>
         public void Validate()
@@ -85,7 +98,9 @@ namespace SmallMind.Runtime.Cache
                 MaxSessions = MaxSessions,
                 MaxBytesTotal = MaxBytesTotal,
                 Policy = Policy,
-                PersistAcrossRequests = PersistAcrossRequests
+                PersistAcrossRequests = PersistAcrossRequests,
+                EnablePrefixSharing = EnablePrefixSharing,
+                CacheQuantization = CacheQuantization
             };
         }
     }

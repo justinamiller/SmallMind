@@ -93,24 +93,35 @@ namespace SmallMind.Abstractions
     public class ContextLimitExceededException : SmallMindException
     {
         /// <summary>
-        /// Gets the requested context size.
+        /// Gets the total tokens in the conversation.
         /// </summary>
-        public int RequestedSize { get; }
+        public int TotalTokens { get; }
 
         /// <summary>
-        /// Gets the maximum allowed context size.
+        /// Gets the context limit.
         /// </summary>
-        public int MaxAllowed { get; }
+        public int ContextLimit { get; }
+
+        /// <summary>
+        /// Gets the system message tokens.
+        /// </summary>
+        public int SystemTokens { get; }
+
+        /// <summary>
+        /// Gets the current message tokens.
+        /// </summary>
+        public int MessageTokens { get; }
 
         /// <summary>
         /// Creates a new ContextLimitExceededException.
         /// </summary>
-        public ContextLimitExceededException(int requestedSize, int maxAllowed)
-            : base($"Context limit exceeded: requested {requestedSize} tokens, max allowed is {maxAllowed}. " +
-                   $"Remediation: reduce input length or increase MaxContextTokens.", "CONTEXT_LIMIT_EXCEEDED")
+        public ContextLimitExceededException(string message, int totalTokens, int contextLimit, int systemTokens = 0, int messageTokens = 0)
+            : base(message, "CONTEXT_LIMIT_EXCEEDED")
         {
-            RequestedSize = requestedSize;
-            MaxAllowed = maxAllowed;
+            TotalTokens = totalTokens;
+            ContextLimit = contextLimit;
+            SystemTokens = systemTokens;
+            MessageTokens = messageTokens;
         }
     }
 
@@ -194,6 +205,35 @@ namespace SmallMind.Abstractions
             : base($"Security violation: {message}", "SECURITY_VIOLATION")
         {
             ViolationType = violationType;
+        }
+    }
+
+    /// <summary>
+    /// Thrown when insufficient memory is available for an operation.
+    /// Remediation: Reduce batch size, lower model size, or increase available memory.
+    /// </summary>
+    public class InsufficientMemoryException : SmallMindException
+    {
+        /// <summary>
+        /// Gets the estimated memory required in bytes.
+        /// </summary>
+        public long RequiredBytes { get; }
+
+        /// <summary>
+        /// Gets the available memory in bytes.
+        /// </summary>
+        public long AvailableBytes { get; }
+
+        /// <summary>
+        /// Creates a new InsufficientMemoryException.
+        /// </summary>
+        public InsufficientMemoryException(long requiredBytes, long availableBytes)
+            : base($"Insufficient memory: operation requires ~{requiredBytes / 1024 / 1024}MB, " +
+                   $"but only {availableBytes / 1024 / 1024}MB available (>90% would be used). " +
+                   $"Remediation: reduce batch size or lower model size.", "INSUFFICIENT_MEMORY")
+        {
+            RequiredBytes = requiredBytes;
+            AvailableBytes = availableBytes;
         }
     }
 }

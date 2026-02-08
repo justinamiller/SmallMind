@@ -12,6 +12,7 @@ namespace SmallMind.Runtime
     /// Manages conversation sessions with context history for multi-turn interactions.
     /// Implements intelligent context window management and session persistence.
     /// </summary>
+    [Obsolete("Use SmallMind.Engine.ChatSession instead. This class will be removed in a future version.")]
     public class ConversationSession
     {
         private readonly int _maxContextTokens;

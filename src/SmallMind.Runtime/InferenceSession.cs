@@ -561,6 +561,14 @@ namespace SmallMind.Runtime
                 ApplyMinP(probs, _options.MinP);
             }
             
+            // 6.5. Apply output constraints (Phase 5)
+            if (_options.OutputConstraint != null)
+            {
+                ApplyOutputConstraints(logitsLast, context);
+                // Recompute probabilities after constraint masking
+                probs = Softmax(logitsLast);
+            }
+            
             // 7. Sample from the distribution
             return SampleFromProbs(probs);
         }
@@ -895,6 +903,99 @@ namespace SmallMind.Runtime
                 for (int i = 0; i < probs.Length; i++)
                 {
                     probs[i] /= sum;
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Apply output constraints to mask disallowed tokens (Phase 5).
+        /// Modifies logits in-place by setting disallowed tokens to -infinity.
+        /// </summary>
+        private void ApplyOutputConstraints(float[] logits, List<int> context)
+        {
+            // Decode current context to get generated text so far
+            string generatedSoFar = _tokenizer.Decode(context);
+            
+            int maskedCount = 0;
+            int vocabSize = logits.Length;
+            
+            // Check each candidate token
+            for (int tokenId = 0; tokenId < vocabSize; tokenId++)
+            {
+                // Skip already masked tokens
+                if (float.IsNegativeInfinity(logits[tokenId]))
+                {
+                    continue;
+                }
+                
+                // Decode candidate token
+                string tokenText = _tokenizer.Decode(new List<int> { tokenId });
+                
+                // Check if token is allowed by constraint
+                if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                {
+                    logits[tokenId] = float.NegativeInfinity;
+                    maskedCount++;
+                }
+            }
+            
+            // If all tokens masked, force structural tokens (JSON recovery)
+            if (AllLogitsMasked(logits))
+            {
+                ForceStructuralToken(logits, generatedSoFar);
+            }
+        }
+        
+        /// <summary>
+        /// Check if all logits are masked.
+        /// </summary>
+        private bool AllLogitsMasked(float[] logits)
+        {
+            for (int i = 0; i < logits.Length; i++)
+            {
+                if (!float.IsNegativeInfinity(logits[i]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        /// <summary>
+        /// Force likely structural tokens when all options are masked.
+        /// This helps JSON mode recovery when stuck.
+        /// </summary>
+        private void ForceStructuralToken(float[] logits, string generatedSoFar)
+        {
+            // Try to force closing braces/brackets based on JSON state
+            try
+            {
+                // Attempt to encode common structural tokens
+                var closeBrace = _tokenizer.Encode("}");
+                var closeBracket = _tokenizer.Encode("]");
+                var quote = _tokenizer.Encode("\"");
+                var comma = _tokenizer.Encode(",");
+                
+                // Unmask these structural tokens
+                if (closeBrace.Count > 0)
+                    logits[closeBrace[0]] = 0.0f;
+                if (closeBracket.Count > 0)
+                    logits[closeBracket[0]] = 0.0f;
+                if (quote.Count > 0)
+                    logits[quote[0]] = 0.0f;
+                if (comma.Count > 0)
+                    logits[comma[0]] = 0.0f;
+            }
+            catch
+            {
+                // If encoding fails, just unmask first valid token
+                for (int i = 0; i < logits.Length; i++)
+                {
+                    if (!float.IsNegativeInfinity(logits[i]))
+                    {
+                        logits[i] = 0.0f;
+                        break;
+                    }
                 }
             }
         }

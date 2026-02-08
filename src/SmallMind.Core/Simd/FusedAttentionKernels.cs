@@ -73,11 +73,34 @@ namespace SmallMind.Core.Simd
             if (seqLen <= BLOCK_SIZE_Q)
             {
                 FusedAttentionSmall(Q, K, V, output, seqLen, headDim, scale, isCausal);
+#if DEBUG
+                // NaN detection in debug builds only (zero overhead in release)
+                int invalidIdx = NaNDetector.DetectInvalid(output);
+                if (invalidIdx >= 0)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"WARNING: NaN/Inf detected in attention output at index {invalidIdx}");
+                    // Sanitize to prevent propagation
+                    NaNDetector.SanitizeInPlace(output);
+                }
+#endif
                 return;
             }
             
             // For large sequences, use block-wise flash-attention style
             FusedAttentionBlocked(Q, K, V, output, seqLen, headDim, scale, isCausal);
+            
+#if DEBUG
+            // NaN detection in debug builds only (zero overhead in release)
+            int invalidIdxBlocked = NaNDetector.DetectInvalid(output);
+            if (invalidIdxBlocked >= 0)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"WARNING: NaN/Inf detected in attention output at index {invalidIdxBlocked}");
+                // Sanitize to prevent propagation
+                NaNDetector.SanitizeInPlace(output);
+            }
+#endif
         }
         
         /// <summary>

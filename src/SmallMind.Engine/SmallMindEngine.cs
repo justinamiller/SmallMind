@@ -94,7 +94,33 @@ namespace SmallMind.Engine
                 throw new ArgumentException("Model handle must be created by this engine", nameof(model));
             }
 
-            return new ChatSession(internalHandle, options ?? new SessionOptions(), _options);
+            // Create ChatSessionOptions from base SessionOptions
+            var chatOptions = new ChatSessionOptions
+            {
+                BaseOptions = options ?? new SessionOptions()
+            };
+
+            return new ChatSession(internalHandle, chatOptions, _options);
+        }
+
+        /// <summary>
+        /// Creates a chat session builder for fluent configuration.
+        /// </summary>
+        public ChatSessionBuilder CreateChatSessionBuilder(IModelHandle model)
+        {
+            ThrowIfDisposed();
+
+            if (model == null)
+            {
+                throw new ArgumentNullException(nameof(model));
+            }
+
+            if (model is not ModelHandle internalHandle)
+            {
+                throw new ArgumentException("Model handle must be created by this engine", nameof(model));
+            }
+
+            return new ChatSessionBuilder(internalHandle, _options);
         }
 
         public async ValueTask<GenerationResult> GenerateAsync(
