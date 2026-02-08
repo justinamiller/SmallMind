@@ -940,7 +940,7 @@ namespace SmallMind.Runtime
             }
             
             // If all tokens masked, force structural tokens (JSON recovery)
-            if (maskedCount == vocabSize || AllLogitsMasked(logits))
+            if (AllLogitsMasked(logits))
             {
                 ForceStructuralToken(logits, generatedSoFar);
             }

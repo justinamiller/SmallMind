@@ -307,7 +307,6 @@ namespace SmallMind.Engine
 
             // Generate response
             InferenceSession session;
-            bool isNewSession = false;
 
             if (_persistentInferenceSession == null)
             {
@@ -315,7 +314,6 @@ namespace SmallMind.Engine
                 session = _modelHandle.CreateInferenceSession(options, _engineOptions);
                 _persistentInferenceSession = session;
                 _persistentSessionPosition = 0;
-                isNewSession = true;
             }
             else
             {
@@ -402,7 +400,6 @@ namespace SmallMind.Engine
             {
                 timeoutCts?.Dispose();
                 // Don't dispose persistent session - it will be reused across turns
-                // session.Dispose(); // REMOVED for Phase 2.1
             }
         }
 
