@@ -32,3 +32,9 @@ perf/baselines/baseline.json
 DELETE_ME/
 benchmark-results-*/
 profiling-results-*/
+
+# Model files (GGUF, SMQ, etc.)
+models/
+*.gguf
+*.smq
+*.smq.manifest.json
