@@ -510,7 +510,7 @@ namespace SmallMind.Transformers
         /// Get named parameters for weight loading.
         /// Returns a dictionary mapping GGUF-style canonical names to tensor references.
         /// </summary>
-        internal Dictionary<string, Tensor> GetNamedParameters()
+        public Dictionary<string, Tensor> GetNamedParameters()
         {
             var namedParams = new Dictionary<string, Tensor>();
             
