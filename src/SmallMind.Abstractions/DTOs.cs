@@ -211,6 +211,36 @@ namespace SmallMind.Abstractions
                 // Note: Stop sequences intentionally not set to allow multi-line JSON
             };
         }
+
+        /// <summary>
+        /// Creates options configured for SQL generation.
+        /// </summary>
+        /// <param name="maxTokens">Maximum tokens to generate. Default: 500.</param>
+        /// <returns>GenerationOptions configured for SQL generation.</returns>
+        public static GenerationOptions SqlMode(int maxTokens = 500)
+        {
+            return new GenerationOptions
+            {
+                MaxNewTokens = maxTokens,
+                Temperature = 0.2
+                // Note: Constraint enforcer should be added separately via Constraints property
+            };
+        }
+
+        /// <summary>
+        /// Creates options configured for XML generation.
+        /// </summary>
+        /// <param name="maxTokens">Maximum tokens to generate. Default: 500.</param>
+        /// <returns>GenerationOptions configured for XML generation.</returns>
+        public static GenerationOptions XmlMode(int maxTokens = 500)
+        {
+            return new GenerationOptions
+            {
+                MaxNewTokens = maxTokens,
+                Temperature = 0.2
+                // Note: Constraint enforcer should be added separately via Constraints property
+            };
+        }
     }
 
     /// <summary>
