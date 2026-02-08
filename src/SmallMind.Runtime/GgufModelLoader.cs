@@ -87,6 +87,11 @@ namespace SmallMind.Runtime
             // Track which parameters we've loaded
             var loadedParams = new HashSet<string>();
 
+            // Counters for tracking tensor reads
+            int mainLoopReads = 0;
+            int qkvSkipped = 0;
+            int qkvReads = 0;
+
             // Read and load tensors
             using (var stream = File.OpenRead(ggufPath))
             using (var reader = new GgufReader(stream))
@@ -107,20 +112,23 @@ namespace SmallMind.Runtime
 
                     string smName = tensorMapping[ggufName];
 
-                    // Read and dequantize tensor
-                    float[] data = ReadAndDequantizeTensor(reader, tensorInfo);
-
-                    // Handle special cases
+                    // Handle special cases BEFORE reading/dequantizing to avoid double-read
                     if (smName == "MERGE_QKV")
                     {
                         // Q/K/V tensors need to be merged - handled separately
+                        qkvSkipped++;
                         continue;
                     }
                     else if (smName.StartsWith("PENDING_"))
                     {
                         // This is a Q/K/V component - will be merged later
+                        qkvSkipped++;
                         continue;
                     }
+
+                    // Read and dequantize tensor
+                    float[] data = ReadAndDequantizeTensor(reader, tensorInfo);
+                    mainLoopReads++;
 
                     // Get target parameter
                     if (!namedParams.TryGetValue(smName, out var targetParam))
@@ -135,7 +143,7 @@ namespace SmallMind.Runtime
                 }
 
                 // Handle QKV merging
-                MergeQKVWeights(reader, modelInfo, namedParams, tensorMapping, loadedParams);
+                qkvReads = MergeQKVWeights(reader, modelInfo, namedParams, tensorMapping, loadedParams);
             }
 
             // Handle weight tying (copy token embeddings to output if missing)
@@ -143,6 +151,8 @@ namespace SmallMind.Runtime
 
             // Report loading summary
             Console.WriteLine($"Loaded {loadedParams.Count} / {namedParams.Count} parameters");
+            Console.WriteLine($"Tensor reads: {mainLoopReads} (main loop) + {qkvReads} (Q/K/V merge) = {mainLoopReads + qkvReads} total");
+            Console.WriteLine($"Q/K/V tensors skipped in main loop: {qkvSkipped}");
 
             // Check for missing critical parameters
             var missingCritical = namedParams.Keys
@@ -445,11 +455,14 @@ namespace SmallMind.Runtime
 
         /// <summary>
         /// Merge separate Q/K/V weight tensors from GGUF into combined QKV tensor in SmallMind.
+        /// Returns the count of Q/K/V tensor reads.
         /// </summary>
-        private static void MergeQKVWeights(GgufReader reader, GgufModelInfo modelInfo, 
+        private static int MergeQKVWeights(GgufReader reader, GgufModelInfo modelInfo, 
             Dictionary<string, Tensor> namedParams, 
             Dictionary<string, string> tensorMapping, HashSet<string> loadedParams)
         {
+            int qkvReadsCount = 0;
+            
             // Group Q/K/V tensors by layer
             var qkvGroups = new Dictionary<int, (GgufTensorInfo? q, GgufTensorInfo? k, GgufTensorInfo? v)>();
 
@@ -500,6 +513,7 @@ namespace SmallMind.Runtime
                 float[] qData = ReadAndDequantizeTensor(reader, q);
                 float[] kData = ReadAndDequantizeTensor(reader, k);
                 float[] vData = ReadAndDequantizeTensor(reader, v);
+                qkvReadsCount += 3; // Count Q, K, V reads
 
                 // Merge: [Q, K, V] concatenation
                 // GGUF stores as (out, in) but we need to match SmallMind's layout
@@ -524,6 +538,8 @@ namespace SmallMind.Runtime
                 Console.WriteLine($"  blk.{layer}.attn_qkv.weight: Merged Q({qSize}) + K({kSize}) + V({vSize}) = {totalSize} elements");
                 loadedParams.Add(targetName);
             }
+            
+            return qkvReadsCount;
         }
 
         private static int ExtractLayerIndex(string tensorName)
