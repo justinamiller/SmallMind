@@ -157,7 +157,7 @@ namespace SmallMind.Tests
     /// <summary>
     /// Tests for exception hierarchy.
     /// </summary>
-    public class ExceptionTests
+    public class PublicApiExceptionTests
     {
         [Fact]
         public void SmallMindException_HasCorrectErrorCode()

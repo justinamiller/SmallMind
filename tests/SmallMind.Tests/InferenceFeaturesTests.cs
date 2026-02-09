@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using InternalFinishReason = SmallMind.Runtime.FinishReason;
 
 namespace SmallMind.Tests
 {
@@ -188,13 +189,13 @@ namespace SmallMind.Tests
         public void FinishReason_Enum_HasExpectedValues()
         {
             // Verify all expected finish reasons exist
-            Assert.Equal(0, (int)FinishReason.None);
-            Assert.Equal(1, (int)FinishReason.MaxTokens);
-            Assert.Equal(2, (int)FinishReason.EndOfSequence);
-            Assert.Equal(3, (int)FinishReason.StopToken);
-            Assert.Equal(4, (int)FinishReason.StopSequence);
-            Assert.Equal(5, (int)FinishReason.Timeout);
-            Assert.Equal(6, (int)FinishReason.MaxContext);
+            Assert.Equal(0, (int)InternalFinishReason.None);
+            Assert.Equal(1, (int)InternalFinishReason.MaxTokens);
+            Assert.Equal(2, (int)InternalFinishReason.EndOfSequence);
+            Assert.Equal(3, (int)InternalFinishReason.StopToken);
+            Assert.Equal(4, (int)InternalFinishReason.StopSequence);
+            Assert.Equal(5, (int)InternalFinishReason.Timeout);
+            Assert.Equal(6, (int)InternalFinishReason.MaxContext);
         }
 
         [Fact]
@@ -205,14 +206,14 @@ namespace SmallMind.Tests
                 text: "hello",
                 index: 0,
                 logProb: -1.5f,
-                finishReason: FinishReason.EndOfSequence
+                finishReason: InternalFinishReason.EndOfSequence
             );
 
             Assert.Equal(42, token.TokenId);
             Assert.Equal("hello", token.Text);
             Assert.Equal(0, token.Index);
             Assert.Equal(-1.5f, token.LogProb);
-            Assert.Equal(FinishReason.EndOfSequence, token.FinishReason);
+            Assert.Equal(InternalFinishReason.EndOfSequence, token.FinishReason);
         }
 
         [Fact]
@@ -289,12 +290,12 @@ namespace SmallMind.Tests
                 await foreach (var token in session.GenerateStreamAsync("test"))
                 {
                     tokens.Add(token);
-                    if (token.FinishReason == FinishReason.Timeout)
+                    if (token.FinishReason == InternalFinishReason.Timeout)
                     {
                         timedOut = true;
                         break;
                     }
-                    if (token.FinishReason != FinishReason.None)
+                    if (token.FinishReason != InternalFinishReason.None)
                     {
                         break;
                     }
@@ -307,7 +308,7 @@ namespace SmallMind.Tests
             }
 
             // With very short timeout, we should get timeout
-            // Either via FinishReason.Timeout in streaming or InferenceTimeoutException
+            // Either via InternalFinishReason.Timeout in streaming or InferenceTimeoutException
             Assert.True(timedOut, "Expected timeout to occur with 1ms limit");
         }
 

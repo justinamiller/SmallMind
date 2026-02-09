@@ -368,7 +368,7 @@ app.MapPost("/v1/embeddings", async (
         
         for (int i = 0; i < inputs.Length; i++)
         {
-            var embRequest = new EmbeddingRequest
+            var embRequest = new SmallMind.EmbeddingRequest
             {
                 Input = inputs[i].AsMemory()
             };
