@@ -11,7 +11,7 @@ namespace SmallMind.Core.Simd
     /// Detects and reports SIMD capabilities of the current CPU.
     /// Provides runtime detection for x86/x64 (SSE, AVX, AVX2, AVX-512, FMA) and ARM (NEON/AdvSimd).
     /// </summary>
-    public static class SimdCapabilities
+    internal static class SimdCapabilities
     {
         /// <summary>
         /// Gets the best supported vector width in bits (128, 256, or 512).

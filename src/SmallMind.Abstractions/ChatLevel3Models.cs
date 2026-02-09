@@ -357,6 +357,11 @@ namespace SmallMind.Abstractions
     public interface IChatTelemetry
     {
         /// <summary>
+        /// Gets a default no-op implementation of IChatTelemetry.
+        /// </summary>
+        static IChatTelemetry Default => NoOpTelemetry.Instance;
+
+        /// <summary>
         /// Called when a request starts.
         /// </summary>
         void OnRequestStart(string sessionId, int messageCount);
@@ -400,7 +405,7 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// No-op telemetry implementation (default).
     /// </summary>
-    public sealed class NoOpTelemetry : IChatTelemetry
+    internal sealed class NoOpTelemetry : IChatTelemetry
     {
         /// <summary>
         /// Singleton instance of NoOpTelemetry.
@@ -422,7 +427,7 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Console logger implementation for telemetry.
     /// </summary>
-    public sealed class ConsoleTelemetry : IChatTelemetry
+    internal sealed class ConsoleTelemetry : IChatTelemetry
     {
         public void OnRequestStart(string sessionId, int messageCount)
         {
@@ -493,6 +498,11 @@ namespace SmallMind.Abstractions
     public interface IRetrievalProvider
     {
         /// <summary>
+        /// Gets a default no-op implementation of IRetrievalProvider.
+        /// </summary>
+        static IRetrievalProvider Default => NoOpRetrievalProvider.Instance;
+
+        /// <summary>
         /// Retrieves relevant chunks for the given query.
         /// </summary>
         /// <param name="query">The user's query.</param>
@@ -504,7 +514,7 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// No-op retrieval provider (returns empty results).
     /// </summary>
-    public sealed class NoOpRetrievalProvider : IRetrievalProvider
+    internal sealed class NoOpRetrievalProvider : IRetrievalProvider
     {
         /// <summary>
         /// Singleton instance of NoOpRetrievalProvider.

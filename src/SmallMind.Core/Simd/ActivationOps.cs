@@ -13,7 +13,7 @@ namespace SmallMind.Core.Simd
     /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on class to avoid zero-initialization overhead.
     /// </summary>
     [SkipLocalsInit]
-    public static class ActivationOps
+    internal static class ActivationOps
     {
         /// <summary>
         /// ReLU activation: result[i] = max(0, input[i])

@@ -12,7 +12,7 @@ namespace SmallMind.Core.Simd
     /// SIMD-accelerated softmax operation with numerical stability.
     /// Implements the stable softmax: exp(x - max(x)) / sum(exp(x - max(x)))
     /// </summary>
-    public static class SoftmaxOps
+    internal static class SoftmaxOps
     {
         /// <summary>
         /// Applies softmax over the last dimension of a 2D tensor (rows x cols).

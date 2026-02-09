@@ -15,7 +15,7 @@ namespace SmallMind.Core.Simd
     /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on class to avoid zero-initialization overhead in hot methods.
     /// </summary>
     [SkipLocalsInit]
-    public static class MatMulOps
+    internal static class MatMulOps
     {
         // Parallelization threshold: Use Parallel.For only when M >= 128
         // Rationale: Thread overhead dominates for smaller matrices

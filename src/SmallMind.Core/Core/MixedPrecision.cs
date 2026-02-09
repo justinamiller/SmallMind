@@ -7,7 +7,7 @@ namespace SmallMind.Core.Core
     /// Mixed precision training utilities for FP16/FP32 conversion and training.
     /// Uses Half precision (float16) for forward/backward, float32 for master weights.
     /// </summary>
-    public static class MixedPrecision
+    internal static class MixedPrecision
     {
         /// <summary>
         /// Convert float32 buffer to float16 (Half)

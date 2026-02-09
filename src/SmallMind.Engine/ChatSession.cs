@@ -1460,7 +1460,7 @@ namespace SmallMind.Engine
             if (request.Messages == null || request.Messages.Count == 0)
                 throw new ArgumentException("Request must contain at least one message", nameof(request));
 
-            telemetry ??= NoOpTelemetry.Instance;
+            telemetry ??= IChatTelemetry.Default;
             
             var sw = Stopwatch.StartNew();
             telemetry.OnRequestStart(_sessionId, request.Messages.Count);

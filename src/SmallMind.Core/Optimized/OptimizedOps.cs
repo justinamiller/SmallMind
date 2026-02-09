@@ -10,7 +10,7 @@ namespace SmallMind.Core.Optimized
     /// High-performance SIMD-accelerated operations optimized for transformer attention.
     /// Provides fused operations to reduce memory bandwidth and improve cache efficiency.
     /// </summary>
-    public static class OptimizedOps
+    internal static class OptimizedOps
     {
         private static readonly int VectorSize = Vector<float>.Count;
         

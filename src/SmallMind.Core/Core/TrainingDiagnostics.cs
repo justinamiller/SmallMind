@@ -184,7 +184,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Gradient diagnostics for detecting vanishing/exploding gradients
     /// </summary>
-    public static class GradientDiagnostics
+    internal static class GradientDiagnostics
     {
         public static void CheckGradients(string name, ReadOnlySpan<float> gradients, bool verbose = false)
         {
