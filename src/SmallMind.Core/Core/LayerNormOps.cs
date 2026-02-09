@@ -297,30 +297,48 @@ namespace SmallMind.Core.Core
                 {
                     int vectorSize = System.Numerics.Vector<float>.Count;
 
-                    // Pass 1a: Sum for mean (SIMD)
+                    // Pass 1a: Sum for mean (SIMD) - optimized to eliminate Span.Slice()
                     var vSum = System.Numerics.Vector<float>.Zero;
                     int f1 = 0;
-                    for (; f1 <= features - vectorSize; f1 += vectorSize)
+                    unsafe
                     {
-                        var vIn = new System.Numerics.Vector<float>(input.Slice(offset + f1, vectorSize));
-                        var vRes = new System.Numerics.Vector<float>(residual.Slice(offset + f1, vectorSize));
-                        vSum += vIn + vRes;
+                        fixed (float* pInput = input, pResidual = residual)
+                        {
+                            float* pIn = pInput + offset;
+                            float* pRes = pResidual + offset;
+                            
+                            for (; f1 <= features - vectorSize; f1 += vectorSize)
+                            {
+                                var vIn = Unsafe.Read<System.Numerics.Vector<float>>(pIn + f1);
+                                var vRes = Unsafe.Read<System.Numerics.Vector<float>>(pRes + f1);
+                                vSum += vIn + vRes;
+                            }
+                        }
                     }
                     float sum = 0f;
                     for (int vi = 0; vi < vectorSize; vi++) sum += vSum[vi];
                     for (; f1 < features; f1++) sum += input[offset + f1] + residual[offset + f1];
                     mean = sum / features;
 
-                    // Pass 1b: Sum of squared deviations (SIMD)
+                    // Pass 1b: Sum of squared deviations (SIMD) - optimized to eliminate Span.Slice()
                     var vMeanTmp = new System.Numerics.Vector<float>(mean);
                     var vSqSum = System.Numerics.Vector<float>.Zero;
                     int f2 = 0;
-                    for (; f2 <= features - vectorSize; f2 += vectorSize)
+                    unsafe
                     {
-                        var vIn = new System.Numerics.Vector<float>(input.Slice(offset + f2, vectorSize));
-                        var vRes = new System.Numerics.Vector<float>(residual.Slice(offset + f2, vectorSize));
-                        var vDiff = vIn + vRes - vMeanTmp;
-                        vSqSum += vDiff * vDiff;
+                        fixed (float* pInput = input, pResidual = residual)
+                        {
+                            float* pIn = pInput + offset;
+                            float* pRes = pResidual + offset;
+                            
+                            for (; f2 <= features - vectorSize; f2 += vectorSize)
+                            {
+                                var vIn = Unsafe.Read<System.Numerics.Vector<float>>(pIn + f2);
+                                var vRes = Unsafe.Read<System.Numerics.Vector<float>>(pRes + f2);
+                                var vDiff = vIn + vRes - vMeanTmp;
+                                vSqSum += vDiff * vDiff;
+                            }
+                        }
                     }
                     float sqSum = 0f;
                     for (int vi = 0; vi < vectorSize; vi++) sqSum += vSqSum[vi];
@@ -389,18 +407,24 @@ namespace SmallMind.Core.Core
 
                     for (; f <= features - vectorSize; f += vectorSize)
                     {
-                        // Load all 4 input vectors
-                        var vInput = new System.Numerics.Vector<float>(input.Slice(offset + f, vectorSize));
-                        var vResidual = new System.Numerics.Vector<float>(residual.Slice(offset + f, vectorSize));
-                        var vGamma = new System.Numerics.Vector<float>(gamma.Slice(f, vectorSize));
-                        var vBeta = new System.Numerics.Vector<float>(beta.Slice(f, vectorSize));
+                        // Load all 4 input vectors - optimized to eliminate Span.Slice()
+                        unsafe
+                        {
+                            fixed (float* pInput = input, pResidual = residual, pGamma = gamma, pBeta = beta, pOutput = output)
+                            {
+                                var vInput = Unsafe.Read<System.Numerics.Vector<float>>(pInput + offset + f);
+                                var vResidual = Unsafe.Read<System.Numerics.Vector<float>>(pResidual + offset + f);
+                                var vGamma = Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f);
+                                var vBeta = Unsafe.Read<System.Numerics.Vector<float>>(pBeta + f);
 
-                        // Fused: gamma * ((input + residual - mean) * invStd) + beta
-                        var vCombined = vInput + vResidual;
-                        var vNormalized = (vCombined - vMean) * vInvStd;
-                        var vResult = vGamma * vNormalized + vBeta;
+                                // Fused: gamma * ((input + residual - mean) * invStd) + beta
+                                var vCombined = vInput + vResidual;
+                                var vNormalized = (vCombined - vMean) * vInvStd;
+                                var vResult = vGamma * vNormalized + vBeta;
 
-                        vResult.CopyTo(output.Slice(offset + f, vectorSize));
+                                Unsafe.Write(pOutput + offset + f, vResult);
+                            }
+                        }
                     }
                 }
 

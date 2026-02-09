@@ -13,6 +13,8 @@
   <ItemGroup>
     <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
     <ProjectReference Include="..\SmallMind.Transformers\SmallMind.Transformers.csproj" />
+    <ProjectReference Include="..\SmallMind.Runtime\SmallMind.Runtime.csproj" />
+    <ProjectReference Include="..\SmallMind.Tokenizers\SmallMind.Tokenizers.csproj" />
   </ItemGroup>
 
 </Project>

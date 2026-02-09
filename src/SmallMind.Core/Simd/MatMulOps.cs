@@ -727,12 +727,21 @@ namespace SmallMind.Core.Simd
                                     
                                     int j = j0;
                                     
-                                    // SIMD loop within tile
-                                    for (; j <= jMax - vectorSize; j += vectorSize)
+                                    // SIMD loop within tile - optimized to eliminate Span.Slice()
+                                    unsafe
                                     {
-                                        var vB = new Vector<float>(BSpanLocal.Slice(bRowStart + j));
-                                        var vC = new Vector<float>(CSpanLocal.Slice(cRowStart + j));
-                                        (vC + vA * vB).CopyTo(CSpanLocal.Slice(cRowStart + j));
+                                        fixed (float* pB = BSpanLocal, pC = CSpanLocal)
+                                        {
+                                            float* pBRow = pB + bRowStart;
+                                            float* pCRow = pC + cRowStart;
+                                            
+                                            for (; j <= jMax - vectorSize; j += vectorSize)
+                                            {
+                                                var vB = Unsafe.Read<Vector<float>>(pBRow + j);
+                                                var vC = Unsafe.Read<Vector<float>>(pCRow + j);
+                                                Unsafe.Write(pCRow + j, vC + vA * vB);
+                                            }
+                                        }
                                     }
                                     
                                     // Scalar remainder within tile
@@ -779,12 +788,21 @@ namespace SmallMind.Core.Simd
                                     
                                     int j = j0;
                                     
-                                    // SIMD loop within tile
-                                    for (; j <= jMax - vectorSize; j += vectorSize)
+                                    // SIMD loop within tile - optimized to eliminate Span.Slice()
+                                    unsafe
                                     {
-                                        var vB = new Vector<float>(BSpan.Slice(bRowStart + j));
-                                        var vC = new Vector<float>(CSpan.Slice(cRowStart + j));
-                                        (vC + vA * vB).CopyTo(CSpan.Slice(cRowStart + j));
+                                        fixed (float* pB = BSpan, pC = CSpan)
+                                        {
+                                            float* pBRow = pB + bRowStart;
+                                            float* pCRow = pC + cRowStart;
+                                            
+                                            for (; j <= jMax - vectorSize; j += vectorSize)
+                                            {
+                                                var vB = Unsafe.Read<Vector<float>>(pBRow + j);
+                                                var vC = Unsafe.Read<Vector<float>>(pCRow + j);
+                                                Unsafe.Write(pCRow + j, vC + vA * vB);
+                                            }
+                                        }
                                     }
                                     
                                     // Scalar remainder within tile
@@ -820,12 +838,21 @@ namespace SmallMind.Core.Simd
 
                 int j = 0;
 
-                // SIMD loop
-                for (; j <= N - vectorSize; j += vectorSize)
+                // SIMD loop - optimized to eliminate Span.Slice()
+                unsafe
                 {
-                    var vB = new Vector<float>(BSpan.Slice(bRowStart + j));
-                    var vC = new Vector<float>(CSpan.Slice(cRowStart + j));
-                    (vC + vA * vB).CopyTo(CSpan.Slice(cRowStart + j));
+                    fixed (float* pB = BSpan, pC = CSpan)
+                    {
+                        float* pBRow = pB + bRowStart;
+                        float* pCRow = pC + cRowStart;
+                        
+                        for (; j <= N - vectorSize; j += vectorSize)
+                        {
+                            var vB = Unsafe.Read<Vector<float>>(pBRow + j);
+                            var vC = Unsafe.Read<Vector<float>>(pCRow + j);
+                            Unsafe.Write(pCRow + j, vC + vA * vB);
+                        }
+                    }
                 }
 
                 // Scalar remainder
