@@ -1,0 +1,82 @@
+name: Golden Output Tests
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop, 'copilot/**' ]
+  workflow_dispatch:
+
+# Prevent CI pileups
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  golden-tests:
+    name: Golden Output Regression Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore SmallMind.sln
+
+      - name: Build (Release)
+        run: dotnet build SmallMind.sln --no-restore --configuration Release
+
+      - name: Run Golden Output Tests
+        run: |
+          dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj \
+            --filter "Category=GoldenOutput" \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=golden-tests.trx" \
+            --logger "console;verbosity=detailed"
+
+      - name: Run Core Unit Tests
+        run: |
+          dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj \
+            --filter "Category=UnitTest&Category!=Slow" \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=unit-tests.trx" \
+            --logger "console;verbosity=normal"
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            tests/SmallMind.Tests/TestResults/*.trx
+          check_name: Golden Output Test Results
+          comment_mode: off
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/SmallMind.Tests/TestResults/*.trx
+          retention-days: 7
