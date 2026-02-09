@@ -291,7 +291,27 @@ Based on PERF_AND_SMELLS_AUDIT.md, the following phases remain:
 
 **Expected Impact**: <0.5% speedup, but cleaner code
 
-**Decision**: **IMPLEMENT** - trivial effort, good code hygiene
+**Decision**: ✅ **INVESTIGATED AND COMPLETE** - Code already optimal (see PHASE4_ANALYSIS.md)
+
+**Actual Status**: After thorough analysis, all Vector broadcasts are already optimally placed:
+- Inside necessary outer loops (batch/row - values differ per iteration)
+- Outside tight inner loops (features/columns - maximum reuse)
+- No improvements possible without semantic changes
+
+---
+
+### Phase 4 Update (2026-02-09): Already Optimal ✅
+
+**Investigation completed**: Detailed code analysis revealed all Vector scalar broadcasts are already in optimal positions.
+
+**Key Findings**:
+1. LayerNormOps.cs: All 4 Vector broadcasts inside batch loop (necessary), outside feature loops (optimal)
+2. SoftmaxOps.cs: All 4 Vector broadcasts outside tight SIMD loops (optimal)
+3. Original audit flagged due to indentation heuristic, but actual placement is correct
+
+**Impact**: No changes required. Code quality excellent.
+
+**Documentation**: Created `src/PHASE4_ANALYSIS.md` with detailed findings.
 
 ---
 
@@ -302,6 +322,7 @@ Based on PERF_AND_SMELLS_AUDIT.md, the following phases remain:
 1. ✅ **Accept Phase 1 optimizations**: MatMul gains are significant and validated
 2. ⚠️ **Benchmark with production model**: Test with 256-512 embd, 6-12 layer model to validate real-world E2E gains
 3. ✅ **Document optimization thresholds**: Update code comments to indicate when unsafe optimizations apply (matrix size > 64)
+4. ✅ **Phase 4 complete**: No changes needed - code already optimal
 
 ### Future Work
 
@@ -315,7 +336,7 @@ Based on PERF_AND_SMELLS_AUDIT.md, the following phases remain:
 
 2. **Production model benchmark**: Create realistic model config (GPT-2 scale) for fair E2E testing
 
-3. **Phase 4 (Vector broadcasts)**: Quick win, implement immediately
+3. ~~**Phase 4 (Vector broadcasts)**~~: ✅ **Complete - Already optimal**
 
 4. **Phases 2-3**: Defer until production model validation confirms need
 
@@ -328,6 +349,7 @@ Based on PERF_AND_SMELLS_AUDIT.md, the following phases remain:
 ✅ **MatMul optimization exceeded targets**: 2.38x speedup vs 2-3x target  
 ✅ **Zero correctness regressions**: All builds successful  
 ✅ **Clean, maintainable code**: Well-commented unsafe sections  
+✅ **Phase 4 verified optimal**: All Vector broadcasts correctly positioned
 ✅ **Comprehensive documentation**: Audit, baseline, and report complete
 
 ### Key Learnings
