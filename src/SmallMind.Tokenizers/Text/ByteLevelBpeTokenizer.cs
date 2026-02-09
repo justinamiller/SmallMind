@@ -15,7 +15,7 @@ namespace SmallMind.Tokenizers;
 /// Operates on raw UTF-8 byte sequences (0-255) with GPT-2 style byte-to-unicode mapping.
 /// Supports training from text, encoding, decoding, and vocabulary persistence.
 /// </summary>
-public sealed class ByteLevelBpeTokenizer : ITokenizer
+internal sealed class ByteLevelBpeTokenizer : ITokenizer
 {
     // Base vocabulary: 256 bytes
     private const int BaseVocabSize = 256;

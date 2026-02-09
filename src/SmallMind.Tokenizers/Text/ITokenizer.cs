@@ -7,7 +7,7 @@ namespace SmallMind.Tokenizers
     /// Interface for tokenizer implementations.
     /// Converts between text and token IDs.
     /// </summary>
-    public interface ITokenizer
+    internal interface ITokenizer
     {
         /// <summary>
         /// The size of the vocabulary.

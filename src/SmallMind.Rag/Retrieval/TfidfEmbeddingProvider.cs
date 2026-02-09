@@ -9,7 +9,7 @@ namespace SmallMind.Rag.Retrieval
     /// A simple, fast, local embedding implementation with no external dependencies.
     /// Provides reasonable semantic similarity for retrieval tasks.
     /// </summary>
-    public class TfidfEmbeddingProvider : IEmbeddingProvider
+    internal class TfidfEmbeddingProvider : IEmbeddingProvider
     {
         private readonly Dictionary<string, int> _vocabulary;
         private readonly Dictionary<string, double> _idfScores;

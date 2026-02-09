@@ -9,7 +9,7 @@ namespace SmallMind.Runtime
     /// Production-grade inference options with resource governance and safety controls.
     /// Use this for commercial deployments requiring bounded resources and predictable behavior.
     /// </summary>
-    public sealed class ProductionInferenceOptions
+    internal sealed class ProductionInferenceOptions
     {
         // Sampling Parameters
         

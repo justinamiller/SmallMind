@@ -9,7 +9,7 @@ namespace SmallMind.Core.Core
     /// Object pooling for tensor arrays to reduce GC pressure.
     /// Uses ArrayPool for efficient memory management with automatic size bucketing.
     /// </summary>
-    public sealed class TensorPool : IDisposable
+    internal sealed class TensorPool : IDisposable
     {
         // Use ArrayPool.Shared for backing storage - provides automatic bucketing and thread-safety
         private readonly ArrayPool<float> _arrayPool;

@@ -9,7 +9,7 @@ namespace SmallMind.Quantization.Tensors
     /// - scale: float32
     /// - quantized values: sbyte[-127, 127]
     /// </summary>
-    public sealed class Q8Tensor
+    internal sealed class Q8Tensor
     {
         /// <summary>
         /// Number of rows in the tensor.

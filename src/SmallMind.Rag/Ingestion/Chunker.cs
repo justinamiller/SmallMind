@@ -7,7 +7,7 @@ namespace SmallMind.Rag.Ingestion;
 /// Handles intelligent text chunking for document ingestion into the RAG system.
 /// Implements markdown-aware splitting with fallback to character window chunking.
 /// </summary>
-public sealed class Chunker
+internal sealed class Chunker
 {
     /// <summary>
     /// Chunks a document into smaller text segments suitable for embedding and retrieval.

@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.Telemetry
     /// Simple logging interface for runtime diagnostics.
     /// No dependencies on external logging frameworks.
     /// </summary>
-    public interface IRuntimeLogger
+    internal interface IRuntimeLogger
     {
         void LogDebug(string message);
         void LogInfo(string message);
@@ -17,7 +17,7 @@ namespace SmallMind.Runtime.Telemetry
     /// <summary>
     /// Console-based runtime logger.
     /// </summary>
-    public sealed class ConsoleRuntimeLogger : IRuntimeLogger
+    internal sealed class ConsoleRuntimeLogger : IRuntimeLogger
     {
         public void LogDebug(string message)
         {
@@ -45,7 +45,7 @@ namespace SmallMind.Runtime.Telemetry
     /// <summary>
     /// Null logger that does nothing (for production where logging is not desired).
     /// </summary>
-    public sealed class NullRuntimeLogger : IRuntimeLogger
+    internal sealed class NullRuntimeLogger : IRuntimeLogger
     {
         public static readonly NullRuntimeLogger Instance = new NullRuntimeLogger();
         

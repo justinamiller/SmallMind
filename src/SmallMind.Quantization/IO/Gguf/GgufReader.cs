@@ -9,7 +9,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// Reads GGUF (GPT-Generated Unified Format) model files.
     /// Supports GGUF versions 2 and 3.
     /// </summary>
-    public sealed class GgufReader : ITensorDataReader, IDisposable
+    internal sealed class GgufReader : ITensorDataReader, IDisposable
     {
         private const string ExpectedMagic = "GGUF";
         private const uint SupportedVersionMin = 2;

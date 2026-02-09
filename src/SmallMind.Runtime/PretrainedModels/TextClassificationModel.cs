@@ -10,7 +10,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// Text classification model implementation.
     /// Classifies text into predefined categories.
     /// </summary>
-    public class TextClassificationModel : ITextClassificationModel
+    internal class TextClassificationModel : ITextClassificationModel
     {
         private readonly TransformerModel _model;
         private readonly ITokenizer _tokenizer;

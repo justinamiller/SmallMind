@@ -8,7 +8,7 @@ namespace SmallMind.Quantization.IO.Smq
     /// SMQ manifest (sidecar JSON file) for human-readable metadata.
     /// Saved as "model.smq.manifest.json" alongside "model.smq".
     /// </summary>
-    public class SmqManifest
+    internal class SmqManifest
     {
         /// <summary>
         /// SMQ format version.
@@ -62,7 +62,7 @@ namespace SmallMind.Quantization.IO.Smq
     /// <summary>
     /// Model architecture dimensions.
     /// </summary>
-    public class ModelDimensions
+    internal class ModelDimensions
     {
         /// <summary>
         /// Number of layers.

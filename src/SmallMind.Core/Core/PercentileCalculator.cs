@@ -7,7 +7,7 @@ namespace SmallMind.Core.Core
     /// Utility for calculating percentile statistics (p50, p95, p99) without external dependencies.
     /// Uses a simple sorting approach for accurate percentile calculation.
     /// </summary>
-    public static class PercentileCalculator
+    internal static class PercentileCalculator
     {
         /// <summary>
         /// Calculate percentile value from a list of values.
@@ -102,7 +102,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Container for percentile statistics.
     /// </summary>
-    public sealed class PercentileStats
+    internal sealed class PercentileStats
     {
         public double Min { get; }
         public double Mean { get; }

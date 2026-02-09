@@ -11,7 +11,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// <summary>
     /// Imports GGUF model files and converts them to SMQ format.
     /// </summary>
-    public sealed class GgufImporter
+    internal sealed class GgufImporter
     {
         private const int GgufBlockSize = 32; // GGUF uses block size 32
         private const int SmqBlockSize = 64;  // SMQ default block size

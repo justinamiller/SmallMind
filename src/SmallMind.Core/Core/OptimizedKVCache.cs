@@ -17,7 +17,7 @@ namespace SmallMind.Core.Core
     /// 
     /// Memory layout: [layer][position][head][feature] for optimal sequential access
     /// </summary>
-    public sealed class OptimizedKVCache : IDisposable
+    internal sealed class OptimizedKVCache : IDisposable
     {
         private readonly int _numLayers;
         private readonly int _maxSeqLen;

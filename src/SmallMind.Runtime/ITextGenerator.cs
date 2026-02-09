@@ -8,7 +8,7 @@ namespace SmallMind.Runtime
     /// <summary>
     /// Options for controlling text generation behavior.
     /// </summary>
-    public class GenerationOptions
+    internal class GenerationOptions
     {
         /// <summary>
         /// Maximum number of tokens to generate. Default: 100.
@@ -44,7 +44,7 @@ namespace SmallMind.Runtime
     /// <summary>
     /// Interface for text generation from language models.
     /// </summary>
-    public interface ITextGenerator
+    internal interface ITextGenerator
     {
         /// <summary>
         /// Generate text asynchronously from a prompt.

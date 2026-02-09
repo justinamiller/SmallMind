@@ -20,7 +20,7 @@ namespace SmallMind.Runtime
     /// Safe for concurrent execution across multiple sessions.
     /// Supports deterministic token scheduling for reproducibility.
     /// </summary>
-    public sealed class InferenceSession : IDisposable
+    internal sealed class InferenceSession : IDisposable
     {
         private readonly TransformerModel _model;
         private readonly ITokenizer _tokenizer;

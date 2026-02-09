@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Telemetry;
 /// <summary>
 /// Provides thread-safe context for trace ID propagation across async operations.
 /// </summary>
-public static class RagContext
+internal static class RagContext
 {
     private static readonly AsyncLocal<string?> _traceId = new AsyncLocal<string?>();
 

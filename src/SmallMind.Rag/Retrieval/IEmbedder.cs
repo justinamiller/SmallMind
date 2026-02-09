@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Retrieval;
 /// <summary>
 /// Interface for generating embeddings from text.
 /// </summary>
-public interface IEmbedder
+internal interface IEmbedder
 {
     /// <summary>
     /// Gets the dimension of the embedding vectors.

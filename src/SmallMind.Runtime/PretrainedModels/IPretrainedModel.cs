@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Base interface for all pre-trained models.
     /// </summary>
-    public interface IPretrainedModel
+    internal interface IPretrainedModel
     {
         /// <summary>
         /// The task this model is designed for.
@@ -37,7 +37,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Interface for text classification models.
     /// </summary>
-    public interface ITextClassificationModel : IPretrainedModel
+    internal interface ITextClassificationModel : IPretrainedModel
     {
         /// <summary>
         /// Available classification labels.
@@ -62,7 +62,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Interface for sentiment analysis models.
     /// </summary>
-    public interface ISentimentAnalysisModel : IPretrainedModel
+    internal interface ISentimentAnalysisModel : IPretrainedModel
     {
         /// <summary>
         /// Analyze sentiment of input text.
@@ -82,7 +82,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Interface for summarization models.
     /// </summary>
-    public interface ISummarizationModel : IPretrainedModel
+    internal interface ISummarizationModel : IPretrainedModel
     {
         /// <summary>
         /// Generate a summary of the input text.
@@ -96,7 +96,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Interface for question answering models.
     /// </summary>
-    public interface IQuestionAnsweringModel : IPretrainedModel
+    internal interface IQuestionAnsweringModel : IPretrainedModel
     {
         /// <summary>
         /// Answer a question based on provided context.

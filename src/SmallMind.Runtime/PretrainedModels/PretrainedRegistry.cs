@@ -9,7 +9,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Registry entry for a pretrained pack.
     /// </summary>
-    public class PackRegistryEntry
+    internal class PackRegistryEntry
     {
         /// <summary>
         /// Pack identifier.
@@ -63,7 +63,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Metadata for the pack registry.
     /// </summary>
-    public class RegistryMetadata
+    internal class RegistryMetadata
     {
         /// <summary>
         /// Total number of packs.
@@ -87,7 +87,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Registry of available pretrained packs.
     /// </summary>
-    public class PretrainedRegistry
+    internal class PretrainedRegistry
     {
         /// <summary>
         /// Registry version.

@@ -17,7 +17,7 @@ namespace SmallMind.Runtime.Batching
     /// Designed for minimal allocations and thread-safe operation.
     /// Supports deterministic scheduling for reproducible token generation.
     /// </summary>
-    public sealed class BatchScheduler : IDisposable
+    internal sealed class BatchScheduler : IDisposable
     {
         private readonly BatchingOptions _options;
         private readonly IRuntimeMetrics _metrics;

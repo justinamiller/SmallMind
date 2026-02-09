@@ -11,7 +11,7 @@ namespace SmallMind.Runtime
     /// Pure C# implementation.
     /// </summary>
     [Obsolete("Use InferenceSession instead. InferenceSession provides TopP, MinP, repetition penalties, output constraints, and async streaming. This class will be removed in v1.0.")]
-    public class Sampling
+    internal class Sampling
     {
         private readonly TransformerModel _model;
         private readonly ITokenizer _tokenizer;

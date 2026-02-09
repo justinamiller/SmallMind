@@ -7,7 +7,7 @@ namespace SmallMind.Runtime.Scheduling
     /// Result of token scheduling operation.
     /// Contains detailed information for reproducibility and auditing.
     /// </summary>
-    public sealed class TokenScheduleResult
+    internal sealed class TokenScheduleResult
     {
         /// <summary>
         /// Gets the unique identifier for this schedule.

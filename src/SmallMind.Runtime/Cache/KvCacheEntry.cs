@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.Cache
     /// <summary>
     /// Model shape information for cache validation.
     /// </summary>
-    public readonly struct ModelShape : IEquatable<ModelShape>
+    internal readonly struct ModelShape : IEquatable<ModelShape>
     {
         public readonly int Layers;
         public readonly int Heads;
@@ -33,7 +33,7 @@ namespace SmallMind.Runtime.Cache
     /// Per-session KV cache entry with pooled memory management.
     /// Stores key and value tensors for all layers using ArrayPool for efficiency.
     /// </summary>
-    public sealed class KvCacheEntry : IDisposable
+    internal sealed class KvCacheEntry : IDisposable
     {
         private readonly SessionId _sessionId;
         private readonly ModelShape _modelShape;

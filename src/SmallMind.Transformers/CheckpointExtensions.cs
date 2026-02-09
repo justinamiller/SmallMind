@@ -9,7 +9,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Extension methods for converting between TransformerModel and ModelCheckpoint.
     /// </summary>
-    public static class CheckpointExtensions
+    internal static class CheckpointExtensions
     {
         /// <summary>
         /// Convert a TransformerModel to a ModelCheckpoint for saving.

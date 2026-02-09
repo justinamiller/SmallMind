@@ -9,7 +9,7 @@ namespace SmallMind.Quantization.Tensors
     /// - scale: float32
     /// - quantized values: 4-bit signed in [-8, 7], packed two per byte
     /// </summary>
-    public sealed class Q4Tensor
+    internal sealed class Q4Tensor
     {
         /// <summary>
         /// Number of rows in the tensor.

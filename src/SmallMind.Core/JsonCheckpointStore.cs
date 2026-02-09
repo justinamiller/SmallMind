@@ -11,7 +11,7 @@ namespace SmallMind.Core
     /// Legacy JSON checkpoint store for backward compatibility.
     /// Loads old JSON checkpoints but saves in binary format by default.
     /// </summary>
-    public class JsonCheckpointStore : ICheckpointStore
+    internal class JsonCheckpointStore : ICheckpointStore
     {
         /// <summary>
         /// Save checkpoint in JSON format (legacy).

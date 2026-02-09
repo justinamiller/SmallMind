@@ -30,7 +30,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SmallMind.Engine" />
+    <InternalsVisibleTo Include="SmallMind.Console" />
     <InternalsVisibleTo Include="SmallMind.Tests" />
+    <InternalsVisibleTo Include="smrag" />
   </ItemGroup>
 
 </Project>

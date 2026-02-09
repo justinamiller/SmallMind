@@ -20,7 +20,7 @@ namespace SmallMind.Rag.Pipeline
     /// Main RAG pipeline that orchestrates ingestion, retrieval, prompting, security, and telemetry.
     /// Thread-safe and supports both sparse (BM25) and dense (vector) retrieval.
     /// </summary>
-    public sealed class RagPipeline
+    internal sealed class RagPipeline
     {
         private IncrementalIndexer? _indexer;
         private InvertedIndex _invertedIndex;

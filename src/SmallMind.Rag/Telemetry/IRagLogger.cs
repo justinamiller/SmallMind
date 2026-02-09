@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Telemetry;
 /// <summary>
 /// Defines the contract for logging RAG operations.
 /// </summary>
-public interface IRagLogger
+internal interface IRagLogger
 {
     /// <summary>
     /// Logs the completion of a document ingestion operation.

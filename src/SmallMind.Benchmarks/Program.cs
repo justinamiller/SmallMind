@@ -2,7 +2,7 @@ using System;
 
 namespace SmallMind.Benchmarks
 {
-    public class Program
+    internal class Program
     {
         public static int Main(string[] args)
         {

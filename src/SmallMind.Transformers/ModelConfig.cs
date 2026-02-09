@@ -8,7 +8,7 @@ namespace SmallMind.Transformers
     /// Unified configuration for transformer models supporting multiple architectures.
     /// Supports: Llama, Mistral, Phi, GPT-2.
     /// </summary>
-    public sealed class ModelConfig
+    internal sealed class ModelConfig
     {
         /// <summary>
         /// Model architecture name (e.g., "llama", "mistral", "phi3", "gpt2").
@@ -434,7 +434,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Exception thrown when required metadata is missing from GGUF file.
     /// </summary>
-    public class MissingMetadataException : Exception
+    internal class MissingMetadataException : Exception
     {
         public string MetadataKey { get; }
 

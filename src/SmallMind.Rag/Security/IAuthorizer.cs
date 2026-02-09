@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Security;
 /// <summary>
 /// Defines the contract for authorization of chunk access.
 /// </summary>
-public interface IAuthorizer
+internal interface IAuthorizer
 {
     /// <summary>
     /// Determines whether the specified user is authorized to access the chunk.

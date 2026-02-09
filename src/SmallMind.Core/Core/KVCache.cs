@@ -9,7 +9,7 @@ namespace SmallMind.Core.Core
     /// Key-Value cache using memory-mapped files for large context windows.
     /// Enables disk-backed storage to reduce RAM usage for attention mechanisms.
     /// </summary>
-    public sealed class KVCache : IDisposable
+    internal sealed class KVCache : IDisposable
     {
         private readonly MemoryMappedFile? _memoryFile;
         private readonly MemoryMappedViewAccessor? _accessor;
@@ -284,7 +284,7 @@ namespace SmallMind.Core.Core
     /// KV cache manager for transformer attention layers.
     /// Manages separate caches for keys and values across multiple layers.
     /// </summary>
-    public sealed class MultiLayerKVCache : IDisposable
+    internal sealed class MultiLayerKVCache : IDisposable
     {
         private readonly KVCache[] _keyCaches;
         private readonly KVCache[] _valueCaches;

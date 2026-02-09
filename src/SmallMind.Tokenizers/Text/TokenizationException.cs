@@ -5,7 +5,7 @@ namespace SmallMind.Tokenizers
     /// <summary>
     /// Exception thrown when tokenization operations fail.
     /// </summary>
-    public class TokenizationException : Exception
+    internal class TokenizationException : Exception
     {
         /// <summary>
         /// Creates a new TokenizationException with the specified message.

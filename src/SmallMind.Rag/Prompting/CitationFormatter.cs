@@ -8,7 +8,7 @@ namespace SmallMind.Rag.Prompting;
 /// Static utility class for formatting citations in RAG responses.
 /// Provides consistent citation formatting for source references.
 /// </summary>
-public static class CitationFormatter
+internal static class CitationFormatter
 {
     /// <summary>
     /// Formats a single citation with index, title, source URI, and character offsets.

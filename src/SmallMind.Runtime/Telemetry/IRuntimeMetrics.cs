@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.Telemetry
     /// Metrics collection interface for runtime performance tracking.
     /// Designed for minimal overhead with atomic operations.
     /// </summary>
-    public interface IRuntimeMetrics
+    internal interface IRuntimeMetrics
     {
         void RecordCacheHit();
         void RecordCacheMiss();
@@ -21,7 +21,7 @@ namespace SmallMind.Runtime.Telemetry
     /// <summary>
     /// In-memory metrics collector with atomic counters.
     /// </summary>
-    public sealed class InMemoryRuntimeMetrics : IRuntimeMetrics
+    internal sealed class InMemoryRuntimeMetrics : IRuntimeMetrics
     {
         private long _cacheHits;
         private long _cacheMisses;
@@ -98,7 +98,7 @@ namespace SmallMind.Runtime.Telemetry
     /// <summary>
     /// Null metrics that does nothing (for minimal overhead).
     /// </summary>
-    public sealed class NullRuntimeMetrics : IRuntimeMetrics
+    internal sealed class NullRuntimeMetrics : IRuntimeMetrics
     {
         public static readonly NullRuntimeMetrics Instance = new NullRuntimeMetrics();
         

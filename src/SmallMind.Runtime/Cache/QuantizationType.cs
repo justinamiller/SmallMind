@@ -3,7 +3,7 @@ namespace SmallMind.Runtime.Cache
     /// <summary>
     /// Quantization precision for KV cache storage.
     /// </summary>
-    public enum QuantizationType
+    internal enum QuantizationType
     {
         /// <summary>No quantization - full FP32 precision.</summary>
         None = 0,

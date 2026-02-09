@@ -6,7 +6,7 @@ namespace SmallMind.Quantization.Abstractions
     /// Abstraction for weight tensors that can be either FP32 or quantized.
     /// Enables polymorphic weight handling in inference layers.
     /// </summary>
-    public interface IWeightTensor
+    internal interface IWeightTensor
     {
         /// <summary>
         /// Number of rows in the weight matrix.
@@ -46,7 +46,7 @@ namespace SmallMind.Quantization.Abstractions
     /// <summary>
     /// Quantization scheme enumeration (copied from Tensors namespace for interface visibility).
     /// </summary>
-    public enum QuantScheme : uint
+    internal enum QuantScheme : uint
     {
         /// <summary>32-bit floating point (standard)</summary>
         F32 = 0,

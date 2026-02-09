@@ -11,7 +11,7 @@ namespace SmallMind.Tokenizers
     /// Unigram Language Model tokenizer (SentencePiece-style).
     /// Uses Viterbi algorithm for best segmentation based on token scores.
     /// </summary>
-    public class UnigramTokenizer : ITokenizer
+    internal class UnigramTokenizer : ITokenizer
     {
         private readonly List<(string token, float score, int id)> _pieces;
         private readonly FrozenDictionary<int, string> _idToToken;

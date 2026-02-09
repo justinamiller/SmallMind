@@ -7,7 +7,7 @@ namespace SmallMind.Runtime.Constraints
     /// Enforces that generated output matches a regular expression pattern.
     /// Uses incremental matching to validate prefixes during generation.
     /// </summary>
-    public sealed class RegexEnforcer : IOutputConstraint
+    internal sealed class RegexEnforcer : IOutputConstraint
     {
         private readonly Regex _pattern;
         private readonly string _patternString;

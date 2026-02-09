@@ -3,7 +3,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Defines domain-specific specializations for pre-trained models.
     /// </summary>
-    public enum DomainType
+    internal enum DomainType
     {
         /// <summary>
         /// General-purpose domain (no specific specialization).

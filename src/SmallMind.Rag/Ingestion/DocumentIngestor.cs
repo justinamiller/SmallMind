@@ -10,7 +10,7 @@ namespace SmallMind.Rag.Ingestion;
 /// Handles ingestion of documents from the filesystem into the RAG system.
 /// Scans directories, computes content hashes, and creates document records.
 /// </summary>
-public sealed class DocumentIngestor
+internal sealed class DocumentIngestor
 {
     /// <summary>
     /// Ingests all documents from a directory matching the specified file patterns.

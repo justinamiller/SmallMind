@@ -9,12 +9,12 @@ namespace SmallMind.Quantization.IO.Smq
     /// <summary>
     /// Validates SMQ file integrity without loading full tensor data.
     /// </summary>
-    public static class SmqValidator
+    internal static class SmqValidator
     {
         /// <summary>
         /// Validation error information.
         /// </summary>
-        public class ValidationError
+        internal class ValidationError
         {
             /// <summary>
             /// Error or warning message.
@@ -45,7 +45,7 @@ namespace SmallMind.Quantization.IO.Smq
         /// <summary>
         /// Severity level for validation issues.
         /// </summary>
-        public enum ValidationSeverity
+        internal enum ValidationSeverity
         {
             /// <summary>
             /// Warning: non-critical issue.

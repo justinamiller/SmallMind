@@ -8,7 +8,7 @@ namespace SmallMind.Rag;
 /// <summary>
 /// Represents a text chunk extracted from a document for indexing and retrieval.
 /// </summary>
-public sealed class Chunk
+internal sealed class Chunk
 {
     /// <summary>
     /// Gets or sets the stable chunk identifier computed from document ID, text, and offsets.

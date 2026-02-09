@@ -138,7 +138,7 @@ namespace SmallMind.Core.Optimized
     /// KV-Cache for efficient autoregressive generation.
     /// Reduces O(n²) to O(n) per token during text generation.
     /// </summary>
-    public class KVCache
+    internal class KVCache
     {
         private readonly float[][] _keyCache;
         private readonly float[][] _valueCache;
@@ -209,7 +209,7 @@ namespace SmallMind.Core.Optimized
     /// Optimized object pool for float arrays with power-of-2 sizing.
     /// Reduces GC pressure through array reuse.
     /// </summary>
-    public sealed class OptimizedArrayPool
+    internal sealed class OptimizedArrayPool
     {
         private const int MaxPooledArraySize = 1024 * 1024; // 1MB
         private const int MaxArraysPerBucket = 32;

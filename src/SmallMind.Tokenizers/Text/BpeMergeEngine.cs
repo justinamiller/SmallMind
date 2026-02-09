@@ -9,13 +9,13 @@ namespace SmallMind.Tokenizers;
 /// High-performance merge engine for Byte Pair Encoding.
 /// Optimized for CPU-only execution with minimal allocations.
 /// </summary>
-public static class BpeMergeEngine
+internal static class BpeMergeEngine
 {
     /// <summary>
     /// Counts pair frequencies in token sequences.
     /// Uses a long-based key encoding to avoid tuple allocations.
     /// </summary>
-    public readonly struct PairCounter
+    internal readonly struct PairCounter
     {
         private readonly Dictionary<long, int> _pairCounts;
 
@@ -152,7 +152,7 @@ public static class BpeMergeEngine
     /// <summary>
     /// Applies merge rules to token sequences in-place with minimal allocations.
     /// </summary>
-    public sealed class MergeApplicator
+    internal sealed class MergeApplicator
     {
         /// <summary>
         /// Apply a single merge rule to a token sequence.

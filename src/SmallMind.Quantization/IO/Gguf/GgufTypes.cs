@@ -6,7 +6,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// <summary>
     /// GGUF metadata value types.
     /// </summary>
-    public enum GgufValueType : uint
+    internal enum GgufValueType : uint
     {
         /// <summary>8-bit unsigned integer.</summary>
         UInt8 = 0,
@@ -39,7 +39,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// <summary>
     /// GGUF tensor data types.
     /// </summary>
-    public enum GgufTensorType : uint
+    internal enum GgufTensorType : uint
     {
         /// <summary>32-bit floating point.</summary>
         F32 = 0,
@@ -90,7 +90,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// <summary>
     /// GGUF key-value metadata entry.
     /// </summary>
-    public class GgufKV
+    internal class GgufKV
     {
         /// <summary>
         /// Metadata key.
@@ -111,7 +111,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// <summary>
     /// GGUF tensor metadata.
     /// </summary>
-    public class GgufTensorInfo
+    internal class GgufTensorInfo
     {
         /// <summary>
         /// Tensor name.

@@ -14,7 +14,7 @@ namespace SmallMind.Core.Core
     /// - Hot paths use Span&lt;T&gt; for zero-copy access
     /// - Avoid per-element indexing in hot loops
     /// </summary>
-    public sealed class ChunkedBuffer
+    internal sealed class ChunkedBuffer
     {
         /// <summary>
         /// Default chunk size: 64M elements (256MB for float[]).

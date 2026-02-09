@@ -10,7 +10,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Base class for neural network layers/modules
     /// </summary>
-    public abstract class Module
+    internal abstract class Module
     {
         public List<Tensor> Parameters { get; protected set; } = new List<Tensor>();
         
@@ -43,7 +43,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Linear (fully connected) layer
     /// </summary>
-    public sealed class Linear : Module
+    internal sealed class Linear : Module
     {
         public Tensor Weight { get; private set; }
         public Tensor? Bias { get; private set; }
@@ -168,7 +168,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Embedding layer
     /// </summary>
-    public sealed class Embedding : Module
+    internal sealed class Embedding : Module
     {
         public Tensor Weight { get; private set; }
         private int _numEmbeddings;
@@ -495,7 +495,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Layer Normalization
     /// </summary>
-    public sealed class LayerNorm : Module
+    internal sealed class LayerNorm : Module
     {
         private int _normalizedShape;
         private float _eps;
@@ -615,7 +615,7 @@ namespace SmallMind.Transformers
     /// Simpler than LayerNorm: no mean subtraction, no beta parameter.
     /// Formula: y = (x / rms(x)) * gamma, where rms(x) = sqrt(mean(x^2) + eps)
     /// </summary>
-    public sealed class RMSNorm : Module
+    internal sealed class RMSNorm : Module
     {
         private int _normalizedShape;
         private float _eps;
@@ -732,7 +732,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Dropout layer (for regularization during training)
     /// </summary>
-    public sealed class Dropout : Module
+    internal sealed class Dropout : Module
     {
         private float _p;
         private bool _training = true;
@@ -793,7 +793,7 @@ namespace SmallMind.Transformers
     /// <summary>
     /// Activation functions
     /// </summary>
-    public static class Activations
+    internal static class Activations
     {
         public static Tensor ReLU(Tensor input)
         {

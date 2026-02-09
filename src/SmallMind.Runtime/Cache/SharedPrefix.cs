@@ -5,7 +5,7 @@ namespace SmallMind.Runtime.Cache
     /// <summary>
     /// Represents a shared prompt prefix that can be reused across sessions.
     /// </summary>
-    public sealed class SharedPrefix
+    internal sealed class SharedPrefix
     {
         public string PrefixHash { get; }
         public int[] TokenIds { get; }

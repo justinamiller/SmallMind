@@ -16,7 +16,7 @@ namespace SmallMind.Runtime
     /// Constructs TransformerModel with appropriate architecture (Llama, Mistral, Phi, GPT-2).
     /// Phase 3 implementation: loads actual weights from GGUF into model.
     /// </summary>
-    public sealed class GgufModelLoader
+    internal sealed class GgufModelLoader
     {
         private const int GgufBlockSize = 32; // GGUF uses block size 32 for quantization
 

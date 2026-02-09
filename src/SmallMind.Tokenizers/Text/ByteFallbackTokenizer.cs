@@ -10,7 +10,7 @@ namespace SmallMind.Tokenizers
     /// Wraps an inner tokenizer and falls back to byte tokens for unknown sequences.
     /// Ensures no UNK tokens by encoding unknowns as individual bytes.
     /// </summary>
-    public class ByteFallbackTokenizer : ITokenizer
+    internal class ByteFallbackTokenizer : ITokenizer
     {
         private readonly ITokenizer _innerTokenizer;
         private readonly int _byteTokenStart;

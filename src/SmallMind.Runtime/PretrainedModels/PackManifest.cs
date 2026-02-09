@@ -7,7 +7,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Represents metadata for a pretrained data pack.
     /// </summary>
-    public class PackManifest
+    internal class PackManifest
     {
         /// <summary>
         /// Unique identifier for this pack (e.g., "sm.pretrained.sentiment.v1").
@@ -73,7 +73,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Source information for a pack.
     /// </summary>
-    public class PackSource
+    internal class PackSource
     {
         /// <summary>
         /// Origin of the data (e.g., "synthetic", "public-domain").
@@ -97,7 +97,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Recommended settings for using a pack.
     /// </summary>
-    public class RecommendedSettings
+    internal class RecommendedSettings
     {
         /// <summary>
         /// Recommended context token length.
@@ -115,7 +115,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Task-specific metadata.
     /// </summary>
-    public class TaskMetadata
+    internal class TaskMetadata
     {
         /// <summary>
         /// Task type (e.g., "sentiment_analysis", "text_classification").
@@ -139,7 +139,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Statistical information about a pack.
     /// </summary>
-    public class PackStatistics
+    internal class PackStatistics
     {
         /// <summary>
         /// Total number of samples.
@@ -157,7 +157,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// RAG-specific metadata.
     /// </summary>
-    public class RagMetadata
+    internal class RagMetadata
     {
         /// <summary>
         /// Whether RAG is enabled for this pack.

@@ -10,7 +10,7 @@ namespace SmallMind.Quantization.IO.Smq
     /// <summary>
     /// Writes quantized tensors to SMQ binary format.
     /// </summary>
-    public sealed class SmqWriter : IDisposable
+    internal sealed class SmqWriter : IDisposable
     {
         private readonly Stream _stream;
         private readonly BinaryWriter _writer;

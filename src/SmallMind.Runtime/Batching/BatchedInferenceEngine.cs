@@ -19,7 +19,7 @@ namespace SmallMind.Runtime.Batching
     /// Batched inference engine that processes multiple requests together for improved throughput.
     /// Routes requests through the batch scheduler and executes batches efficiently.
     /// </summary>
-    public sealed class BatchedInferenceEngine : IDisposable
+    internal sealed class BatchedInferenceEngine : IDisposable
     {
         private readonly TransformerModel _model;
         private readonly ITokenizer _tokenizer;

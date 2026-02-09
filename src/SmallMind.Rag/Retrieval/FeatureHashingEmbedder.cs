@@ -7,7 +7,7 @@ namespace SmallMind.Rag.Retrieval;
 /// Deterministic feature hashing embedder using the hashing trick.
 /// Provides a simple baseline for embeddings without external models.
 /// </summary>
-public sealed class FeatureHashingEmbedder : IEmbedder
+internal sealed class FeatureHashingEmbedder : IEmbedder
 {
     private readonly int _dimension;
     private readonly int _seed;

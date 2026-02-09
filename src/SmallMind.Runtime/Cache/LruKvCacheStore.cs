@@ -10,7 +10,7 @@ namespace SmallMind.Runtime.Cache
     /// Thread-safe implementation with bounded memory and session count.
     /// Supports per-session memory budgets with budget telemetry events.
     /// </summary>
-    public sealed class LruKvCacheStore : IKvCacheStore, IDisposable
+    internal sealed class LruKvCacheStore : IKvCacheStore, IDisposable
     {
         private sealed class LruNode
         {

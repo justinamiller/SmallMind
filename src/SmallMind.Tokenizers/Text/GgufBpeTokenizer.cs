@@ -11,7 +11,7 @@ namespace SmallMind.Tokenizers.Text
     /// Supports both character-level and byte-level BPE (GPT-2 style).
     /// Extracts vocabulary and merges directly from GGUF metadata.
     /// </summary>
-    public class GgufBpeTokenizer : ITokenizer
+    internal class GgufBpeTokenizer : ITokenizer
     {
         private readonly Dictionary<string, int> _vocab;
         private readonly Dictionary<int, string> _inverseVocab;

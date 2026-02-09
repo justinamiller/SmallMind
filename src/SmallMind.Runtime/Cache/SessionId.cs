@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.Cache
     /// Represents a unique session identifier for KV cache management.
     /// Immutable value type for safe dictionary keys.
     /// </summary>
-    public readonly struct SessionId : IEquatable<SessionId>
+    internal readonly struct SessionId : IEquatable<SessionId>
     {
         private readonly string _value;
 

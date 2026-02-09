@@ -8,7 +8,7 @@ namespace SmallMind.Rag.Prompting;
 /// Enforces grounding discipline for RAG systems to ensure answers are based on evidence.
 /// Provides utilities for checking evidence sufficiency and generating appropriate responses.
 /// </summary>
-public static class GroundingRules
+internal static class GroundingRules
 {
     private static readonly string[] StopWords = new[]
     {

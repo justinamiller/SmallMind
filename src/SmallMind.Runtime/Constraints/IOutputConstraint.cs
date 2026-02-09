@@ -4,7 +4,7 @@ namespace SmallMind.Runtime.Constraints
     /// Interface for output constraints that guide structured generation.
     /// Implementations enforce specific output formats (JSON, regex patterns, etc).
     /// </summary>
-    public interface IOutputConstraint
+    internal interface IOutputConstraint
     {
         /// <summary>
         /// Determines whether a candidate token is allowed given the current generation state.

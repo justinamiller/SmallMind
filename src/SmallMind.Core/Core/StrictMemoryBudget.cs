@@ -8,7 +8,7 @@ namespace SmallMind.Core.Core
     /// Unlike advisory limits, strict budgets reject operations that would exceed limits.
     /// Designed for production environments requiring predictable resource usage.
     /// </summary>
-    public sealed class StrictMemoryBudget
+    internal sealed class StrictMemoryBudget
     {
         /// <summary>
         /// Gets the hard maximum memory limit in bytes.

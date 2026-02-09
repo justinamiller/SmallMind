@@ -11,7 +11,7 @@ namespace SmallMind.Core.Core
     /// Supports basic operations needed for neural networks.
     /// Now supports chunked storage for tensors exceeding int.MaxValue elements.
     /// </summary>
-    public class Tensor : IDisposable
+    internal class Tensor : IDisposable
     {
         public float[] Data { get; private set; }
         public int[] Shape { get; private set; }
@@ -1042,7 +1042,7 @@ namespace SmallMind.Core.Core
     /// Use for temporary/scratch tensors only. DO NOT use for model weights.
     /// The backing array may be larger than the logical size to leverage pooling.
     /// </summary>
-    public sealed class PooledTensor : Tensor, IDisposable
+    internal sealed class PooledTensor : Tensor, IDisposable
     {
         private readonly int _capacity;
         private bool _disposed;
@@ -1080,7 +1080,7 @@ namespace SmallMind.Core.Core
     /// Usage: using var scope = new TensorScope();
     ///        var temp = scope.Rent(shape);
     /// </summary>
-    public sealed class TensorScope : IDisposable
+    internal sealed class TensorScope : IDisposable
     {
         private readonly System.Collections.Generic.List<PooledTensor> _tensors = new();
         

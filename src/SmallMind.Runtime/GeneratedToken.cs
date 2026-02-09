@@ -3,7 +3,7 @@ namespace SmallMind.Runtime
     /// <summary>
     /// Reason why text generation finished.
     /// </summary>
-    public enum FinishReason
+    internal enum FinishReason
     {
         /// <summary>
         /// Generation is not yet complete (used during streaming).
@@ -45,7 +45,7 @@ namespace SmallMind.Runtime
     /// Represents a single generated token with metadata.
     /// Used in streaming generation APIs.
     /// </summary>
-    public readonly struct GeneratedToken
+    internal readonly struct GeneratedToken
     {
         /// <summary>
         /// The token ID from the vocabulary.

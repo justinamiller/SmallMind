@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Telemetry;
 /// <summary>
 /// Defines the contract for recording RAG metrics.
 /// </summary>
-public interface IRagMetrics
+internal interface IRagMetrics
 {
     /// <summary>
     /// Increments the ingestion operation counter.

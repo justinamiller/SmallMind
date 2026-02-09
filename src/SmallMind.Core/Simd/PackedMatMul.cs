@@ -18,7 +18,7 @@ namespace SmallMind.Core.Simd
     /// Expected improvement: 1.3-1.8x vs naive tiled MatMul on reused weights
     /// </summary>
     [SkipLocalsInit]
-    public static class PackedMatMul
+    internal static class PackedMatMul
     {
         // Cache-friendly block sizes (tuned for typical L1=32KB, L2=256KB)
         private const int MC = 256;  // M-dimension blocking for L2 cache
@@ -37,7 +37,7 @@ namespace SmallMind.Core.Simd
         /// Layout: [NC panels] -> [KC blocks] -> [NR columns] -> [KC rows]
         /// Ensures microkernel accesses B sequentially (optimal cache line usage).
         /// </summary>
-        public sealed class PackedMatrix : IDisposable
+        internal sealed class PackedMatrix : IDisposable
         {
             internal readonly float[] _data;  // Made internal for access
             private readonly int _rows;

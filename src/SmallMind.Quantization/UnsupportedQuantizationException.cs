@@ -5,7 +5,7 @@ namespace SmallMind.Quantization
     /// <summary>
     /// Exception thrown when an unsupported quantization type or operation is encountered.
     /// </summary>
-    public class UnsupportedQuantizationException : NotSupportedException
+    internal class UnsupportedQuantizationException : NotSupportedException
     {
         /// <summary>
         /// Initializes a new instance of the UnsupportedQuantizationException class.

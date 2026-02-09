@@ -8,7 +8,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Formats performance metrics for output (text or JSON).
     /// </summary>
-    public static class MetricsFormatter
+    internal static class MetricsFormatter
     {
         /// <summary>
         /// Format metrics as human-readable text (llama-style output).
@@ -155,7 +155,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Result from a single benchmark run configuration.
     /// </summary>
-    public sealed class BenchmarkResult
+    internal sealed class BenchmarkResult
     {
         public int Concurrency { get; set; }
         public int MaxTokens { get; set; }

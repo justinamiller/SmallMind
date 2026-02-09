@@ -10,7 +10,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// Sentiment analysis model implementation.
     /// Classifies text as Positive, Negative, or Neutral.
     /// </summary>
-    public class SentimentAnalysisModel : ISentimentAnalysisModel
+    internal class SentimentAnalysisModel : ISentimentAnalysisModel
     {
         private readonly TransformerModel _model;
         private readonly ITokenizer _tokenizer;

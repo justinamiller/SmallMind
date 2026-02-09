@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.Metrics
     /// <summary>
     /// Utilities for computing model quality metrics.
     /// </summary>
-    public static class MetricsComputer
+    internal static class MetricsComputer
     {
         /// <summary>
         /// Compute token-level prediction accuracy.

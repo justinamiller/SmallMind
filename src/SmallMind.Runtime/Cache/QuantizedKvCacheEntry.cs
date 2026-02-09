@@ -7,7 +7,7 @@ namespace SmallMind.Runtime.Cache
     /// KV cache entry with quantized storage for memory efficiency.
     /// Supports FP16 (2x reduction) and INT8 (4x reduction).
     /// </summary>
-    public sealed class QuantizedKvCacheEntry : IDisposable
+    internal sealed class QuantizedKvCacheEntry : IDisposable
     {
         private readonly SessionId _sessionId;
         private readonly ModelShape _modelShape;

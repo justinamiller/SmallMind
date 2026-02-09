@@ -6,7 +6,7 @@ namespace SmallMind.Core.Core
     /// Result of a memory budget pre-flight check.
     /// Indicates whether an operation can proceed within budget constraints.
     /// </summary>
-    public sealed class BudgetCheckResult
+    internal sealed class BudgetCheckResult
     {
         /// <summary>
         /// Gets whether the operation can proceed within budget.
@@ -108,7 +108,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Detailed breakdown of memory requirements.
     /// </summary>
-    public readonly struct MemoryBreakdown : IEquatable<MemoryBreakdown>
+    internal readonly struct MemoryBreakdown : IEquatable<MemoryBreakdown>
     {
         /// <summary>
         /// Memory for model parameters in bytes.

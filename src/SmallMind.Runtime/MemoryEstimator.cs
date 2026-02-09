@@ -6,7 +6,7 @@ namespace SmallMind.Runtime
     /// Utilities for estimating memory usage of inference operations.
     /// Provides rough estimates for capacity planning without running actual inference.
     /// </summary>
-    public static class MemoryEstimator
+    internal static class MemoryEstimator
     {
         private const int FloatSize = sizeof(float);
         private const int IntSize = sizeof(int);

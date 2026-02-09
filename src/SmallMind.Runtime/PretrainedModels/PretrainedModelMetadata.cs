@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Extension methods for ModelMetadata to support pre-trained model information.
     /// </summary>
-    public static class PretrainedModelMetadata
+    internal static class PretrainedModelMetadata
     {
         private const string TaskTypeKey = "TaskType";
         private const string DomainTypeKey = "DomainType";

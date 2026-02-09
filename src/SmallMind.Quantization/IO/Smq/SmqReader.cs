@@ -10,7 +10,7 @@ namespace SmallMind.Quantization.IO.Smq
     /// <summary>
     /// Reads quantized tensors from SMQ binary format.
     /// </summary>
-    public sealed class SmqReader : IDisposable
+    internal sealed class SmqReader : IDisposable
     {
         private readonly Stream _stream;
         private readonly BinaryReader _reader;

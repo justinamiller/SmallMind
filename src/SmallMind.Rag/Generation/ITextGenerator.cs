@@ -8,7 +8,7 @@ namespace SmallMind.Rag.Generation
     /// Interface for text generation from prompts.
     /// Allows plugging in different LLM backends (SmallMind, OpenAI, etc.)
     /// </summary>
-    public interface ITextGenerator
+    internal interface ITextGenerator
     {
         /// <summary>
         /// Generates text from the given prompt.
@@ -37,7 +37,7 @@ namespace SmallMind.Rag.Generation
     /// <summary>
     /// Options for text generation.
     /// </summary>
-    public sealed class GenerationOptions
+    internal sealed class GenerationOptions
     {
         /// <summary>
         /// Maximum number of tokens to generate.

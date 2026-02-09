@@ -9,7 +9,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Represents a labeled text sample for training.
     /// </summary>
-    public class LabeledSample
+    internal class LabeledSample
     {
         /// <summary>
         /// Unique identifier for this sample.
@@ -36,7 +36,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// Utility for loading pre-labeled datasets for training and fine-tuning.
     /// Supports both JSONL (preferred) and legacy pipe-delimited formats.
     /// </summary>
-    public static class DatasetLoader
+    internal static class DatasetLoader
     {
         /// <summary>
         /// Load sentiment analysis dataset from a file.

@@ -6,7 +6,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Gradient checkpointing strategy selection
     /// </summary>
-    public enum CheckpointStrategy
+    internal enum CheckpointStrategy
     {
         None,           // Store all: fastest, highest memory
         EveryLayer,     // Checkpoint all: slowest, lowest memory  
@@ -18,12 +18,12 @@ namespace SmallMind.Core.Core
     /// Gradient checkpointing utilities for memory-efficient training.
     /// Trades compute for memory by recomputing activations during backward pass.
     /// </summary>
-    public static class GradientCheckpointing
+    internal static class GradientCheckpointing
     {
         /// <summary>
         /// Calculate optimal checkpoint interval based on available memory
         /// </summary>
-        public static int GetOptimalCheckpointInterval(
+        internal static int GetOptimalCheckpointInterval(
             int numLayers, 
             long availableMemoryBytes, 
             long perLayerBytes,
@@ -85,7 +85,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Checkpoint manager for transformer layers
     /// </summary>
-    public sealed class CheckpointManager
+    internal sealed class CheckpointManager
     {
         private readonly Dictionary<int, Tensor> _checkpoints;
         private readonly int _checkpointInterval;

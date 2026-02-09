@@ -3,7 +3,7 @@ namespace SmallMind.Tokenizers
     /// <summary>
     /// Specifies the type of tokenizer to use.
     /// </summary>
-    public enum TokenizerKind
+    internal enum TokenizerKind
     {
         /// <summary>
         /// Character-level tokenizer (simple, works with any text).

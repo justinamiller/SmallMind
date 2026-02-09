@@ -5,7 +5,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Base interface for learning rate schedulers
     /// </summary>
-    public interface ILearningRateScheduler
+    internal interface ILearningRateScheduler
     {
         /// <summary>
         /// Get the learning rate for the current step
@@ -18,7 +18,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Constant learning rate (no scheduling)
     /// </summary>
-    public class ConstantLR : ILearningRateScheduler
+    internal class ConstantLR : ILearningRateScheduler
     {
         private readonly float _lr;
 
@@ -40,7 +40,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Linear warmup followed by constant learning rate
     /// </summary>
-    public class WarmupLR : ILearningRateScheduler
+    internal class WarmupLR : ILearningRateScheduler
     {
         private readonly float _baseLr;
         private readonly int _warmupSteps;
@@ -72,7 +72,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Cosine annealing learning rate schedule with warmup
     /// </summary>
-    public class CosineAnnealingLR : ILearningRateScheduler
+    internal class CosineAnnealingLR : ILearningRateScheduler
     {
         private readonly float _baseLr;
         private readonly float _minLr;
@@ -123,7 +123,7 @@ namespace SmallMind.Core.Core
     /// Step decay learning rate schedule with warmup
     /// Reduces learning rate by a factor at specified intervals
     /// </summary>
-    public class StepDecayLR : ILearningRateScheduler
+    internal class StepDecayLR : ILearningRateScheduler
     {
         private readonly float _baseLr;
         private readonly float _decayFactor;
@@ -166,7 +166,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Exponential decay learning rate schedule with warmup
     /// </summary>
-    public class ExponentialDecayLR : ILearningRateScheduler
+    internal class ExponentialDecayLR : ILearningRateScheduler
     {
         private readonly float _baseLr;
         private readonly float _decayRate;
@@ -206,7 +206,7 @@ namespace SmallMind.Core.Core
     /// One-cycle learning rate schedule (triangular policy)
     /// Increases learning rate to max, then decreases to min over total steps
     /// </summary>
-    public class OneCycleLR : ILearningRateScheduler
+    internal class OneCycleLR : ILearningRateScheduler
     {
         private readonly float _maxLr;
         private readonly float _minLr;

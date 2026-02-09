@@ -6,7 +6,7 @@ namespace SmallMind.Rag.Retrieval;
 /// <summary>
 /// Hybrid retriever that combines BM25 sparse retrieval with dense vector retrieval.
 /// </summary>
-public sealed class HybridRetriever
+internal sealed class HybridRetriever
 {
     private readonly Bm25Retriever _bm25;
     private readonly DenseRetriever _dense;

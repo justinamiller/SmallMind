@@ -9,7 +9,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Represents a loaded pretrained data pack.
     /// </summary>
-    public class PretrainedPack
+    internal class PretrainedPack
     {
         /// <summary>
         /// Pack manifest metadata.
@@ -153,7 +153,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Category definitions for classification tasks.
     /// </summary>
-    public class CategoryDefinitions
+    internal class CategoryDefinitions
     {
         /// <summary>
         /// List of categories.
@@ -171,7 +171,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Definition of a single category.
     /// </summary>
-    public class CategoryDefinition
+    internal class CategoryDefinition
     {
         /// <summary>
         /// Category identifier.

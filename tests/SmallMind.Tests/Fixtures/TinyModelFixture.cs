@@ -10,7 +10,7 @@ namespace SmallMind.Tests.Fixtures
     /// Models are small enough to run quickly in CI (<1 second per test)
     /// but large enough to exercise all code paths.
     /// </summary>
-    public sealed class TinyModelFixture
+    internal sealed class TinyModelFixture
     {
         // Model configuration constants
         public const int VocabSize = 128;

@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.Cache
     /// <summary>
     /// Utilities for quantizing and dequantizing KV cache data.
     /// </summary>
-    public static class QuantizationHelpers
+    internal static class QuantizationHelpers
     {
         /// <summary>
         /// Quantizes FP32 to INT8 using linear quantization.
