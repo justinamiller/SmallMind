@@ -45,7 +45,7 @@ namespace SmallMind.Quantization.IO.Gguf
                     sb.AppendLine($"  - {name}: {type}");
                 }
                 sb.AppendLine();
-                sb.AppendLine("Supported types: F32, F16, Q8_0, Q4_0");
+                sb.AppendLine("Supported types: F32, F16, Q8_0, Q4_0, Q4_1, Q5_0");
                 throw new UnsupportedQuantizationException(sb.ToString());
             }
 
@@ -103,7 +103,9 @@ namespace SmallMind.Quantization.IO.Gguf
             return type == GgufTensorType.F32 
                 || type == GgufTensorType.F16 
                 || type == GgufTensorType.Q8_0 
-                || type == GgufTensorType.Q4_0;
+                || type == GgufTensorType.Q4_0
+                || type == GgufTensorType.Q4_1
+                || type == GgufTensorType.Q5_0;
         }
 
         /// <summary>
@@ -120,6 +122,8 @@ namespace SmallMind.Quantization.IO.Gguf
                 GgufTensorType.F16 => ConvertF16Tensor(rawData, tensorInfo.Dimensions),
                 GgufTensorType.Q8_0 => ConvertQ8_0Tensor(rawData, tensorInfo.Dimensions),
                 GgufTensorType.Q4_0 => ConvertQ4_0Tensor(rawData, tensorInfo.Dimensions),
+                GgufTensorType.Q4_1 => ConvertQ4_1Tensor(rawData, tensorInfo.Dimensions),
+                GgufTensorType.Q5_0 => ConvertQ5_0Tensor(rawData, tensorInfo.Dimensions),
                 _ => throw new UnsupportedQuantizationException($"Unsupported tensor type: {tensorInfo.Type}")
             };
         }
@@ -353,6 +357,155 @@ namespace SmallMind.Quantization.IO.Gguf
             }
 
             return Q4Tensor.Quantize(floatData, rows, cols, SmqBlockSize);
+        }
+
+        /// <summary>
+        /// Convert GGUF Q4_1 tensor to native Q4_1Tensor.
+        /// GGUF Q4_1 format: block_size=32, each block has fp16 scale + fp16 min + 16 bytes (32 x 4-bit unsigned values).
+        /// Returns native Q4_1Tensor with block_size=32 to preserve quantized format.
+        /// </summary>
+        private Q4_1Tensor ConvertQ4_1Tensor(byte[] rawData, ulong[] dimensions)
+        {
+            // Calculate total elements from dimensions
+            int totalElements = 1;
+            foreach (var dim in dimensions)
+            {
+                totalElements *= (int)dim;
+            }
+            
+            // For tensor, we need rows and cols
+            int rows, cols;
+            if (dimensions.Length == 1)
+            {
+                rows = 1;
+                cols = (int)dimensions[0];
+            }
+            else if (dimensions.Length == 2)
+            {
+                rows = (int)dimensions[0];
+                cols = (int)dimensions[1];
+            }
+            else
+            {
+                // Flatten multi-dimensional tensors to 2D
+                rows = (int)dimensions[0];
+                cols = totalElements / rows;
+            }
+
+            // GGUF uses block size 32 (matches Q4_1 native block size)
+            int numBlocks = (totalElements + GgufBlockSize - 1) / GgufBlockSize;
+
+            // Parse GGUF Q4_1 blocks
+            var data = new byte[(totalElements + 1) / 2];
+            var scales = new float[numBlocks];
+            var mins = new float[numBlocks];
+
+            using (var ms = new MemoryStream(rawData))
+            using (var br = new BinaryReader(ms))
+            {
+                for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
+                {
+                    // Read fp16 scale and convert to fp32
+                    ushort scaleHalf = br.ReadUInt16();
+                    scales[blockIdx] = HalfToFloat(scaleHalf);
+
+                    // Read fp16 min and convert to fp32
+                    ushort minHalf = br.ReadUInt16();
+                    mins[blockIdx] = HalfToFloat(minHalf);
+
+                    // Read 16 bytes (32 x 4-bit unsigned values packed)
+                    int blockStart = blockIdx * GgufBlockSize;
+                    int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
+                    
+                    for (int i = blockStart; i < blockEnd; i += 2)
+                    {
+                        byte packedByte = br.ReadByte();
+                        
+                        // GGUF packs low nibble first, then high nibble
+                        int byteIdx = i / 2;
+                        data[byteIdx] = packedByte;
+                    }
+                }
+            }
+
+            // Return native Q4_1Tensor (no re-quantization needed since block sizes match)
+            return new Q4_1Tensor(rows, cols, data, scales, mins);
+        }
+
+        /// <summary>
+        /// Convert GGUF Q5_0 tensor to native Q5_0Tensor.
+        /// GGUF Q5_0 format: block_size=32, each block has fp16 scale + 4 bytes high bits + 16 bytes low nibbles.
+        /// Returns native Q5_0Tensor with block_size=32 to preserve quantized format.
+        /// </summary>
+        private Q5_0Tensor ConvertQ5_0Tensor(byte[] rawData, ulong[] dimensions)
+        {
+            // Calculate total elements from dimensions
+            int totalElements = 1;
+            foreach (var dim in dimensions)
+            {
+                totalElements *= (int)dim;
+            }
+            
+            // For tensor, we need rows and cols
+            int rows, cols;
+            if (dimensions.Length == 1)
+            {
+                rows = 1;
+                cols = (int)dimensions[0];
+            }
+            else if (dimensions.Length == 2)
+            {
+                rows = (int)dimensions[0];
+                cols = (int)dimensions[1];
+            }
+            else
+            {
+                // Flatten multi-dimensional tensors to 2D
+                rows = (int)dimensions[0];
+                cols = totalElements / rows;
+            }
+
+            // GGUF uses block size 32 (matches Q5_0 native block size)
+            int numBlocks = (totalElements + GgufBlockSize - 1) / GgufBlockSize;
+
+            // Parse GGUF Q5_0 blocks
+            var dataLow = new byte[(totalElements + 1) / 2];
+            var dataHigh = new byte[numBlocks * 4];
+            var scales = new float[numBlocks];
+
+            using (var ms = new MemoryStream(rawData))
+            using (var br = new BinaryReader(ms))
+            {
+                for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
+                {
+                    // Read fp16 scale and convert to fp32
+                    ushort scaleHalf = br.ReadUInt16();
+                    scales[blockIdx] = HalfToFloat(scaleHalf);
+
+                    // Read 4 bytes of high bits (32 bits, 1 per value)
+                    int highByteStart = blockIdx * 4;
+                    dataHigh[highByteStart + 0] = br.ReadByte();
+                    dataHigh[highByteStart + 1] = br.ReadByte();
+                    dataHigh[highByteStart + 2] = br.ReadByte();
+                    dataHigh[highByteStart + 3] = br.ReadByte();
+
+                    // Read 16 bytes (32 x 4-bit low nibbles packed)
+                    int blockStart = blockIdx * GgufBlockSize;
+                    int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
+                    
+                    for (int i = blockStart; i < blockEnd; i += 2)
+                    {
+                        byte packedByte = br.ReadByte();
+                        
+                        // GGUF packs low nibble first, then high nibble
+                        int byteIdx = i / 2;
+                        dataLow[byteIdx] = packedByte;
+                    }
+                }
+            }
+
+            // Return native Q5_0Tensor (no re-quantization needed since block sizes match)
+            return new Q5_0Tensor(rows, cols, dataLow, dataHigh, scales);
         }
 
         /// <summary>
