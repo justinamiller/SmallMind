@@ -4,13 +4,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET Version](https://img.shields.io/badge/.NET-10.0%2B-512BD4)](https://dotnet.microsoft.com/download)
 
-SmallMind is a **production-ready, open source, local, CPU-first LLM inference runtime** built entirely in C# (.NET 10+) with **NO 3rd party dependencies**. It provides a stable public API (`SmallMind.Public`) for running decoder-only Transformers (GPT-style) on your infrastructure.
+SmallMind is a **production-ready, open source, local, CPU-first LLM inference runtime** built entirely in C# (.NET 10+) with **NO 3rd party dependencies**. It provides a stable public API (`SmallMind`) for running decoder-only Transformers (GPT-style) on your infrastructure.
 
 ## Project Intent
 
 **SmallMind is designed for production-grade local inference, not training at scale.**
 
-The **stable public API** (`SmallMind.Public` namespace) is the recommended adoption surface for:
+The **stable public API** (`SmallMind` namespace) is the recommended adoption surface for:
 - Loading models for inference (`.smq`, `.gguf` import)
 - Text generation with streaming and cancellation
 - Session-based inference with state management
@@ -26,7 +26,7 @@ See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guaran
 
 - ✅ **Zero Dependencies**: No black-box libraries - full control over your inference stack
 - ✅ **Local & Private**: Runs entirely on your infrastructure, no external API calls
-- ✅ **Stable Public API**: Semantic versioning with clear stability guarantees (`SmallMind.Public` namespace)
+- ✅ **Stable Public API**: Semantic versioning with clear stability guarantees (`SmallMind` namespace)
 - ✅ **Performance Optimized**: SIMD acceleration, quantization (Q8/Q4), KV caching
 - ✅ **Production Ready**: Resource governance, budgets, deterministic mode, diagnostics
 - ✅ **Platform Native**: Pure .NET - runs on Windows, Linux, macOS, containers
@@ -85,7 +85,7 @@ See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guaran
 
 ```bash
 # Stable public API (recommended for production)
-dotnet add package SmallMind.Public
+dotnet add package SmallMind
 
 # Optional: Core libraries for advanced scenarios
 dotnet add package SmallMind.Core        # Tensor operations, SIMD
@@ -114,7 +114,7 @@ dotnet test SmallMind.sln -c Release
 ## Quick Start (Stable API)
 
 ```csharp
-using SmallMind.Public;
+using SmallMind;
 
 // Create engine with model loaded
 var options = new SmallMindOptions
@@ -186,7 +186,7 @@ await foreach (var token in session.GenerateStreaming(request))
 
 ## Key Features
 
-### 🔒 Stable Public API (`SmallMind.Public`)
+### 🔒 Stable Public API (`SmallMind`)
 
 Use the **stable contract** for production deployments:
 - **Single entry point**: `SmallMindFactory.Create(options)`
