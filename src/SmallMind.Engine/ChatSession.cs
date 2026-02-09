@@ -21,7 +21,7 @@ namespace SmallMind.Engine
     /// <summary>
     /// Context budget information for a chat session.
     /// </summary>
-    public readonly struct ContextBudget
+    internal readonly struct ContextBudget
     {
         /// <summary>Maximum context tokens (model.BlockSize).</summary>
         public readonly int MaxContextTokens;

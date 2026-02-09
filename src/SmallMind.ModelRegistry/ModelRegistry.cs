@@ -12,7 +12,7 @@ namespace SmallMind.ModelRegistry
     /// <summary>
     /// Manages model registration, caching, and verification.
     /// </summary>
-    public sealed class ModelRegistry
+    internal sealed class ModelRegistry
     {
         private readonly string _cacheRoot;
         private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
@@ -381,7 +381,7 @@ namespace SmallMind.ModelRegistry
     /// <summary>
     /// Result of model verification.
     /// </summary>
-    public sealed class ModelVerificationResult
+    internal sealed class ModelVerificationResult
     {
         /// <summary>
         /// Gets or sets the model ID.

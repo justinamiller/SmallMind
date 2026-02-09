@@ -7,7 +7,7 @@ namespace SmallMind.ModelRegistry
     /// <summary>
     /// Manifest describing a cached model.
     /// </summary>
-    public sealed class ModelManifest
+    internal sealed class ModelManifest
     {
         /// <summary>
         /// Gets or sets the unique model identifier.
@@ -73,7 +73,7 @@ namespace SmallMind.ModelRegistry
     /// <summary>
     /// Represents a file entry in the model manifest.
     /// </summary>
-    public sealed class ModelFileEntry
+    internal sealed class ModelFileEntry
     {
         /// <summary>
         /// Gets or sets the relative file path within the model directory.

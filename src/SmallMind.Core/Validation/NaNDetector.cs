@@ -9,7 +9,7 @@ namespace SmallMind.Core.Validation
     /// Efficient NaN and Infinity detection for tensor operations.
     /// Uses SIMD intrinsics for high-performance validation.
     /// </summary>
-    public static class NaNDetector
+    internal static class NaNDetector
     {
         /// <summary>
         /// Checks if any element in the span is NaN or Infinity.

@@ -11,7 +11,7 @@ namespace SmallMind.Core.Validation
     /// <summary>
     /// Provides guard clauses for input validation across SmallMind.
     /// </summary>
-    public static class Guard
+    internal static class Guard
     {
         /// <summary>
         /// Throws <see cref="ValidationException"/> if the value is null.
