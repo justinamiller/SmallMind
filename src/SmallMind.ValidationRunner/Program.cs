@@ -335,9 +335,9 @@ namespace SmallMind.ValidationRunner
                 quantTypes[typeName]++;
                 
                 // Estimate tensor size
-                var elements = tensor.Shape.Aggregate(1L, (a, b) => a * b);
+                var elements = tensor.Dimensions.Aggregate(1UL, (a, b) => a * b);
                 var bytesPerElement = GetBytesPerElement(tensor.Type);
-                totalBytes += elements * bytesPerElement;
+                totalBytes += (long)(elements * (ulong)bytesPerElement);
             }
             
             Console.WriteLine("Quantization Distribution:");
@@ -361,23 +361,23 @@ namespace SmallMind.ValidationRunner
             }
         }
 
-        static long GetBytesPerElement(GgmlType type)
+        static long GetBytesPerElement(GgufTensorType type)
         {
             return type switch
             {
-                GgmlType.F32 => 4,
-                GgmlType.F16 => 2,
-                GgmlType.Q4_0 => 1, // Approximate (actually 4.5 bits)
-                GgmlType.Q4_1 => 1,
-                GgmlType.Q5_0 => 1,
-                GgmlType.Q5_1 => 1,
-                GgmlType.Q8_0 => 1,
-                GgmlType.Q8_1 => 1,
-                GgmlType.Q2_K => 1,
-                GgmlType.Q3_K => 1,
-                GgmlType.Q4_K => 1,
-                GgmlType.Q5_K => 1,
-                GgmlType.Q6_K => 1,
+                GgufTensorType.F32 => 4,
+                GgufTensorType.F16 => 2,
+                GgufTensorType.Q4_0 => 1, // Approximate (actually 4.5 bits)
+                GgufTensorType.Q4_1 => 1,
+                GgufTensorType.Q5_0 => 1,
+                GgufTensorType.Q5_1 => 1,
+                GgufTensorType.Q8_0 => 1,
+                GgufTensorType.Q8_1 => 1,
+                GgufTensorType.Q2_K => 1,
+                GgufTensorType.Q3_K => 1,
+                GgufTensorType.Q4_K => 1,
+                GgufTensorType.Q5_K => 1,
+                GgufTensorType.Q6_K => 1,
                 _ => 4
             };
         }
@@ -392,7 +392,7 @@ namespace SmallMind.ValidationRunner
                 var tensor = modelInfo.Tensors.FirstOrDefault(t => t.Name.EndsWith(weightName));
                 if (tensor != null)
                 {
-                    Console.WriteLine($"{tensor.Name}: shape={string.Join("x", tensor.Shape)}, type={tensor.Type}");
+                    Console.WriteLine($"{tensor.Name}: shape={string.Join("x", tensor.Dimensions)}, type={tensor.Type}");
                     // Note: Actual weight values would require reading from file
                 }
             }
@@ -728,7 +728,7 @@ namespace SmallMind.ValidationRunner
                     MaxNewTokens = maxTokens,
                     MaxContextTokens = model.BlockSize,
                     Seed = _seed,
-                    StopSequences = new List<string> { "\n\n", "<|" }
+                    StopSequences = new[] { "\n\n", "<|" }
                 };
 
                 using var session = new InferenceSession(model, tokenizer, options, model.BlockSize);
