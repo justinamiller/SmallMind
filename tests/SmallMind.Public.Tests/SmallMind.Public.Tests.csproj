@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SmallMind.Public\SmallMind.Public.csproj" />
+    <ProjectReference Include="..\..\src\SmallMind\SmallMind.csproj" />
   </ItemGroup>
 
 </Project>
