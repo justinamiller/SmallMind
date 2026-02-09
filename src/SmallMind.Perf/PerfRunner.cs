@@ -233,7 +233,7 @@ public class PerfRunner
         var options = new ProductionInferenceOptions
         {
             MaxNewTokens = _maxNewTokens,
-            Temperature = _deterministicMode ? 0.0 : 1.0,
+            Temperature = _deterministicMode ? 0.01 : 1.0, // Use very low temp for deterministic, not 0
             Seed = _deterministicMode ? _seed : null
         };
 
