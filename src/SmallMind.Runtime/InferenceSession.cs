@@ -995,13 +995,6 @@ namespace SmallMind.Runtime
         }
         
         /// <summary>
-                {
-                    probs[i] /= sum;
-                }
-            }
-        }
-        
-        /// <summary>
         /// Apply output constraints to mask disallowed tokens (Phase 5).
         /// Modifies logits in-place by setting disallowed tokens to -infinity.
         /// </summary>
