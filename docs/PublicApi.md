@@ -20,7 +20,7 @@ This document provides quick reference examples for using the stable public API 
 
 ```bash
 # Stable public API (recommended for production)
-dotnet add package SmallMind.Public
+dotnet add package SmallMind
 ```
 
 ### From Source
@@ -40,7 +40,7 @@ SmallMind supports loading models in `.smq` format (SmallMind's native format) a
 ### Basic Model Loading
 
 ```csharp
-using SmallMind.Public;
+using SmallMind;
 
 // Configure engine options
 var options = new SmallMindOptions

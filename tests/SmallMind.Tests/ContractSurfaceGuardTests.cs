@@ -5,6 +5,7 @@ using System.Reflection;
 using Xunit;
 using SmallMind.Abstractions;
 using SmallMind.Core.Core;
+using AbstractionsEngine = SmallMind.Abstractions.ISmallMindEngine;
 
 namespace SmallMind.Tests
 {
@@ -109,7 +110,7 @@ namespace SmallMind.Tests
         public void SmallMindAbstractions_OnlyContainsAllowedPublicTypes()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
             var publicTypes = assembly.GetTypes()
                 .Where(t => t.IsPublic && t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .Select(t => t.FullName)
@@ -136,7 +137,7 @@ namespace SmallMind.Tests
         public void SmallMindAbstractions_AllPublicTypesAreNotCompilerGenerated()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
             var publicTypes = assembly.GetTypes()
                 .Where(t => t.IsPublic && t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .ToList();
@@ -160,7 +161,7 @@ namespace SmallMind.Tests
         public void SmallMindAbstractions_AllPublicInterfacesFollowNamingConvention()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
             var publicInterfaces = assembly.GetTypes()
                 .Where(t => t.IsPublic && 
                            t.IsInterface && 
@@ -181,7 +182,7 @@ namespace SmallMind.Tests
         public void SmallMindAbstractions_AllPublicExceptionsInheritFromSmallMindException()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
             var publicExceptions = assembly.GetTypes()
                 .Where(t => t.IsPublic && 
                            typeof(Exception).IsAssignableFrom(t) &&
@@ -231,7 +232,7 @@ namespace SmallMind.Tests
         public void SmallMindAbstractions_PublicDtosAreSealed()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
             var publicClasses = assembly.GetTypes()
                 .Where(t => t.IsPublic && 
                            t.IsClass && 
@@ -254,7 +255,7 @@ namespace SmallMind.Tests
         public void SmallMindAbstractions_EnumsAreProperlyDefined()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
             var publicEnums = assembly.GetTypes()
                 .Where(t => t.IsPublic && 
                            t.IsEnum && 
@@ -283,7 +284,7 @@ namespace SmallMind.Tests
         public void SmallMindAbstractions_NoPublicFields()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
             var publicTypes = assembly.GetTypes()
                 .Where(t => t.IsPublic && t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .ToList();
@@ -331,7 +332,7 @@ namespace SmallMind.Tests
         public void VersionAssemblyAttribute_IsPresent()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
 
             // Act
             var version = assembly.GetName().Version;
@@ -345,7 +346,7 @@ namespace SmallMind.Tests
         public void SmallMindAbstractions_CountPublicTypes()
         {
             // Arrange
-            var assembly = typeof(ISmallMindEngine).Assembly;
+            var assembly = typeof(AbstractionsEngine).Assembly;
             var publicTypeCount = assembly.GetTypes()
                 .Count(t => t.IsPublic && t.Namespace?.StartsWith("SmallMind.Abstractions") == true);
 

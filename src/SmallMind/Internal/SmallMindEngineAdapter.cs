@@ -5,7 +5,7 @@ using System.Threading;
 using SmallMind.Abstractions;
 using SmallMind.Engine;
 
-namespace SmallMind.Public.Internal
+namespace SmallMind.Internal
 {
     /// <summary>
     /// Internal adapter that bridges the stable public API to the existing SmallMind engine.

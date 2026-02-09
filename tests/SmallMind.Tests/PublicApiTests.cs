@@ -1,8 +1,8 @@
 using Xunit;
-using SmallMind.Public;
+using SmallMind;
 using System;
 
-namespace SmallMind.Public.Tests
+namespace SmallMind.Tests
 {
     /// <summary>
     /// Tests for SmallMindOptions validation.
@@ -157,7 +157,7 @@ namespace SmallMind.Public.Tests
     /// <summary>
     /// Tests for exception hierarchy.
     /// </summary>
-    public class ExceptionTests
+    public class PublicApiExceptionTests
     {
         [Fact]
         public void SmallMindException_HasCorrectErrorCode()

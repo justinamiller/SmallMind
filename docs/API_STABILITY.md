@@ -2,13 +2,13 @@
 
 ## Overview
 
-SmallMind provides a **stable public API contract** through the `SmallMind.Public` namespace. This document defines what is stable, how versioning works, and what guarantees you can expect.
+SmallMind provides a **stable public API contract** through the `SmallMind` namespace. This document defines what is stable, how versioning works, and what guarantees you can expect.
 
 ## What is Stable?
 
 ### Stable (Public Contract)
 
-Everything in the `SmallMind.Public` namespace is considered **stable** and follows semantic versioning guarantees:
+Everything in the `SmallMind` namespace is considered **stable** and follows semantic versioning guarantees:
 
 - **Interfaces**: `ISmallMindEngine`, `ITextGenerationSession`, `IEmbeddingSession`
 - **Factory**: `SmallMindFactory.Create()`
@@ -18,16 +18,16 @@ Everything in the `SmallMind.Public` namespace is considered **stable** and foll
 - **Capabilities**: `EngineCapabilities`
 - **Diagnostics**: `ISmallMindDiagnosticsSink`, `SmallMindDiagnosticEvent`
 
-**Guarantee**: Code written against `SmallMind.Public` will not break between minor versions (e.g., 1.0 → 1.1).
+**Guarantee**: Code written against `SmallMind` will not break between minor versions (e.g., 1.0 → 1.1).
 
 ### Internal (Not Stable)
 
-Everything **outside** `SmallMind.Public` is considered **internal** and may change without notice:
+Everything **outside** `SmallMind` is considered **internal** and may change without notice:
 
 - `SmallMind.Core`
 - `SmallMind.Transformers`
 - `SmallMind.Runtime`
-- `SmallMind.Abstractions` (used by SmallMind.Public internally)
+- `SmallMind.Abstractions` (used by SmallMind internally)
 - `SmallMind.Engine` (facade implementation)
 - All other namespaces
 
@@ -121,7 +121,7 @@ public ITextGenerationSession CreateSession(...) { ... }
 
 ```bash
 # Upgrade from 1.0 to 1.1 (safe, no code changes needed)
-dotnet add package SmallMind.Public --version 1.1.0
+dotnet add package SmallMind --version 1.1.0
 ```
 
 Your code will continue to work. Review release notes for new features.
@@ -130,7 +130,7 @@ Your code will continue to work. Review release notes for new features.
 
 ```bash
 # Upgrade from 1.x to 2.0 (review breaking changes first)
-dotnet add package SmallMind.Public --version 2.0.0
+dotnet add package SmallMind --version 2.0.0
 ```
 
 **Before upgrading:**
@@ -177,7 +177,7 @@ dotnet add package SmallMind.Public --version 2.0.0
 
 If you're unsure whether an API is stable:
 
-1. **Check the namespace**: If it's in `SmallMind.Public`, it's stable
+1. **Check the namespace**: If it's in `SmallMind`, it's stable
 2. **Check the documentation**: Stable APIs have complete XML docs
 3. **Ask**: Open an issue on GitHub
 

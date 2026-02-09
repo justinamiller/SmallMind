@@ -2,6 +2,7 @@ using System;
 using Xunit;
 using SmallMind.Core.Exceptions;
 using SmallMind.Runtime;
+using CoreSmallMindException = SmallMind.Core.Exceptions.SmallMindException;
 
 namespace SmallMind.Tests
 {
@@ -159,7 +160,7 @@ namespace SmallMind.Tests
 
         #endregion
 
-        #region SmallMindException Base Tests
+        #region CoreSmallMindException Base Tests
 
         [Fact]
         public void SmallMindException_CanBeUsedAsBaseException()
@@ -169,7 +170,7 @@ namespace SmallMind.Tests
             const string errorCode = "CUSTOM_ERROR";
 
             // Act
-            var exception = new SmallMindException(message, errorCode);
+            var exception = new CoreSmallMindException(message, errorCode);
 
             // Assert
             Assert.Equal(message, exception.Message);
@@ -185,7 +186,7 @@ namespace SmallMind.Tests
             var context = new { Layer = "attention", Index = 3 };
 
             // Act
-            var exception = new SmallMindException(message, errorCode);
+            var exception = new CoreSmallMindException(message, errorCode);
             exception.Data["Context"] = context;
 
             // Assert
@@ -200,10 +201,10 @@ namespace SmallMind.Tests
         public void AllCustomExceptions_InheritFromSmallMindException()
         {
             // Assert
-            Assert.IsAssignableFrom<SmallMindException>(new ValidationException("test", "param"));
-            Assert.IsAssignableFrom<SmallMindException>(new ShapeMismatchException("test", new[] { 1 }, new[] { 2 }));
-            Assert.IsAssignableFrom<SmallMindException>(new CheckpointException("test", "path"));
-            Assert.IsAssignableFrom<SmallMindException>(new TrainingException("test", 1));
+            Assert.IsAssignableFrom<CoreSmallMindException>(new ValidationException("test", "param"));
+            Assert.IsAssignableFrom<CoreSmallMindException>(new ShapeMismatchException("test", new[] { 1 }, new[] { 2 }));
+            Assert.IsAssignableFrom<CoreSmallMindException>(new CheckpointException("test", "path"));
+            Assert.IsAssignableFrom<CoreSmallMindException>(new TrainingException("test", 1));
         }
 
         [Fact]
@@ -242,7 +243,7 @@ namespace SmallMind.Tests
         public void Exception_HasExpectedErrorCode(Type exceptionType, string expectedCode)
         {
             // Arrange & Act
-            SmallMindException exception = exceptionType.Name switch
+            CoreSmallMindException exception = exceptionType.Name switch
             {
                 nameof(ValidationException) => new ValidationException("test", "param"),
                 nameof(ShapeMismatchException) => new ShapeMismatchException("test", new[] { 1 }, new[] { 2 }),

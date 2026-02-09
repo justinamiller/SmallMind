@@ -1,6 +1,6 @@
 using System;
 
-namespace SmallMind.Public
+namespace SmallMind
 {
     /// <summary>
     /// Engine capabilities descriptor.

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using SmallMind.Abstractions;
+using EngineSmallMindOptions = SmallMind.Abstractions.SmallMindOptions;
 
 namespace SmallMind.Tests
 {
@@ -14,12 +15,12 @@ namespace SmallMind.Tests
     /// </summary>
     public class RuntimeGuaranteeTests : IDisposable
     {
-        private readonly ISmallMindEngine _engine;
+        private readonly SmallMind.Abstractions.ISmallMindEngine _engine;
         private readonly string _testDataDir;
 
         public RuntimeGuaranteeTests()
         {
-            _engine = Engine.SmallMind.Create(new SmallMindOptions
+            _engine = Engine.SmallMind.Create(new EngineSmallMindOptions
             {
                 EnableKvCache = false,
                 EnableRag = false,

@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using SmallMind.Public;
+using SmallMind;
 using SmallMind.Server;
 using SmallMind.Server.Models;
 using SmallMind.Server.Services;
@@ -368,7 +368,7 @@ app.MapPost("/v1/embeddings", async (
         
         for (int i = 0; i < inputs.Length; i++)
         {
-            var embRequest = new SmallMind.Public.EmbeddingRequest
+            var embRequest = new SmallMind.EmbeddingRequest
             {
                 Input = inputs[i].AsMemory()
             };

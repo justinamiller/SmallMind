@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using SmallMind.Abstractions;
 using SmallMind.Engine;
-using SmallMind.Public;
+using SmallMind;
 
 namespace SmallMind.Examples
 {

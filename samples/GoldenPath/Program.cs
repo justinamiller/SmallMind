@@ -1,12 +1,12 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using SmallMind.Public;
+using SmallMind;
 
 namespace GoldenPath
 {
     /// <summary>
-    /// Golden Path example demonstrating the stable SmallMind.Public API.
+    /// Golden Path example demonstrating the stable SmallMind API.
     /// Shows: engine creation, capabilities check, text generation, streaming, and cancellation.
     /// </summary>
     class Program

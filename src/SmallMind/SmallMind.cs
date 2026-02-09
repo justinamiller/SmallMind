@@ -1,4 +1,4 @@
-namespace SmallMind.Public
+namespace SmallMind
 {
     /// <summary>
     /// Single entry point for creating a SmallMind inference engine.

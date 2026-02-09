@@ -1,6 +1,6 @@
 using System;
 
-namespace SmallMind.Public
+namespace SmallMind
 {
     /// <summary>
     /// Diagnostics sink for observability and instrumentation.

@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using SmallMind.Abstractions;
 
-namespace SmallMind.Public
+namespace SmallMind
 {
     /// <summary>
     /// Level 3 chat client implementation.
