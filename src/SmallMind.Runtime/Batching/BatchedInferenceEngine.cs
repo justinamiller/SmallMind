@@ -387,19 +387,9 @@ namespace SmallMind.Runtime.Batching
                 {
                     logitsLastPooled = ArrayPool<float>.Shared.Rent(vocabSize);
                     int lastPosOffset = (T - 1) * vocabSize;
-                    for (int v = 0; v < vocabSize; v++)
-                    {
-                        logitsLastPooled[v] = logits.Data[lastPosOffset + v];
-                    }
-
-                    // Apply temperature
-                    if (options.Temperature != 1.0)
-                    {
-                        for (int v = 0; v < vocabSize; v++)
-                        {
-                            logitsLastPooled[v] /= (float)options.Temperature;
-                        }
-                    }
+                    
+                    // SIMD-optimized copy and temperature scaling
+                    CopyAndScaleLogits(logits.Data, logitsLastPooled, lastPosOffset, vocabSize, (float)options.Temperature);
 
                     // Copy to exact-size array for remaining operations
                     logitsLast = new float[vocabSize];
@@ -596,6 +586,50 @@ namespace SmallMind.Runtime.Batching
             {
                 session?.Dispose();
                 _executionSemaphore.Release();
+            }
+        }
+
+        /// <summary>
+        /// SIMD-optimized copy and temperature scaling for logits extraction.
+        /// Combines copy and scale into single pass for better cache locality.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void CopyAndScaleLogits(float[] source, float[] dest, int sourceOffset, int length, float temperature)
+        {
+            float invTemp = temperature != 1.0f ? (1.0f / temperature) : 1.0f;
+            int vectorSize = System.Numerics.Vector<float>.Count;
+            int i = 0;
+            
+            if (temperature != 1.0f)
+            {
+                // Copy + scale with SIMD
+                for (; i <= length - vectorSize; i += vectorSize)
+                {
+                    var vec = new System.Numerics.Vector<float>(source, sourceOffset + i);
+                    var scaled = vec * invTemp;
+                    scaled.CopyTo(dest, i);
+                }
+                
+                // Handle remainder
+                for (; i < length; i++)
+                {
+                    dest[i] = source[sourceOffset + i] * invTemp;
+                }
+            }
+            else
+            {
+                // Copy only with SIMD (when temperature == 1.0)
+                for (; i <= length - vectorSize; i += vectorSize)
+                {
+                    var vec = new System.Numerics.Vector<float>(source, sourceOffset + i);
+                    vec.CopyTo(dest, i);
+                }
+                
+                // Handle remainder
+                for (; i < length; i++)
+                {
+                    dest[i] = source[sourceOffset + i];
+                }
             }
         }
 

@@ -381,6 +381,24 @@ namespace SmallMind.Tokenizers
         }
 
         /// <summary>
+        /// Fast-path decode for a single token ID. Avoids List allocation.
+        /// Used internally in hot loops (e.g., constraint checking).
+        /// </summary>
+        internal string DecodeSingleToken(int tokenId)
+        {
+            if (_inverseVocab.TryGetValue(tokenId, out string? token))
+            {
+                return token;
+            }
+            else
+            {
+                throw new TokenizationException(
+                    $"Invalid token ID during decode: {tokenId}\n" +
+                    $"Valid token IDs range from 0 to {_vocab.Count - 1}");
+            }
+        }
+
+        /// <summary>
         /// Gets the token ID for the end-of-text token.
         /// Returns -1 if not present in vocabulary.
         /// </summary>

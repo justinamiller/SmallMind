@@ -429,6 +429,27 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
     }
 
     /// <summary>
+    /// Fast-path decode for a single token ID. Avoids List allocation.
+    /// </summary>
+    internal string DecodeSingleToken(int tokenId)
+    {
+        // Use stack-allocated buffer for single token
+        Span<int> tokenSpan = stackalloc int[1];
+        tokenSpan[0] = tokenId;
+        
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(16); // Most tokens are small
+        try
+        {
+            int byteCount = Decode(tokenSpan, buffer);
+            return Encoding.UTF8.GetString(buffer, 0, byteCount);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
     /// Decode token IDs to string (convenience method).
     /// </summary>
     public string DecodeToString(ReadOnlySpan<int> tokens)

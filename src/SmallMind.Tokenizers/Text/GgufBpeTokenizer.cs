@@ -311,6 +311,37 @@ namespace SmallMind.Tokenizers.Text
         }
 
         /// <summary>
+        /// Fast-path decode for a single token ID. Avoids List allocation.
+        /// </summary>
+        internal string DecodeSingleToken(int tokenId)
+        {
+            if (_inverseVocab.TryGetValue(tokenId, out string? token))
+            {
+                // If byte-level BPE, convert back from special chars to bytes
+                if (_isByteLevelBpe && _charToByte != null)
+                {
+                    var bytes = new List<byte>();
+                    foreach (char c in token)
+                    {
+                        string charStr = c.ToString();
+                        if (_charToByte.TryGetValue(charStr, out byte b))
+                        {
+                            bytes.Add(b);
+                        }
+                        else
+                        {
+                            bytes.AddRange(Encoding.UTF8.GetBytes(charStr));
+                        }
+                    }
+                    return Encoding.UTF8.GetString(bytes.ToArray());
+                }
+                return token;
+            }
+            // Return empty string for unknown token IDs (consistent with Decode behavior)
+            return string.Empty;
+        }
+
+        /// <summary>
         /// Decode token IDs back into UTF-8 bytes (fast path).
         /// </summary>
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)

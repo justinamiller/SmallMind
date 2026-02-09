@@ -266,6 +266,18 @@ namespace SmallMind.Tokenizers
             }
         }
 
+        /// <summary>
+        /// Fast-path decode for a single token ID. Avoids List allocation.
+        /// </summary>
+        internal string DecodeSingleToken(int tokenId)
+        {
+            if (_idToToken.TryGetValue(tokenId, out string? token))
+            {
+                return token;
+            }
+            return string.Empty;
+        }
+
         private class TrieNode
         {
             public Dictionary<char, TrieNode> Children { get; } = new Dictionary<char, TrieNode>();

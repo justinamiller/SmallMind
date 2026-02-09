@@ -10,6 +10,7 @@ using SmallMind.Core.Exceptions;
 using SmallMind.Core.Rng;
 using SmallMind.Runtime.Scheduling;
 using SmallMind.Tokenizers;
+using SmallMind.Tokenizers.Text;
 using SmallMind.Transformers;
 
 namespace SmallMind.Runtime
@@ -531,13 +532,10 @@ namespace SmallMind.Runtime
             // 1. Apply repetition/presence/frequency penalties (before temperature)
             ApplyRepetitionPenalties(logitsLast, context);
             
-            // 2. Apply temperature scaling
+            // 2. Apply temperature scaling (SIMD optimized)
             if (_options.Temperature != 1.0)
             {
-                for (int v = 0; v < vocabSize; v++)
-                {
-                    logitsLast[v] /= (float)_options.Temperature;
-                }
+                ApplyTemperatureScaling(logitsLast, (float)_options.Temperature);
             }
             
             // 3. Apply top-k filtering
@@ -700,6 +698,35 @@ namespace SmallMind.Runtime
         }
         
         /// <summary>
+        /// Apply temperature scaling to logits (SIMD optimized).
+        /// Divides all logits by temperature value.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ApplyTemperatureScaling(float[] logits, float temperature)
+        {
+            int vocabSize = logits.Length;
+            float invTemp = 1.0f / temperature;
+            
+            // SIMD vectorization for better performance
+            int vectorSize = System.Numerics.Vector<float>.Count;
+            int i = 0;
+            
+            // Process SIMD-width chunks
+            for (; i <= vocabSize - vectorSize; i += vectorSize)
+            {
+                var vec = new System.Numerics.Vector<float>(logits, i);
+                var scaled = vec * invTemp;
+                scaled.CopyTo(logits, i);
+            }
+            
+            // Handle remainder
+            for (; i < vocabSize; i++)
+            {
+                logits[i] *= invTemp;
+            }
+        }
+
+        /// <summary>
         /// Apply repetition penalties to logits based on tokens in recent context window.
         /// Modifies logits in-place. Zero allocations after first call.
         /// </summary>
@@ -843,20 +870,8 @@ namespace SmallMind.Runtime
                 probs[tokenIdx] = 0.0f;
             }
             
-            // Re-normalize
-            float sum = 0.0f;
-            for (int i = 0; i < vocabSize; i++)
-            {
-                sum += probs[i];
-            }
-            
-            if (sum > 0)
-            {
-                for (int i = 0; i < vocabSize; i++)
-                {
-                    probs[i] /= sum;
-                }
-            }
+            // Re-normalize (SIMD optimized)
+            NormalizeProbabilities(probs, vocabSize);
         }
         
         /// <summary>
@@ -871,15 +886,8 @@ namespace SmallMind.Runtime
                 return; // Disabled
             }
             
-            // Find max probability
-            float maxProb = 0.0f;
-            for (int i = 0; i < probs.Length; i++)
-            {
-                if (probs[i] > maxProb)
-                {
-                    maxProb = probs[i];
-                }
-            }
+            // Find max probability (SIMD optimized)
+            float maxProb = FindMaxValue(probs);
             
             // Apply threshold
             float threshold = maxProb * (float)minP;
@@ -891,18 +899,97 @@ namespace SmallMind.Runtime
                 }
             }
             
-            // Re-normalize
+            // Re-normalize (SIMD optimized)
+            NormalizeProbabilities(probs, probs.Length);
+        }
+
+        /// <summary>
+        /// Find maximum value in array (SIMD optimized).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static float FindMaxValue(float[] values)
+        {
+            int length = values.Length;
+            int vectorSize = System.Numerics.Vector<float>.Count;
+            int i = 0;
+            
+            var maxVec = new System.Numerics.Vector<float>(float.NegativeInfinity);
+            
+            // Process SIMD-width chunks
+            for (; i <= length - vectorSize; i += vectorSize)
+            {
+                var vec = new System.Numerics.Vector<float>(values, i);
+                maxVec = System.Numerics.Vector.Max(maxVec, vec);
+            }
+            
+            // Find max in vector
+            float max = float.NegativeInfinity;
+            for (int j = 0; j < vectorSize; j++)
+            {
+                if (maxVec[j] > max) max = maxVec[j];
+            }
+            
+            // Handle remainder
+            for (; i < length; i++)
+            {
+                if (values[i] > max) max = values[i];
+            }
+            
+            return max;
+        }
+
+        /// <summary>
+        /// Normalize probabilities to sum to 1.0 (SIMD optimized).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void NormalizeProbabilities(float[] probs, int length)
+        {
+            // Sum all values
             float sum = 0.0f;
-            for (int i = 0; i < probs.Length; i++)
+            int vectorSize = System.Numerics.Vector<float>.Count;
+            int i = 0;
+            
+            var sumVec = System.Numerics.Vector<float>.Zero;
+            
+            // SIMD sum
+            for (; i <= length - vectorSize; i += vectorSize)
+            {
+                var vec = new System.Numerics.Vector<float>(probs, i);
+                sumVec += vec;
+            }
+            
+            // Horizontal sum of vector
+            for (int j = 0; j < vectorSize; j++)
+            {
+                sum += sumVec[j];
+            }
+            
+            // Handle remainder
+            for (; i < length; i++)
             {
                 sum += probs[i];
             }
             
+            // Normalize if sum > 0
             if (sum > 0)
             {
-                for (int i = 0; i < probs.Length; i++)
+                float invSum = 1.0f / sum;
+                i = 0;
+                
+                var invSumVec = new System.Numerics.Vector<float>(invSum);
+                
+                // SIMD normalization
+                for (; i <= length - vectorSize; i += vectorSize)
                 {
-                    probs[i] /= sum;
+                    var vec = new System.Numerics.Vector<float>(probs, i);
+                    var normalized = vec * invSumVec;
+                    normalized.CopyTo(probs, i);
+                }
+                
+                // Handle remainder
+                for (; i < length; i++)
+                {
+                    probs[i] *= invSum;
                 }
             }
         }
@@ -919,23 +1006,87 @@ namespace SmallMind.Runtime
             int maskedCount = 0;
             int vocabSize = logits.Length;
             
-            // Check each candidate token
-            for (int tokenId = 0; tokenId < vocabSize; tokenId++)
+            // OPTIMIZATION: Hoist type check outside the loop to enable fast-path
+            // This eliminates interface dispatch overhead in the O(vocab_size) loop
+            if (_tokenizer is BpeTokenizer bpeTokenizer)
             {
-                // Skip already masked tokens
-                if (float.IsNegativeInfinity(logits[tokenId]))
+                // Fast-path for BpeTokenizer: use DecodeSingleToken to avoid List allocation
+                for (int tokenId = 0; tokenId < vocabSize; tokenId++)
                 {
-                    continue;
+                    // Skip already masked tokens
+                    if (float.IsNegativeInfinity(logits[tokenId]))
+                    {
+                        continue;
+                    }
+                    
+                    // Decode candidate token (fast-path, no allocation)
+                    string tokenText = bpeTokenizer.DecodeSingleToken(tokenId);
+                    
+                    // Check if token is allowed by constraint
+                    if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                    {
+                        logits[tokenId] = float.NegativeInfinity;
+                        maskedCount++;
+                    }
                 }
-                
-                // Decode candidate token
-                string tokenText = _tokenizer.Decode(new List<int> { tokenId });
-                
-                // Check if token is allowed by constraint
-                if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+            }
+            else if (_tokenizer is GgufBpeTokenizer ggufBpe)
+            {
+                // Fast-path for GgufBpeTokenizer
+                for (int tokenId = 0; tokenId < vocabSize; tokenId++)
                 {
-                    logits[tokenId] = float.NegativeInfinity;
-                    maskedCount++;
+                    if (float.IsNegativeInfinity(logits[tokenId]))
+                    {
+                        continue;
+                    }
+                    
+                    string tokenText = ggufBpe.DecodeSingleToken(tokenId);
+                    
+                    if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                    {
+                        logits[tokenId] = float.NegativeInfinity;
+                        maskedCount++;
+                    }
+                }
+            }
+            else if (_tokenizer is ByteLevelBpeTokenizer byteLevelBpe)
+            {
+                // Fast-path for ByteLevelBpeTokenizer
+                for (int tokenId = 0; tokenId < vocabSize; tokenId++)
+                {
+                    if (float.IsNegativeInfinity(logits[tokenId]))
+                    {
+                        continue;
+                    }
+                    
+                    string tokenText = byteLevelBpe.DecodeSingleToken(tokenId);
+                    
+                    if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                    {
+                        logits[tokenId] = float.NegativeInfinity;
+                        maskedCount++;
+                    }
+                }
+            }
+            else
+            {
+                // Fallback path for other tokenizer implementations
+                // Uses interface method with default implementation
+                for (int tokenId = 0; tokenId < vocabSize; tokenId++)
+                {
+                    if (float.IsNegativeInfinity(logits[tokenId]))
+                    {
+                        continue;
+                    }
+                    
+                    // Use interface fast-path method (may allocate if not overridden)
+                    string tokenText = _tokenizer.DecodeSingleToken(tokenId);
+                    
+                    if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                    {
+                        logits[tokenId] = float.NegativeInfinity;
+                        maskedCount++;
+                    }
                 }
             }
             
