@@ -1,8 +1,8 @@
 using Xunit;
-using SmallMind.Public;
+using SmallMind;
 using System;
 
-namespace SmallMind.Public.Tests
+namespace SmallMind.Tests
 {
     /// <summary>
     /// Tests for SmallMindOptions validation.

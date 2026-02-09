@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using SmallMind.Abstractions;
 
-namespace SmallMind.Public.Internal
+namespace SmallMind.Internal
 {
     /// <summary>
     /// Adapter for text generation session.

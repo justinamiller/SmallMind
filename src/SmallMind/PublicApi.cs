@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace SmallMind.Public
+namespace SmallMind
 {
     // ============================================================
     // CORE ENGINE INTERFACE

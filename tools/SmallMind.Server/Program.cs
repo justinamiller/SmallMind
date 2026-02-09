@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using SmallMind.Public;
+using SmallMind;
 using SmallMind.Server;
 using SmallMind.Server.Models;
 using SmallMind.Server.Services;
