@@ -58,6 +58,12 @@ namespace SmallMind.Quantization.Abstractions
         Q8_0 = 2,
 
         /// <summary>4-bit symmetric quantization (Q4_0)</summary>
-        Q4_0 = 3
+        Q4_0 = 3,
+
+        /// <summary>4-bit asymmetric quantization (Q4_1)</summary>
+        Q4_1 = 4,
+
+        /// <summary>5-bit symmetric quantization (Q5_0)</summary>
+        Q5_0 = 5
     }
 }

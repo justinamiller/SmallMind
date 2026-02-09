@@ -1,0 +1,63 @@
+using System;
+using SmallMind.Quantization.Tensors;
+using SmallMind.Quantization.Kernels;
+
+namespace SmallMind.Quantization.Abstractions
+{
+    /// <summary>
+    /// Q5_0 quantized weight tensor implementation for IWeightTensor.
+    /// Uses fused FP32×Q5_0 matrix multiplication kernel.
+    /// </summary>
+    internal sealed class Q5_0WeightTensor : IWeightTensor
+    {
+        private readonly Q5_0Tensor _tensor;
+
+        /// <summary>
+        /// Number of rows in the weight matrix.
+        /// </summary>
+        public int Rows => _tensor.Rows;
+
+        /// <summary>
+        /// Number of columns in the weight matrix.
+        /// </summary>
+        public int Cols => _tensor.Cols;
+
+        /// <summary>
+        /// Gets the quantization scheme (Q5_0).
+        /// </summary>
+        public QuantScheme Scheme => QuantScheme.Q5_0;
+
+        /// <summary>
+        /// Creates a new Q5_0 weight tensor.
+        /// </summary>
+        /// <param name="tensor">Q5_0 tensor data.</param>
+        public Q5_0WeightTensor(Q5_0Tensor tensor)
+        {
+            _tensor = tensor ?? throw new ArgumentNullException(nameof(tensor));
+        }
+
+        /// <summary>
+        /// Perform fused FP32×Q5_0 matrix multiplication.
+        /// </summary>
+        public void MatMul(ReadOnlySpan<float> activations, Span<float> output, int m, int k, int n)
+        {
+            if (k != Rows) throw new ArgumentException($"k={k} must equal Rows={Rows}");
+            if (n != Cols) throw new ArgumentException($"n={n} must equal Cols={Cols}");
+            if (activations.Length < m * k)
+                throw new ArgumentException($"activations.Length {activations.Length} < m*k {m * k}");
+            if (output.Length < m * n)
+                throw new ArgumentException($"output.Length {output.Length} < m*n {m * n}");
+
+            // Use fused Q5_0 matmul kernel
+            FusedQ5_0MatMul.Multiply(activations, _tensor, output, m, k, n);
+        }
+
+        /// <summary>
+        /// Dequantize to FP32.
+        /// </summary>
+        public float[] ToFloat32()
+        {
+            return _tensor.Dequantize();
+        }
+    }
+}

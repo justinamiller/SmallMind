@@ -1,4 +1,5 @@
 using SmallMind.Quantization.Tensors;
+using SmallMind.Quantization.Kernels;
 using Xunit;
 
 namespace SmallMind.Quantization.Tests
@@ -221,6 +222,112 @@ namespace SmallMind.Quantization.Tests
                     float percentError = MathF.Abs((actual[i] - expected[i]) / expected[i]) * 100f;
                     Assert.True(percentError <= tolerancePercent,
                         $"Index {i}: expected {expected[i]}, got {actual[i]}, error {percentError:F2}%");
+                }
+            }
+        }
+
+        [Fact]
+        public void FusedQ4_1MatMul_MatchesDequantizedMatMul()
+        {
+            // Arrange
+            var random = new Random(42);
+            int m = 4, k = 64, n = 32; // k and n are multiples of block size (32)
+            
+            var a = GenerateRandomFloats(random, m * k, -1f, 1f);
+            var bFloat = GenerateRandomFloats(random, k * n, -2f, 2f);
+            var bQuant = Q4_1Tensor.Quantize(bFloat, k, n);
+
+            // Reference: dequantize then matmul
+            var bDequant = bQuant.Dequantize();
+            var expected = new float[m * n];
+            MatMulReference(a, bDequant, expected, m, k, n);
+
+            // Act: fused Q4_1 matmul
+            var actual = new float[m * n];
+            FusedQ4_1MatMul.Multiply(a, bQuant, actual, m, k, n);
+
+            // Assert - fused should match dequantized within tolerance
+            AssertArraysClose(expected, actual, 5.0f);
+        }
+
+        [Fact]
+        public void FusedQ5_0MatMul_MatchesDequantizedMatMul()
+        {
+            // Arrange
+            var random = new Random(42);
+            int m = 4, k = 64, n = 32; // k and n are multiples of block size (32)
+            
+            var a = GenerateRandomFloats(random, m * k, -1f, 1f);
+            var bFloat = GenerateRandomFloats(random, k * n, -3f, 3f);
+            var bQuant = Q5_0Tensor.Quantize(bFloat, k, n);
+
+            // Reference: dequantize then matmul
+            var bDequant = bQuant.Dequantize();
+            var expected = new float[m * n];
+            MatMulReference(a, bDequant, expected, m, k, n);
+
+            // Act: fused Q5_0 matmul
+            var actual = new float[m * n];
+            FusedQ5_0MatMul.Multiply(a, bQuant, actual, m, k, n);
+
+            // Assert - fused should match dequantized within tolerance
+            AssertArraysClose(expected, actual, 3.0f);
+        }
+
+        [Fact]
+        public void FusedQ4_1MatMul_SingleRow()
+        {
+            // Test fast path for single-row inference (common in generation)
+            var random = new Random(42);
+            int k = 64, n = 64;
+            var a = GenerateRandomFloats(random, k, -1f, 1f);
+            var bFloat = GenerateRandomFloats(random, k * n, -1f, 1f);
+            var bQuant = Q4_1Tensor.Quantize(bFloat, k, n);
+
+            var bDequant = bQuant.Dequantize();
+            var expected = new float[n];
+            MatMulReference(a, bDequant, expected, 1, k, n);
+
+            var actual = new float[n];
+            FusedQ4_1MatMul.Multiply(a, bQuant, actual, 1, k, n);
+
+            AssertArraysClose(expected, actual, 5.0f);
+        }
+
+        [Fact]
+        public void FusedQ5_0MatMul_SingleRow()
+        {
+            // Test fast path for single-row inference (common in generation)
+            var random = new Random(42);
+            int k = 64, n = 64;
+            var a = GenerateRandomFloats(random, k, -1f, 1f);
+            var bFloat = GenerateRandomFloats(random, k * n, -2f, 2f);
+            var bQuant = Q5_0Tensor.Quantize(bFloat, k, n);
+
+            var bDequant = bQuant.Dequantize();
+            var expected = new float[n];
+            MatMulReference(a, bDequant, expected, 1, k, n);
+
+            var actual = new float[n];
+            FusedQ5_0MatMul.Multiply(a, bQuant, actual, 1, k, n);
+
+            AssertArraysClose(expected, actual, 3.0f);
+        }
+
+        // Reference matrix multiplication for validation
+        private static void MatMulReference(float[] a, float[] b, float[] c, int m, int k, int n)
+        {
+            Array.Clear(c);
+            for (int i = 0; i < m; i++)
+            {
+                for (int j = 0; j < n; j++)
+                {
+                    float sum = 0f;
+                    for (int p = 0; p < k; p++)
+                    {
+                        sum += a[i * k + p] * b[p * n + j];
+                    }
+                    c[i * n + j] = sum;
                 }
             }
         }
