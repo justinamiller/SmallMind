@@ -13,7 +13,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// End-to-end GGUF validation command.
     /// Loads a GGUF model directly, runs inference, and validates output coherence.
     /// </summary>
-    public sealed class RunGgufCommand : ICommand
+    internal sealed class RunGgufCommand : ICommand
     {
         public string Name => "run-gguf";
         public string Description => "Load GGUF model and run inference validation";

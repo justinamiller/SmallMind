@@ -7,7 +7,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to verify model integrity.
     /// </summary>
-    public sealed class ModelVerifyCommand : ICommand
+    internal sealed class ModelVerifyCommand : ICommand
     {
         public string Name => "model verify";
         public string Description => "Verify model integrity (files, sizes, checksums)";

@@ -7,7 +7,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to inspect model details.
     /// </summary>
-    public sealed class ModelInspectCommand : ICommand
+    internal sealed class ModelInspectCommand : ICommand
     {
         public string Name => "model inspect";
         public string Description => "Show detailed information about a model";

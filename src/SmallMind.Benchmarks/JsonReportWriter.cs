@@ -9,7 +9,7 @@ namespace SmallMind.Benchmarks
     /// <summary>
     /// Writes benchmark results to JSON format.
     /// </summary>
-    public static class JsonReportWriter
+    internal static class JsonReportWriter
     {
         private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
         {

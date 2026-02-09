@@ -6,7 +6,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// Interface for CLI commands.
     /// </summary>
-    public interface ICommand
+    internal interface ICommand
     {
         /// <summary>
         /// Command name (e.g., "quantize", "import-gguf").

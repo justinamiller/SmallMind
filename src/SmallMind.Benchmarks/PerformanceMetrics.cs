@@ -6,7 +6,7 @@ namespace SmallMind.Benchmarks
     /// <summary>
     /// Performance metrics for a benchmark run.
     /// </summary>
-    public sealed class PerformanceMetrics
+    internal sealed class PerformanceMetrics
     {
         /// <summary>
         /// Time to First Token (ms).
@@ -72,7 +72,7 @@ namespace SmallMind.Benchmarks
     /// <summary>
     /// Benchmark configuration.
     /// </summary>
-    public sealed class BenchmarkConfig
+    internal sealed class BenchmarkConfig
     {
         /// <summary>
         /// Number of warmup iterations.
@@ -113,7 +113,7 @@ namespace SmallMind.Benchmarks
     /// <summary>
     /// Benchmark result containing metrics and metadata.
     /// </summary>
-    public sealed class BenchmarkResult
+    internal sealed class BenchmarkResult
     {
         /// <summary>
         /// Benchmark name.

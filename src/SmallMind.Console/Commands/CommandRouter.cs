@@ -8,7 +8,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// Routes CLI commands to their implementations.
     /// </summary>
-    public sealed class CommandRouter
+    internal sealed class CommandRouter
     {
         private readonly Dictionary<string, ICommand> _commands;
 

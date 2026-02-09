@@ -8,7 +8,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to download GGUF models from HuggingFace.
     /// </summary>
-    public sealed class ModelDownloadCommand : ICommand
+    internal sealed class ModelDownloadCommand : ICommand
     {
         public string Name => "model download";
         public string Description => "Download GGUF model from HuggingFace";

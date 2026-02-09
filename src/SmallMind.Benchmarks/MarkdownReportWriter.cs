@@ -8,7 +8,7 @@ namespace SmallMind.Benchmarks
     /// <summary>
     /// Writes benchmark results to Markdown format.
     /// </summary>
-    public static class MarkdownReportWriter
+    internal static class MarkdownReportWriter
     {
         /// <summary>
         /// Write benchmark results to Markdown file.

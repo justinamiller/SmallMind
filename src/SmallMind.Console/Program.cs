@@ -22,7 +22,7 @@ namespace SmallMind.ConsoleApp
         /// Model configuration preset inspired by popular LLM architectures.
         /// Allows users to choose different model sizes and configurations.
         /// </summary>
-        public class ModelConfig
+        internal class ModelConfig
         {
             public string Name { get; set; }
             public string Description { get; set; }

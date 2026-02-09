@@ -15,7 +15,7 @@ namespace SmallMind.Perf;
 /// Measures: execution time, allocations, GC counts, CPU time.
 /// Supports both micro-benchmarks and end-to-end inference benchmarks.
 /// </summary>
-public class PerfRunner
+internal class PerfRunner
 {
     private int _warmupIters = 50;
     private int _measureIters = 1000;

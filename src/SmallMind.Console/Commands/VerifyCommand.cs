@@ -10,7 +10,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to verify SMQ model integrity.
     /// </summary>
-    public sealed class VerifyCommand : ICommand
+    internal sealed class VerifyCommand : ICommand
     {
         public string Name => "verify";
         public string Description => "Validate SMQ model integrity";

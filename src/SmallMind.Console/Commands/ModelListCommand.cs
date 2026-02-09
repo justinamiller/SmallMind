@@ -7,7 +7,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to list registered models.
     /// </summary>
-    public sealed class ModelListCommand : ICommand
+    internal sealed class ModelListCommand : ICommand
     {
         public string Name => "model list";
         public string Description => "List all registered models";

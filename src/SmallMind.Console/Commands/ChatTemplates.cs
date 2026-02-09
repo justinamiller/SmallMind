@@ -7,9 +7,9 @@ namespace SmallMind.ConsoleApp.Commands
     /// Chat template formats for different model architectures.
     /// Automatically applies the appropriate template based on model metadata.
     /// </summary>
-    public static class ChatTemplates
+    internal static class ChatTemplates
     {
-        public enum TemplateType
+        internal enum TemplateType
         {
             None,
             ChatML,
