@@ -77,6 +77,20 @@ namespace SmallMind.Tokenizers
         string DecodeToString(ReadOnlySpan<int> tokens);
 
         /// <summary>
+        /// Fast-path decode for a single token ID. Avoids List allocation.
+        /// Used internally in hot loops (e.g., constraint checking).
+        /// Default implementation falls back to Decode with temporary list.
+        /// Concrete tokenizers should override for better performance.
+        /// </summary>
+        /// <param name="tokenId">Token ID to decode</param>
+        /// <returns>Decoded text for the single token</returns>
+        string DecodeSingleToken(int tokenId)
+        {
+            // Default fallback - concrete implementations should override
+            return Decode(new List<int> { tokenId });
+        }
+
+        /// <summary>
         /// Save tokenizer state to a file (if supported).
         /// </summary>
         /// <param name="path">Path to save the tokenizer state</param>

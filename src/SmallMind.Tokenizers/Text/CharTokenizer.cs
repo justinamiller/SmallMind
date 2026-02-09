@@ -175,5 +175,17 @@ namespace SmallMind.Tokenizers
             }
             return sb.ToString();
         }
+
+        /// <summary>
+        /// Fast-path decode for a single token ID. Avoids List allocation.
+        /// </summary>
+        internal string DecodeSingleToken(int tokenId)
+        {
+            if (_idxToChar.TryGetValue(tokenId, out char ch))
+            {
+                return ch.ToString();
+            }
+            return string.Empty;
+        }
     }
 }

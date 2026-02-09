@@ -10,6 +10,7 @@ using SmallMind.Core.Exceptions;
 using SmallMind.Core.Rng;
 using SmallMind.Runtime.Scheduling;
 using SmallMind.Tokenizers;
+using SmallMind.Tokenizers.Text;
 using SmallMind.Transformers;
 
 namespace SmallMind.Runtime
@@ -919,23 +920,87 @@ namespace SmallMind.Runtime
             int maskedCount = 0;
             int vocabSize = logits.Length;
             
-            // Check each candidate token
-            for (int tokenId = 0; tokenId < vocabSize; tokenId++)
+            // OPTIMIZATION: Hoist type check outside the loop to enable fast-path
+            // This eliminates interface dispatch overhead in the O(vocab_size) loop
+            if (_tokenizer is BpeTokenizer bpeTokenizer)
             {
-                // Skip already masked tokens
-                if (float.IsNegativeInfinity(logits[tokenId]))
+                // Fast-path for BpeTokenizer: use DecodeSingleToken to avoid List allocation
+                for (int tokenId = 0; tokenId < vocabSize; tokenId++)
                 {
-                    continue;
+                    // Skip already masked tokens
+                    if (float.IsNegativeInfinity(logits[tokenId]))
+                    {
+                        continue;
+                    }
+                    
+                    // Decode candidate token (fast-path, no allocation)
+                    string tokenText = bpeTokenizer.DecodeSingleToken(tokenId);
+                    
+                    // Check if token is allowed by constraint
+                    if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                    {
+                        logits[tokenId] = float.NegativeInfinity;
+                        maskedCount++;
+                    }
                 }
-                
-                // Decode candidate token
-                string tokenText = _tokenizer.Decode(new List<int> { tokenId });
-                
-                // Check if token is allowed by constraint
-                if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+            }
+            else if (_tokenizer is GgufBpeTokenizer ggufBpe)
+            {
+                // Fast-path for GgufBpeTokenizer
+                for (int tokenId = 0; tokenId < vocabSize; tokenId++)
                 {
-                    logits[tokenId] = float.NegativeInfinity;
-                    maskedCount++;
+                    if (float.IsNegativeInfinity(logits[tokenId]))
+                    {
+                        continue;
+                    }
+                    
+                    string tokenText = ggufBpe.DecodeSingleToken(tokenId);
+                    
+                    if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                    {
+                        logits[tokenId] = float.NegativeInfinity;
+                        maskedCount++;
+                    }
+                }
+            }
+            else if (_tokenizer is ByteLevelBpeTokenizer byteLevelBpe)
+            {
+                // Fast-path for ByteLevelBpeTokenizer
+                for (int tokenId = 0; tokenId < vocabSize; tokenId++)
+                {
+                    if (float.IsNegativeInfinity(logits[tokenId]))
+                    {
+                        continue;
+                    }
+                    
+                    string tokenText = byteLevelBpe.DecodeSingleToken(tokenId);
+                    
+                    if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                    {
+                        logits[tokenId] = float.NegativeInfinity;
+                        maskedCount++;
+                    }
+                }
+            }
+            else
+            {
+                // Fallback path for other tokenizer implementations
+                // Uses interface method with default implementation
+                for (int tokenId = 0; tokenId < vocabSize; tokenId++)
+                {
+                    if (float.IsNegativeInfinity(logits[tokenId]))
+                    {
+                        continue;
+                    }
+                    
+                    // Use interface fast-path method (may allocate if not overridden)
+                    string tokenText = _tokenizer.DecodeSingleToken(tokenId);
+                    
+                    if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
+                    {
+                        logits[tokenId] = float.NegativeInfinity;
+                        maskedCount++;
+                    }
                 }
             }
             

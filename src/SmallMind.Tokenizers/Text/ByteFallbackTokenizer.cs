@@ -291,5 +291,37 @@ namespace SmallMind.Tokenizers
                 ArrayPool<byte>.Shared.Return(buffer);
             }
         }
+
+        /// <summary>
+        /// Fast-path decode for a single token ID. Avoids List allocation.
+        /// </summary>
+        internal string DecodeSingleToken(int tokenId)
+        {
+            if (tokenId >= _byteTokenStart && tokenId < VocabSize)
+            {
+                // Byte token - decode directly to single byte
+                byte b = _tokenToByte[tokenId];
+                Span<byte> bytes = stackalloc byte[1];
+                bytes[0] = b;
+                return Encoding.UTF8.GetString(bytes);
+            }
+            else
+            {
+                // Inner token - use inner tokenizer's decode
+                Span<int> tokenSpan = stackalloc int[1];
+                tokenSpan[0] = tokenId;
+                
+                byte[] buffer = ArrayPool<byte>.Shared.Rent(10);
+                try
+                {
+                    int byteCount = _innerTokenizer.Decode(tokenSpan, buffer);
+                    return Encoding.UTF8.GetString(buffer, 0, byteCount);
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
+            }
+        }
     }
 }

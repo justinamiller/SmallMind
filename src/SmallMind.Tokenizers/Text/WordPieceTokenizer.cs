@@ -285,5 +285,18 @@ namespace SmallMind.Tokenizers
                 ArrayPool<byte>.Shared.Return(buffer);
             }
         }
+
+        /// <summary>
+        /// Fast-path decode for a single token ID. Avoids List allocation.
+        /// </summary>
+        internal string DecodeSingleToken(int tokenId)
+        {
+            if (_inverseVocab.TryGetValue(tokenId, out string? token))
+            {
+                // Remove ## prefix for continuation tokens
+                return token.StartsWith("##") ? token[2..] : token;
+            }
+            return string.Empty;
+        }
     }
 }
