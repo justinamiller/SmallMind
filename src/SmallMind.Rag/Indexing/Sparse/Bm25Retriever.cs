@@ -8,7 +8,7 @@ namespace SmallMind.Rag.Indexing.Sparse;
 /// BM25-based retriever for ranking and retrieving relevant chunks.
 /// Combines tokenization, scoring, and ranking to return top-K results.
 /// </summary>
-public sealed class Bm25Retriever
+internal sealed class Bm25Retriever
 {
     private readonly InvertedIndex _index;
     private readonly double _k1;

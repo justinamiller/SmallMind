@@ -9,7 +9,7 @@ namespace SmallMind.Engine
     /// Basic JSON schema validator supporting a subset of JSON Schema.
     /// Supports: type, required, properties, items, enum.
     /// </summary>
-    public sealed class JsonSchemaValidator
+    internal sealed class JsonSchemaValidator
     {
         /// <summary>
         /// Validates JSON against a schema.
@@ -254,7 +254,7 @@ namespace SmallMind.Engine
     /// <summary>
     /// Result of JSON schema validation.
     /// </summary>
-    public sealed class ValidationResult
+    internal sealed class ValidationResult
     {
         /// <summary>
         /// Gets whether the JSON is valid.

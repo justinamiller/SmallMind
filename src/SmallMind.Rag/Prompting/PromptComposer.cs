@@ -8,7 +8,7 @@ namespace SmallMind.Rag.Prompting;
 /// Composes RAG prompts with source citations and grounding instructions.
 /// Builds prompts that enforce citation discipline and evidence-based responses.
 /// </summary>
-public sealed class PromptComposer
+internal sealed class PromptComposer
 {
     private readonly RagOptions.RetrievalOptions _options;
     private const int MaxContextTokens = 2048;

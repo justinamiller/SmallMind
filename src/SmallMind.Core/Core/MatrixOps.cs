@@ -9,7 +9,7 @@ namespace SmallMind.Core.Core
     /// Optimized matrix operations for backward pass efficiency.
     /// Implements transposed matrix multiply without creating copies.
     /// </summary>
-    public static class MatrixOps
+    internal static class MatrixOps
     {
         /// <summary>
         /// Matrix multiplication: C = A × B^T (B transposed) without creating transposed copy.

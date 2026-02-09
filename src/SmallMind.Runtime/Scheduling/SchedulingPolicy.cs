@@ -4,7 +4,7 @@ namespace SmallMind.Runtime.Scheduling
     /// Scheduling policy for deterministic token generation.
     /// Defines the order in which tokens are scheduled for processing.
     /// </summary>
-    public enum SchedulingPolicy
+    internal enum SchedulingPolicy
     {
         /// <summary>
         /// First-In-First-Out: Process requests in the order they arrive.

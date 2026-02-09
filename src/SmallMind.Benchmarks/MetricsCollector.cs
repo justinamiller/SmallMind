@@ -8,7 +8,7 @@ namespace SmallMind.Benchmarks
     /// <summary>
     /// Collects performance metrics during benchmark execution.
     /// </summary>
-    public sealed class MetricsCollector
+    internal sealed class MetricsCollector
     {
         private long _allocatedBytesStart;
         private int _gen0Start;

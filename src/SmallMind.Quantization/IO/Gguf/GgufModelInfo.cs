@@ -6,7 +6,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// <summary>
     /// Parsed GGUF model information including metadata and tensor manifests.
     /// </summary>
-    public class GgufModelInfo
+    internal class GgufModelInfo
     {
         /// <summary>
         /// GGUF format version (2 or 3).

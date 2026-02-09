@@ -7,7 +7,7 @@ namespace SmallMind.Rag.Retrieval
     /// Abstraction for embedding providers.
     /// Converts text chunks into vector representations for semantic search.
     /// </summary>
-    public interface IEmbeddingProvider
+    internal interface IEmbeddingProvider
     {
         /// <summary>
         /// Gets the dimensionality of the embedding vectors produced by this provider.

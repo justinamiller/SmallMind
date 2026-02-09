@@ -8,7 +8,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// <summary>
     /// Extracts tokenizer configuration from GGUF metadata.
     /// </summary>
-    public static class GgufTokenizerExtractor
+    internal static class GgufTokenizerExtractor
     {
         /// <summary>
         /// Extract a tokenizer from GGUF metadata.

@@ -8,7 +8,7 @@ namespace SmallMind.Rag.Pipeline
     /// Builder pattern for easily configuring and creating RAG pipeline instances.
     /// Provides a fluent API for setting options and dependencies.
     /// </summary>
-    public sealed class RagPipelineBuilder
+    internal sealed class RagPipelineBuilder
     {
         private RagOptions _options = new RagOptions();
         private IAuthorizer? _authorizer;

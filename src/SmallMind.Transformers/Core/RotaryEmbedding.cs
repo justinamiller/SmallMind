@@ -8,7 +8,7 @@ namespace SmallMind.Transformers
     /// Precomputes sin/cos tables once and applies rotation in-place to Q and K.
     /// Used in modern architectures like Llama, Mistral, Qwen, Gemma.
     /// </summary>
-    public sealed class RotaryEmbedding
+    internal sealed class RotaryEmbedding
     {
         private readonly int _maxSeqLen;
         private readonly int _headDim;

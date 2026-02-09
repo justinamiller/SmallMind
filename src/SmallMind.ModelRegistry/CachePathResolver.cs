@@ -7,7 +7,7 @@ namespace SmallMind.ModelRegistry
     /// <summary>
     /// Resolves cache directory paths for different operating systems.
     /// </summary>
-    public static class CachePathResolver
+    internal static class CachePathResolver
     {
         /// <summary>
         /// Gets the default model cache directory for the current platform.

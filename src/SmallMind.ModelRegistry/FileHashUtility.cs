@@ -7,7 +7,7 @@ namespace SmallMind.ModelRegistry
     /// <summary>
     /// Utilities for file hashing and verification.
     /// </summary>
-    public static class FileHashUtility
+    internal static class FileHashUtility
     {
         /// <summary>
         /// Computes the SHA256 hash of a file.

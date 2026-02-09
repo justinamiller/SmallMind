@@ -10,7 +10,7 @@ namespace SmallMind.Rag.Indexing;
 /// Manages incremental indexing of documents for the RAG system.
 /// Supports building indexes from scratch and updating existing indexes with new or changed documents.
 /// </summary>
-public sealed class IncrementalIndexer
+internal sealed class IncrementalIndexer
 {
     private readonly string _indexDir;
     private readonly DocumentIngestor _ingestor;

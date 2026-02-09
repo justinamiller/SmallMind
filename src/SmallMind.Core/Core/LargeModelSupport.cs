@@ -7,7 +7,7 @@ namespace SmallMind.Core.Core
     /// Utilities and validation for billion-parameter model support.
     /// Provides memory estimation, configuration validation, and scale recommendations.
     /// </summary>
-    public static class LargeModelSupport
+    internal static class LargeModelSupport
     {
         /// <summary>
         /// Maximum safe parameters for in-memory FP32 models (int32 limit consideration).

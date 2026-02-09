@@ -12,7 +12,7 @@ namespace SmallMind.Rag.Generation
     /// <summary>
     /// Text generator implementation using SmallMind's built-in Transformer model.
     /// </summary>
-    public sealed class SmallMindTextGenerator : ITextGenerator
+    internal sealed class SmallMindTextGenerator : ITextGenerator
     {
         private readonly Sampling _sampling;
 

@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Security;
 /// <summary>
 /// Default implementation of <see cref="IAuthorizer"/> that uses <see cref="UserContext.CanAccess"/>.
 /// </summary>
-public sealed class DefaultAuthorizer : IAuthorizer
+internal sealed class DefaultAuthorizer : IAuthorizer
 {
     /// <summary>
     /// Determines whether the specified user is authorized to access the chunk.

@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Common;
 /// <summary>
 /// Constants for retrieval operations to avoid magic numbers.
 /// </summary>
-public static class RetrievalConstants
+internal static class RetrievalConstants
 {
     /// <summary>
     /// Maximum length for text excerpts before truncation.

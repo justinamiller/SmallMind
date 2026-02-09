@@ -7,7 +7,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to add a model to the registry.
     /// </summary>
-    public sealed class ModelAddCommand : ICommand
+    internal sealed class ModelAddCommand : ICommand
     {
         public string Name => "model add";
         public string Description => "Add a model to the registry from a file or URL";

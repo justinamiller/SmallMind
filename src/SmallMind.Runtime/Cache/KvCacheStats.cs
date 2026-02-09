@@ -3,7 +3,7 @@ namespace SmallMind.Runtime.Cache
     /// <summary>
     /// Statistics for KV cache usage and performance.
     /// </summary>
-    public sealed class KvCacheStats
+    internal sealed class KvCacheStats
     {
         /// <summary>
         /// Gets or sets the current number of sessions in cache.

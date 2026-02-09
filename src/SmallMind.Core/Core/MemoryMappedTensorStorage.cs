@@ -20,7 +20,7 @@ namespace SmallMind.Core.Core
     /// - OS manages paging automatically
     /// - Excellent for inference, not suitable for training
     /// </summary>
-    public sealed class MemoryMappedTensorStorage : ITensorStorage, IDisposable
+    internal sealed class MemoryMappedTensorStorage : ITensorStorage, IDisposable
     {
         private readonly MemoryMappedFile _mmf;
         private readonly MemoryMappedViewAccessor _accessor;

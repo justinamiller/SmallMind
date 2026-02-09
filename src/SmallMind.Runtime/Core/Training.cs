@@ -21,7 +21,7 @@ namespace SmallMind.Runtime
     /// <summary>
     /// Training configuration options for Phase 2 optimizations
     /// </summary>
-    public class TrainingConfig
+    internal class TrainingConfig
     {
         public bool UseMixedPrecision { get; set; } = false;
         public bool UseGradientCheckpointing { get; set; } = false;
@@ -36,7 +36,7 @@ namespace SmallMind.Runtime
     /// <summary>
     /// Handles dataset preparation, mini-batching, and the training loop with pure C#.
     /// </summary>
-    public class Training
+    internal class Training
     {
         private readonly TransformerModel _model;
         private readonly ITokenizer _tokenizer;

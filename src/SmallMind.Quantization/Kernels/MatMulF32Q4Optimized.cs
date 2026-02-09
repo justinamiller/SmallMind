@@ -12,7 +12,7 @@ namespace SmallMind.Quantization.Kernels
     /// Optimized block-oriented Q4 matrix multiplication kernels.
     /// Avoids per-element nibble decode by processing entire blocks at once.
     /// </summary>
-    public static class MatMulF32Q4Optimized
+    internal static class MatMulF32Q4Optimized
     {
         private const int BLOCK_SIZE = 64; // Must match Q4Tensor block size
 

@@ -8,7 +8,7 @@ namespace SmallMind.Runtime
     /// and provides encode/decode methods to convert between strings and token IDs.
     /// This is a type alias for CharTokenizer for backwards compatibility.
     /// </summary>
-    public class Tokenizer : CharTokenizer
+    internal class Tokenizer : CharTokenizer
     {
         /// <summary>
         /// Creates a new Tokenizer (CharTokenizer) from the given training text.

@@ -7,7 +7,7 @@ namespace SmallMind.Rag.Indexing.Sparse;
 /// Static BM25 scoring implementation for ranking document relevance.
 /// Implements the Okapi BM25 algorithm with configurable parameters.
 /// </summary>
-public static class Bm25Scorer
+internal static class Bm25Scorer
 {
     /// <summary>
     /// Computes the BM25 relevance score for a chunk given query terms.

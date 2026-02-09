@@ -3,7 +3,7 @@ namespace SmallMind.Tokenizers
     /// <summary>
     /// Configuration options for tokenizer selection and behavior.
     /// </summary>
-    public class TokenizerOptions
+    internal class TokenizerOptions
     {
         /// <summary>
         /// Tokenizer mode to use.

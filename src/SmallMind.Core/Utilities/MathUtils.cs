@@ -7,7 +7,7 @@ namespace SmallMind.Core.Utilities
     /// Fast mathematical approximations optimized for neural network operations.
     /// Prioritizes performance over exact accuracy where acceptable for ML workloads.
     /// </summary>
-    public static class MathUtils
+    internal static class MathUtils
     {
         /// <summary>
         /// Fast exponential approximation using Padé approximation.

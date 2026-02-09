@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Retrieval;
 /// <summary>
 /// Interface for storing and searching vectors for dense retrieval.
 /// </summary>
-public interface IVectorStore
+internal interface IVectorStore
 {
     /// <summary>
     /// Adds a vector to the store.

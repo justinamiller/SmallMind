@@ -4,7 +4,7 @@ namespace SmallMind.Tokenizers;
 /// No-operation pre-tokenizer that returns the input text as a single chunk.
 /// This is the default pre-tokenizer for SmallMind's byte-level BPE.
 /// </summary>
-public sealed class NoOpPreTokenizer : IPreTokenizer
+internal sealed class NoOpPreTokenizer : IPreTokenizer
 {
     /// <summary>
     /// Singleton instance of NoOpPreTokenizer.

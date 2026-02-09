@@ -8,7 +8,7 @@ namespace SmallMind.Runtime.Cache
     /// Cache for shared prompt prefixes across sessions.
     /// Uses hash-based deduplication and LRU eviction.
     /// </summary>
-    public sealed class PrefixCache
+    internal sealed class PrefixCache
     {
         private readonly ConcurrentDictionary<string, SharedPrefix> _prefixes;
         private readonly int _maxPrefixes;

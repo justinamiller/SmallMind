@@ -17,7 +17,7 @@ namespace SmallMind
         public ChatClient(IChatSession session, IChatTelemetry? telemetry)
         {
             _session = session ?? throw new ArgumentNullException(nameof(session));
-            _telemetry = telemetry ?? NoOpTelemetry.Instance;
+            _telemetry = telemetry ?? IChatTelemetry.Default;
         }
 
         public ChatResponse SendChat(ChatRequest request, CancellationToken cancellationToken = default)

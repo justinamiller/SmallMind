@@ -10,7 +10,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Factory for creating and loading pre-trained models.
     /// </summary>
-    public static class PretrainedModelFactory
+    internal static class PretrainedModelFactory
     {
         /// <summary>
         /// Load a pre-trained model from a checkpoint file.

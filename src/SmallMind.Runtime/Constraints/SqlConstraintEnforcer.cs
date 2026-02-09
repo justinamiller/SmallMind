@@ -7,7 +7,7 @@ namespace SmallMind.Runtime.Constraints
     /// Enforces SQL syntax constraints during generation.
     /// Validates keywords, parentheses, and quote balancing.
     /// </summary>
-    public sealed class SqlConstraintEnforcer : IOutputConstraint
+    internal sealed class SqlConstraintEnforcer : IOutputConstraint
     {
         private static readonly HashSet<string> SQL_KEYWORDS = new(StringComparer.OrdinalIgnoreCase)
         {

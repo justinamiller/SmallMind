@@ -11,7 +11,7 @@ namespace SmallMind.Rag.Indexing
     /// <summary>
     /// Represents a stored vector with its metadata.
     /// </summary>
-    public class VectorEntry
+    internal class VectorEntry
     {
         public string Id { get; set; } = "";
         public float[] Vector { get; set; } = Array.Empty<float>();
@@ -22,7 +22,7 @@ namespace SmallMind.Rag.Indexing
     /// <summary>
     /// Result from a vector search query.
     /// </summary>
-    public class SearchResult
+    internal class SearchResult
     {
         public string Id { get; set; } = "";
         public string Text { get; set; } = "";
@@ -35,7 +35,7 @@ namespace SmallMind.Rag.Indexing
     /// Supports kNN search with cosine similarity.
     /// Stores vectors on disk in JSONL format.
     /// </summary>
-    public class VectorIndex : IDisposable
+    internal class VectorIndex : IDisposable
     {
         private const string DEFAULT_INDEX_FILENAME = "vectors.jsonl";
         

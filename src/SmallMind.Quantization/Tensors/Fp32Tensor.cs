@@ -6,7 +6,7 @@ namespace SmallMind.Quantization.Tensors
     /// Represents a full-precision (FP32) tensor.
     /// Used for storing unquantized model weights (e.g., layer norm parameters).
     /// </summary>
-    public sealed class Fp32Tensor
+    internal sealed class Fp32Tensor
     {
         /// <summary>
         /// Raw float data.

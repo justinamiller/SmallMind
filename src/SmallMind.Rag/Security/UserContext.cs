@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Security;
 /// <summary>
 /// Represents the security context for a user accessing RAG resources.
 /// </summary>
-public sealed class UserContext
+internal sealed class UserContext
 {
     /// <summary>
     /// Gets or sets the unique identifier for the user.

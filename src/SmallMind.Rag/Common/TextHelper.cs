@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Common;
 /// <summary>
 /// Text manipulation utilities for RAG operations.
 /// </summary>
-public static class TextHelper
+internal static class TextHelper
 {
     /// <summary>
     /// Truncates text to a maximum length and appends ellipsis if truncated.

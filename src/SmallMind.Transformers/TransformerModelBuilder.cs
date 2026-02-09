@@ -7,7 +7,7 @@ namespace SmallMind.Transformers
     /// Builder for creating TransformerModel instances with a fluent API.
     /// Provides validation and sensible defaults for model configuration.
     /// </summary>
-    public class TransformerModelBuilder
+    internal class TransformerModelBuilder
     {
         private int _vocabSize;
         private int _blockSize = 128;

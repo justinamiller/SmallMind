@@ -11,7 +11,7 @@ namespace SmallMind.Core.Core
     /// and does not use a shift parameter (beta).
     /// Used in modern architectures like Llama, Mistral, Gemma.
     /// </summary>
-    public static class RMSNormOps
+    internal static class RMSNormOps
     {
         /// <summary>
         /// Fused RMSNorm: normalizes over last dimension using RMS.

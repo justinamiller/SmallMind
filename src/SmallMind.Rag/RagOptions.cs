@@ -5,7 +5,7 @@ namespace SmallMind.Rag;
 /// <summary>
 /// Configuration options for the RAG (Retrieval-Augmented Generation) system.
 /// </summary>
-public sealed class RagOptions
+internal sealed class RagOptions
 {
     /// <summary>
     /// Gets or sets the directory path where the index is stored.
@@ -45,7 +45,7 @@ public sealed class RagOptions
     /// <summary>
     /// Configuration options for text chunking.
     /// </summary>
-    public sealed class ChunkingOptions
+    internal sealed class ChunkingOptions
     {
         /// <summary>
         /// Gets or sets the maximum size of each chunk in characters.
@@ -66,7 +66,7 @@ public sealed class RagOptions
     /// <summary>
     /// Configuration options for retrieval.
     /// </summary>
-    public sealed class RetrievalOptions
+    internal sealed class RetrievalOptions
     {
         /// <summary>
         /// Gets or sets the maximum number of chunks to retrieve per query.

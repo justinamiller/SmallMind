@@ -11,7 +11,7 @@ namespace SmallMind.Core.Core
     /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on hot methods to avoid zero-initialization overhead.
     /// </summary>
     [SkipLocalsInit]
-    public static class LayerNormOps
+    internal static class LayerNormOps
     {
         /// <summary>
         /// Fused LayerNorm: normalizes over last dimension with optional in-place operation.

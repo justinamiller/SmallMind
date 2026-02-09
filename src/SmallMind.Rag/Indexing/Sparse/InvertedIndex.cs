@@ -7,7 +7,7 @@ namespace SmallMind.Rag.Indexing.Sparse;
 /// In-memory inverted index for BM25 ranking.
 /// Maps terms to postings lists containing chunk IDs and term frequencies.
 /// </summary>
-public sealed class InvertedIndex
+internal sealed class InvertedIndex
 {
     private readonly Dictionary<string, PostingsList> _index;
     private readonly Dictionary<string, int> _docLengths;

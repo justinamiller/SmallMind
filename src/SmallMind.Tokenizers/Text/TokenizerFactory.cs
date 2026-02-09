@@ -6,7 +6,7 @@ namespace SmallMind.Tokenizers
     /// <summary>
     /// Factory for creating tokenizer instances based on configuration and asset availability.
     /// </summary>
-    public static class TokenizerFactory
+    internal static class TokenizerFactory
     {
         /// <summary>
         /// Creates a tokenizer instance based on the provided options.

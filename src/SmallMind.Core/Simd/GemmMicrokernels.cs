@@ -19,7 +19,7 @@ namespace SmallMind.Core.Simd
     /// - Zero-allocation hot paths with stack-allocated buffers
     /// </summary>
     [SkipLocalsInit]
-    public static class GemmMicrokernels
+    internal static class GemmMicrokernels
     {
         // Cache-line and block sizes tuned for modern CPUs
         private const int CACHE_LINE_SIZE = 64; // bytes (512 bits = 16 floats)

@@ -3,7 +3,7 @@ namespace SmallMind.Rag.Telemetry;
 /// <summary>
 /// Simple console-based implementation of <see cref="IRagLogger"/>.
 /// </summary>
-public sealed class ConsoleRagLogger : IRagLogger
+internal sealed class ConsoleRagLogger : IRagLogger
 {
     /// <summary>
     /// Logs the completion of a document ingestion operation.

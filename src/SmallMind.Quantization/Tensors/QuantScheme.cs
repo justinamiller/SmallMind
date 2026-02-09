@@ -3,7 +3,7 @@ namespace SmallMind.Quantization.Tensors
     /// <summary>
     /// Supported quantization schemes for weight compression.
     /// </summary>
-    public enum QuantScheme : uint
+    internal enum QuantScheme : uint
     {
         /// <summary>
         /// Standard 32-bit floating point (no quantization).

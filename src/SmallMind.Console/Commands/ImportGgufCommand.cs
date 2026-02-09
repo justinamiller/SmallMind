@@ -8,7 +8,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to import GGUF models to SMQ format.
     /// </summary>
-    public sealed class ImportGgufCommand : ICommand
+    internal sealed class ImportGgufCommand : ICommand
     {
         public string Name => "import-gguf";
         public string Description => "Import GGUF model to SMQ format";

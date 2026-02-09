@@ -8,7 +8,7 @@ namespace SmallMind.Core.Core
     /// Dynamically adjusts token limits based on available system memory.
     /// Supports both advisory and strict memory budgeting modes.
     /// </summary>
-    public class MemoryConfiguration
+    internal class MemoryConfiguration
     {
         /// <summary>
         /// Default maximum context size for systems with 16GB RAM.

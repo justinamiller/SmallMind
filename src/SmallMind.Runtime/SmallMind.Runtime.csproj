@@ -29,8 +29,38 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Main library projects -->
+    <InternalsVisibleTo Include="SmallMind.Engine" />
+    <InternalsVisibleTo Include="SmallMind.Rag" />
+    
+    <!-- Test projects -->
     <InternalsVisibleTo Include="SmallMind.Tests" />
     <InternalsVisibleTo Include="SmallMind.IntegrationTests" />
+    <InternalsVisibleTo Include="SmallMind.PerfTests" />
+    
+    <!-- CLI and sample projects -->
+    <InternalsVisibleTo Include="SmallMind.Console" />
+    <InternalsVisibleTo Include="SmallMind.Rag.Cli" />
+    <InternalsVisibleTo Include="CachingAndBatching" />
+    <InternalsVisibleTo Include="CreateBenchmarkModel" />
+    <InternalsVisibleTo Include="GgufInferenceDemo" />
+    <InternalsVisibleTo Include="InferenceAllocationBenchmark" />
+    <InternalsVisibleTo Include="InferenceFeaturesBenchmark" />
+    <InternalsVisibleTo Include="MatMulBenchmark" />
+    <InternalsVisibleTo Include="MinimalGenerate" />
+    <InternalsVisibleTo Include="MultiThreadedGeneration" />
+    <InternalsVisibleTo Include="ParameterLimitsDemo" />
+    <InternalsVisibleTo Include="PretrainedModels" />
+    <InternalsVisibleTo Include="ProductionInference" />
+    <InternalsVisibleTo Include="ProfileModelCreation" />
+    <InternalsVisibleTo Include="ProfilerBenchmarks" />
+    <InternalsVisibleTo Include="SmallMind.QuickStart" />
+    <InternalsVisibleTo Include="SmallMind.Server" />
+    <InternalsVisibleTo Include="SmallMind.ValidationRunner" />
+    <InternalsVisibleTo Include="StandardLLMBenchmarks" />
+    <InternalsVisibleTo Include="Tier1HotpathBenchmark" />
+    <InternalsVisibleTo Include="Tier2Tier3Benchmarks" />
+    <InternalsVisibleTo Include="ValidateGguf" />
   </ItemGroup>
 
 </Project>

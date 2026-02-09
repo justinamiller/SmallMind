@@ -7,7 +7,7 @@ namespace SmallMind.Quantization.Abstractions
     /// FP32 weight tensor implementation for IWeightTensor.
     /// Provides standard floating-point matrix multiplication.
     /// </summary>
-    public sealed class F32WeightTensor : IWeightTensor
+    internal sealed class F32WeightTensor : IWeightTensor
     {
         private readonly float[] _data;
 

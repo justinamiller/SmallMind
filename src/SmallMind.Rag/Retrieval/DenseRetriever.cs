@@ -6,7 +6,7 @@ namespace SmallMind.Rag.Retrieval;
 /// <summary>
 /// Dense retriever using vector embeddings for semantic search.
 /// </summary>
-public sealed class DenseRetriever
+internal sealed class DenseRetriever
 {
     private readonly IVectorStore _vectorStore;
     private readonly IEmbedder _embedder;

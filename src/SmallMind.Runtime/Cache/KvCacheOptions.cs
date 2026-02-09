@@ -5,7 +5,7 @@ namespace SmallMind.Runtime.Cache
     /// <summary>
     /// Eviction policy for KV cache store.
     /// </summary>
-    public enum KvEvictionPolicy
+    internal enum KvEvictionPolicy
     {
         /// <summary>
         /// Least Recently Used - evict sessions not accessed recently.
@@ -16,7 +16,7 @@ namespace SmallMind.Runtime.Cache
     /// <summary>
     /// Configuration options for KV cache management.
     /// </summary>
-    public sealed class KvCacheOptions
+    internal sealed class KvCacheOptions
     {
         /// <summary>
         /// Gets or sets whether KV caching is enabled.

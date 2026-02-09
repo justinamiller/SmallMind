@@ -20,7 +20,7 @@ namespace SmallMind.Core.Simd
     /// Memory reduction: Avoids materializing O(seq_len²) attention scores
     /// </summary>
     [SkipLocalsInit]
-    public static class FusedAttentionKernels
+    internal static class FusedAttentionKernels
     {
         private const float SOFTMAX_MIN = -1e9f; // Causal mask value
         

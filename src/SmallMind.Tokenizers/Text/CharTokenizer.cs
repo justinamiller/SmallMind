@@ -11,7 +11,7 @@ namespace SmallMind.Tokenizers
     /// and provides encode/decode methods to convert between strings and token IDs.
     /// This is the default tokenizer and works with any text without external assets.
     /// </summary>
-    public class CharTokenizer : ITokenizer
+    internal class CharTokenizer : ITokenizer
     {
         private readonly FrozenDictionary<char, int> _charToIdx;
         private readonly FrozenDictionary<int, char> _idxToChar;

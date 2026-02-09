@@ -9,11 +9,11 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Performance profiler for tracking operation timings during training
     /// </summary>
-    public sealed class TrainingProfiler
+    internal sealed class TrainingProfiler
     {
         private readonly ConcurrentDictionary<string, OperationStats> _stats = new();
         
-        public struct OperationStats
+        internal struct OperationStats
         {
             public long TotalTicks;
             public long Count;
@@ -53,7 +53,7 @@ namespace SmallMind.Core.Core
                 });
         }
         
-        public readonly struct ProfileScope : IDisposable
+        internal readonly struct ProfileScope : IDisposable
         {
             private readonly TrainingProfiler? _profiler;
             private readonly string _operation;
@@ -134,7 +134,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Memory usage tracker for monitoring training memory consumption
     /// </summary>
-    public sealed class MemoryTracker
+    internal sealed class MemoryTracker
     {
         private long _peakManaged;
         private long _peakWorking;
@@ -184,7 +184,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// Gradient diagnostics for detecting vanishing/exploding gradients
     /// </summary>
-    public static class GradientDiagnostics
+    internal static class GradientDiagnostics
     {
         public static void CheckGradients(string name, ReadOnlySpan<float> gradients, bool verbose = false)
         {

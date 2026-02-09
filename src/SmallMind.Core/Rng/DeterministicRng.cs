@@ -7,7 +7,7 @@ namespace SmallMind.Core.Rng
     /// Provides reproducible random sequences when seeded with the same value.
     /// Pure C# implementation with no external dependencies.
     /// </summary>
-    public sealed class DeterministicRng
+    internal sealed class DeterministicRng
     {
         private ulong _state0;
         private ulong _state1;

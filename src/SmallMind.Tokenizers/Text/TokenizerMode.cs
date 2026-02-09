@@ -3,7 +3,7 @@ namespace SmallMind.Tokenizers
     /// <summary>
     /// Specifies which tokenizer implementation to use.
     /// </summary>
-    public enum TokenizerMode
+    internal enum TokenizerMode
     {
         /// <summary>
         /// Automatically select tokenizer based on available assets.

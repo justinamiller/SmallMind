@@ -21,7 +21,7 @@ namespace SmallMind.Engine
     /// <summary>
     /// Context budget information for a chat session.
     /// </summary>
-    public readonly struct ContextBudget
+    internal readonly struct ContextBudget
     {
         /// <summary>Maximum context tokens (model.BlockSize).</summary>
         public readonly int MaxContextTokens;
@@ -1460,7 +1460,7 @@ namespace SmallMind.Engine
             if (request.Messages == null || request.Messages.Count == 0)
                 throw new ArgumentException("Request must contain at least one message", nameof(request));
 
-            telemetry ??= NoOpTelemetry.Instance;
+            telemetry ??= IChatTelemetry.Default;
             
             var sw = Stopwatch.StartNew();
             telemetry.OnRequestStart(_sessionId, request.Messages.Count);

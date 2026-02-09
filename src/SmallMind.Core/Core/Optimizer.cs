@@ -10,7 +10,7 @@ namespace SmallMind.Core.Core
     /// <summary>
     /// AdamW optimizer for training neural networks with gradient clipping support
     /// </summary>
-    public sealed class AdamW
+    internal sealed class AdamW
     {
         private List<Tensor> _parameters;
         private float _lr;

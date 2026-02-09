@@ -14,7 +14,7 @@ namespace SmallMind.Tokenizers
     /// Byte Pair Encoding (BPE) tokenizer implementation.
     /// Loads vocabulary and merge rules from vocab.json and merges.txt files.
     /// </summary>
-    public class BpeTokenizer : ITokenizer
+    internal class BpeTokenizer : ITokenizer
     {
         private readonly FrozenDictionary<string, int> _vocab;
         private readonly FrozenDictionary<int, string> _inverseVocab;

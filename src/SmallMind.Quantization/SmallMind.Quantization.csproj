@@ -15,4 +15,17 @@
     <ProjectReference Include="..\SmallMind.Tokenizers\SmallMind.Tokenizers.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmallMind.Runtime" />
+    <InternalsVisibleTo Include="SmallMind.Engine" />
+    <InternalsVisibleTo Include="SmallMind.Console" />
+    <InternalsVisibleTo Include="SmallMind.Tests" />
+    <InternalsVisibleTo Include="SmallMind.Quantization.Tests" />
+    <InternalsVisibleTo Include="SmallMind.IntegrationTests" />
+    <InternalsVisibleTo Include="SmallMind.PerfTests" />
+    <InternalsVisibleTo Include="GgufInferenceDemo" />
+    <InternalsVisibleTo Include="ValidateGguf" />
+    <InternalsVisibleTo Include="SmallMind.Benchmarks" />
+  </ItemGroup>
+
 </Project>

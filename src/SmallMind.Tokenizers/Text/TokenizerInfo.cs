@@ -3,7 +3,7 @@ namespace SmallMind.Tokenizers
     /// <summary>
     /// Metadata about a tokenizer instance.
     /// </summary>
-    public readonly struct TokenizerInfo
+    internal readonly struct TokenizerInfo
     {
         /// <summary>
         /// Name of the tokenizer.

@@ -26,8 +26,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SmallMind.Runtime" />
+    <InternalsVisibleTo Include="SmallMind.Quantization" />
+    <InternalsVisibleTo Include="SmallMind.Engine" />
+    <InternalsVisibleTo Include="SmallMind.Rag" />
+    <InternalsVisibleTo Include="SmallMind.Console" />
     <InternalsVisibleTo Include="SmallMind.Tests" />
+    <InternalsVisibleTo Include="SmallMind.PerfTests" />
     <InternalsVisibleTo Include="SmallMind.IntegrationTests" />
+    <InternalsVisibleTo Include="MinimalGenerate" />
+    <InternalsVisibleTo Include="GgufInferenceDemo" />
+    <InternalsVisibleTo Include="TokenizerPerf" />
   </ItemGroup>
 
 </Project>

@@ -15,7 +15,7 @@ namespace SmallMind.Core.Simd
     /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on class to avoid zero-initialization overhead in hot methods.
     /// </summary>
     [SkipLocalsInit]
-    public static class MatMulOps
+    internal static class MatMulOps
     {
         // Parallelization threshold: Use Parallel.For only when M >= 128
         // Rationale: Thread overhead dominates for smaller matrices
@@ -31,7 +31,7 @@ namespace SmallMind.Core.Simd
         /// Kernel selection telemetry for diagnostics.
         /// Records which kernel was used for the last MatMul call.
         /// </summary>
-        public enum MatMulKernel
+        internal enum MatMulKernel
         {
             Unknown,
             Avx512Unsafe,
@@ -45,7 +45,7 @@ namespace SmallMind.Core.Simd
         /// Gets the kernel used for the last MatMul operation.
         /// Useful for benchmarking and diagnostics.
         /// </summary>
-        public static MatMulKernel LastKernelUsed { get; private set; } = MatMulKernel.Unknown;
+        internal static MatMulKernel LastKernelUsed { get; private set; } = MatMulKernel.Unknown;
 
         /// <summary>
         /// Enhanced matrix multiplication: C = A × B

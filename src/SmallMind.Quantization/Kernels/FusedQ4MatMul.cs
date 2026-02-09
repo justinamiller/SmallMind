@@ -20,7 +20,7 @@ namespace SmallMind.Quantization.Kernels
     /// Memory bandwidth reduction: 8x (4-bit vs 32-bit weights)
     /// </summary>
     [SkipLocalsInit]
-    public static class FusedQ4MatMul
+    internal static class FusedQ4MatMul
     {
         // Cache blocking parameters (tuned for Q4 bandwidth characteristics)
         private const int L1_BLOCK_M = 32;

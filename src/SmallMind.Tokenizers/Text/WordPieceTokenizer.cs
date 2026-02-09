@@ -11,7 +11,7 @@ namespace SmallMind.Tokenizers
     /// WordPiece tokenizer (BERT-style with ## continuation markers).
     /// Uses greedy longest-match-first algorithm.
     /// </summary>
-    public class WordPieceTokenizer : ITokenizer
+    internal class WordPieceTokenizer : ITokenizer
     {
         private readonly FrozenDictionary<string, int> _vocab;
         private readonly FrozenDictionary<int, string> _inverseVocab;

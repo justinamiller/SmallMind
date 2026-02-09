@@ -5,7 +5,7 @@ namespace SmallMind.Rag.Telemetry;
 /// <summary>
 /// In-memory implementation of <see cref="IRagMetrics"/> for tracking RAG operation metrics.
 /// </summary>
-public sealed class InMemoryRagMetrics : IRagMetrics
+internal sealed class InMemoryRagMetrics : IRagMetrics
 {
     private long _ingestionCount;
     private long _retrievalCount;

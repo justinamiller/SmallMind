@@ -8,7 +8,7 @@ namespace SmallMind.Runtime.Batching
     /// Configuration options for batched inference scheduling.
     /// Controls batch formation, timeout, and queue management.
     /// </summary>
-    public sealed class BatchingOptions
+    internal sealed class BatchingOptions
     {
         /// <summary>
         /// Gets or sets whether batching is enabled.

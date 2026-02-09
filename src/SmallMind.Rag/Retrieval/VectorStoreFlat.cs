@@ -8,7 +8,7 @@ namespace SmallMind.Rag.Retrieval;
 /// Simple flat vector store that performs brute-force similarity search.
 /// Optimized with SIMD for cosine similarity computation.
 /// </summary>
-public sealed class VectorStoreFlat : IVectorStore
+internal sealed class VectorStoreFlat : IVectorStore
 {
     private const int FILE_VERSION = 1;
 

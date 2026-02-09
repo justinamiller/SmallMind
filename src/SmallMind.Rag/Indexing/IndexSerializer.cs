@@ -9,7 +9,7 @@ namespace SmallMind.Rag.Indexing;
 /// Handles binary serialization and deserialization of the RAG index to disk.
 /// Stores chunks, sparse inverted index, and manifest as separate files.
 /// </summary>
-public static class IndexSerializer
+internal static class IndexSerializer
 {
     private const string ManifestFileName = "manifest.json";
     private const string ChunksFileName = "chunks.bin";

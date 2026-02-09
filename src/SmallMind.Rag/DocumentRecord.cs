@@ -6,7 +6,7 @@ namespace SmallMind.Rag;
 /// Represents metadata for a document in the RAG index.
 /// Immutable value type for performance and thread-safety.
 /// </summary>
-public readonly struct DocumentRecord
+internal readonly struct DocumentRecord
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="DocumentRecord"/> struct.

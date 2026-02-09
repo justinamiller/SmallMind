@@ -12,7 +12,7 @@ namespace SmallMind.Core
     /// High-performance binary checkpoint store with version control.
     /// Format: Magic header + version + JSON metadata + binary tensors.
     /// </summary>
-    public class BinaryCheckpointStore : ICheckpointStore
+    internal class BinaryCheckpointStore : ICheckpointStore
     {
         private const string MagicHeader = "SMND"; // SmallMiND
         private const int CurrentFormatVersion = 1;

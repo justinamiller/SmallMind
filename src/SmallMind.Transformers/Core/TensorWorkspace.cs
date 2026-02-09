@@ -9,7 +9,7 @@ namespace SmallMind.Transformers
     /// Allocates tensors on first use and reuses them for subsequent calls.
     /// This eliminates allocations for intermediate results during inference.
     /// </summary>
-    public sealed class TensorWorkspace : IDisposable
+    internal sealed class TensorWorkspace : IDisposable
     {
         private readonly Dictionary<string, Tensor> _tensors;
         private bool _disposed;

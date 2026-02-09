@@ -8,7 +8,7 @@ namespace SmallMind.Rag.Indexing.Sparse;
 /// Static tokenizer for text processing in RAG indexing and retrieval.
 /// Implements high-performance tokenization with zero-allocation scanning.
 /// </summary>
-public static class RagTokenizer
+internal static class RagTokenizer
 {
     /// <summary>
     /// Tokenizes text into a list of lowercase alphanumeric tokens.

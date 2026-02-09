@@ -14,7 +14,7 @@ namespace SmallMind.Runtime
     /// Supports JSON, XML, CSV, text files, directories, and custom delimiters.
     /// All methods return a single concatenated string suitable for training.
     /// </summary>
-    public static class DataLoader
+    internal static class DataLoader
     {
         /// <summary>
         /// Load data from a plain text file, one sentence per line.

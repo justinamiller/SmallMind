@@ -12,7 +12,7 @@ namespace SmallMind.Runtime.Quantization
     /// Loads quantized models from SMQ format and integrates with inference runtime.
     /// Handles both FP32 checkpoints and quantized SMQ models.
     /// </summary>
-    public sealed class QuantizedModelLoader
+    internal sealed class QuantizedModelLoader
     {
         /// <summary>
         /// Load a model from either FP32 checkpoint or SMQ format.
@@ -129,7 +129,7 @@ namespace SmallMind.Runtime.Quantization
     /// <summary>
     /// Metadata information about an SMQ quantized model.
     /// </summary>
-    public sealed class SmqModelInfo
+    internal sealed class SmqModelInfo
     {
         /// <summary>
         /// Number of tensors in the model.

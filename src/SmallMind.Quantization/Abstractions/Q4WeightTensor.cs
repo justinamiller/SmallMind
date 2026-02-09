@@ -8,7 +8,7 @@ namespace SmallMind.Quantization.Abstractions
     /// Q4_0 quantized weight tensor implementation for IWeightTensor.
     /// Uses fused FP32×Q4 matrix multiplication kernel.
     /// </summary>
-    public sealed class Q4WeightTensor : IWeightTensor
+    internal sealed class Q4WeightTensor : IWeightTensor
     {
         private readonly Q4Tensor _tensor;
 

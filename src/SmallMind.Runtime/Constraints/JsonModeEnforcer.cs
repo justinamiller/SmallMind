@@ -6,7 +6,7 @@ namespace SmallMind.Runtime.Constraints
     /// Enforces JSON structural validity during generation.
     /// Implements a simplified state machine that ensures balanced braces/brackets.
     /// </summary>
-    public sealed class JsonModeEnforcer : IOutputConstraint
+    internal sealed class JsonModeEnforcer : IOutputConstraint
     {
         private enum State
         {

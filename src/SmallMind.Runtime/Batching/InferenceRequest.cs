@@ -9,7 +9,7 @@ namespace SmallMind.Runtime.Batching
     /// Represents a single inference request in the batching queue.
     /// Contains prompt tokens, options, and response channel for streaming results.
     /// </summary>
-    public sealed class InferenceRequest : IDisposable
+    internal sealed class InferenceRequest : IDisposable
     {
         /// <summary>
         /// Gets the session ID for this request.

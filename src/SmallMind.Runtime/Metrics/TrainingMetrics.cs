@@ -8,7 +8,7 @@ namespace SmallMind.Runtime.Metrics
     /// Tracks model quality metrics during training and validation.
     /// Provides insights into prediction quality, training progress, and model health.
     /// </summary>
-    public sealed class TrainingMetrics
+    internal sealed class TrainingMetrics
     {
         private readonly List<float> _trainingLosses = new List<float>();
         private readonly List<float> _validationLosses = new List<float>();
@@ -261,7 +261,7 @@ namespace SmallMind.Runtime.Metrics
     /// <summary>
     /// Statistics for gradient health monitoring.
     /// </summary>
-    public sealed class GradientStats
+    internal sealed class GradientStats
     {
         public float MeanNorm { get; set; }
         public float MaxNorm { get; set; }
@@ -273,7 +273,7 @@ namespace SmallMind.Runtime.Metrics
     /// <summary>
     /// Summary of statistical metrics.
     /// </summary>
-    public sealed class StatsSummary
+    internal sealed class StatsSummary
     {
         public int Count { get; set; }
         public float Mean { get; set; }
@@ -285,7 +285,7 @@ namespace SmallMind.Runtime.Metrics
     /// <summary>
     /// Overall summary of gradient health.
     /// </summary>
-    public sealed class GradientHealthSummary
+    internal sealed class GradientHealthSummary
     {
         public float AverageMeanNorm { get; set; }
         public float MaxNormSeen { get; set; }
@@ -298,7 +298,7 @@ namespace SmallMind.Runtime.Metrics
     /// <summary>
     /// Complete summary of all training metrics.
     /// </summary>
-    public sealed class MetricsSummary
+    internal sealed class MetricsSummary
     {
         public StatsSummary? TrainingLossStats { get; set; }
         public StatsSummary? ValidationLossStats { get; set; }

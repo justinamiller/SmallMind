@@ -3,7 +3,7 @@ namespace SmallMind.Runtime.PretrainedModels
     /// <summary>
     /// Defines the types of pre-trained model tasks supported.
     /// </summary>
-    public enum TaskType
+    internal enum TaskType
     {
         /// <summary>
         /// Text generation (default task for base Transformer).

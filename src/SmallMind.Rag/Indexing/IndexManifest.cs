@@ -9,7 +9,7 @@ namespace SmallMind.Rag.Indexing;
 /// Tracks metadata for the RAG index including version, creation time, and document hashes.
 /// Used to support incremental updates and version checking.
 /// </summary>
-public sealed class IndexManifest
+internal sealed class IndexManifest
 {
     /// <summary>
     /// Gets or sets the index format version number.

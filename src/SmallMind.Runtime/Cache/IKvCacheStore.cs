@@ -3,7 +3,7 @@ namespace SmallMind.Runtime.Cache
     /// <summary>
     /// Interface for KV cache storage with lifecycle management.
     /// </summary>
-    public interface IKvCacheStore
+    internal interface IKvCacheStore
     {
         /// <summary>
         /// Tries to get an existing cache entry for the given session.

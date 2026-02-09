@@ -9,7 +9,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// CLI command to generate text from a trained model.
     /// Supports both raw generation and chat-formatted prompts.
     /// </summary>
-    public sealed class GenerateCommand : ICommand
+    internal sealed class GenerateCommand : ICommand
     {
         public string Name => "generate";
         public string Description => "Generate text from a trained model";

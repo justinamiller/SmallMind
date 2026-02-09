@@ -9,7 +9,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to inspect SMQ model details.
     /// </summary>
-    public sealed class InspectCommand : ICommand
+    internal sealed class InspectCommand : ICommand
     {
         public string Name => "inspect";
         public string Description => "Display SMQ model information";

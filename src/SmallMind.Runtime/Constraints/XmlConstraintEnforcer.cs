@@ -7,7 +7,7 @@ namespace SmallMind.Runtime.Constraints
     /// Enforces XML syntax constraints during generation.
     /// Validates tag structure, attributes, and well-formedness.
     /// </summary>
-    public sealed class XmlConstraintEnforcer : IOutputConstraint
+    internal sealed class XmlConstraintEnforcer : IOutputConstraint
     {
         public string ConstraintDescription => "XML well-formedness validation";
         

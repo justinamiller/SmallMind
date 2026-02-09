@@ -17,7 +17,7 @@ namespace SmallMind.Runtime
     /// Provides bounded concurrency and session pooling for production deployments.
     /// Model weights are immutable and shared safely across all sessions.
     /// </summary>
-    public sealed class InferenceEngine : IDisposable
+    internal sealed class InferenceEngine : IDisposable
     {
         private readonly TransformerModel _model;
         private readonly ITokenizer _tokenizer;
@@ -393,7 +393,7 @@ namespace SmallMind.Runtime
     /// <summary>
     /// Statistics about the inference engine state.
     /// </summary>
-    public readonly struct EngineStatistics : IEquatable<EngineStatistics>
+    internal readonly struct EngineStatistics : IEquatable<EngineStatistics>
     {
         /// <summary>
         /// Number of currently active sessions.

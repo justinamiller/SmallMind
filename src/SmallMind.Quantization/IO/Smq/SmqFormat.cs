@@ -9,7 +9,7 @@ namespace SmallMind.Quantization.IO.Smq
     /// Format version: SMQv0001
     /// Layout: Header | Metadata JSON | Tensor Directory | Tensor Data Blobs
     /// </summary>
-    public static class SmqFormat
+    internal static class SmqFormat
     {
         /// <summary>
         /// Magic header for SMQ files (8 bytes ASCII).
@@ -29,7 +29,7 @@ namespace SmallMind.Quantization.IO.Smq
         /// <summary>
         /// Tensor metadata entry in the directory.
         /// </summary>
-        public class TensorEntry
+        internal class TensorEntry
         {
             /// <summary>
             /// Tensor name (e.g., "model.layers.0.attn.wq").

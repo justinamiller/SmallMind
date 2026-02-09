@@ -6,7 +6,7 @@ namespace SmallMind.Rag;
 /// Represents a retrieved chunk with relevance scoring information.
 /// Immutable value type for performance in retrieval operations.
 /// </summary>
-public readonly struct RetrievedChunk
+internal readonly struct RetrievedChunk
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="RetrievedChunk"/> struct.

@@ -10,7 +10,7 @@ namespace SmallMind.Runtime.Scheduling
     /// Provides first-class scheduling with auditable and replayable token generation.
     /// Thread-safe and designed for production use.
     /// </summary>
-    public sealed class DeterministicScheduler
+    internal sealed class DeterministicScheduler
     {
         private readonly object _lock = new object();
         private readonly Dictionary<string, TokenScheduleResult> _scheduleHistory;

@@ -14,7 +14,7 @@ namespace SmallMind.ConsoleApp.Commands
     /// <summary>
     /// CLI command to quantize FP32 models to SMQ format.
     /// </summary>
-    public sealed class QuantizeCommand : ICommand
+    internal sealed class QuantizeCommand : ICommand
     {
         public string Name => "quantize";
         public string Description => "Convert FP32 model checkpoint to quantized SMQ format";

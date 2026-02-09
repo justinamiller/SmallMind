@@ -6,7 +6,7 @@ namespace SmallMind.Tokenizers
     /// <summary>
     /// Configuration for creating and initializing tokenizers.
     /// </summary>
-    public class TokenizerConfig
+    internal class TokenizerConfig
     {
         /// <summary>
         /// The type of tokenizer to create.
@@ -66,7 +66,7 @@ namespace SmallMind.Tokenizers
     /// <summary>
     /// Special tokens configuration.
     /// </summary>
-    public class SpecialTokensConfig
+    internal class SpecialTokensConfig
     {
         /// <summary>
         /// Beginning-of-sequence token.

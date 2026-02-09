@@ -4,7 +4,7 @@ namespace SmallMind.Quantization.IO.Gguf
     /// Interface for reading tensor data from GGUF files.
     /// Abstracts between stream-based and memory-mapped readers.
     /// </summary>
-    public interface ITensorDataReader
+    internal interface ITensorDataReader
     {
         /// <summary>
         /// Read raw tensor data from the GGUF file.

@@ -13,7 +13,7 @@ namespace SmallMind.Benchmarks
     /// Performance benchmark runner for SmallMind.
     /// Measures TTFT, tok/sec, memory, GC, and allocations.
     /// </summary>
-    public sealed class BenchmarkRunner
+    internal sealed class BenchmarkRunner
     {
         private readonly BenchmarkConfig _config;
         private readonly List<BenchmarkResult> _results = new List<BenchmarkResult>();
