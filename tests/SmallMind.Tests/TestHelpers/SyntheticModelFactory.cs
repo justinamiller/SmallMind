@@ -1,99 +1,64 @@
 using System;
 using SmallMind.Transformers;
-using SmallMind.Tokenizers;
-using SmallMind.Tests.Fixtures;
 
 namespace SmallMind.Tests.TestHelpers
 {
     /// <summary>
-    /// Factory for creating synthetic, deterministic transformer models for testing.
-    /// Produces tiny models that are fast to execute but exercise full code paths.
-    /// Used for golden output regression tests and CI validation.
+    /// Factory for creating small, deterministic synthetic models for testing.
+    /// Creates tiny TransformerModels with predictable weights to enable golden output testing.
     /// </summary>
-    internal sealed class SyntheticModelFactory
+    internal static class SyntheticModelFactory
     {
-        // Synthetic model configuration (optimized for CI speed)
-        public const int VocabSize = 256;           // Extended vocab for better coverage
-        public const int ContextLength = 64;        // Short context for fast tests
-        public const int EmbeddingDim = 64;         // Small embedding dimension
-        public const int NumLayers = 2;             // Minimal layers for full stack testing
-        public const int NumHeads = 4;              // Multiple heads for attention testing
-        public const int HeadDim = EmbeddingDim / NumHeads; // = 16
-        public const int KVHeads = 2;               // For GQA testing
-        public const int FFNHiddenDim = 256;        // Standard 4x embedding dim
-        public const int DeterministicSeed = 42;    // Fixed seed for reproducibility
-
-        // Special tokens
-        public const int BOS_TOKEN_ID = 0;
-        public const int EOS_TOKEN_ID = 1;
-        public const int UNK_TOKEN_ID = 2;
-        public const int PAD_TOKEN_ID = 3;
-
         /// <summary>
-        /// Creates a new synthetic transformer model with deterministic initialization.
-        /// All weights are initialized from the same seed for reproducibility.
+        /// Creates a tiny deterministic model for golden output tests.
+        /// Vocab=256, Context=64, Embedding=64, Layers=2, Heads=4
         /// </summary>
-        /// <param name="seed">Random seed for weight initialization (default: 42)</param>
-        /// <returns>A fully initialized transformer model</returns>
-        public static TransformerModel CreateSyntheticModel(int seed = DeterministicSeed)
+        /// <param name="seed">Random seed for deterministic weight initialization</param>
+        /// <returns>A small TransformerModel with deterministic weights</returns>
+        public static TransformerModel CreateTinyModel(int seed = 42)
         {
             var config = new ModelConfig
             {
-                VocabSize = VocabSize,
-                ContextLength = ContextLength,
-                EmbeddingLength = EmbeddingDim,
-                BlockCount = NumLayers,
-                HeadCount = NumHeads,
-                HeadCountKv = KVHeads,
-                FeedForwardLength = FFNHiddenDim,
-                Architecture = "llama", // Use Llama architecture
+                VocabSize = 256,
+                ContextLength = 64,
+                EmbeddingLength = 64,
+                FeedForwardLength = 256, // 4x embedding for standard transformer
+                BlockCount = 2,
+                HeadCount = 4,
+                HeadCountKv = 4, // MHA (not GQA)
+                Architecture = "test-synthetic",
                 RopeFreqBase = 10000.0,
                 NormEps = 1e-5,
-                Dropout = 0.0 // No dropout for deterministic behavior
+                UseBias = false
             };
-
-            var model = new TransformerModel(config, seed);
-            model.Eval(); // Set to eval mode (disables dropout)
             
-            return model;
+            return new TransformerModel(config, seed);
         }
-
+        
         /// <summary>
-        /// Creates a synthetic character-level tokenizer.
-        /// Uses ASCII printable characters + common control chars.
+        /// Creates a micro model (single layer, minimal dimensions) for ultra-fast tests.
+        /// Vocab=128, Context=32, Embedding=32, Layers=1, Heads=2
         /// </summary>
-        /// <returns>A character-level tokenizer</returns>
-        public static ITokenizer CreateSyntheticTokenizer()
+        /// <param name="seed">Random seed for deterministic weight initialization</param>
+        /// <returns>A micro TransformerModel</returns>
+        public static TransformerModel CreateMicroModel(int seed = 42)
         {
-            // Build vocabulary from ASCII printable characters
-            var vocabChars = new char[VocabSize];
-            
-            // Special tokens first
-            vocabChars[BOS_TOKEN_ID] = '<'; // <BOS>
-            vocabChars[EOS_TOKEN_ID] = '>'; // <EOS>
-            vocabChars[UNK_TOKEN_ID] = '?'; // <UNK>
-            vocabChars[PAD_TOKEN_ID] = '_'; // <PAD>
-            
-            // Fill rest with ASCII printable (32-126) and wrap around
-            for (int i = 4; i < VocabSize; i++)
+            var config = new ModelConfig
             {
-                vocabChars[i] = (char)(32 + ((i - 4) % 95));
-            }
+                VocabSize = 128,
+                ContextLength = 32,
+                EmbeddingLength = 32,
+                FeedForwardLength = 128, // 4x embedding
+                BlockCount = 1,
+                HeadCount = 2,
+                HeadCountKv = 2,
+                Architecture = "test-micro",
+                RopeFreqBase = 10000.0,
+                NormEps = 1e-5,
+                UseBias = false
+            };
             
-            var vocab = new string(vocabChars);
-            return new CharTokenizer(vocab);
-        }
-
-        /// <summary>
-        /// Creates a complete synthetic model setup (model + tokenizer).
-        /// </summary>
-        /// <param name="seed">Random seed for model initialization</param>
-        /// <returns>Tuple of (model, tokenizer)</returns>
-        public static (TransformerModel model, ITokenizer tokenizer) CreateComplete(int seed = DeterministicSeed)
-        {
-            var model = CreateSyntheticModel(seed);
-            var tokenizer = CreateSyntheticTokenizer();
-            return (model, tokenizer);
+            return new TransformerModel(config, seed);
         }
     }
 }
