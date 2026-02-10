@@ -38,3 +38,5 @@ models/
 *.gguf
 *.smq
 *.smq.manifest.json
+SmallMind.Showcase/.data/
+*.swp

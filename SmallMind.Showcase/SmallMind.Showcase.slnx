@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SmallMind.Showcase.Core/SmallMind.Showcase.Core.csproj" />
+    <Project Path="src/SmallMind.Showcase.Web/SmallMind.Showcase.Web.csproj" />
+  </Folder>
+</Solution>
