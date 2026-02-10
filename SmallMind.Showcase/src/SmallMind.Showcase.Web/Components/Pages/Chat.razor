@@ -1,0 +1,443 @@
+@page "/"
+@rendermode InteractiveServer
+@using SmallMind.Showcase.Core.Interfaces
+@using SmallMind.Showcase.Core.Models
+@inject IChatOrchestrator ChatOrchestrator
+@inject IChatSessionStore SessionStore
+@inject IModelRegistry ModelRegistry
+@inject IMetricsCollector MetricsCollector
+
+<PageTitle>SmallMind Showcase</PageTitle>
+
+<div class="showcase-container">
+    <div class="showcase-header">
+        <h1>🧠 SmallMind Showcase</h1>
+        <div class="model-info">
+            @if (ChatOrchestrator.CurrentModel != null)
+            {
+                <span class="badge bg-success">
+                    Model: @ChatOrchestrator.CurrentModel.Name
+                    @if (!string.IsNullOrEmpty(ChatOrchestrator.CurrentModel.Quantization))
+                    {
+                        <text>(@ChatOrchestrator.CurrentModel.Quantization)</text>
+                    }
+                </span>
+            }
+            else
+            {
+                <span class="badge bg-warning">No model loaded</span>
+            }
+        </div>
+    </div>
+
+    <div class="showcase-content">
+        <!-- Left Sidebar: Sessions -->
+        <div class="sessions-sidebar">
+            <div class="sidebar-header">
+                <h5>Chat Sessions</h5>
+                <button class="btn btn-sm btn-primary" @onclick="CreateNewSession" disabled="@(ChatOrchestrator.CurrentModel == null)">
+                    + New
+                </button>
+            </div>
+            <div class="sessions-list">
+                @foreach (var session in _sessions)
+                {
+                    <div class="session-item @(session.Id == _currentSession?.Id ? "active" : "")"
+                         @onclick="() => SelectSession(session)">
+                        <div class="session-title">@session.Title</div>
+                        <div class="session-date">@session.UpdatedAt.ToString("MMM dd, HH:mm")</div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div class="chat-main">
+            @if (_currentSession == null)
+            {
+                <div class="empty-state">
+                    <h3>Welcome to SmallMind Showcase</h3>
+                    <p>Select a model, then create or select a session to start chatting.</p>
+                    
+                    <div class="model-selection mt-4">
+                        <h5>Available Models</h5>
+                        @if (_models.Count == 0)
+                        {
+                            <div class="alert alert-warning">
+                                No models found in the models directory. 
+                                <br/>
+                                Please add .smq or .gguf model files to: <code>@_modelsPath</code>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="models-list">
+                                @foreach (var model in _models)
+                                {
+                                    <div class="model-card">
+                                        <h6>@model.Name</h6>
+                                        <div class="model-meta">
+                                            <span>@model.SizeFormatted</span>
+                                            @if (!string.IsNullOrEmpty(model.Architecture))
+                                            {
+                                                <span class="badge bg-info">@model.Architecture</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(model.Quantization))
+                                            {
+                                                <span class="badge bg-secondary">@model.Quantization</span>
+                                            }
+                                        </div>
+                                        <button class="btn btn-sm btn-success mt-2" 
+                                                @onclick="() => LoadModel(model)"
+                                                disabled="@_isLoadingModel">
+                                            @(_isLoadingModel ? "Loading..." : "Load Model")
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="chat-messages">
+                    @foreach (var message in _currentSession.Messages)
+                    {
+                        <div class="message @message.Role.ToString().ToLower()">
+                            <div class="message-role">@message.Role</div>
+                            <div class="message-content">@message.Content</div>
+                            @if (message.Duration.HasValue)
+                            {
+                                <div class="message-meta">
+                                    @message.Duration.Value.TotalSeconds.ToString("F2")s
+                                    @if (message.TokenCount.HasValue)
+                                    {
+                                        <text>· @message.TokenCount tokens</text>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (_isGenerating)
+                    {
+                        <div class="message assistant streaming">
+                            <div class="message-role">Assistant</div>
+                            <div class="message-content">@_streamingResponse</div>
+                            <div class="message-meta">Generating...</div>
+                        </div>
+                    }
+                    <div @ref="_messagesEndRef"></div>
+                </div>
+
+                <div class="chat-input">
+                    @if (_errorMessage != null)
+                    {
+                        <div class="alert alert-danger alert-dismissible">
+                            @_errorMessage
+                            <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+                        </div>
+                    }
+                    
+                    <div class="input-group">
+                        <textarea class="form-control" 
+                                  @bind="_userInput" 
+                                  @bind:event="oninput"
+                                  @onkeydown="HandleKeyDown"
+                                  placeholder="Type your message... (Enter to send, Shift+Enter for newline)"
+                                  rows="3"
+                                  disabled="@_isGenerating"></textarea>
+                        <button class="btn btn-primary" 
+                                @onclick="SendMessage" 
+                                disabled="@(string.IsNullOrWhiteSpace(_userInput) || _isGenerating)">
+                            Send
+                        </button>
+                        @if (_isGenerating)
+                        {
+                            <button class="btn btn-danger" @onclick="CancelGeneration">
+                                Stop
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Right Sidebar: Metrics -->
+        <div class="metrics-sidebar">
+            <div class="sidebar-header">
+                <h5>Metrics</h5>
+            </div>
+            <div class="metrics-content">
+                @{
+                    var metrics = MetricsCollector.GetCurrentMetrics();
+                    var percentiles = MetricsCollector.GetPercentiles();
+                }
+                
+                <div class="metric-group">
+                    <h6>Generation Metrics</h6>
+                    @if (metrics.TimeToFirstToken.HasValue)
+                    {
+                        <div class="metric">
+                            <span class="metric-label">TTFT:</span>
+                            <span class="metric-value">@metrics.TimeToFirstToken.Value.TotalMilliseconds.ToString("F0") ms</span>
+                        </div>
+                    }
+                    @if (metrics.PrefillTokensPerSecond.HasValue)
+                    {
+                        <div class="metric">
+                            <span class="metric-label">Prefill:</span>
+                            <span class="metric-value">@metrics.PrefillTokensPerSecond.Value.ToString("F1") tok/s</span>
+                        </div>
+                    }
+                    @if (metrics.DecodeTokensPerSecond.HasValue)
+                    {
+                        <div class="metric">
+                            <span class="metric-label">Decode:</span>
+                            <span class="metric-value">@metrics.DecodeTokensPerSecond.Value.ToString("F1") tok/s</span>
+                        </div>
+                    }
+                    @if (metrics.PerTokenLatencyMs.HasValue)
+                    {
+                        <div class="metric">
+                            <span class="metric-label">Per-token:</span>
+                            <span class="metric-value">@metrics.PerTokenLatencyMs.Value.ToString("F1") ms</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="metric-group">
+                    <h6>Token Count</h6>
+                    <div class="metric">
+                        <span class="metric-label">Prompt:</span>
+                        <span class="metric-value">@metrics.PromptTokens</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Generated:</span>
+                        <span class="metric-value">@metrics.GeneratedTokens</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Total:</span>
+                        <span class="metric-value">@metrics.TotalTokens</span>
+                    </div>
+                </div>
+
+                <div class="metric-group">
+                    <h6>Memory</h6>
+                    <div class="metric">
+                        <span class="metric-label">Heap:</span>
+                        <span class="metric-value">@FormatBytes(metrics.ManagedHeapSizeBytes)</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">GC Gen0:</span>
+                        <span class="metric-value">@metrics.Gen0Collections</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">GC Gen1:</span>
+                        <span class="metric-value">@metrics.Gen1Collections</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">GC Gen2:</span>
+                        <span class="metric-value">@metrics.Gen2Collections</span>
+                    </div>
+                </div>
+
+                @if (percentiles.Count > 0)
+                {
+                    <div class="metric-group">
+                        <h6>Latency Percentiles (ms)</h6>
+                        <div class="metric">
+                            <span class="metric-label">P50:</span>
+                            <span class="metric-value">@percentiles.P50.ToString("F0")</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">P95:</span>
+                            <span class="metric-value">@percentiles.P95.ToString("F0")</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">P99:</span>
+                            <span class="metric-value">@percentiles.P99.ToString("F0")</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ChatSession> _sessions = new();
+    private ChatSession? _currentSession;
+    private List<DiscoveredModel> _models = new();
+    private string _userInput = "";
+    private bool _isGenerating = false;
+    private bool _isLoadingModel = false;
+    private string _streamingResponse = "";
+    private string? _errorMessage;
+    private CancellationTokenSource? _generationCts;
+    private ElementReference _messagesEndRef;
+    private Timer? _metricsUpdateTimer;
+    private string _modelsPath = "./models";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load sessions
+        _sessions = await SessionStore.GetAllSessionsAsync();
+
+        // Discover models
+        _models = await ModelRegistry.DiscoverModelsAsync();
+
+        // Start metrics update timer
+        _metricsUpdateTimer = new Timer(async _ => await InvokeAsync(StateHasChanged), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(500));
+    }
+
+    private async Task CreateNewSession()
+    {
+        var session = new ChatSession
+        {
+            Id = Guid.NewGuid().ToString(),
+            Title = $"Chat {_sessions.Count + 1}",
+            ModelId = ChatOrchestrator.CurrentModel?.Id
+        };
+
+        await SessionStore.CreateSessionAsync(session);
+        _sessions.Insert(0, session);
+        _currentSession = session;
+    }
+
+    private void SelectSession(ChatSession session)
+    {
+        _currentSession = session;
+    }
+
+    private async Task LoadModel(DiscoveredModel model)
+    {
+        _isLoadingModel = true;
+        _errorMessage = null;
+        
+        try
+        {
+            await ChatOrchestrator.LoadModelAsync(model);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load model: {ex.Message}";
+        }
+        finally
+        {
+            _isLoadingModel = false;
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_userInput) || _currentSession == null)
+            return;
+
+        var userMessage = _userInput.Trim();
+        _userInput = "";
+        _isGenerating = true;
+        _streamingResponse = "";
+        _errorMessage = null;
+
+        // Add user message
+        var userMsg = new ChatMessage
+        {
+            Id = Guid.NewGuid().ToString(),
+            Role = ChatMessageRole.User,
+            Content = userMessage
+        };
+        _currentSession.Messages.Add(userMsg);
+
+        _generationCts = new CancellationTokenSource();
+        var startTime = DateTime.UtcNow;
+
+        try
+        {
+            await foreach (var token in ChatOrchestrator.SendMessageAsync(
+                _currentSession,
+                userMessage,
+                _currentSession.Config,
+                _generationCts.Token))
+            {
+                _streamingResponse += token;
+                StateHasChanged();
+            }
+
+            // Add assistant message
+            var assistantMsg = new ChatMessage
+            {
+                Id = Guid.NewGuid().ToString(),
+                Role = ChatMessageRole.Assistant,
+                Content = _streamingResponse,
+                Duration = DateTime.UtcNow - startTime,
+                TokenCount = _streamingResponse.Length / 4 // Rough estimate
+            };
+            _currentSession.Messages.Add(assistantMsg);
+
+            // Save session
+            await SessionStore.UpdateSessionAsync(_currentSession);
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancelled
+            if (!string.IsNullOrEmpty(_streamingResponse))
+            {
+                var assistantMsg = new ChatMessage
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Role = ChatMessageRole.Assistant,
+                    Content = _streamingResponse + " [Cancelled]",
+                    Duration = DateTime.UtcNow - startTime
+                };
+                _currentSession.Messages.Add(assistantMsg);
+                await SessionStore.UpdateSessionAsync(_currentSession);
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _isGenerating = false;
+            _streamingResponse = "";
+            _generationCts?.Dispose();
+            _generationCts = null;
+        }
+    }
+
+    private void CancelGeneration()
+    {
+        _generationCts?.Cancel();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        int suffixIndex = 0;
+        double size = bytes;
+
+        while (size >= 1024 && suffixIndex < suffixes.Length - 1)
+        {
+            size /= 1024;
+            suffixIndex++;
+        }
+
+        return $"{size:F1} {suffixes[suffixIndex]}";
+    }
+
+    public void Dispose()
+    {
+        _metricsUpdateTimer?.Dispose();
+        _generationCts?.Dispose();
+    }
+}

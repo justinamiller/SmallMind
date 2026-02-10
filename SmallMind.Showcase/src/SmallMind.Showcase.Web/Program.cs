@@ -1,10 +1,26 @@
 using SmallMind.Showcase.Web.Components;
+using SmallMind.Showcase.Core.Interfaces;
+using SmallMind.Showcase.Core.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Configure SmallMind paths
+var modelsPath = builder.Configuration["SmallMind:ModelsPath"] ?? "./models";
+var dataPath = builder.Configuration["SmallMind:DataPath"] ?? "./.data";
+
+// Ensure directories exist
+Directory.CreateDirectory(modelsPath);
+Directory.CreateDirectory(dataPath);
+
+// Register SmallMind Showcase services
+builder.Services.AddSingleton<IModelRegistry>(sp => new ModelRegistry(modelsPath));
+builder.Services.AddSingleton<IChatSessionStore>(sp => new JsonChatSessionStore(dataPath));
+builder.Services.AddSingleton<IMetricsCollector, MetricsCollector>();
+builder.Services.AddSingleton<IChatOrchestrator, ChatOrchestrator>();
 
 var app = builder.Build();
 
