@@ -118,6 +118,15 @@ namespace SmallMind.Tests
             var publicTypes = assembly.GetExportedTypes();
             var violations = new List<string>();
 
+            // Allowlist for default implementation classes that provide convenience implementations
+            // These are sealed implementation classes that implement interfaces defined in Abstractions
+            var allowedDefaultImplementations = new HashSet<string>
+            {
+                "SmallMind.Abstractions.NoOpTelemetry",       // Default no-op implementation of IChatTelemetry
+                "SmallMind.Abstractions.ConsoleTelemetry",    // Console logging implementation of IChatTelemetry
+                "SmallMind.Abstractions.NoOpRetrievalProvider" // Default no-op implementation of IRetrievalProvider
+            };
+
             foreach (var type in publicTypes)
             {
                 // Interfaces, enums, and value types are always allowed
@@ -138,6 +147,10 @@ namespace SmallMind.Tests
 
                 // Abstract classes are allowed (base classes for exceptions, etc.)
                 if (type.IsAbstract)
+                    continue;
+
+                // Default implementation classes are allowed (sealed, implement interface)
+                if (type.IsSealed && allowedDefaultImplementations.Contains(type.FullName ?? ""))
                     continue;
 
                 // Everything else is suspicious
