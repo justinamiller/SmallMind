@@ -20,6 +20,18 @@ namespace SmallMind.Tokenizers
         /// Use Byte Pair Encoding (BPE) tokenizer.
         /// Requires vocab.json and merges.txt assets.
         /// </summary>
-        Bpe
+        Bpe,
+
+        /// <summary>
+        /// Use GGUF token-table-only tokenizer (no BPE merges).
+        /// Extracted from GGUF model metadata.
+        /// </summary>
+        GgufTokenTable,
+
+        /// <summary>
+        /// Use GGUF BPE tokenizer with merges.
+        /// Extracted from GGUF model metadata.
+        /// </summary>
+        GgufBpe
     }
 }
