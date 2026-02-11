@@ -55,6 +55,7 @@ namespace SmallMind.Engine
     /// <summary>
     /// Internal implementation of IChatSession.
     /// Maintains conversation context and KV cache across multiple turns.
+    /// NOT thread-safe: Sessions must not be accessed concurrently.
     /// </summary>
     internal sealed class ChatSession : IChatSession
     {
@@ -74,6 +75,9 @@ namespace SmallMind.Engine
         private int[]? _lastPromptTokenIds; // Last tokenized prompt for delta calculation
         private bool _lastTurnWasTruncated; // Track if last turn required truncation
         private bool _disposed;
+        
+        // Thread-safety guard: Sessions are NOT thread-safe and must not be used concurrently
+        private int _inUse = 0; // 0 = not in use, 1 = in use
         
         // Persistent InferenceSession for KV cache reuse (Phase 2.1)
         private InferenceSession? _persistentInferenceSession;
@@ -159,16 +163,41 @@ namespace SmallMind.Engine
             return ValueTask.CompletedTask;
         }
 
+        /// <summary>
+        /// Acquires the session for use. Throws if already in use by another thread.
+        /// </summary>
+        private void AcquireSession()
+        {
+            if (Interlocked.CompareExchange(ref _inUse, 1, 0) != 0)
+            {
+                throw new InvalidOperationException(
+                    $"ChatSession '{_sessionId}' is already in use. " +
+                    "Sessions are not thread-safe and must not be accessed concurrently. " +
+                    "Create separate sessions for concurrent users.");
+            }
+        }
+
+        /// <summary>
+        /// Releases the session after use.
+        /// </summary>
+        private void ReleaseSession()
+        {
+            Interlocked.Exchange(ref _inUse, 0);
+        }
+
         public async ValueTask<GenerationResult> SendAsync(
             ChatMessage message,
             PublicGenerationOptions options,
             CancellationToken cancellationToken = default)
         {
-            ThrowIfDisposed();
-
-            if (message == null)
+            AcquireSession();
+            try
             {
-                throw new ArgumentNullException(nameof(message));
+                ThrowIfDisposed();
+
+                if (message == null)
+                {
+                    throw new ArgumentNullException(nameof(message));
             }
 
             _totalInferenceTimer.Start();
@@ -401,6 +430,11 @@ namespace SmallMind.Engine
                 timeoutCts?.Dispose();
                 // Don't dispose persistent session - it will be reused across turns
             }
+            }
+            finally
+            {
+                ReleaseSession();
+            }
         }
 
         public async IAsyncEnumerable<TokenEvent> SendStreamingAsync(
@@ -408,25 +442,28 @@ namespace SmallMind.Engine
             PublicGenerationOptions options,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            ThrowIfDisposed();
-
-            if (message == null)
+            AcquireSession();
+            try
             {
-                throw new ArgumentNullException(nameof(message));
-            }
+                ThrowIfDisposed();
 
-            _totalInferenceTimer.Start();
+                if (message == null)
+                {
+                    throw new ArgumentNullException(nameof(message));
+                }
 
-            // Add user message to history
-            _conversationHistory.Add(message);
+                _totalInferenceTimer.Start();
 
-            // RAG integration
-            List<Citation>? citations = null;
-            string prompt;
-            List<string>? warnings = null;
+                // Add user message to history
+                _conversationHistory.Add(message);
 
-            if (_options.EnableRag && _ragPipeline != null && message.Role == ChatRole.User)
-            {
+                // RAG integration
+                List<Citation>? citations = null;
+                string prompt;
+                List<string>? warnings = null;
+
+                if (_options.EnableRag && _ragPipeline != null && message.Role == ChatRole.User)
+                {
                 // Retrieve relevant chunks
                 var topK = _options.RagOptions?.TopK ?? 5;
                 var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
@@ -621,6 +658,11 @@ namespace SmallMind.Engine
             finally
             {
                 session.Dispose();
+            }
+            }
+            finally
+            {
+                ReleaseSession();
             }
         }
 
