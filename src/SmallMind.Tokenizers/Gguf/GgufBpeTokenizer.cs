@@ -10,11 +10,14 @@ namespace SmallMind.Tokenizers.Gguf
     /// </summary>
     internal sealed class GgufBpeTokenizer : ITokenizer
     {
+        private const int ByteTokenLength = 6; // Length of byte tokens (e.g., "<0x20>")
+        
         private readonly Dictionary<string, int> _vocab;
         private readonly List<string> _reverseVocab;
         private readonly List<(string, string)> _merges;
         private readonly Dictionary<(string, string), int> _mergeRanks;
         private readonly SpecialTokens _specialTokens;
+        private readonly string[] _byteTokenCache; // Pre-computed byte tokens for performance
 
         public GgufBpeTokenizer(
             Dictionary<string, int> vocab,
@@ -32,6 +35,13 @@ namespace SmallMind.Tokenizers.Gguf
             for (int i = 0; i < _merges.Count; i++)
             {
                 _mergeRanks[_merges[i]] = i;
+            }
+            
+            // Pre-compute byte tokens to avoid allocations in hot path
+            _byteTokenCache = new string[256];
+            for (int b = 0; b < 256; b++)
+            {
+                _byteTokenCache[b] = $"<0x{b:X2}>";
             }
         }
 
@@ -59,8 +69,8 @@ namespace SmallMind.Tokenizers.Gguf
             
             foreach (byte b in bytes)
             {
-                // Try byte token format first (e.g., <0x20>)
-                string byteToken = $"<0x{b:X2}>";
+                // Use pre-computed byte token string (no allocation)
+                string byteToken = _byteTokenCache[b];
                 if (_vocab.ContainsKey(byteToken))
                 {
                     tokens.Add(byteToken);
@@ -175,13 +185,10 @@ namespace SmallMind.Tokenizers.Gguf
                     string tokenStr = _reverseVocab[tokenId];
                     
                     // Handle byte tokens (e.g., <0x20> for space)
-                    if (tokenStr.StartsWith("<0x") && tokenStr.EndsWith(">") && tokenStr.Length == 6)
+                    if (IsByteToken(tokenStr, out byte byteValue))
                     {
-                        if (byte.TryParse(tokenStr.Substring(3, 2), System.Globalization.NumberStyles.HexNumber, null, out byte b))
-                        {
-                            sb.Append((char)b);
-                            continue;
-                        }
+                        sb.Append((char)byteValue);
+                        continue;
                     }
                     
                     sb.Append(tokenStr);
@@ -189,6 +196,24 @@ namespace SmallMind.Tokenizers.Gguf
             }
 
             return sb.ToString();
+        }
+        
+        private static bool IsByteToken(string tokenStr, out byte byteValue)
+        {
+            // Check if token is in byte format: <0xXX> where XX is hex
+            if (tokenStr.Length == ByteTokenLength && 
+                tokenStr.StartsWith("<0x") && 
+                tokenStr.EndsWith(">"))
+            {
+                return byte.TryParse(
+                    tokenStr.Substring(3, 2), 
+                    System.Globalization.NumberStyles.HexNumber, 
+                    null, 
+                    out byteValue);
+            }
+            
+            byteValue = 0;
+            return false;
         }
 
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
@@ -226,12 +251,9 @@ namespace SmallMind.Tokenizers.Gguf
                 string tokenStr = _reverseVocab[tokenId];
                 
                 // Handle byte tokens
-                if (tokenStr.StartsWith("<0x") && tokenStr.EndsWith(">") && tokenStr.Length == 6)
+                if (IsByteToken(tokenStr, out byte byteValue))
                 {
-                    if (byte.TryParse(tokenStr.Substring(3, 2), System.Globalization.NumberStyles.HexNumber, null, out byte b))
-                    {
-                        return ((char)b).ToString();
-                    }
+                    return ((char)byteValue).ToString();
                 }
                 
                 return tokenStr;

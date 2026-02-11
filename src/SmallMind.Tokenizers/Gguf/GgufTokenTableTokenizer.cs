@@ -11,6 +11,9 @@ namespace SmallMind.Tokenizers.Gguf
     /// </summary>
     internal sealed class GgufTokenTableTokenizer : ITokenizer
     {
+        private const int MaxTokenLength = 50; // Maximum length to search for matching tokens
+        private const int ByteTokenLength = 6; // Length of byte tokens (e.g., "<0x20>")
+        
         private readonly Dictionary<string, int> _vocab;
         private readonly List<string> _reverseVocab;
         private readonly SpecialTokens _specialTokens;
@@ -53,7 +56,7 @@ namespace SmallMind.Tokenizers.Gguf
                 int matchedTokenId = -1;
 
                 // Try to find the longest matching token starting at current position
-                for (int len = Math.Min(text.Length - pos, 50); len > 0; len--)
+                for (int len = Math.Min(text.Length - pos, MaxTokenLength); len > 0; len--)
                 {
                     string candidate = text.Substring(pos, len);
                     if (_vocab.TryGetValue(candidate, out int tokenId))
@@ -121,13 +124,10 @@ namespace SmallMind.Tokenizers.Gguf
                     string tokenStr = _reverseVocab[tokenId];
                     
                     // Handle byte tokens (e.g., <0x20> for space)
-                    if (tokenStr.StartsWith("<0x") && tokenStr.EndsWith(">") && tokenStr.Length == 6)
+                    if (IsByteToken(tokenStr, out byte byteValue))
                     {
-                        if (byte.TryParse(tokenStr.Substring(3, 2), System.Globalization.NumberStyles.HexNumber, null, out byte b))
-                        {
-                            sb.Append((char)b);
-                            continue;
-                        }
+                        sb.Append((char)byteValue);
+                        continue;
                     }
                     
                     sb.Append(tokenStr);
@@ -135,6 +135,24 @@ namespace SmallMind.Tokenizers.Gguf
             }
 
             return sb.ToString();
+        }
+        
+        private static bool IsByteToken(string tokenStr, out byte byteValue)
+        {
+            // Check if token is in byte format: <0xXX> where XX is hex
+            if (tokenStr.Length == ByteTokenLength && 
+                tokenStr.StartsWith("<0x") && 
+                tokenStr.EndsWith(">"))
+            {
+                return byte.TryParse(
+                    tokenStr.Substring(3, 2), 
+                    System.Globalization.NumberStyles.HexNumber, 
+                    null, 
+                    out byteValue);
+            }
+            
+            byteValue = 0;
+            return false;
         }
 
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
@@ -172,12 +190,9 @@ namespace SmallMind.Tokenizers.Gguf
                 string tokenStr = _reverseVocab[tokenId];
                 
                 // Handle byte tokens
-                if (tokenStr.StartsWith("<0x") && tokenStr.EndsWith(">") && tokenStr.Length == 6)
+                if (IsByteToken(tokenStr, out byte byteValue))
                 {
-                    if (byte.TryParse(tokenStr.Substring(3, 2), System.Globalization.NumberStyles.HexNumber, null, out byte b))
-                    {
-                        return ((char)b).ToString();
-                    }
+                    return ((char)byteValue).ToString();
                 }
                 
                 return tokenStr;

@@ -231,13 +231,17 @@ namespace SmallMind.Abstractions.Telemetry
         /// <inheritdoc/>
         public void RecordMemoryHighWaterMark(long memoryBytes)
         {
-            // Use max value
+            // Use compare-exchange loop to update max value atomically
+            // Under high contention, this could theoretically spin, but in practice:
+            // 1. Memory high-water mark updates are infrequent (not in hot path)
+            // 2. Updates tend to monotonically increase (fewer retries)
+            // 3. The trade-off of avoiding locks is acceptable for this use case
             long current;
             long newValue = memoryBytes;
             do
             {
                 current = Interlocked.Read(ref _memoryHighWaterMarkBytes);
-                if (newValue <= current) return;
+                if (newValue <= current) return; // Not a new high-water mark
             }
             while (Interlocked.CompareExchange(ref _memoryHighWaterMarkBytes, newValue, current) != current);
         }
