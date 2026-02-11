@@ -201,16 +201,17 @@ namespace SmallMind.Core.Simd
                             int mb = Math.Min(MC, M - mc);
                             
                             // Microkernel loop
-                            // For panel-major layout: calculate panel base pointer
-                            int panelIdx = nc / NR;
-                            int jInPanel = nc % NR;
-                            float* panelBase = pB + panelIdx * K * NR + kc * NR + jInPanel;
+                            // For panel-major layout with KC blocking:
+                            // - Pass panelStride = K (full matrix K dimension) for correct panel offset calculation
+                            // - Bpacked points to the start of row kc in panel 0
+                            // - Microkernel will calculate offsets for other panels using panelStride
+                            float* packedBlockStart = pB + kc * NR;
                             
                             GemmMicrokernel(
                                 pA + mc * K + kc,
-                                panelBase,
+                                packedBlockStart,
                                 pC + mc * N + nc,
-                                mb, kb, nb, K, NR, N);
+                                mb, kb, nb, K, K, N);  // panelStride = K (full dimension)
                         }
                     }
                 }
@@ -271,16 +272,17 @@ namespace SmallMind.Core.Simd
                             int mb = Math.Min(MC, mcEnd - mc);
                             
                             // Microkernel loop
-                            // For panel-major layout: calculate panel base pointer
-                            int panelIdx = nc / NR;
-                            int jInPanel = nc % NR;
-                            float* panelBase = pB + panelIdx * K * NR + kc * NR + jInPanel;
+                            // For panel-major layout with KC blocking:
+                            // - Pass panelStride = K (full matrix K dimension) for correct panel offset calculation
+                            // - Bpacked points to the start of row kc in panel 0
+                            // - Microkernel will calculate offsets for other panels using panelStride
+                            float* packedBlockStart = pB + kc * NR;
                             
                             GemmMicrokernel(
                                 pA + mc * K + kc,
-                                panelBase,
+                                packedBlockStart,
                                 pC + mc * N + nc,
-                                mb, kb, nb, K, NR, N);
+                                mb, kb, nb, K, K, N);  // panelStride = K (full dimension)
                         }
                     }
                 }
@@ -290,22 +292,22 @@ namespace SmallMind.Core.Simd
         /// <summary>
         /// Cache-blocked microkernel dispatcher.
         /// Processes MR×NR tiles with optimal SIMD kernels.
-        /// Note: ldB parameter no longer used with panel-major layout.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static unsafe void GemmMicrokernel(
             float* A, float* Bpacked, float* C,
             int M, int K, int N,
-            int ldA, int ldB, int ldC)
+            int ldA, int panelStride, int ldC)
         {
-            // Dispatch to SIMD microkernel (ldB ignored with panel-major layout)
+            // panelStride = full K dimension (for panel offset calculation)
+            // K = number of rows to process (kb in blocked case)
             if (Avx512F.IsSupported)
             {
-                GemmMicrokernelAvx512(A, Bpacked, C, M, K, N, ldA, ldC);
+                GemmMicrokernelAvx512(A, Bpacked, C, M, K, N, ldA, panelStride, ldC);
             }
             else if (Avx2.IsSupported && Fma.IsSupported)
             {
-                GemmMicrokernelAvx2(A, Bpacked, C, M, K, N, ldA, ldC);
+                GemmMicrokernelAvx2(A, Bpacked, C, M, K, N, ldA, panelStride, ldC);
             }
             else
             {
@@ -320,11 +322,11 @@ namespace SmallMind.Core.Simd
         private static unsafe void GemmMicrokernelAvx512(
             float* A, float* Bpacked, float* C,
             int M, int K, int N,
-            int ldA, int ldC)
+            int ldA, int panelStride, int ldC)
         {
             if (!Avx512F.IsSupported)
             {
-                GemmMicrokernelAvx2(A, Bpacked, C, M, K, N, ldA, ldC);
+                GemmMicrokernelAvx2(A, Bpacked, C, M, K, N, ldA, panelStride, ldC);
                 return;
             }
             
@@ -343,7 +345,8 @@ namespace SmallMind.Core.Simd
                         // Full tile fast path
                         // Panel index for this j
                         int panelIdx = j / NR_AVX512;
-                        float* panelBase = Bpacked + panelIdx * K * NR_AVX512;
+                        // Use panelStride (full K) for panel offset, not K (which is kb in blocked case)
+                        float* panelBase = Bpacked + panelIdx * panelStride * NR_AVX512;
                         
                         GemmKernelAvx512_6x32(
                             A + i * ldA,
@@ -355,7 +358,7 @@ namespace SmallMind.Core.Simd
                     {
                         // Edge case: scalar fallback
                         int panelIdx = j / NR_AVX512;
-                        float* panelBase = Bpacked + panelIdx * K * NR_AVX512;
+                        float* panelBase = Bpacked + panelIdx * panelStride * NR_AVX512;
                         int jInPanel = j % NR_AVX512;
                         
                         GemmKernelScalar(A + i * ldA, panelBase + jInPanel, C + i * ldC + j,
@@ -372,7 +375,7 @@ namespace SmallMind.Core.Simd
         private static unsafe void GemmMicrokernelAvx2(
             float* A, float* Bpacked, float* C,
             int M, int K, int N,
-            int ldA, int ldC)
+            int ldA, int panelStride, int ldC)
         {
             if (!Avx2.IsSupported || !Fma.IsSupported)
             {
@@ -391,9 +394,10 @@ namespace SmallMind.Core.Simd
                     if (mr == MR && nr == NR)
                     {
                         // Full tile fast path
-                        // Panel index for this j
+                        // Panel index for this j  
                         int panelIdx = j / NR;
-                        float* panelBase = Bpacked + panelIdx * K * NR;
+                        // Use panelStride (full K) for panel offset, not K (which is kb in blocked case)
+                        float* panelBase = Bpacked + panelIdx * panelStride * NR;
                         
                         GemmKernelAvx2_6x16(
                             A + i * ldA,
@@ -405,7 +409,7 @@ namespace SmallMind.Core.Simd
                     {
                         // Edge case: scalar fallback
                         int panelIdx = j / NR;
-                        float* panelBase = Bpacked + panelIdx * K * NR;
+                        float* panelBase = Bpacked + panelIdx * panelStride * NR;
                         int jInPanel = j % NR;
                         
                         GemmKernelScalar(A + i * ldA, panelBase + jInPanel, C + i * ldC + j,
