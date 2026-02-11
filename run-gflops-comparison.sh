@@ -118,7 +118,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # Create comparison report
 REPORT_FILE="$RESULTS_DIR/COMPARISON_REPORT.md"
 
-cat > "$REPORT_FILE" << 'EOF'
+cat > "$REPORT_FILE" << EOF
 # GFLOPS Comparison Report - PR #192 vs PR #193
 
 **Generated:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
