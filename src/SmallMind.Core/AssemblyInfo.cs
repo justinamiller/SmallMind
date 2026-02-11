@@ -11,3 +11,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("SmallMind.Quantization")]
 [assembly: InternalsVisibleTo("MatMulBenchmark")]
 [assembly: InternalsVisibleTo("MatMulComprehensiveBenchmark")]
+[assembly: InternalsVisibleTo("MatMulKernelComparison")]
