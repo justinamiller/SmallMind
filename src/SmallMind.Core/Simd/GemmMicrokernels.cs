@@ -147,7 +147,7 @@ namespace SmallMind.Core.Simd
                             A + i * ldA,
                             B + j,
                             C + i * ldC + j,
-                            K, ldB, ldC);
+                            K, ldA, ldB, ldC);
                     }
                     else
                     {
@@ -170,7 +170,7 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static unsafe void GemmMicrokernelAvx512(
             float* A, float* B, float* C,
-            int K, int ldB, int ldC)
+            int K, int ldA, int ldB, int ldC)
         {
             if (!Avx512F.IsSupported) return;
             
@@ -188,13 +188,13 @@ namespace SmallMind.Core.Simd
                 // Load B vector (broadcast happens in register)
                 Vector512<float> b = Vector512.Load(B + k * ldB);
                 
-                // Broadcast A elements and FMA
-                c0 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[0 * K + k]), b, c0);
-                c1 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[1 * K + k]), b, c1);
-                c2 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[2 * K + k]), b, c2);
-                c3 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[3 * K + k]), b, c3);
-                c4 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[4 * K + k]), b, c4);
-                c5 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[5 * K + k]), b, c5);
+                // Broadcast A elements and FMA - use ldA for A row stride
+                c0 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[0 * ldA + k]), b, c0);
+                c1 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[1 * ldA + k]), b, c1);
+                c2 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[2 * ldA + k]), b, c2);
+                c3 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[3 * ldA + k]), b, c3);
+                c4 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[4 * ldA + k]), b, c4);
+                c5 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[5 * ldA + k]), b, c5);
             }
             
             // Store accumulators back to C
@@ -274,7 +274,7 @@ namespace SmallMind.Core.Simd
                             A + i * ldA,
                             B + j,
                             C + i * ldC + j,
-                            K, ldB, ldC);
+                            K, ldA, ldB, ldC);
                     }
                     else
                     {
@@ -296,7 +296,7 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static unsafe void GemmMicrokernelAvx2(
             float* A, float* B, float* C,
-            int K, int ldB, int ldC)
+            int K, int ldA, int ldB, int ldC)
         {
             if (!Avx2.IsSupported || !Fma.IsSupported) return;
             
@@ -321,33 +321,33 @@ namespace SmallMind.Core.Simd
                 Vector256<float> b0 = Avx.LoadVector256(B + k * ldB + 0);
                 Vector256<float> b1 = Avx.LoadVector256(B + k * ldB + 8);
                 
-                // Row 0: broadcast A[0,k] and FMA with B
-                Vector256<float> a0 = Vector256.Create(A[0 * K + k]);
+                // Row 0: broadcast A[0,k] and FMA with B - use ldA for A row stride
+                Vector256<float> a0 = Vector256.Create(A[0 * ldA + k]);
                 c00 = Fma.MultiplyAdd(a0, b0, c00);
                 c01 = Fma.MultiplyAdd(a0, b1, c01);
                 
                 // Row 1
-                Vector256<float> a1 = Vector256.Create(A[1 * K + k]);
+                Vector256<float> a1 = Vector256.Create(A[1 * ldA + k]);
                 c10 = Fma.MultiplyAdd(a1, b0, c10);
                 c11 = Fma.MultiplyAdd(a1, b1, c11);
                 
                 // Row 2
-                Vector256<float> a2 = Vector256.Create(A[2 * K + k]);
+                Vector256<float> a2 = Vector256.Create(A[2 * ldA + k]);
                 c20 = Fma.MultiplyAdd(a2, b0, c20);
                 c21 = Fma.MultiplyAdd(a2, b1, c21);
                 
                 // Row 3
-                Vector256<float> a3 = Vector256.Create(A[3 * K + k]);
+                Vector256<float> a3 = Vector256.Create(A[3 * ldA + k]);
                 c30 = Fma.MultiplyAdd(a3, b0, c30);
                 c31 = Fma.MultiplyAdd(a3, b1, c31);
                 
                 // Row 4
-                Vector256<float> a4 = Vector256.Create(A[4 * K + k]);
+                Vector256<float> a4 = Vector256.Create(A[4 * ldA + k]);
                 c40 = Fma.MultiplyAdd(a4, b0, c40);
                 c41 = Fma.MultiplyAdd(a4, b1, c41);
                 
                 // Row 5
-                Vector256<float> a5 = Vector256.Create(A[5 * K + k]);
+                Vector256<float> a5 = Vector256.Create(A[5 * ldA + k]);
                 c50 = Fma.MultiplyAdd(a5, b0, c50);
                 c51 = Fma.MultiplyAdd(a5, b1, c51);
             }

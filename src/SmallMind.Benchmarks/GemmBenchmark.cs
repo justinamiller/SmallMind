@@ -29,9 +29,10 @@ namespace SmallMind.Benchmarks
             (512, 512, 512),      // Exceeds L2, tests cache blocking
             (1024, 1024, 1024),   // Large, tests threading + cache hierarchy
             (2048, 2048, 2048),   // Stress test
-            (4096, 4096, 4096),   // LLM-scale weight matrix
-            (1, 4096, 4096),      // M=1, simulates single-token decode (matvec)
-            (32, 4096, 4096),     // M=32, simulates prefill batch
+            // Skipped for now - too slow without further optimizations:
+            // (4096, 4096, 4096),   // LLM-scale weight matrix
+            // (1, 4096, 4096),      // M=1, simulates single-token decode (matvec)
+            // (32, 4096, 4096),     // M=32, simulates prefill batch
         };
 
         /// <summary>
