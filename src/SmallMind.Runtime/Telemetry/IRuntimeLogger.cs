@@ -27,6 +27,11 @@ namespace SmallMind.Runtime.Telemetry
             _publicLogger = publicLogger ?? NullRuntimeLogger.Instance;
         }
 
+        /// <summary>
+        /// Gets the underlying public logger.
+        /// </summary>
+        public IRuntimeLogger PublicLogger => _publicLogger;
+
         public void LogDebug(string message)
         {
             _publicLogger.Debug(message);

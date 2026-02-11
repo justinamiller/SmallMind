@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using SmallMind.Quantization.IO.Gguf;
 using SmallMind.Tokenizers;
+using SmallMind.Tokenizers.Gguf;
 using SmallMind.Transformers;
 using SmallMind.Quantization.Tensors;
 using SmallMind.Runtime.Telemetry;
+using SmallMind.Abstractions.Telemetry;
 using Tensor = SmallMind.Core.Core.Tensor;
 
 namespace SmallMind.Runtime
@@ -61,14 +63,37 @@ namespace SmallMind.Runtime
             logger.LogInfo($"RoPE freq base: {config.RopeFreqBase}");
             logger.LogInfo($"Vocab size: {config.VocabSize}");
 
-            // Extract tokenizer from metadata
-            var tokenizer = GgufTokenizerExtractor.ExtractTokenizer(modelInfo.Metadata);
+            // Extract tokenizer from metadata using new GgufTokenizerFactory
+            // Convert internal logger to public logger for tokenizer factory
+            IRuntimeLogger publicLogger = logger is RuntimeLoggerAdapter adapter
+                ? adapter.PublicLogger
+                : NullRuntimeLogger.Instance;
+            
+            var (tokenizer, diagnostics) = GgufTokenizerFactory.CreateTokenizer(
+                modelInfo.Metadata, 
+                publicLogger);
+            
             if (tokenizer == null)
             {
                 throw new NotSupportedException(
-                    "Failed to extract tokenizer from GGUF file. " +
-                    "Ensure the file contains tokenizer metadata (tokenizer.ggml.*).");
+                    "Failed to create tokenizer from GGUF file. " +
+                    "Ensure the file contains tokenizer metadata (tokenizer.ggml.*). " +
+                    $"Diagnostics: {string.Join(", ", diagnostics.Issues.Select(i => i.message))}");
             }
+            
+            // Log tokenizer diagnostics
+            if (diagnostics.HasIssues)
+            {
+                foreach (var (reason, message) in diagnostics.Issues)
+                {
+                    logger.LogWarning($"Tokenizer diagnostic [{reason}]: {message}");
+                }
+            }
+            
+            logger.LogInfo($"Created tokenizer: {diagnostics.TokenizerType ?? "Unknown"} " +
+                          $"(vocab size: {diagnostics.VocabSize}, " +
+                          $"has merges: {diagnostics.HasMerges}, " +
+                          $"merge count: {diagnostics.MergeCount})");
 
             // Build TransformerModel from config
             var model = new TransformerModel(config, seed);
@@ -1112,12 +1137,16 @@ namespace SmallMind.Runtime
             using var reader = new GgufReader(stream);
             var modelInfo = reader.ReadModelInfo();
 
-            var tokenizer = GgufTokenizerExtractor.ExtractTokenizer(modelInfo.Metadata);
+            var (tokenizer, diagnostics) = GgufTokenizerFactory.CreateTokenizer(
+                modelInfo.Metadata, 
+                NullRuntimeLogger.Instance);
+                
             if (tokenizer == null)
             {
                 throw new NotSupportedException(
-                    "Failed to extract tokenizer from GGUF file. " +
-                    "Ensure the file contains tokenizer metadata.");
+                    "Failed to create tokenizer from GGUF file. " +
+                    "Ensure the file contains tokenizer metadata. " +
+                    $"Diagnostics: {string.Join(", ", diagnostics.Issues.Select(i => i.message))}");
             }
 
             return tokenizer;
