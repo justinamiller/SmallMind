@@ -10,7 +10,16 @@ namespace SmallMind
 
     /// <summary>
     /// SmallMind inference engine. This is the main entry point for the public API.
+    /// Thread-safe: Can be safely used from multiple threads concurrently.
+    /// Create one instance and share it across your application.
     /// </summary>
+    /// <remarks>
+    /// Thread-Safety:
+    /// - The engine itself is thread-safe and can be used concurrently from multiple threads.
+    /// - Model weights are immutable after loading and safely shared across all sessions.
+    /// - Multiple threads can create sessions simultaneously.
+    /// - Each session maintains its own mutable state and is NOT thread-safe.
+    /// </remarks>
     public interface ISmallMindEngine : IDisposable
     {
         /// <summary>
@@ -141,7 +150,19 @@ namespace SmallMind
 
     /// <summary>
     /// Text generation session for inference.
+    /// NOT thread-safe: Must be used from a single thread or explicitly synchronized.
+    /// Each session maintains mutable state (KV cache, RNG, conversation history).
     /// </summary>
+    /// <remarks>
+    /// Thread-Safety:
+    /// - Sessions are NOT thread-safe and must not be accessed concurrently.
+    /// - For concurrent requests, create separate sessions (one per thread/request).
+    /// - Sessions are lightweight to create (~1ms overhead).
+    /// 
+    /// Resource Management:
+    /// - Dispose when done to release KV cache and other resources.
+    /// - KV cache size can be limited via ChatClientOptions.MaxKvCacheTokens.
+    /// </remarks>
     public interface ITextGenerationSession : IDisposable
     {
         /// <summary>
@@ -465,7 +486,18 @@ namespace SmallMind
     /// <summary>
     /// Level 3 chat client interface for product-grade chat sessions.
     /// Supports messages-first design, context policies, tools, and RAG.
+    /// NOT thread-safe: Must be used from a single thread or explicitly synchronized.
     /// </summary>
+    /// <remarks>
+    /// Thread-Safety:
+    /// - Chat clients are NOT thread-safe and must not be accessed concurrently.
+    /// - For multi-user scenarios, create one chat client per user/session.
+    /// - Use ChatClientOptions.SessionId for correlation in logs and metrics.
+    /// 
+    /// Resource Management:
+    /// - Dispose when done to release KV cache and session resources.
+    /// - KV cache is per-session and can be limited via MaxKvCacheTokens.
+    /// </remarks>
     public interface IChatClient : IDisposable
     {
         /// <summary>

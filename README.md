@@ -79,6 +79,19 @@ See [docs/API_STABILITY.md](docs/API_STABILITY.md) for detailed stability guaran
 
 </details>
 
+## Thread-Safety and Concurrency
+
+SmallMind provides explicit thread-safety guarantees for production use:
+
+- **Engine (`ISmallMindEngine`)**: ✅ Thread-safe - share one instance across your application
+- **Sessions (`ITextGenerationSession`, `IChatClient`)**: ❌ NOT thread-safe - create one per thread/user
+- **Model Weights**: Immutable and safely shared across all sessions
+- **KV Cache**: Per-session, configurable size limits
+
+For multi-user scenarios, create one session per user. The engine is lightweight to share but sessions maintain mutable state.
+
+📖 **Detailed Documentation**: See [docs/CONCURRENCY.md](docs/CONCURRENCY.md) for comprehensive threading examples and best practices.
+
 ## Installation
 
 ### NuGet Packages
