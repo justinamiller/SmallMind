@@ -120,17 +120,12 @@ namespace SmallMind.Runtime.Execution
         /// <summary>
         /// Implements sliding window for the cache.
         /// Removes oldest tokens to make room for new ones.
-        /// TODO: Implement actual sliding logic (current implementation just resets).
+        /// Keeps only the last windowSize tokens.
         /// </summary>
         /// <param name="windowSize">Size of the sliding window to maintain</param>
         public void Slide(int windowSize)
         {
-            // TODO: Implement proper sliding window that preserves last windowSize tokens
-            // For now, just reset (conservative approach)
-            if (CurrentPosition > windowSize)
-            {
-                Reset();
-            }
+            _cacheEntry.Slide(windowSize);
         }
         
         /// <summary>
