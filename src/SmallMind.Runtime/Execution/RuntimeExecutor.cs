@@ -99,7 +99,7 @@ namespace SmallMind.Runtime.Execution
             // Record telemetry
             if (context.Options.EnableTelemetry)
             {
-                // Telemetry recording would go here
+                context.Telemetry.RecordPrefillEnd(promptLength, sw.Elapsed.TotalMilliseconds);
             }
             
             return new PrefillResult(
@@ -167,7 +167,7 @@ namespace SmallMind.Runtime.Execution
             // Record telemetry
             if (context.Options.EnableTelemetry)
             {
-                // Telemetry recording would go here
+                context.Telemetry.RecordDecodeEnd(sw.Elapsed.TotalMilliseconds);
             }
             
             return new DecodeResult(
