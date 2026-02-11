@@ -352,9 +352,21 @@ namespace SmallMind.Core.Core
 
             var result = new Tensor(new int[] { M, N }, requiresGrad);
 
-            // Use SIMD-optimized matrix multiplication from SmallMind.Core.Simd
-            // This provides 5-10x speedup over naive implementation
-            MatMulOps.MatMul(a.Data, b.Data, result.Data, M, K, N);
+            // Use GemmMicrokernels for large matrices where blocking pays off
+            // Threshold: ~16M FLOPs (256×256×256) where cache blocking becomes beneficial
+            if (M * K * N >= 256 * 256 * 256)
+            {
+                GemmMicrokernels.MatMul(
+                    a.Data.AsSpan(0, M * K),
+                    b.Data.AsSpan(0, K * N),
+                    result.Data.AsSpan(0, M * N),
+                    M, K, N);
+            }
+            else
+            {
+                // Use MatMulOps for small matrices where blocking overhead hurts
+                MatMulOps.MatMul(a.Data, b.Data, result.Data, M, K, N);
+            }
 
             // Setup backward pass
             if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))
@@ -437,8 +449,21 @@ namespace SmallMind.Core.Core
                 result = new Tensor(new int[] { M, N }, requiresGrad);
             }
 
-            // Use SIMD-optimized matrix multiplication
-            MatMulOps.MatMul(a.Data, b.Data, result.Data, M, K, N);
+            // Use GemmMicrokernels for large matrices where blocking pays off
+            // Threshold: ~16M FLOPs (256×256×256) where cache blocking becomes beneficial
+            if (M * K * N >= 256 * 256 * 256)
+            {
+                GemmMicrokernels.MatMul(
+                    a.Data.AsSpan(0, M * K),
+                    b.Data.AsSpan(0, K * N),
+                    result.Data.AsSpan(0, M * N),
+                    M, K, N);
+            }
+            else
+            {
+                // Use MatMulOps for small matrices where blocking overhead hurts
+                MatMulOps.MatMul(a.Data, b.Data, result.Data, M, K, N);
+            }
 
             // Setup backward pass
             if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))

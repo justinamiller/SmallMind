@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
+using System.Threading.Tasks;
 
 namespace SmallMind.Core.Simd
 {
@@ -40,6 +41,11 @@ namespace SmallMind.Core.Simd
         private const int NR_AVX2 = 16;   // N-register blocking: 16 cols (2x AVX2 vectors)
         private const int MR_AVX512 = 6;  // M-register blocking: 6 rows
         private const int NR_AVX512 = 16; // N-register blocking: 16 cols (1x AVX-512 vector)
+        
+        // Parallelization threshold: set to 512 (4 blocks) to avoid overhead for small matrices
+        // 256×256 runs serially (no Span→Array conversion overhead)
+        // 512×512 runs parallel (4 MC blocks, good scaling with 4 CPU cores)
+        private const int PARALLEL_THRESHOLD_M = 512;
         
         /// <summary>
         /// High-performance blocked GEMM: C = A × B
@@ -147,7 +153,7 @@ namespace SmallMind.Core.Simd
                             A + i * ldA,
                             B + j,
                             C + i * ldC + j,
-                            K, ldB, ldC);
+                            K, ldA, ldB, ldC);
                     }
                     else
                     {
@@ -170,7 +176,7 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static unsafe void GemmMicrokernelAvx512(
             float* A, float* B, float* C,
-            int K, int ldB, int ldC)
+            int K, int ldA, int ldB, int ldC)
         {
             if (!Avx512F.IsSupported) return;
             
@@ -188,13 +194,13 @@ namespace SmallMind.Core.Simd
                 // Load B vector (broadcast happens in register)
                 Vector512<float> b = Vector512.Load(B + k * ldB);
                 
-                // Broadcast A elements and FMA
-                c0 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[0 * K + k]), b, c0);
-                c1 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[1 * K + k]), b, c1);
-                c2 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[2 * K + k]), b, c2);
-                c3 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[3 * K + k]), b, c3);
-                c4 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[4 * K + k]), b, c4);
-                c5 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[5 * K + k]), b, c5);
+                // Broadcast A elements and FMA - use ldA for A row stride
+                c0 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[0 * ldA + k]), b, c0);
+                c1 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[1 * ldA + k]), b, c1);
+                c2 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[2 * ldA + k]), b, c2);
+                c3 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[3 * ldA + k]), b, c3);
+                c4 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[4 * ldA + k]), b, c4);
+                c5 = Avx512F.FusedMultiplyAdd(Vector512.Create(A[5 * ldA + k]), b, c5);
             }
             
             // Store accumulators back to C
@@ -209,6 +215,7 @@ namespace SmallMind.Core.Simd
         /// <summary>
         /// AVX2 blocked GEMM with B-matrix packing and L1/L2 cache blocking.
         /// Uses 8-wide SIMD with FMA for high throughput on pre-AVX-512 CPUs.
+        /// Parallelized over M-dimension blocks for large matrices (Phase 2 optimization).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static unsafe void MatMulAvx2Blocked(
@@ -221,27 +228,146 @@ namespace SmallMind.Core.Simd
                 return;
             }
             
-            fixed (float* pA = A, pB = B, pC = C)
+            // Fast path for 256×256 - skip L2 blocking overhead
+            if (M == 256 && K == 256 && N == 256)
             {
-                // L2 blocking for large matrices
-                for (int mc = 0; mc < M; mc += L2_BLOCK_M)
+                MatMul256x256FastPath(A, B, C);
+                return;
+            }
+            
+            // Fast path for 512×512 - serial with optimized blocking (avoid parallel overhead)
+            if (M == 512 && K == 512 && N == 512)
+            {
+                MatMul512x512FastPath(A, B, C);
+                return;
+            }
+            
+            // Decide whether to use parallelization based on M dimension
+            bool useParallel = M >= PARALLEL_THRESHOLD_M && Environment.ProcessorCount > 1;
+            
+            if (useParallel)
+            {
+                // Parallel execution over MC blocks
+                int numMcBlocks = (M + L2_BLOCK_M - 1) / L2_BLOCK_M;
+                
+                // Convert to arrays for lambda capture (can't use Span in lambda)
+                float[] aArray = A.ToArray();
+                float[] bArray = B.ToArray();
+                float[] cArray = C.ToArray();
+                
+                Parallel.For(0, numMcBlocks, mcIdx =>
                 {
+                    int mc = mcIdx * L2_BLOCK_M;
                     int mb = Math.Min(L2_BLOCK_M, M - mc);
                     
-                    for (int nc = 0; nc < N; nc += L2_BLOCK_N)
+                    fixed (float* pA = aArray, pB = bArray, pC = cArray)
                     {
-                        int nb = Math.Min(L2_BLOCK_N, N - nc);
-                        
-                        for (int kc = 0; kc < K; kc += L2_BLOCK_K)
+                        for (int nc = 0; nc < N; nc += L2_BLOCK_N)
                         {
-                            int kb = Math.Min(L2_BLOCK_K, K - kc);
+                            int nb = Math.Min(L2_BLOCK_N, N - nc);
                             
-                            // L1 blocking within L2 blocks
+                            for (int kc = 0; kc < K; kc += L2_BLOCK_K)
+                            {
+                                int kb = Math.Min(L2_BLOCK_K, K - kc);
+                                
+                                // L1 blocking within L2 blocks
+                                GemmL1BlockedAvx2(
+                                    pA + mc * K + kc,
+                                    pB + kc * N + nc,
+                                    pC + mc * N + nc,
+                                    mb, kb, nb, K, N, N);
+                            }
+                        }
+                    }
+                });
+                
+                // Copy result back to C span
+                cArray.CopyTo(C);
+            }
+            else
+            {
+                // Serial execution for small matrices
+                fixed (float* pA = A, pB = B, pC = C)
+                {
+                    // L2 blocking for large matrices
+                    for (int mc = 0; mc < M; mc += L2_BLOCK_M)
+                    {
+                        int mb = Math.Min(L2_BLOCK_M, M - mc);
+                        
+                        for (int nc = 0; nc < N; nc += L2_BLOCK_N)
+                        {
+                            int nb = Math.Min(L2_BLOCK_N, N - nc);
+                            
+                            for (int kc = 0; kc < K; kc += L2_BLOCK_K)
+                            {
+                                int kb = Math.Min(L2_BLOCK_K, K - kc);
+                                
+                                // L1 blocking within L2 blocks
+                                GemmL1BlockedAvx2(
+                                    pA + mc * K + kc,
+                                    pB + kc * N + nc,
+                                    pC + mc * N + nc,
+                                    mb, kb, nb, K, N, N);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Fast path for 256×256 matrix multiplication.
+        /// Optimized blocking for L2 cache (256×256×4 bytes = 256KB, fits in typical 512KB L2).
+        /// Uses minimal blocking since entire matrix fits in cache.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private static unsafe void MatMul256x256FastPath(
+            ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C)
+        {
+            // 256×256 matrices fit entirely in L2 cache
+            // Use simple blocking at microkernel level only - no MC/KC/NC blocking
+            const int M = 256, K = 256, N = 256;
+            
+            fixed (float* pA = A, pB = B, pC = C)
+            {
+                C.Clear();
+                
+                // Direct microkernel calls without L2 blocking overhead
+                GemmL1BlockedAvx2(pA, pB, pC, M, K, N, K, N, N);
+            }
+        }
+        
+        /// <summary>
+        /// Fast path for 512×512 matrix multiplication.
+        /// Uses serial execution with cache-optimized blocking.
+        /// 512×512×4 bytes = 1MB per matrix, exceeds L2 but manageable with good blocking.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private static unsafe void MatMul512x512FastPath(
+            ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C)
+        {
+            const int M = 512, K = 512, N = 512;
+            // Use 256×256 blocks - half the matrix, good cache locality
+            const int MC = 256;
+            const int KC = 256;
+            const int NC = 256;
+            
+            fixed (float* pA = A, pB = B, pC = C)
+            {
+                C.Clear();
+                
+                // 2×2×2 blocking - simple and cache-friendly
+                for (int mc = 0; mc < M; mc += MC)
+                {
+                    for (int nc = 0; nc < N; nc += NC)
+                    {
+                        for (int kc = 0; kc < K; kc += KC)
+                        {
                             GemmL1BlockedAvx2(
                                 pA + mc * K + kc,
                                 pB + kc * N + nc,
                                 pC + mc * N + nc,
-                                mb, kb, nb, K, N, N);
+                                MC, KC, NC, K, N, N);
                         }
                     }
                 }
@@ -274,7 +400,7 @@ namespace SmallMind.Core.Simd
                             A + i * ldA,
                             B + j,
                             C + i * ldC + j,
-                            K, ldB, ldC);
+                            K, ldA, ldB, ldC);
                     }
                     else
                     {
@@ -296,7 +422,7 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static unsafe void GemmMicrokernelAvx2(
             float* A, float* B, float* C,
-            int K, int ldB, int ldC)
+            int K, int ldA, int ldB, int ldC)
         {
             if (!Avx2.IsSupported || !Fma.IsSupported) return;
             
@@ -321,33 +447,33 @@ namespace SmallMind.Core.Simd
                 Vector256<float> b0 = Avx.LoadVector256(B + k * ldB + 0);
                 Vector256<float> b1 = Avx.LoadVector256(B + k * ldB + 8);
                 
-                // Row 0: broadcast A[0,k] and FMA with B
-                Vector256<float> a0 = Vector256.Create(A[0 * K + k]);
+                // Row 0: broadcast A[0,k] and FMA with B - use ldA for A row stride
+                Vector256<float> a0 = Vector256.Create(A[0 * ldA + k]);
                 c00 = Fma.MultiplyAdd(a0, b0, c00);
                 c01 = Fma.MultiplyAdd(a0, b1, c01);
                 
                 // Row 1
-                Vector256<float> a1 = Vector256.Create(A[1 * K + k]);
+                Vector256<float> a1 = Vector256.Create(A[1 * ldA + k]);
                 c10 = Fma.MultiplyAdd(a1, b0, c10);
                 c11 = Fma.MultiplyAdd(a1, b1, c11);
                 
                 // Row 2
-                Vector256<float> a2 = Vector256.Create(A[2 * K + k]);
+                Vector256<float> a2 = Vector256.Create(A[2 * ldA + k]);
                 c20 = Fma.MultiplyAdd(a2, b0, c20);
                 c21 = Fma.MultiplyAdd(a2, b1, c21);
                 
                 // Row 3
-                Vector256<float> a3 = Vector256.Create(A[3 * K + k]);
+                Vector256<float> a3 = Vector256.Create(A[3 * ldA + k]);
                 c30 = Fma.MultiplyAdd(a3, b0, c30);
                 c31 = Fma.MultiplyAdd(a3, b1, c31);
                 
                 // Row 4
-                Vector256<float> a4 = Vector256.Create(A[4 * K + k]);
+                Vector256<float> a4 = Vector256.Create(A[4 * ldA + k]);
                 c40 = Fma.MultiplyAdd(a4, b0, c40);
                 c41 = Fma.MultiplyAdd(a4, b1, c41);
                 
                 // Row 5
-                Vector256<float> a5 = Vector256.Create(A[5 * K + k]);
+                Vector256<float> a5 = Vector256.Create(A[5 * ldA + k]);
                 c50 = Fma.MultiplyAdd(a5, b0, c50);
                 c51 = Fma.MultiplyAdd(a5, b1, c51);
             }
