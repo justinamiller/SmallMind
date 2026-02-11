@@ -515,13 +515,12 @@ namespace SmallMind.Runtime
                 int promptLength = contextCropped.Count;
                 
                 // Build tensor from full prompt: shape (1, promptLength)
-                // Use exact allocation for Tensor (validates data.Length == shape product)
-                var prefillData = new float[promptLength];
+                // Use pooled tensor to reduce allocation pressure
+                using var prefillTensor = Tensor.CreatePooled(new int[] { 1, promptLength }, requiresGrad: false);
                 for (int j = 0; j < promptLength; j++)
                 {
-                    prefillData[j] = contextCropped[j];
+                    prefillTensor.Data[j] = contextCropped[j];
                 }
-                var prefillTensor = new Tensor(prefillData, new int[] { 1, promptLength });
                 
                 // Forward pass with position offset 0 (start of sequence)
                 logits = _model.Forward(prefillTensor, positionOffset: 0);
