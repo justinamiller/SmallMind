@@ -405,7 +405,7 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// No-op telemetry implementation (default).
     /// </summary>
-    internal sealed class NoOpTelemetry : IChatTelemetry
+    public sealed class NoOpTelemetry : IChatTelemetry
     {
         /// <summary>
         /// Singleton instance of NoOpTelemetry.
@@ -427,7 +427,7 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Console logger implementation for telemetry.
     /// </summary>
-    internal sealed class ConsoleTelemetry : IChatTelemetry
+    public sealed class ConsoleTelemetry : IChatTelemetry
     {
         public void OnRequestStart(string sessionId, int messageCount)
         {
@@ -514,7 +514,7 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// No-op retrieval provider (returns empty results).
     /// </summary>
-    internal sealed class NoOpRetrievalProvider : IRetrievalProvider
+    public sealed class NoOpRetrievalProvider : IRetrievalProvider
     {
         /// <summary>
         /// Singleton instance of NoOpRetrievalProvider.
