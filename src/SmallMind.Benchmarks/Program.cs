@@ -8,6 +8,14 @@ namespace SmallMind.Benchmarks
         {
             try
             {
+                // Check if user wants GEMM benchmark
+                if (args.Length > 0 && args[0].Equals("gemm", StringComparison.OrdinalIgnoreCase))
+                {
+                    GemmBenchmark.Run();
+                    return 0;
+                }
+
+                // Default: run existing Q4 benchmarks
                 var config = new BenchmarkConfig
                 {
                     WarmupIterations = 5,
