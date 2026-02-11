@@ -92,7 +92,7 @@ namespace SmallMind.Tests
             "SmallMind.Abstractions.IToolExecutor",
             "SmallMind.Abstractions.IRetrievalProvider",
 
-            // Chat Level 3 implementations
+            // Chat Level 3 default implementations
             "SmallMind.Abstractions.NoOpTelemetry",
             "SmallMind.Abstractions.ConsoleTelemetry",
             "SmallMind.Abstractions.NoOpRetrievalProvider",
@@ -183,21 +183,36 @@ namespace SmallMind.Tests
         {
             // Arrange
             var assembly = typeof(AbstractionsEngine).Assembly;
-            var publicExceptions = assembly.GetTypes()
+            var baseExceptionType = assembly.GetType("SmallMind.Abstractions.SmallMindException");
+            if (baseExceptionType == null)
+            {
+                throw new InvalidOperationException("SmallMindException not found in Abstractions assembly");
+            }
+
+            var allPublicExceptions = assembly.GetTypes()
                 .Where(t => t.IsPublic && 
                            typeof(Exception).IsAssignableFrom(t) &&
-                           t != typeof(SmallMindException) &&
                            t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .ToList();
 
+            // Debug: log all exceptions
+            var debugInfo = string.Join("\n", allPublicExceptions.Select(t => 
+                $"{t.FullName} == base? {t == baseExceptionType}, inherits? {baseExceptionType.IsAssignableFrom(t)}"));
+
+            var publicExceptions = allPublicExceptions.Where(t => t != baseExceptionType).ToList();
+
             // Act - check inheritance
             var nonCompliantExceptions = publicExceptions
-                .Where(t => !typeof(SmallMindException).IsAssignableFrom(t))
+                .Where(t => !baseExceptionType.IsAssignableFrom(t))
                 .Select(t => t.FullName)
                 .ToList();
 
             // Assert - all exceptions should inherit from SmallMindException
-            Assert.Empty(nonCompliantExceptions);
+            // If this fails, debug info will show in the test output
+            if (nonCompliantExceptions.Any())
+            {
+                Assert.Fail($"Found non-compliant exceptions:\n{debugInfo}\n\nNon-compliant: {string.Join(", ", nonCompliantExceptions)}");
+            }
         }
 
         [Fact]

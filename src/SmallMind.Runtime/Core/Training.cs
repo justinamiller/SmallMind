@@ -609,11 +609,24 @@ namespace SmallMind.Runtime
 
         /// <summary>
         /// Save model checkpoint using the configured checkpoint store.
+        /// Auto-detects format based on file extension (.json for legacy JSON, otherwise binary).
         /// </summary>
         public void SaveCheckpoint(string path)
         {
             var checkpoint = _model.ToCheckpoint();
-            _checkpointStore.SaveAsync(checkpoint, path).GetAwaiter().GetResult();
+            
+            // Auto-detect format based on file extension (symmetric with LoadCheckpoint)
+            if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                // Use JSON store for .json files
+                var jsonStore = new JsonCheckpointStore();
+                jsonStore.SaveAsync(checkpoint, path).GetAwaiter().GetResult();
+            }
+            else
+            {
+                // Use configured store (binary by default)
+                _checkpointStore.SaveAsync(checkpoint, path).GetAwaiter().GetResult();
+            }
         }
 
         /// <summary>
