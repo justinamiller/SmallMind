@@ -42,8 +42,9 @@ namespace SmallMind.Core.Simd
         private const int MR_AVX512 = 6;  // M-register blocking: 6 rows
         private const int NR_AVX512 = 16; // N-register blocking: 16 cols (1x AVX-512 vector)
         
-        // Parallelization threshold: only use threads when M >= 384 (3 blocks) to avoid overhead
-        private const int PARALLEL_THRESHOLD_M = 384;
+        // Parallelization threshold: lowered to 256 (2 blocks) to enable parallel for 512×512
+        // Previous value was 384 (3 blocks) which excluded 512×512
+        private const int PARALLEL_THRESHOLD_M = 256;
         
         /// <summary>
         /// High-performance blocked GEMM: C = A × B
