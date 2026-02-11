@@ -89,6 +89,47 @@ namespace SmallMind
         public int? RequestTimeoutMs { get; init; }
 
         /// <summary>
+        /// Maximum number of buffered tokens for streaming backpressure control.
+        /// If null, no backpressure limit.
+        /// Default: null (unbounded)
+        /// </summary>
+        public int? MaxBufferedTokens { get; init; }
+
+        /// <summary>
+        /// Maximum queue depth for batched/multi-session scenarios.
+        /// If null, no queue depth limit.
+        /// Default: null (unbounded)
+        /// </summary>
+        public int? MaxQueueDepth { get; init; }
+
+        /// <summary>
+        /// Maximum tensor memory budget in bytes.
+        /// If null, no memory budget enforcement.
+        /// Default: null (unbounded)
+        /// </summary>
+        public long? MaxTensorBytes { get; init; }
+
+        /// <summary>
+        /// Memory budget enforcement mode.
+        /// Default: None (no enforcement)
+        /// </summary>
+        public Abstractions.Telemetry.MemoryBudgetMode MemoryBudgetMode { get; init; } = Abstractions.Telemetry.MemoryBudgetMode.None;
+
+        /// <summary>
+        /// Runtime logger for diagnostics and debugging.
+        /// If null, uses NullRuntimeLogger (no logging).
+        /// Default: null
+        /// </summary>
+        public Abstractions.Telemetry.IRuntimeLogger? Logger { get; init; }
+
+        /// <summary>
+        /// Runtime metrics collector for performance tracking.
+        /// If null, uses NullRuntimeMetrics (no metrics).
+        /// Default: null
+        /// </summary>
+        public Abstractions.Telemetry.IRuntimeMetrics? Metrics { get; init; }
+
+        /// <summary>
         /// Diagnostics sink for observability.
         /// </summary>
         public ISmallMindDiagnosticsSink? DiagnosticsSink { get; init; }
