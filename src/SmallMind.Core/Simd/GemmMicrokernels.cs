@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
+using System.Threading.Tasks;
 
 namespace SmallMind.Core.Simd
 {
@@ -40,6 +41,9 @@ namespace SmallMind.Core.Simd
         private const int NR_AVX2 = 16;   // N-register blocking: 16 cols (2x AVX2 vectors)
         private const int MR_AVX512 = 6;  // M-register blocking: 6 rows
         private const int NR_AVX512 = 16; // N-register blocking: 16 cols (1x AVX-512 vector)
+        
+        // Parallelization threshold: only use threads when M >= 384 (3 blocks) to avoid overhead
+        private const int PARALLEL_THRESHOLD_M = 384;
         
         /// <summary>
         /// High-performance blocked GEMM: C = A × B
@@ -209,6 +213,7 @@ namespace SmallMind.Core.Simd
         /// <summary>
         /// AVX2 blocked GEMM with B-matrix packing and L1/L2 cache blocking.
         /// Uses 8-wide SIMD with FMA for high throughput on pre-AVX-512 CPUs.
+        /// Parallelized over M-dimension blocks for large matrices (Phase 2 optimization).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static unsafe void MatMulAvx2Blocked(
@@ -221,27 +226,73 @@ namespace SmallMind.Core.Simd
                 return;
             }
             
-            fixed (float* pA = A, pB = B, pC = C)
+            // Decide whether to use parallelization based on M dimension
+            bool useParallel = M >= PARALLEL_THRESHOLD_M && Environment.ProcessorCount > 1;
+            
+            if (useParallel)
             {
-                // L2 blocking for large matrices
-                for (int mc = 0; mc < M; mc += L2_BLOCK_M)
+                // Parallel execution over MC blocks
+                int numMcBlocks = (M + L2_BLOCK_M - 1) / L2_BLOCK_M;
+                
+                // Convert to arrays for lambda capture (can't use Span in lambda)
+                float[] aArray = A.ToArray();
+                float[] bArray = B.ToArray();
+                float[] cArray = C.ToArray();
+                
+                Parallel.For(0, numMcBlocks, mcIdx =>
                 {
+                    int mc = mcIdx * L2_BLOCK_M;
                     int mb = Math.Min(L2_BLOCK_M, M - mc);
                     
-                    for (int nc = 0; nc < N; nc += L2_BLOCK_N)
+                    fixed (float* pA = aArray, pB = bArray, pC = cArray)
                     {
-                        int nb = Math.Min(L2_BLOCK_N, N - nc);
-                        
-                        for (int kc = 0; kc < K; kc += L2_BLOCK_K)
+                        for (int nc = 0; nc < N; nc += L2_BLOCK_N)
                         {
-                            int kb = Math.Min(L2_BLOCK_K, K - kc);
+                            int nb = Math.Min(L2_BLOCK_N, N - nc);
                             
-                            // L1 blocking within L2 blocks
-                            GemmL1BlockedAvx2(
-                                pA + mc * K + kc,
-                                pB + kc * N + nc,
-                                pC + mc * N + nc,
-                                mb, kb, nb, K, N, N);
+                            for (int kc = 0; kc < K; kc += L2_BLOCK_K)
+                            {
+                                int kb = Math.Min(L2_BLOCK_K, K - kc);
+                                
+                                // L1 blocking within L2 blocks
+                                GemmL1BlockedAvx2(
+                                    pA + mc * K + kc,
+                                    pB + kc * N + nc,
+                                    pC + mc * N + nc,
+                                    mb, kb, nb, K, N, N);
+                            }
+                        }
+                    }
+                });
+                
+                // Copy result back to C span
+                cArray.CopyTo(C);
+            }
+            else
+            {
+                // Serial execution for small matrices
+                fixed (float* pA = A, pB = B, pC = C)
+                {
+                    // L2 blocking for large matrices
+                    for (int mc = 0; mc < M; mc += L2_BLOCK_M)
+                    {
+                        int mb = Math.Min(L2_BLOCK_M, M - mc);
+                        
+                        for (int nc = 0; nc < N; nc += L2_BLOCK_N)
+                        {
+                            int nb = Math.Min(L2_BLOCK_N, N - nc);
+                            
+                            for (int kc = 0; kc < K; kc += L2_BLOCK_K)
+                            {
+                                int kb = Math.Min(L2_BLOCK_K, K - kc);
+                                
+                                // L1 blocking within L2 blocks
+                                GemmL1BlockedAvx2(
+                                    pA + mc * K + kc,
+                                    pB + kc * N + nc,
+                                    pC + mc * N + nc,
+                                    mb, kb, nb, K, N, N);
+                            }
                         }
                     }
                 }
