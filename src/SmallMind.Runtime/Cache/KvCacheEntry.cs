@@ -197,6 +197,36 @@ namespace SmallMind.Runtime.Cache
         }
 
         /// <summary>
+        /// Implements sliding window by keeping only the last windowSize tokens.
+        /// Shifts cached data to the beginning and updates token count.
+        /// </summary>
+        /// <param name="windowSize">Number of tokens to retain (must be less than current count)</param>
+        public void Slide(int windowSize)
+        {
+            if (windowSize < 0)
+                throw new ArgumentOutOfRangeException(nameof(windowSize));
+            
+            if (windowSize >= _currentTokenCount)
+                return; // Nothing to slide
+            
+            int tokensToKeep = Math.Min(windowSize, _currentTokenCount);
+            int startPos = _currentTokenCount - tokensToKeep;
+            int stride = _modelShape.Heads * _modelShape.HeadDim;
+            int srcOffset = startPos * stride;
+            int length = tokensToKeep * stride;
+            
+            // Shift data to beginning of arrays
+            for (int layer = 0; layer < _modelShape.Layers; layer++)
+            {
+                // Use Buffer.BlockCopy for efficient memory move
+                Buffer.BlockCopy(_keyCaches[layer], srcOffset * sizeof(float), _keyCaches[layer], 0, length * sizeof(float));
+                Buffer.BlockCopy(_valueCaches[layer], srcOffset * sizeof(float), _valueCaches[layer], 0, length * sizeof(float));
+            }
+            
+            _currentTokenCount = tokensToKeep;
+        }
+
+        /// <summary>
         /// Disposes the cache and returns pooled arrays.
         /// </summary>
         public void Dispose()
