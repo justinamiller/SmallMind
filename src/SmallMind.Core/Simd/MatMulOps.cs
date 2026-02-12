@@ -24,7 +24,7 @@ namespace SmallMind.Core.Simd
         //   - 128×128: Break-even point (overhead ≈ work)
         //   - 256×256+: Parallel is 44%+ faster (work >> overhead)
         private const int PARALLEL_THRESHOLD = 128;
-        private const int TILE_SIZE = 32; // Cache tile size for blocking
+        private const int TILE_SIZE = 64; // Cache tile size for blocking (optimized for L1 cache)
         private const int VEC512_SIZE = 16; // AVX-512 vector width (16 floats)
         
         /// <summary>
@@ -1007,7 +1007,7 @@ namespace SmallMind.Core.Simd
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
         private static unsafe void MatMulAvx2TileKernel(
             float* pA, float* pB, float* pC,
             int i0, int iMax, int K, int N)
@@ -1033,12 +1033,14 @@ namespace SmallMind.Core.Simd
                     Vector256<float> acc6 = Vector256<float>.Zero;
                     Vector256<float> acc7 = Vector256<float>.Zero;
 
-                    // Accumulate across K dimension with 2x unrolling for better ILP
+                    // Accumulate across K dimension with 4x unrolling for better ILP
                     int k = 0;
-                    for (; k <= K - 2; k += 2)
+                    for (; k <= K - 4; k += 4)
                     {
                         int bRowStart0 = k * N;
                         int bRowStart1 = (k + 1) * N;
+                        int bRowStart2 = (k + 2) * N;
+                        int bRowStart3 = (k + 3) * N;
                         
                         // Iteration 0
                         Vector256<float> vA0 = Vector256.Create(pA[aRowStart + k]);
@@ -1061,6 +1063,28 @@ namespace SmallMind.Core.Simd
                         acc5 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 5), acc5);
                         acc6 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 6), acc6);
                         acc7 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 7), acc7);
+                        
+                        // Iteration 2
+                        Vector256<float> vA2 = Vector256.Create(pA[aRowStart + k + 2]);
+                        acc0 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j), acc0);
+                        acc1 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize), acc1);
+                        acc2 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 2), acc2);
+                        acc3 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 3), acc3);
+                        acc4 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 4), acc4);
+                        acc5 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 5), acc5);
+                        acc6 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 6), acc6);
+                        acc7 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 7), acc7);
+                        
+                        // Iteration 3
+                        Vector256<float> vA3 = Vector256.Create(pA[aRowStart + k + 3]);
+                        acc0 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j), acc0);
+                        acc1 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize), acc1);
+                        acc2 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 2), acc2);
+                        acc3 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 3), acc3);
+                        acc4 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 4), acc4);
+                        acc5 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 5), acc5);
+                        acc6 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 6), acc6);
+                        acc7 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 7), acc7);
                     }
                     
                     // Handle remaining K iteration (0 or 1)
