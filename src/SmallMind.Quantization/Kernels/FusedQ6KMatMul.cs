@@ -139,7 +139,10 @@ namespace SmallMind.Quantization.Kernels
                 {
                     int valueIdx = sb * Q6K_SUB_BLOCK_SIZE + i;
                     
-                    byte low4 = ql_ptr[valueIdx];
+                    int qlIdx = valueIdx / 2;
+                    byte qlByte = ql_ptr[qlIdx];
+                    byte low4 = (valueIdx % 2 == 0) ? (byte)(qlByte & 0xF) : (byte)((qlByte >> 4) & 0xF);
+                    
                     int qhIdx = valueIdx / 4;
                     int qhShift = (valueIdx % 4) * 2;
                     byte high2 = (byte)((qh_ptr[qhIdx] >> qhShift) & 0x3);
@@ -215,7 +218,10 @@ namespace SmallMind.Quantization.Kernels
                 {
                     int valueIdx = sb * Q6K_SUB_BLOCK_SIZE + i;
                     
-                    byte low4 = ql[valueIdx];
+                    int qlIdx = valueIdx / 2;
+                    byte qlByte = ql[qlIdx];
+                    byte low4 = (valueIdx % 2 == 0) ? (byte)(qlByte & 0xF) : (byte)((qlByte >> 4) & 0xF);
+                    
                     int qhIdx = valueIdx / 4;
                     int qhShift = (valueIdx % 4) * 2;
                     byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
