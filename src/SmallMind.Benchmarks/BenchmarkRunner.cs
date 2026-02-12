@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.InteropServices;
 using System.IO;
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Quantization.Kernels;
 using SmallMind.Quantization.Tensors;
 
@@ -17,10 +18,12 @@ namespace SmallMind.Benchmarks
     {
         private readonly BenchmarkConfig _config;
         private readonly List<BenchmarkResult> _results = new List<BenchmarkResult>();
+        private readonly IRuntimeLogger _logger;
 
-        public BenchmarkRunner(BenchmarkConfig? config = null)
+        public BenchmarkRunner(BenchmarkConfig? config = null, IRuntimeLogger? logger = null)
         {
             _config = config ?? new BenchmarkConfig();
+            _logger = logger ?? NullRuntimeLogger.Instance;
         }
 
         /// <summary>
@@ -28,14 +31,14 @@ namespace SmallMind.Benchmarks
         /// </summary>
         public void RunAll()
         {
-            Console.WriteLine("=== SmallMind Performance Benchmarks ===");
-            Console.WriteLine();
+            _logger.Info("=== SmallMind Performance Benchmarks ===");
+            _logger.Info("");
 
             CheckConfiguration();
             CollectEnvironmentInfo();
 
             // Run FP32 MatMul benchmarks (targeting 60+ GFLOPS)
-            Console.WriteLine("\n=== FP32 MatMul Benchmarks (GFLOPS Target: 60+) ===\n");
+            _logger.Info("\n=== FP32 MatMul Benchmarks (GFLOPS Target: 60+) ===\n");
             RunFP32MatMulBenchmark(64, 64, 64);
             RunFP32MatMulBenchmark(128, 128, 128);
             RunFP32MatMulBenchmark(256, 256, 256);
@@ -44,7 +47,7 @@ namespace SmallMind.Benchmarks
             RunFP32MatMulBenchmark(2048, 2048, 2048);
 
             // Run Q4 quantized benchmarks (for comparison)
-            Console.WriteLine("\n=== Q4 Quantized MatMul Benchmarks ===\n");
+            _logger.Info("\n=== Q4 Quantized MatMul Benchmarks ===\n");
             RunQ4MatMulComparison(128, 128, 128);
             RunQ4MatMulComparison(256, 256, 256);
             RunQ4MatMulComparison(512, 512, 512);
@@ -56,18 +59,16 @@ namespace SmallMind.Benchmarks
         private void CheckConfiguration()
         {
 #if DEBUG
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("WARNING: Running in Debug mode. Results may not be representative.");
-            Console.WriteLine("Please run in Release mode for accurate benchmarks.");
-            Console.ResetColor();
-            Console.WriteLine();
+            _logger.Warn("WARNING: Running in Debug mode. Results may not be representative.");
+            _logger.Warn("Please run in Release mode for accurate benchmarks.");
+            _logger.Info("");
 #endif
 
-            Console.WriteLine($"Configuration:");
-            Console.WriteLine($"  Warmup iterations: {_config.WarmupIterations}");
-            Console.WriteLine($"  Measured iterations: {_config.MeasuredIterations}");
-            Console.WriteLine($"  Seed: {_config.Seed}");
-            Console.WriteLine();
+            _logger.Info($"Configuration:");
+            _logger.Info($"  Warmup iterations: {_config.WarmupIterations}");
+            _logger.Info($"  Measured iterations: {_config.MeasuredIterations}");
+            _logger.Info($"  Seed: {_config.Seed}");
+            _logger.Info("");
         }
 
         private Dictionary<string, object> _environment = new Dictionary<string, object>();
@@ -98,7 +99,7 @@ namespace SmallMind.Benchmarks
         /// </summary>
         private void RunFP32MatMulBenchmark(int m, int k, int n)
         {
-            Console.WriteLine($"Running FP32 MatMul Benchmark: {m}x{k} * {k}x{n}");
+            _logger.Info($"Running FP32 MatMul Benchmark: {m}x{k} * {k}x{n}");
 
             // Create test data
             var random = new Random(_config.Seed);
@@ -113,16 +114,16 @@ namespace SmallMind.Benchmarks
             var c = new float[m * n];
 
             // Warmup
-            Console.Write($"  Warmup ({_config.WarmupIterations} iterations)... ");
+            _logger.Info($"  Warmup ({_config.WarmupIterations} iterations)... ");
             for (int i = 0; i < _config.WarmupIterations; i++)
             {
                 Array.Clear(c);
                 SmallMind.Core.Simd.MatMulOps.MatMul(a, b, c, m, k, n);
             }
-            Console.WriteLine("Done");
+            _logger.Info("Done");
 
             // Benchmark
-            Console.Write($"  Measuring ({_config.MeasuredIterations} iterations)... ");
+            _logger.Info($"  Measuring ({_config.MeasuredIterations} iterations)... ");
             
             var collector = new MetricsCollector();
             var times = new List<double>();
@@ -144,7 +145,7 @@ namespace SmallMind.Benchmarks
             }
 
             var (alloc, gen0, gen1, gen2, peakRSS, managedHeap) = collector.Stop();
-            Console.WriteLine("Done");
+            _logger.Info("Done");
 
             // Calculate statistics
             times.Sort();
@@ -162,31 +163,25 @@ namespace SmallMind.Benchmarks
             // Get kernel info
             var kernel = SmallMind.Core.Simd.MatMulOps.LastKernelUsed.ToString();
 
-            Console.WriteLine($"  Time:      {mean:F3} ms (median: {median:F3} ms)");
-            Console.WriteLine($"  GFLOPS:    {gflops:F2}");
-            Console.WriteLine($"  Kernel:    {kernel}");
-            Console.WriteLine($"  Allocated: {alloc / 1024.0:F2} KB, Gen0: {gen0}");
+            _logger.Info($"  Time:      {mean:F3} ms (median: {median:F3} ms)");
+            _logger.Info($"  GFLOPS:    {gflops:F2}");
+            _logger.Info($"  Kernel:    {kernel}");
+            _logger.Info($"  Allocated: {alloc / 1024.0:F2} KB, Gen0: {gen0}");
             
             // Highlight if we're meeting the 60+ GFLOPS goal
             if (gflops >= 60.0)
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"  ✓ GOAL MET: {gflops:F2} GFLOPS >= 60.0 GFLOPS");
-                Console.ResetColor();
+                _logger.Info($"  ✓ GOAL MET: {gflops:F2} GFLOPS >= 60.0 GFLOPS");
             }
             else if (gflops >= 40.0)
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"  ⚠ CLOSE: {gflops:F2} GFLOPS (goal: 60+ GFLOPS)");
-                Console.ResetColor();
+                _logger.Warn($"  ⚠ CLOSE: {gflops:F2} GFLOPS (goal: 60+ GFLOPS)");
             }
             else
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"  ✗ BELOW TARGET: {gflops:F2} GFLOPS (goal: 60+ GFLOPS)");
-                Console.ResetColor();
+                _logger.Error($"  ✗ BELOW TARGET: {gflops:F2} GFLOPS (goal: 60+ GFLOPS)");
             }
-            Console.WriteLine();
+            _logger.Info("");
 
             // Store result
             var result = new BenchmarkResult
@@ -225,7 +220,7 @@ namespace SmallMind.Benchmarks
         /// </summary>
         private void RunQ4MatMulComparison(int m, int k, int n)
         {
-            Console.WriteLine($"Running Q4 MatMul Comparison: {m}x{k} * {k}x{n}");
+            _logger.Info($"Running Q4 MatMul Comparison: {m}x{k} * {k}x{n}");
 
             // Create test data
             var random = new Random(_config.Seed);
@@ -241,16 +236,16 @@ namespace SmallMind.Benchmarks
             var c = new float[m * n];
 
             // Warmup
-            Console.Write($"  Warmup ({_config.WarmupIterations} iterations)... ");
+            _logger.Info($"  Warmup ({_config.WarmupIterations} iterations)... ");
             for (int i = 0; i < _config.WarmupIterations; i++)
             {
                 Array.Clear(c);
                 MatMulF32Q4.Multiply(a, b, c, m, k, n);
             }
-            Console.WriteLine("Done");
+            _logger.Info("Done");
 
             // Benchmark original
-            Console.Write($"  Measuring Original ({_config.MeasuredIterations} iterations)... ");
+            _logger.Info($"  Measuring Original ({_config.MeasuredIterations} iterations)... ");
             
             var collector = new MetricsCollector();
             var timesOriginal = new List<double>();
@@ -272,7 +267,7 @@ namespace SmallMind.Benchmarks
             }
 
             var (allocOriginal, gen0Original, gen1Original, gen2Original, peakRSSOriginal, managedHeapOriginal) = collector.Stop();
-            Console.WriteLine("Done");
+            _logger.Info("Done");
 
             // Warmup optimized
             for (int i = 0; i < _config.WarmupIterations; i++)
@@ -282,7 +277,7 @@ namespace SmallMind.Benchmarks
             }
 
             // Benchmark optimized
-            Console.Write($"  Measuring Optimized ({_config.MeasuredIterations} iterations)... ");
+            _logger.Info($"  Measuring Optimized ({_config.MeasuredIterations} iterations)... ");
             
             collector = new MetricsCollector();
             var timesOptimized = new List<double>();
@@ -304,7 +299,7 @@ namespace SmallMind.Benchmarks
             }
 
             var (allocOptimized, gen0Optimized, gen1Optimized, gen2Optimized, peakRSSOptimized, managedHeapOptimized) = collector.Stop();
-            Console.WriteLine("Done");
+            _logger.Info("Done");
 
             // Calculate statistics
             timesOriginal.Sort();
@@ -327,12 +322,12 @@ namespace SmallMind.Benchmarks
             
             var speedup = meanOriginal / meanOptimized;
 
-            Console.WriteLine($"  Original:  {meanOriginal:F3} ms (median: {medianOriginal:F3} ms), {gflopsOriginal:F2} GFLOPS");
-            Console.WriteLine($"  Optimized: {meanOptimized:F3} ms (median: {medianOptimized:F3} ms), {gflopsOptimized:F2} GFLOPS");
-            Console.WriteLine($"  Speedup:   {speedup:F2}x");
-            Console.WriteLine($"  Allocated (Original): {allocOriginal / 1024.0:F2} KB, Gen0: {gen0Original}");
-            Console.WriteLine($"  Allocated (Optimized): {allocOptimized / 1024.0:F2} KB, Gen0: {gen0Optimized}");
-            Console.WriteLine();
+            _logger.Info($"  Original:  {meanOriginal:F3} ms (median: {medianOriginal:F3} ms), {gflopsOriginal:F2} GFLOPS");
+            _logger.Info($"  Optimized: {meanOptimized:F3} ms (median: {medianOptimized:F3} ms), {gflopsOptimized:F2} GFLOPS");
+            _logger.Info($"  Speedup:   {speedup:F2}x");
+            _logger.Info($"  Allocated (Original): {allocOriginal / 1024.0:F2} KB, Gen0: {gen0Original}");
+            _logger.Info($"  Allocated (Optimized): {allocOptimized / 1024.0:F2} KB, Gen0: {gen0Optimized}");
+            _logger.Info("");
 
             // Store results for both
             var resultOriginal = new BenchmarkResult
@@ -394,7 +389,7 @@ namespace SmallMind.Benchmarks
 
         private void WriteReports()
         {
-            Console.WriteLine("Writing reports...");
+            _logger.Info("Writing reports...");
 
             var outputDir = "/home/runner/work/SmallMind/SmallMind/artifacts/perf";
             Directory.CreateDirectory(outputDir);
@@ -409,11 +404,11 @@ namespace SmallMind.Benchmarks
 
             // Write JSON
             JsonReportWriter.WriteReport(jsonPath, _results);
-            Console.WriteLine($"  JSON: {jsonPath}");
+            _logger.Info($"  JSON: {jsonPath}");
 
             // Write Markdown
             MarkdownReportWriter.WriteReport(mdPath, _results, baseline);
-            Console.WriteLine($"  Markdown: {mdPath}");
+            _logger.Info($"  Markdown: {mdPath}");
 
             // Also write latest
             var latestJsonPath = Path.Combine(outputDir, "perf-results-latest.json");
@@ -421,8 +416,8 @@ namespace SmallMind.Benchmarks
             JsonReportWriter.WriteReport(latestJsonPath, _results);
             MarkdownReportWriter.WriteReport(latestMdPath, _results, baseline);
 
-            Console.WriteLine();
-            Console.WriteLine("Benchmark complete!");
+            _logger.Info("");
+            _logger.Info("Benchmark complete!");
 
             // Check for regressions if baseline exists
             if (baseline != null)
@@ -433,8 +428,8 @@ namespace SmallMind.Benchmarks
 
         private void CheckRegressions(List<BenchmarkResult> baseline)
         {
-            Console.WriteLine();
-            Console.WriteLine("=== Regression Check ===");
+            _logger.Info("");
+            _logger.Info("=== Regression Check ===");
 
             var hasRegressions = false;
 
@@ -450,29 +445,23 @@ namespace SmallMind.Benchmarks
                 
                 if (currentAlloc > baselineAlloc * 1.1) // 10% threshold
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"❌ {result.Name}: Allocation regression!");
-                    Console.WriteLine($"   Current: {currentAlloc:F0} bytes, Baseline: {baselineAlloc:F0} bytes");
-                    Console.ResetColor();
+                    _logger.Error($"❌ {result.Name}: Allocation regression!");
+                    _logger.Error($"   Current: {currentAlloc:F0} bytes, Baseline: {baselineAlloc:F0} bytes");
                     hasRegressions = true;
                 }
 
                 // Check Gen0 collections
                 if (result.Metrics.Gen0Collections > baselineResult.Metrics.Gen0Collections)
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"❌ {result.Name}: Gen0 collection increase!");
-                    Console.WriteLine($"   Current: {result.Metrics.Gen0Collections}, Baseline: {baselineResult.Metrics.Gen0Collections}");
-                    Console.ResetColor();
+                    _logger.Error($"❌ {result.Name}: Gen0 collection increase!");
+                    _logger.Error($"   Current: {result.Metrics.Gen0Collections}, Baseline: {baselineResult.Metrics.Gen0Collections}");
                     hasRegressions = true;
                 }
             }
 
             if (!hasRegressions)
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("✅ No regressions detected!");
-                Console.ResetColor();
+                _logger.Info("✅ No regressions detected!");
             }
         }
     }

@@ -32,6 +32,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SmallMind.Abstractions\SmallMind.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Main library projects -->
     <InternalsVisibleTo Include="SmallMind.Transformers" />
     <InternalsVisibleTo Include="SmallMind.Runtime" />

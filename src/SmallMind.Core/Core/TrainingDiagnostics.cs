@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Core.Core
 {
@@ -77,13 +78,15 @@ namespace SmallMind.Core.Core
             }
         }
         
-        public void PrintReport()
+        public void PrintReport(IRuntimeLogger? logger = null)
         {
-            Console.WriteLine("\n╔══════════════════════════════════════════════════════════════════════════╗");
-            Console.WriteLine("║                         TRAINING PERFORMANCE REPORT                       ║");
-            Console.WriteLine("╠══════════════════════════════════════════════════════════════════════════╣");
-            Console.WriteLine("║ Operation                    │ Total (ms) │ Avg (ms) │ Count  │ % Time  ║");
-            Console.WriteLine("╟──────────────────────────────┼────────────┼──────────┼────────┼─────────╢");
+            var log = logger ?? NullRuntimeLogger.Instance;
+            
+            log.Info("\n╔══════════════════════════════════════════════════════════════════════════╗");
+            log.Info("║                         TRAINING PERFORMANCE REPORT                       ║");
+            log.Info("╠══════════════════════════════════════════════════════════════════════════╣");
+            log.Info("║ Operation                    │ Total (ms) │ Avg (ms) │ Count  │ % Time  ║");
+            log.Info("╟──────────────────────────────┼────────────┼──────────┼────────┼─────────╢");
             
             // Sort by total ticks descending
             var statsList = new List<KeyValuePair<string, OperationStats>>(_stats.Count);
@@ -117,12 +120,12 @@ namespace SmallMind.Core.Core
                 var op = statsList[i].Key;
                 var stats = statsList[i].Value;
                 double pct = totalTime > 0 ? (stats.TotalMs / totalTime * 100) : 0;
-                Console.WriteLine($"║ {op,-28} │ {stats.TotalMs,10:F2} │ {stats.AvgMs,8:F3} │ {stats.Count,6} │ {pct,6:F1}% ║");
+                log.Info($"║ {op,-28} │ {stats.TotalMs,10:F2} │ {stats.AvgMs,8:F3} │ {stats.Count,6} │ {pct,6:F1}% ║");
             }
             
-            Console.WriteLine("╠══════════════════════════════════════════════════════════════════════════╣");
-            Console.WriteLine($"║ TOTAL                        │ {totalTime,10:F2} │          │        │ 100.0% ║");
-            Console.WriteLine("╚══════════════════════════════════════════════════════════════════════════╝");
+            log.Info("╠══════════════════════════════════════════════════════════════════════════╣");
+            log.Info($"║ TOTAL                        │ {totalTime,10:F2} │          │        │ 100.0% ║");
+            log.Info("╚══════════════════════════════════════════════════════════════════════════╝");
         }
         
         public void Clear()
@@ -153,24 +156,26 @@ namespace SmallMind.Core.Core
             _snapshots.Add((phase, managed, working));
         }
         
-        public void PrintReport()
+        public void PrintReport(IRuntimeLogger? logger = null)
         {
-            Console.WriteLine("\n╔══════════════════════════════════════════════════════════════╗");
-            Console.WriteLine("║                    MEMORY USAGE REPORT                        ║");
-            Console.WriteLine("╠══════════════════════════════════════════════════════════════╣");
-            Console.WriteLine("║ Phase                    │ Managed (MB) │ Working Set (MB)   ║");
-            Console.WriteLine("╟──────────────────────────┼──────────────┼────────────────────╢");
+            var log = logger ?? NullRuntimeLogger.Instance;
+            
+            log.Info("\n╔══════════════════════════════════════════════════════════════╗");
+            log.Info("║                    MEMORY USAGE REPORT                        ║");
+            log.Info("╠══════════════════════════════════════════════════════════════╣");
+            log.Info("║ Phase                    │ Managed (MB) │ Working Set (MB)   ║");
+            log.Info("╟──────────────────────────┼──────────────┼────────────────────╢");
             
             foreach (var (phase, managed, working) in _snapshots)
             {
-                Console.WriteLine($"║ {phase,-24} │ {managed / 1024.0 / 1024.0,12:F1} │ {working / 1024.0 / 1024.0,18:F1} ║");
+                log.Info($"║ {phase,-24} │ {managed / 1024.0 / 1024.0,12:F1} │ {working / 1024.0 / 1024.0,18:F1} ║");
             }
             
-            Console.WriteLine("╠══════════════════════════════════════════════════════════════╣");
-            Console.WriteLine($"║ PEAK                     │ {_peakManaged / 1024.0 / 1024.0,12:F1} │ {_peakWorking / 1024.0 / 1024.0,18:F1} ║");
-            Console.WriteLine("╚══════════════════════════════════════════════════════════════╝");
+            log.Info("╠══════════════════════════════════════════════════════════════╣");
+            log.Info($"║ PEAK                     │ {_peakManaged / 1024.0 / 1024.0,12:F1} │ {_peakWorking / 1024.0 / 1024.0,18:F1} ║");
+            log.Info("╚══════════════════════════════════════════════════════════════╝");
             
-            Console.WriteLine($"\nGC Collections - Gen0: {GC.CollectionCount(0)}, Gen1: {GC.CollectionCount(1)}, Gen2: {GC.CollectionCount(2)}");
+            log.Info($"\nGC Collections - Gen0: {GC.CollectionCount(0)}, Gen1: {GC.CollectionCount(1)}, Gen2: {GC.CollectionCount(2)}");
         }
         
         public void Clear()
@@ -186,8 +191,10 @@ namespace SmallMind.Core.Core
     /// </summary>
     internal static class GradientDiagnostics
     {
-        public static void CheckGradients(string name, ReadOnlySpan<float> gradients, bool verbose = false)
+        public static void CheckGradients(string name, ReadOnlySpan<float> gradients, IRuntimeLogger? logger = null, bool verbose = false)
         {
+            var log = logger ?? NullRuntimeLogger.Instance;
+            
             float min = float.MaxValue;
             float max = float.MinValue;
             float sum = 0;
@@ -250,10 +257,12 @@ namespace SmallMind.Core.Core
             {
                 if (hasIssue)
                 {
-                    Console.WriteLine($"\n[{name}] Gradient Issues Detected:");
-                    Console.Write(sb.ToString());
+                    log.Warn($"\n[{name}] Gradient Issues Detected:");
+                    var issues = sb.ToString().TrimEnd();
+                    foreach (var line in issues.Split('\n'))
+                        log.Warn(line);
                 }
-                Console.WriteLine($"[{name}] Stats: mean={mean:E2}, std={std:E2}, min={min:E2}, max={max:E2}, norm={norm:F4}");
+                log.Info($"[{name}] Stats: mean={mean:E2}, std={std:E2}, min={min:E2}, max={max:E2}, norm={norm:F4}");
             }
         }
         

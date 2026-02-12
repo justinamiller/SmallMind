@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Core.Simd
 {
@@ -147,38 +148,40 @@ namespace SmallMind.Core.Simd
         /// Prints CPU SIMD capabilities to the console.
         /// Useful for debugging and diagnostics.
         /// </summary>
-        public static void PrintCapabilities()
+        public static void PrintCapabilities(IRuntimeLogger? logger = null)
         {
-            Console.WriteLine("=== SmallMind SIMD Capabilities ===");
-            Console.WriteLine($"Platform: {PlatformType}");
-            Console.WriteLine($"Best Instruction Set: {BestInstructionSet}");
-            Console.WriteLine($"Vector Width: {VectorWidthBits} bits ({FloatsPerVector} floats/vector)");
-            Console.WriteLine();
+            var log = logger ?? NullRuntimeLogger.Instance;
+            
+            log.Info("=== SmallMind SIMD Capabilities ===");
+            log.Info($"Platform: {PlatformType}");
+            log.Info($"Best Instruction Set: {BestInstructionSet}");
+            log.Info($"Vector Width: {VectorWidthBits} bits ({FloatsPerVector} floats/vector)");
+            log.Info("");
 
             if (PlatformType == "x86/x64")
             {
-                Console.WriteLine("x86/x64 Features:");
-                Console.WriteLine($"  SSE:     {FormatSupport(IsSSESupported)}");
-                Console.WriteLine($"  SSE2:    {FormatSupport(IsSSE2Supported)}");
-                Console.WriteLine($"  AVX:     {FormatSupport(IsAvxSupported)}");
-                Console.WriteLine($"  AVX2:    {FormatSupport(IsAvx2Supported)}");
-                Console.WriteLine($"  AVX-512: {FormatSupport(IsAvx512Supported)}");
-                Console.WriteLine($"  FMA:     {FormatSupport(IsFmaSupported)}");
+                log.Info("x86/x64 Features:");
+                log.Info($"  SSE:     {FormatSupport(IsSSESupported)}");
+                log.Info($"  SSE2:    {FormatSupport(IsSSE2Supported)}");
+                log.Info($"  AVX:     {FormatSupport(IsAvxSupported)}");
+                log.Info($"  AVX2:    {FormatSupport(IsAvx2Supported)}");
+                log.Info($"  AVX-512: {FormatSupport(IsAvx512Supported)}");
+                log.Info($"  FMA:     {FormatSupport(IsFmaSupported)}");
             }
             else if (PlatformType == "ARM64")
             {
-                Console.WriteLine("ARM64 Features:");
-                Console.WriteLine($"  NEON (AdvSimd): {FormatSupport(IsNeonSupported)}");
+                log.Info("ARM64 Features:");
+                log.Info($"  NEON (AdvSimd): {FormatSupport(IsNeonSupported)}");
             }
             else
             {
-                Console.WriteLine("No hardware SIMD detected. Using Vector<T> fallback.");
+                log.Info("No hardware SIMD detected. Using Vector<T> fallback.");
             }
 
-            Console.WriteLine();
-            Console.WriteLine($"Vector<float>.Count: {Vector<float>.Count}");
-            Console.WriteLine($"Vector.IsHardwareAccelerated: {Vector.IsHardwareAccelerated}");
-            Console.WriteLine("===================================");
+            log.Info("");
+            log.Info($"Vector<float>.Count: {Vector<float>.Count}");
+            log.Info($"Vector.IsHardwareAccelerated: {Vector.IsHardwareAccelerated}");
+            log.Info("===================================");
         }
 
         /// <summary>
