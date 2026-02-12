@@ -11,7 +11,9 @@ namespace SmallMind.Core.Simd
     /// SIMD-accelerated element-wise operations for tensors.
     /// Supports add, subtract, multiply, multiply-add (FMA), and scale operations.
     /// All operations are allocation-free and use the best available SIMD instruction set.
+    /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on class to avoid zero-initialization overhead in hot methods.
     /// </summary>
+    [SkipLocalsInit]
     internal static class ElementWiseOps
     {
         /// <summary>
@@ -61,12 +63,22 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback - process remaining elements
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             int vectorSize = Vector<float>.Count;
-            for (; i <= length - vectorSize; i += vectorSize)
+            if (i <= length - vectorSize)
             {
-                var va = new Vector<float>(a.Slice(i));
-                var vb = new Vector<float>(b.Slice(i));
-                (va + vb).CopyTo(result.Slice(i));
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b, pR = result)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var va = Unsafe.Read<Vector<float>>(pA + i);
+                            var vb = Unsafe.Read<Vector<float>>(pB + i);
+                            Unsafe.Write(pR + i, va + vb);
+                        }
+                    }
+                }
             }
 
             // Scalar remainder
@@ -107,12 +119,22 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             int vectorSize = Vector<float>.Count;
-            for (; i <= length - vectorSize; i += vectorSize)
+            if (i <= length - vectorSize)
             {
-                var va = new Vector<float>(a.Slice(i));
-                var vb = new Vector<float>(b.Slice(i));
-                (va - vb).CopyTo(result.Slice(i));
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b, pR = result)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var va = Unsafe.Read<Vector<float>>(pA + i);
+                            var vb = Unsafe.Read<Vector<float>>(pB + i);
+                            Unsafe.Write(pR + i, va - vb);
+                        }
+                    }
+                }
             }
 
             // Scalar remainder
@@ -169,12 +191,22 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             int vectorSize = Vector<float>.Count;
-            for (; i <= length - vectorSize; i += vectorSize)
+            if (i <= length - vectorSize)
             {
-                var va = new Vector<float>(a.Slice(i));
-                var vb = new Vector<float>(b.Slice(i));
-                (va * vb).CopyTo(result.Slice(i));
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b, pR = result)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var va = Unsafe.Read<Vector<float>>(pA + i);
+                            var vb = Unsafe.Read<Vector<float>>(pB + i);
+                            Unsafe.Write(pR + i, va * vb);
+                        }
+                    }
+                }
             }
 
             // Scalar remainder
@@ -355,12 +387,22 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             int vectorSize = Vector<float>.Count;
             var vScalar = new Vector<float>(scalar);
-            for (; i <= length - vectorSize; i += vectorSize)
+            if (i <= length - vectorSize)
             {
-                var va = new Vector<float>(a.Slice(i));
-                (va + vScalar).CopyTo(a.Slice(i));
+                unsafe
+                {
+                    fixed (float* pA = a)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var va = Unsafe.Read<Vector<float>>(pA + i);
+                            Unsafe.Write(pA + i, va + vScalar);
+                        }
+                    }
+                }
             }
 
             // Scalar remainder
@@ -401,12 +443,22 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             int vectorSize = Vector<float>.Count;
-            for (; i <= length - vectorSize; i += vectorSize)
+            if (i <= length - vectorSize)
             {
-                var va = new Vector<float>(a.Slice(i));
-                var vb = new Vector<float>(b.Slice(i));
-                (va + vb).CopyTo(a.Slice(i));
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var va = Unsafe.Read<Vector<float>>(pA + i);
+                            var vb = Unsafe.Read<Vector<float>>(pB + i);
+                            Unsafe.Write(pA + i, va + vb);
+                        }
+                    }
+                }
             }
 
             // Scalar remainder
