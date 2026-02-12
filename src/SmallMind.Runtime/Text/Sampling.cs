@@ -196,13 +196,16 @@ namespace SmallMind.Runtime
                     int vocabSize = logits.Shape[2];
                     
                     // Reuse logitsLast buffer
-                    if (_logitsLastBuffer == null || _logitsLastBuffer.Length < vocabSize)
+                    int bufferLength = _logitsLastBuffer?.Length ?? 0;
+                    if (bufferLength < vocabSize)
                     {
                         _logitsLastBuffer = new float[vocabSize];
+                        bufferLength = vocabSize;
                     }
                     
                     int lastPosOffset = (T - 1) * vocabSize; // Offset for last position in batch 0
-                    for (int v = 0; v < vocabSize; v++)
+                    // JIT can eliminate bounds checks when loop bound matches buffer length
+                    for (int v = 0; v < bufferLength; v++)
                     {
                         _logitsLastBuffer[v] = logits.Data[lastPosOffset + v];
                     }
@@ -210,7 +213,7 @@ namespace SmallMind.Runtime
                     // Apply temperature - operate on buffer directly
                     if (temperature != 1.0)
                     {
-                        for (int v = 0; v < vocabSize; v++)
+                        for (int v = 0; v < bufferLength; v++)
                         {
                             _logitsLastBuffer[v] /= (float)temperature;
                         }

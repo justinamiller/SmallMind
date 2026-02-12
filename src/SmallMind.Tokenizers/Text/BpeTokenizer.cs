@@ -291,7 +291,9 @@ namespace SmallMind.Tokenizers
                     else if (_vocab.TryGetValue(UnknownToken, out int unkId))
                     {
                         result.Add(unkId);
+#if DEBUG
                         Console.WriteLine($"Warning: Unknown token '{token}' replaced with [UNK]");
+#endif
                     }
                     else
                     {
