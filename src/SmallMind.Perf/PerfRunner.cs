@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime;
 using System.Text.Json;
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Core;
 using SmallMind.Core.Simd;
 using SmallMind.Runtime;
@@ -17,6 +18,7 @@ namespace SmallMind.Perf;
 /// </summary>
 internal class PerfRunner
 {
+    private readonly IRuntimeLogger _logger;
     private int _warmupIters = 50;
     private int _measureIters = 1000;
     private bool _jsonOutput = false;
@@ -31,6 +33,11 @@ internal class PerfRunner
     private int _seed = 42;
 
     private readonly List<BenchmarkResult> _results = new();
+
+    public PerfRunner(IRuntimeLogger? logger = null)
+    {
+        _logger = logger ?? NullRuntimeLogger.Instance;
+    }
 
     public static void Main(string[] args)
     {
@@ -89,59 +96,59 @@ internal class PerfRunner
 
     private void PrintHelp()
     {
-        Console.WriteLine("SmallMind.Perf - Performance Benchmark Runner");
-        Console.WriteLine();
-        Console.WriteLine("Usage: SmallMind.Perf [options]");
-        Console.WriteLine();
-        Console.WriteLine("Benchmark Selection:");
-        Console.WriteLine("  --bench <name>     Benchmark to run:");
-        Console.WriteLine("                       micro: matmul|attention|layernorm|softmax|kvcache");
-        Console.WriteLine("                       e2e: end-to-end inference (requires --prompt)");
-        Console.WriteLine("                       all: all micro-benchmarks (default)");
-        Console.WriteLine();
-        Console.WriteLine("Micro-benchmark Options:");
-        Console.WriteLine("  --warmup N         Number of warmup iterations (default: 50)");
-        Console.WriteLine("  --iters M          Number of measurement iterations (default: 1000)");
-        Console.WriteLine("  --fast             Fast mode for CI (fewer iterations)");
-        Console.WriteLine();
-        Console.WriteLine("End-to-End Options:");
-        Console.WriteLine("  --prompt \"<text>\"   Text prompt for e2e benchmark");
-        Console.WriteLine("  --prompt-file <p>  File containing prompt text");
-        Console.WriteLine("  --max-new-tokens N Number of tokens to generate (default: 50)");
-        Console.WriteLine("  --deterministic    Use deterministic sampling (greedy)");
-        Console.WriteLine("  --seed N           Random seed (default: 42)");
-        Console.WriteLine();
-        Console.WriteLine("Output Options:");
-        Console.WriteLine("  --json             Output results in JSON format");
-        Console.WriteLine("  --help             Show this help message");
-        Console.WriteLine();
-        Console.WriteLine("Examples:");
-        Console.WriteLine("  # Run all micro-benchmarks in fast mode");
-        Console.WriteLine("  SmallMind.Perf --bench all --fast");
-        Console.WriteLine();
-        Console.WriteLine("  # Run end-to-end inference benchmark");
-        Console.WriteLine("  SmallMind.Perf --bench e2e --prompt \"hello world\" --max-new-tokens 100");
-        Console.WriteLine();
-        Console.WriteLine("  # Run with JSON output for automation");
-        Console.WriteLine("  SmallMind.Perf --bench all --json > results.json");
+        _logger.Info("SmallMind.Perf - Performance Benchmark Runner");
+        _logger.Info("");
+        _logger.Info("Usage: SmallMind.Perf [options]");
+        _logger.Info("");
+        _logger.Info("Benchmark Selection:");
+        _logger.Info("  --bench <name>     Benchmark to run:");
+        _logger.Info("                       micro: matmul|attention|layernorm|softmax|kvcache");
+        _logger.Info("                       e2e: end-to-end inference (requires --prompt)");
+        _logger.Info("                       all: all micro-benchmarks (default)");
+        _logger.Info("");
+        _logger.Info("Micro-benchmark Options:");
+        _logger.Info("  --warmup N         Number of warmup iterations (default: 50)");
+        _logger.Info("  --iters M          Number of measurement iterations (default: 1000)");
+        _logger.Info("  --fast             Fast mode for CI (fewer iterations)");
+        _logger.Info("");
+        _logger.Info("End-to-End Options:");
+        _logger.Info("  --prompt \"<text>\"   Text prompt for e2e benchmark");
+        _logger.Info("  --prompt-file <p>  File containing prompt text");
+        _logger.Info("  --max-new-tokens N Number of tokens to generate (default: 50)");
+        _logger.Info("  --deterministic    Use deterministic sampling (greedy)");
+        _logger.Info("  --seed N           Random seed (default: 42)");
+        _logger.Info("");
+        _logger.Info("Output Options:");
+        _logger.Info("  --json             Output results in JSON format");
+        _logger.Info("  --help             Show this help message");
+        _logger.Info("");
+        _logger.Info("Examples:");
+        _logger.Info("  # Run all micro-benchmarks in fast mode");
+        _logger.Info("  SmallMind.Perf --bench all --fast");
+        _logger.Info("");
+        _logger.Info("  # Run end-to-end inference benchmark");
+        _logger.Info("  SmallMind.Perf --bench e2e --prompt \"hello world\" --max-new-tokens 100");
+        _logger.Info("");
+        _logger.Info("  # Run with JSON output for automation");
+        _logger.Info("  SmallMind.Perf --bench all --json > results.json");
     }
 
     private void PrintSystemInfo()
     {
         if (_jsonOutput) return;
 
-        Console.WriteLine("╔═══════════════════════════════════════════════════════════════════════╗");
-        Console.WriteLine("║         SmallMind Performance Benchmark (No 3rd Party Deps)          ║");
-        Console.WriteLine("╚═══════════════════════════════════════════════════════════════════════╝");
-        Console.WriteLine();
-        Console.WriteLine($"Runtime:          .NET {Environment.Version}");
-        Console.WriteLine($"OS:               {Environment.OSVersion}");
-        Console.WriteLine($"Processor Count:  {Environment.ProcessorCount}");
-        Console.WriteLine($"GC Mode:          {(GCSettings.IsServerGC ? "Server" : "Workstation")}");
-        Console.WriteLine($"SIMD Width:       Vector<float>.Count = {System.Numerics.Vector<float>.Count}");
-        Console.WriteLine($"Date:             {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
-        Console.WriteLine($"Mode:             {(_fastMode ? "FAST (CI)" : "FULL")}");
-        Console.WriteLine();
+        _logger.Info("╔═══════════════════════════════════════════════════════════════════════╗");
+        _logger.Info("║         SmallMind Performance Benchmark (No 3rd Party Deps)          ║");
+        _logger.Info("╚═══════════════════════════════════════════════════════════════════════╝");
+        _logger.Info("");
+        _logger.Info($"Runtime:          .NET {Environment.Version}");
+        _logger.Info($"OS:               {Environment.OSVersion}");
+        _logger.Info($"Processor Count:  {Environment.ProcessorCount}");
+        _logger.Info($"GC Mode:          {(GCSettings.IsServerGC ? "Server" : "Workstation")}");
+        _logger.Info($"SIMD Width:       Vector<float>.Count = {System.Numerics.Vector<float>.Count}");
+        _logger.Info($"Date:             {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+        _logger.Info($"Mode:             {(_fastMode ? "FAST (CI)" : "FULL")}");
+        _logger.Info("");
     }
 
     private void Run()
@@ -173,11 +180,11 @@ internal class PerfRunner
     {
         if (!_jsonOutput)
         {
-            Console.WriteLine();
-            Console.WriteLine("═══════════════════════════════════════════════════════════════════════");
-            Console.WriteLine("                    End-to-End Inference Benchmark");
-            Console.WriteLine("═══════════════════════════════════════════════════════════════════════");
-            Console.WriteLine();
+            _logger.Info("");
+            _logger.Info("═══════════════════════════════════════════════════════════════════════");
+            _logger.Info("                    End-to-End Inference Benchmark");
+            _logger.Info("═══════════════════════════════════════════════════════════════════════");
+            _logger.Info("");
         }
 
         // Get prompt
@@ -197,12 +204,12 @@ internal class PerfRunner
 
         if (!_jsonOutput)
         {
-            Console.WriteLine($"Prompt: {(prompt.Length > 60 ? prompt.Substring(0, 60) + "..." : prompt)}");
-            Console.WriteLine($"Prompt length: {prompt.Length} chars");
-            Console.WriteLine($"Max new tokens: {_maxNewTokens}");
-            Console.WriteLine($"Deterministic: {_deterministicMode}");
-            Console.WriteLine($"Seed: {_seed}");
-            Console.WriteLine();
+            _logger.Info($"Prompt: {(prompt.Length > 60 ? prompt.Substring(0, 60) + "..." : prompt)}");
+            _logger.Info($"Prompt length: {prompt.Length} chars");
+            _logger.Info($"Max new tokens: {_maxNewTokens}");
+            _logger.Info($"Deterministic: {_deterministicMode}");
+            _logger.Info($"Seed: {_seed}");
+            _logger.Info("");
         }
 
         // Create a small model for benchmarking
@@ -215,8 +222,8 @@ internal class PerfRunner
         
         if (!_jsonOutput)
         {
-            Console.WriteLine($"Model config: vocab={vocabSize}, embd={nEmbd}, layers={nLayer}, heads={nHead}");
-            Console.WriteLine("Creating model...");
+            _logger.Info($"Model config: vocab={vocabSize}, embd={nEmbd}, layers={nLayer}, heads={nHead}");
+            _logger.Info("Creating model...");
         }
 
         var model = new TransformerModel(vocabSize, blockSize, nEmbd, nLayer, nHead, dropout: 0.0, seed: _seed);
@@ -225,8 +232,8 @@ internal class PerfRunner
 
         if (!_jsonOutput)
         {
-            Console.WriteLine("Model created. Running benchmark...");
-            Console.WriteLine();
+            _logger.Info("Model created. Running benchmark...");
+            _logger.Info("");
         }
 
         // Create inference options
@@ -293,7 +300,7 @@ internal class PerfRunner
             {
                 if (!_jsonOutput)
                 {
-                    Console.WriteLine($"Warning: Run {run + 1} failed: {ex.Message}");
+                    _logger.Warn($"Warning: Run {run + 1} failed: {ex.Message}");
                 }
                 continue;
             }
@@ -329,7 +336,7 @@ internal class PerfRunner
         {
             if (!_jsonOutput)
             {
-                Console.WriteLine("ERROR: All runs failed!");
+                _logger.Error("ERROR: All runs failed!");
             }
             return;
         }
@@ -404,27 +411,27 @@ internal class PerfRunner
 
         if (!_jsonOutput)
         {
-            Console.WriteLine("Results:");
-            Console.WriteLine($"  Runs:                {runs}");
-            Console.WriteLine($"  Avg tokens generated:{avgTokens:F1}");
-            Console.WriteLine();
-            Console.WriteLine("  Latency:");
-            Console.WriteLine($"    Avg:               {avgLatency:F2} ms");
-            Console.WriteLine($"    P50:               {p50Latency:F2} ms");
-            Console.WriteLine($"    P95:               {p95Latency:F2} ms");
-            Console.WriteLine($"    P99:               {p99Latency:F2} ms");
-            Console.WriteLine($"    TTFT (avg):        {avgTTFT:F2} ms");
-            Console.WriteLine();
-            Console.WriteLine("  Throughput:");
-            Console.WriteLine($"    Prefill:           {prefillToksPerSec:F2} tok/s");
-            Console.WriteLine($"    Decode:            {decodeToksPerSec:F2} tok/s");
-            Console.WriteLine($"    ms/token:          {msPerToken:F3} ms");
-            Console.WriteLine();
-            Console.WriteLine("  Memory:");
-            Console.WriteLine($"    Total alloc:       {totalAllocations / 1024.0:F2} KB");
-            Console.WriteLine($"    Alloc/token:       {allocPerToken:F2} bytes");
-            Console.WriteLine($"    GC (Gen0/1/2):     {GC.CollectionCount(0) - startGen0}/{GC.CollectionCount(1) - startGen1}/{GC.CollectionCount(2) - startGen2}");
-            Console.WriteLine();
+            _logger.Info("Results:");
+            _logger.Info($"  Runs:                {runs}");
+            _logger.Info($"  Avg tokens generated:{avgTokens:F1}");
+            _logger.Info("");
+            _logger.Info("  Latency:");
+            _logger.Info($"    Avg:               {avgLatency:F2} ms");
+            _logger.Info($"    P50:               {p50Latency:F2} ms");
+            _logger.Info($"    P95:               {p95Latency:F2} ms");
+            _logger.Info($"    P99:               {p99Latency:F2} ms");
+            _logger.Info($"    TTFT (avg):        {avgTTFT:F2} ms");
+            _logger.Info("");
+            _logger.Info("  Throughput:");
+            _logger.Info($"    Prefill:           {prefillToksPerSec:F2} tok/s");
+            _logger.Info($"    Decode:            {decodeToksPerSec:F2} tok/s");
+            _logger.Info($"    ms/token:          {msPerToken:F3} ms");
+            _logger.Info("");
+            _logger.Info("  Memory:");
+            _logger.Info($"    Total alloc:       {totalAllocations / 1024.0:F2} KB");
+            _logger.Info($"    Alloc/token:       {allocPerToken:F2} bytes");
+            _logger.Info($"    GC (Gen0/1/2):     {GC.CollectionCount(0) - startGen0}/{GC.CollectionCount(1) - startGen1}/{GC.CollectionCount(2) - startGen2}");
+            _logger.Info("");
         }
     }
 
@@ -754,23 +761,23 @@ internal class PerfRunner
         }
         else
         {
-            Console.WriteLine();
-            Console.WriteLine("╔═══════════════════════════════════════════════════════════════════════╗");
-            Console.WriteLine("║                         Benchmark Results                             ║");
-            Console.WriteLine("╚═══════════════════════════════════════════════════════════════════════╝");
-            Console.WriteLine();
+            _logger.Info("");
+            _logger.Info("╔═══════════════════════════════════════════════════════════════════════╗");
+            _logger.Info("║                         Benchmark Results                             ║");
+            _logger.Info("╚═══════════════════════════════════════════════════════════════════════╝");
+            _logger.Info("");
 
             foreach (var result in _results)
             {
-                Console.WriteLine($"[{result.Name}]");
-                Console.WriteLine($"  Time/op:        {result.TimeMs:F4} ms");
+                _logger.Info($"[{result.Name}]");
+                _logger.Info($"  Time/op:        {result.TimeMs:F4} ms");
                 if (result.Throughput > 0)
-                    Console.WriteLine($"  Throughput:     {result.Throughput:F2} {result.ThroughputUnit}");
-                Console.WriteLine($"  Alloc/op:       {result.AllocationsPerOp:F2} bytes");
-                Console.WriteLine($"  GC (Gen0/1/2):  {result.Gen0Collections}/{result.Gen1Collections}/{result.Gen2Collections}");
+                    _logger.Info($"  Throughput:     {result.Throughput:F2} {result.ThroughputUnit}");
+                _logger.Info($"  Alloc/op:       {result.AllocationsPerOp:F2} bytes");
+                _logger.Info($"  GC (Gen0/1/2):  {result.Gen0Collections}/{result.Gen1Collections}/{result.Gen2Collections}");
                 if (result.CpuTimeMs > 0)
-                    Console.WriteLine($"  CPU time/op:    {result.CpuTimeMs:F4} ms");
-                Console.WriteLine();
+                    _logger.Info($"  CPU time/op:    {result.CpuTimeMs:F4} ms");
+                _logger.Info("");
             }
         }
     }
