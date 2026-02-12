@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Abstractions
 {
@@ -429,45 +430,52 @@ namespace SmallMind.Abstractions
     /// </summary>
     public sealed class ConsoleTelemetry : IChatTelemetry
     {
+        private readonly IRuntimeLogger _logger;
+
+        public ConsoleTelemetry(IRuntimeLogger? logger = null)
+        {
+            _logger = logger ?? NullRuntimeLogger.Instance;
+        }
+
         public void OnRequestStart(string sessionId, int messageCount)
         {
-            Console.WriteLine($"[{sessionId}] Request started with {messageCount} messages");
+            _logger.Info($"[{sessionId}] Request started with {messageCount} messages");
         }
 
         public void OnFirstToken(string sessionId, double elapsedMs)
         {
-            Console.WriteLine($"[{sessionId}] First token: {elapsedMs:F2}ms (TTFT)");
+            _logger.Info($"[{sessionId}] First token: {elapsedMs:F2}ms (TTFT)");
         }
 
         public void OnRequestComplete(string sessionId, UsageStats usage)
         {
-            Console.WriteLine($"[{sessionId}] Completed: {usage.PromptTokens} prompt + {usage.CompletionTokens} completion = {usage.TotalTokens} total");
-            Console.WriteLine($"[{sessionId}] Performance: {usage.TokensPerSecond:F2} tok/s");
+            _logger.Info($"[{sessionId}] Completed: {usage.PromptTokens} prompt + {usage.CompletionTokens} completion = {usage.TotalTokens} total");
+            _logger.Info($"[{sessionId}] Performance: {usage.TokensPerSecond:F2} tok/s");
         }
 
         public void OnContextPolicyApplied(string sessionId, string policyName, int originalTokens, int finalTokens)
         {
-            Console.WriteLine($"[{sessionId}] Context policy '{policyName}': {originalTokens} → {finalTokens} tokens");
+            _logger.Info($"[{sessionId}] Context policy '{policyName}': {originalTokens} → {finalTokens} tokens");
         }
 
         public void OnKvCacheAccess(string sessionId, bool hit, int cachedTokens)
         {
-            Console.WriteLine($"[{sessionId}] KV cache {(hit ? "HIT" : "MISS")}: {cachedTokens} cached tokens");
+            _logger.Info($"[{sessionId}] KV cache {(hit ? "HIT" : "MISS")}: {cachedTokens} cached tokens");
         }
 
         public void OnToolCall(string sessionId, string toolName, double elapsedMs)
         {
-            Console.WriteLine($"[{sessionId}] Tool call '{toolName}': {elapsedMs:F2}ms");
+            _logger.Info($"[{sessionId}] Tool call '{toolName}': {elapsedMs:F2}ms");
         }
 
         public void OnKvCacheBudgetExceeded(string sessionId, long currentBytes, long maxBytes)
         {
-            Console.WriteLine($"[{sessionId}] KV cache budget EXCEEDED: {currentBytes / 1024 / 1024}MB / {maxBytes / 1024 / 1024}MB");
+            _logger.Info($"[{sessionId}] KV cache budget EXCEEDED: {currentBytes / 1024 / 1024}MB / {maxBytes / 1024 / 1024}MB");
         }
 
         public void OnKvCacheEviction(string evictedSessionId, string reason, long freedBytes)
         {
-            Console.WriteLine($"[EVICTION] Session '{evictedSessionId}' evicted ({reason}): freed {freedBytes / 1024 / 1024}MB");
+            _logger.Info($"[EVICTION] Session '{evictedSessionId}' evicted ({reason}): freed {freedBytes / 1024 / 1024}MB");
         }
     }
 

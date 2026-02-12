@@ -308,7 +308,7 @@ namespace SmallMind.Engine
             var metadata = QuantizedModelLoader.LoadQuantizedModelMetadata(request.Path);
 
             // Validate metadata sanity
-            ModelValidator.ValidateMetadata(metadata.Metadata, request.Path);
+            ModelValidator.ValidateMetadata(metadata.Metadata, request.Path, _options.Logger);
 
             // Try to extract tokenizer from GGUF metadata (if present)
             ITokenizer tokenizer;
