@@ -385,20 +385,38 @@ namespace SmallMind.Transformers
                 {
                     if (tokEmb.RequiresGrad)
                     {
-                        for (int i = 0; i < dest.Size; i++)
+                        // Use unsafe pointers for gradient accumulation
+                        unsafe
                         {
-                            tokEmb.Grad[i] += dest.Grad[i];
+                            fixed (float* pTokGrad = tokEmb.Grad, pDestGrad = dest.Grad)
+                            {
+                                for (int i = 0; i < dest.Size; i++)
+                                {
+                                    pTokGrad[i] += pDestGrad[i];
+                                }
+                            }
                         }
                     }
                     if (posEmb.RequiresGrad)
                     {
-                        for (int b = 0; b < B; b++)
+                        // Use unsafe pointers for triple-nested loop
+                        unsafe
                         {
-                            for (int t = 0; t < T; t++)
+                            fixed (float* pPosGrad = posEmb.Grad, pDestGrad = dest.Grad)
                             {
-                                for (int e = 0; e < nEmbd; e++)
+                                for (int b = 0; b < B; b++)
                                 {
-                                    posEmb.Grad[t * nEmbd + e] += dest.Grad[(b * T + t) * nEmbd + e];
+                                    int bOffset = b * T * nEmbd;
+                                    for (int t = 0; t < T; t++)
+                                    {
+                                        int posIdx = t * nEmbd;
+                                        int destIdx = bOffset + t * nEmbd;
+                                        
+                                        for (int e = 0; e < nEmbd; e++)
+                                        {
+                                            pPosGrad[posIdx + e] += pDestGrad[destIdx + e];
+                                        }
+                                    }
                                 }
                             }
                         }
