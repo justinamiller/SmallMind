@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace SmallMind.Runtime.Constraints
@@ -11,6 +12,11 @@ namespace SmallMind.Runtime.Constraints
     {
         private readonly Regex _pattern;
         private readonly string _patternString;
+        
+        // Static cache to reuse compiled regex instances across constraint instances
+        // Thread-safe for concurrent access during inference
+        private static readonly ConcurrentDictionary<string, Regex> PatternCache = 
+            new(StringComparer.Ordinal);
 
         /// <summary>
         /// Creates a new RegexEnforcer with the specified pattern.
@@ -22,7 +28,9 @@ namespace SmallMind.Runtime.Constraints
                 throw new ArgumentException("Pattern cannot be null or empty", nameof(pattern));
 
             _patternString = pattern;
-            _pattern = new Regex(pattern, RegexOptions.Compiled);
+            // Reuse compiled regex from cache or create new one
+            _pattern = PatternCache.GetOrAdd(pattern, 
+                p => new Regex(p, RegexOptions.Compiled));
         }
 
         public string ConstraintDescription => $"Regex pattern: {_patternString}";

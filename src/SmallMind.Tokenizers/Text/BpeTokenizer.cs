@@ -20,7 +20,12 @@ namespace SmallMind.Tokenizers
         private readonly FrozenDictionary<int, string> _inverseVocab;
         private readonly List<(string, string)> _merges;
         private readonly FrozenDictionary<(string, string), int> _mergeRanks;
-        private readonly Regex _preTokenizeRegex;
+        
+        // Pre-tokenization regex: shared across all instances for efficiency
+        // Pattern matches sequences of letters, digits, or individual punctuation/whitespace
+        private static readonly Regex PreTokenizeRegex = 
+            new Regex(@"\w+|[^\w\s]|\s+", RegexOptions.Compiled);
+        
         private const string UnknownToken = "[UNK]";
         private const string EndOfTextToken = "[EOT]";
         
@@ -123,9 +128,7 @@ namespace SmallMind.Tokenizers
                 _inverseVocab = inverseDict.ToFrozenDictionary();
                 _mergeRanks = mergeDict.ToFrozenDictionary();
 
-                // Pre-tokenization regex: split on whitespace and punctuation boundaries
-                // This pattern matches sequences of letters, digits, or individual punctuation/whitespace
-                _preTokenizeRegex = new Regex(@"\w+|[^\w\s]|\s+", RegexOptions.Compiled);
+                // Pre-tokenization regex now uses static field (no per-instance compilation)
 
                 int eosId = _vocab.TryGetValue(EndOfTextToken, out int id) ? id : -1;
                 int unkId = _vocab.TryGetValue(UnknownToken, out int id2) ? id2 : -1;
@@ -189,8 +192,7 @@ namespace SmallMind.Tokenizers
             _merges = merges;
             _mergeRanks = mergeDict.ToFrozenDictionary();
 
-            // Pre-tokenization regex
-            _preTokenizeRegex = new Regex(@"\w+|[^\w\s]|\s+", RegexOptions.Compiled);
+            // Pre-tokenization regex now uses static field (no per-instance compilation)
 
             Info = new TokenizerInfo(
                 name: "BpeTokenizer",
@@ -215,7 +217,7 @@ namespace SmallMind.Tokenizers
             var result = new List<int>(text.Length / 3);
 
             // Pre-tokenize: split into words and punctuation
-            var matches = _preTokenizeRegex.Matches(text);
+            var matches = PreTokenizeRegex.Matches(text);
             
             foreach (Match match in matches)
             {

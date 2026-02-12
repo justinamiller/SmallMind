@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SmallMind.Engine
 {
@@ -11,6 +12,12 @@ namespace SmallMind.Engine
     /// </summary>
     internal sealed class JsonSchemaValidator
     {
+        // Static cache for compiled regex patterns to avoid repeated compilation
+        // Thread-safe dictionary with lock for cache updates
+        private static readonly Dictionary<string, Regex> PatternCache = 
+            new(StringComparer.Ordinal);
+        private static readonly object PatternCacheLock = new();
+        
         /// <summary>
         /// Validates JSON against a schema.
         /// </summary>
@@ -174,13 +181,25 @@ namespace SmallMind.Engine
                 }
             }
 
-            // Validate pattern (basic regex support)
+            // Validate pattern (basic regex support) - use cached compiled regex
             if (schema.TryGetProperty("pattern", out var pattern))
             {
-                var regex = new System.Text.RegularExpressions.Regex(pattern.GetString() ?? "");
+                var patternStr = pattern.GetString() ?? "";
+                Regex regex;
+                
+                // Check cache first, compile and cache if not present
+                lock (PatternCacheLock)
+                {
+                    if (!PatternCache.TryGetValue(patternStr, out regex))
+                    {
+                        regex = new Regex(patternStr, RegexOptions.Compiled);
+                        PatternCache[patternStr] = regex;
+                    }
+                }
+                
                 if (!regex.IsMatch(value))
                 {
-                    errors.Add($"{path}: String does not match pattern '{pattern.GetString()}'");
+                    errors.Add($"{path}: String does not match pattern '{patternStr}'");
                 }
             }
         }
