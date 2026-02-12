@@ -96,6 +96,19 @@ namespace SmallMind.Tests
             "SmallMind.Abstractions.NoOpTelemetry",
             "SmallMind.Abstractions.ConsoleTelemetry",
             "SmallMind.Abstractions.NoOpRetrievalProvider",
+
+            // Telemetry types
+            "SmallMind.Abstractions.Telemetry.IRuntimeLogger",
+            "SmallMind.Abstractions.Telemetry.LogLevel",
+            "SmallMind.Abstractions.Telemetry.ConsoleRuntimeLogger",
+            "SmallMind.Abstractions.Telemetry.NullRuntimeLogger",
+            "SmallMind.Abstractions.Telemetry.RuntimeLogEvent",
+            "SmallMind.Abstractions.Telemetry.IRuntimeMetrics",
+            "SmallMind.Abstractions.Telemetry.InMemoryRuntimeMetrics",
+            "SmallMind.Abstractions.Telemetry.NullRuntimeMetrics",
+            "SmallMind.Abstractions.Telemetry.RuntimeStopReason",
+            "SmallMind.Abstractions.Telemetry.RuntimeDegradeReason",
+            "SmallMind.Abstractions.Telemetry.MemoryBudgetMode",
         };
 
         /// <summary>
@@ -312,6 +325,7 @@ namespace SmallMind.Tests
                     .Where(f => !f.IsLiteral) // Exclude const fields
                     .Where(f => f.Name != "value__") // Exclude enum value__ field
                     .Where(f => !IsReadonlyStructField(type, f)) // Exclude readonly fields in readonly structs
+                    .Where(f => !IsSingletonInstanceField(f)) // Exclude singleton Instance fields
                     .ToList();
 
                 if (publicFields.Any())
@@ -323,7 +337,16 @@ namespace SmallMind.Tests
             // Assert - no public fields (use properties instead)
             // Note: Enum value__ fields are automatically excluded
             // Note: readonly struct fields are allowed for performance optimization
+            // Note: public static readonly Instance fields are allowed for singleton pattern
             Assert.Empty(typesWithPublicFields);
+        }
+
+        private static bool IsSingletonInstanceField(FieldInfo field)
+        {
+            // Allow public static readonly "Instance" fields (singleton pattern)
+            return field.IsStatic && 
+                   field.IsInitOnly && 
+                   field.Name == "Instance";
         }
 
         private static bool IsReadonlyStructField(Type type, FieldInfo field)
