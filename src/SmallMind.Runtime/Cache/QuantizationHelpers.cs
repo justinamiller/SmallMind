@@ -39,7 +39,7 @@ namespace SmallMind.Runtime.Cache
             {
                 scale = 1.0f;
                 offset = min;
-                Array.Fill(output.ToArray(), (byte)127); // Mid-range value
+                output.Fill((byte)127); // Mid-range value - Fill works directly on Span
                 return;
             }
             
