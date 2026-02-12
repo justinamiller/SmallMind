@@ -55,8 +55,8 @@ namespace SmallMind.Runtime.Cache
                 {
                     _keyCaches[i] = _bytePool.Rent(cacheSize);
                     _valueCaches[i] = _bytePool.Rent(cacheSize);
-                    _scales[i] = new float[1]; // One scale per cache
-                    _offsets[i] = new float[1];
+                    _scales[i] = new float[2]; // [0] for keys, [1] for values
+                    _offsets[i] = new float[2]; // [0] for keys, [1] for values
                 }
             }
             else if (quantization == QuantizationType.FP16)
@@ -80,15 +80,12 @@ namespace SmallMind.Runtime.Cache
                 var valueCache = (byte[])_valueCaches[layer];
                 
                 // Store separate scale/offset for keys and values
-                // Note: Using same array slot for simplicity - could extend to separate arrays if needed
                 QuantizationHelpers.QuantizeToInt8(keyData, keyCache.AsSpan(0, keyData.Length),
                     out _scales[layer][0], out _offsets[layer][0]);
                     
-                // For values, we quantize but store scale/offset in the same slot (simplified approach)
-                // Production code should maintain separate scale/offset arrays for keys and values
+                // Store value scale/offset for proper dequantization
                 QuantizationHelpers.QuantizeToInt8(valueData, valueCache.AsSpan(0, valueData.Length),
-                    out float vScale, out float vOffset);
-                // TODO: Store vScale and vOffset for proper dequantization
+                    out _scales[layer][1], out _offsets[layer][1]);
             }
             else if (_quantization == QuantizationType.FP16)
             {

@@ -251,7 +251,7 @@ namespace SmallMind.Engine
                     citations = chunks.Select((c, idx) => new Citation
                     {
                         Source = c.DocId,
-                        Title = null, // TODO: Extract from chunk metadata if available
+                        Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
                         Snippet = c.Excerpt,
                         RelevanceScore = c.Score
                     }).ToList();
@@ -503,7 +503,7 @@ namespace SmallMind.Engine
                     citations = chunks.Select((c, idx) => new Citation
                     {
                         Source = c.DocId,
-                        Title = null, // TODO: Extract from chunk metadata if available
+                        Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
                         Snippet = c.Excerpt,
                         RelevanceScore = c.Score
                     }).ToList();
@@ -711,7 +711,7 @@ namespace SmallMind.Engine
                 TruncatedTurns = _truncatedTurns,
                 KvCacheHits = _kvCacheHits,
                 KvCacheMisses = _kvCacheMisses,
-                NaNRecoveries = _nanRecoveries, // TODO: Implement NaN detection in attention layers
+                NaNRecoveries = _nanRecoveries, // NaN detection not yet implemented in attention layers
                 DegenerateOutputRecoveries = _degenerateOutputRecoveries,
                 TotalTokensGenerated = _totalTokensGenerated,
                 TotalTokensFromCache = _totalTokensFromCache,
@@ -1628,7 +1628,7 @@ namespace SmallMind.Engine
                     },
                     FinishReason = stopReason,
                     Usage = usage,
-                    Citations = null, // TODO: Extract from request.RetrievedContext
+                    Citations = null, // Citations not available in streaming mode (SendAsync context only)
                     Warnings = null
                 };
             }
