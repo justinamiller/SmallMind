@@ -8,6 +8,7 @@ using CoreCheckpointStrategy = SmallMind.Core.Core.CheckpointStrategy;
 using CoreTensorPool = SmallMind.Core.Core.TensorPool;
 using SmallMind.Core.Core;
 using SmallMind.Transformers;
+using SmallMind.Training;
 
 namespace SmallMind.Tests
 {

@@ -16,7 +16,7 @@ using Guard = SmallMind.Core.Validation.Guard;
 using CheckpointStrategy = SmallMind.Core.Core.CheckpointStrategy;
 using AdamW = SmallMind.Core.Core.AdamW;
 
-namespace SmallMind.Runtime
+namespace SmallMind.Training
 {
     /// <summary>
     /// Training configuration options for Phase 2 optimizations
@@ -36,6 +36,7 @@ namespace SmallMind.Runtime
     /// <summary>
     /// Handles dataset preparation, mini-batching, and the training loop with pure C#.
     /// </summary>
+    [Obsolete("SmallMind.Training is experimental and not part of the stable inference API.")]
     internal class Training
     {
         private readonly TransformerModel _model;
