@@ -96,15 +96,43 @@ namespace SmallMind.Quantization.Tensors
                 // Read quantized values (128 bytes, 2 values per byte)
                 ReadOnlySpan<byte> qs = src.Slice(srcOffset + 16, 128);
 
+                // Extract 6-bit scales and mins for all 8 sub-blocks from the 12-byte packed field
+                // Per llama.cpp Q4_K: the 12 bytes encode both scales and mins packed together
+                // The encoding uses 6 bits per scale and 6 bits per min for 8 sub-blocks
+                // Total: 8*(6+6) = 96 bits = 12 bytes
+                Span<byte> scales = stackalloc byte[SUB_BLOCK_COUNT];
+                Span<byte> mins = stackalloc byte[SUB_BLOCK_COUNT];
+                
+                // Unpack the 12 bytes into 8 6-bit scales and 8 6-bit mins
+                // The packing is: scale0(6) scale1(6) scale2(6) scale3(6) scale4(6) scale5(6) scale6(6) scale7(6)
+                //                  min0(6)   min1(6)   min2(6)   min3(6)   min4(6)   min5(6)   min6(6)   min7(6)
+                // Arranged as bytes where each group of 3 bytes holds 4 6-bit values
+                
+                // Extract scales (first 6 bytes)
+                scales[0] = (byte)((scalesBytes[0]) & 0x3F);
+                scales[1] = (byte)((scalesBytes[0] >> 6) | ((scalesBytes[1] & 0x0F) << 2));
+                scales[2] = (byte)((scalesBytes[1] >> 4) | ((scalesBytes[2] & 0x03) << 4));
+                scales[3] = (byte)((scalesBytes[2] >> 2) & 0x3F);
+                scales[4] = (byte)((scalesBytes[3]) & 0x3F);
+                scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
+                scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
+                scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
+                
+                // Extract mins (last 6 bytes)
+                mins[0] = (byte)((scalesBytes[6]) & 0x3F);
+                mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));
+                mins[2] = (byte)((scalesBytes[7] >> 4) | ((scalesBytes[8] & 0x03) << 4));
+                mins[3] = (byte)((scalesBytes[8] >> 2) & 0x3F);
+                mins[4] = (byte)((scalesBytes[9]) & 0x3F);
+                mins[5] = (byte)((scalesBytes[9] >> 6) | ((scalesBytes[10] & 0x0F) << 2));
+                mins[6] = (byte)((scalesBytes[10] >> 4) | ((scalesBytes[11] & 0x03) << 4));
+                mins[7] = (byte)((scalesBytes[11] >> 2) & 0x3F);
+
                 // Decode each sub-block
                 for (int subBlock = 0; subBlock < SUB_BLOCK_COUNT; subBlock++)
                 {
-                    // Extract 6-bit scale and min for this sub-block from the 12-byte scales field
-                    // This is a simplified extraction - actual llama.cpp uses bit packing
-                    int scaleIdx = subBlock * 12 / 8;
-                    byte scaleByte = scalesBytes[scaleIdx];
-                    float sc = d * (scaleByte & 0x3F); // 6-bit scale
-                    float m = dmin * ((scaleByte >> 6) & 0x3F); // 6-bit min (approximation)
+                    float sc = d * scales[subBlock];
+                    float m = dmin * mins[subBlock];
 
                     // Dequantize 32 values in this sub-block
                     int subBlockDstOffset = dstOffset + subBlock * SUB_BLOCK_SIZE;
@@ -163,6 +191,17 @@ namespace SmallMind.Quantization.Tensors
             mantissa = mantissa << 13;
             uint floatBits = sign | (exponent << 23) | mantissa;
             return *(float*)&floatBits;
+        }
+
+        /// <summary>
+        /// Dequantize the entire tensor to FP32.
+        /// </summary>
+        public float[] Dequantize()
+        {
+            int totalSize = Rows * Cols;
+            var result = new float[totalSize];
+            Dequantize(Data, result);
+            return result;
         }
     }
 }

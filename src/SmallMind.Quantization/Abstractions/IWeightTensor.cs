@@ -64,6 +64,12 @@ namespace SmallMind.Quantization.Abstractions
         Q4_1 = 4,
 
         /// <summary>5-bit symmetric quantization (Q5_0)</summary>
-        Q5_0 = 5
+        Q5_0 = 5,
+
+        /// <summary>4-bit K-quant (Q4_K) - larger block size, better compression</summary>
+        Q4_K = 6,
+
+        /// <summary>6-bit K-quant (Q6_K) - larger block size, better precision</summary>
+        Q6_K = 7
     }
 }

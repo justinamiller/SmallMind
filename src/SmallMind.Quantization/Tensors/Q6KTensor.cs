@@ -108,16 +108,20 @@ namespace SmallMind.Quantization.Tensors
                         int valueIdx = subBlock * SUB_BLOCK_SIZE + i;
                         
                         // Reconstruct 6-bit value from low 4 bits (ql) and high 2 bits (qh)
-                        // qh stores 4 values per byte (2 bits each)
-                        int qlIdx = valueIdx;
+                        // ql stores the low 4 bits of each value
+                        // qh stores high 2 bits packed: 4 values per byte (2 bits each)
+                        byte low4 = ql[valueIdx];
+                        
+                        // Extract high 2 bits from qh
                         int qhIdx = valueIdx / 4;
                         int qhShift = (valueIdx % 4) * 2;
-
-                        byte low4 = ql[qlIdx];
                         byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
-
-                        int q = (high2 << 4) | low4; // Combine to form 6-bit value
-                        dst[subBlockDstOffset + i] = sc * (q - 32); // Center around 0 (-32 bias)
+                        
+                        // Combine to form 6-bit value (range 0-63)
+                        int q = low4 | (high2 << 4);
+                        
+                        // Dequantize: center around 0 with -32 bias
+                        dst[subBlockDstOffset + i] = sc * (q - 32);
                     }
                 }
             }
@@ -163,6 +167,17 @@ namespace SmallMind.Quantization.Tensors
             mantissa = mantissa << 13;
             uint floatBits = sign | (exponent << 23) | mantissa;
             return *(float*)&floatBits;
+        }
+
+        /// <summary>
+        /// Dequantize the entire tensor to FP32.
+        /// </summary>
+        public float[] Dequantize()
+        {
+            int totalSize = Rows * Cols;
+            var result = new float[totalSize];
+            Dequantize(Data, result);
+            return result;
         }
     }
 }
