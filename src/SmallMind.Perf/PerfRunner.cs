@@ -752,6 +752,7 @@ internal class PerfRunner
     {
         if (_jsonOutput)
         {
+            // INTENTIONAL: JSON output to stdout for piping/redirection (performance tool design)
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true,
