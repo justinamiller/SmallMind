@@ -29,30 +29,39 @@ namespace SmallMind.Runtime.Metrics
             int correctCount = 0;
             int totalCount = B * T;
 
-            for (int b = 0; b < B; b++)
+            // Use unsafe pointers for better performance in nested loops
+            unsafe
             {
-                for (int t = 0; t < T; t++)
+                fixed (float* pLogits = logits.Data)
+                fixed (float* pTargets = targets.Data)
                 {
-                    int targetClass = (int)targets.Data[b * T + t];
-                    if (targetClass < 0 || targetClass >= V) continue;
-
-                    int offset = (b * T + t) * V;
-
-                    // Find the token with highest logit (argmax)
-                    int predictedClass = 0;
-                    float maxLogit = logits.Data[offset];
-                    for (int v = 1; v < V; v++)
+                    for (int b = 0; b < B; b++)
                     {
-                        if (logits.Data[offset + v] > maxLogit)
+                        for (int t = 0; t < T; t++)
                         {
-                            maxLogit = logits.Data[offset + v];
-                            predictedClass = v;
-                        }
-                    }
+                            int targetClass = (int)pTargets[b * T + t];
+                            if (targetClass < 0 || targetClass >= V) continue;
 
-                    if (predictedClass == targetClass)
-                    {
-                        correctCount++;
+                            int offset = (b * T + t) * V;
+
+                            // Find the token with highest logit (argmax) with pointer arithmetic
+                            int predictedClass = 0;
+                            float maxLogit = pLogits[offset];
+                            for (int v = 1; v < V; v++)
+                            {
+                                float currentLogit = pLogits[offset + v];
+                                if (currentLogit > maxLogit)
+                                {
+                                    maxLogit = currentLogit;
+                                    predictedClass = v;
+                                }
+                            }
+
+                            if (predictedClass == targetClass)
+                            {
+                                correctCount++;
+                            }
+                        }
                     }
                 }
             }
@@ -75,28 +84,41 @@ namespace SmallMind.Runtime.Metrics
             int nanCount = 0;
             int infCount = 0;
             int paramCount = 0;
+            
+            int parametersCount = parameters.Count;
 
-            foreach (var param in parameters)
+            // Use indexed for-loop instead of foreach for better performance
+            for (int p = 0; p < parametersCount; p++)
             {
+                var param = parameters[p];
                 if (param.Grad == null || !param.RequiresGrad) continue;
 
                 float norm = 0f;
-                for (int i = 0; i < param.Grad.Length; i++)
+                int gradLength = param.Grad.Length;
+                
+                // Use unsafe pointers for tight inner loop
+                unsafe
                 {
-                    float g = param.Grad[i];
-                    
-                    if (float.IsNaN(g))
+                    fixed (float* pGrad = param.Grad)
                     {
-                        nanCount++;
-                        continue;
-                    }
-                    if (float.IsInfinity(g))
-                    {
-                        infCount++;
-                        continue;
-                    }
+                        for (int i = 0; i < gradLength; i++)
+                        {
+                            float g = pGrad[i];
+                            
+                            if (float.IsNaN(g))
+                            {
+                                nanCount++;
+                                continue;
+                            }
+                            if (float.IsInfinity(g))
+                            {
+                                infCount++;
+                                continue;
+                            }
 
-                    norm += g * g;
+                            norm += g * g;
+                        }
+                    }
                 }
 
                 norm = MathF.Sqrt(norm);

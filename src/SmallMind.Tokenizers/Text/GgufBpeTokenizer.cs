@@ -16,8 +16,11 @@ namespace SmallMind.Tokenizers.Text
         private readonly Dictionary<string, int> _vocab;
         private readonly Dictionary<int, string> _inverseVocab;
         private readonly Dictionary<(string, string), int> _mergeRanks;
-        private readonly Regex _preTokenizeRegex;
         private readonly bool _isByteLevelBpe;
+        
+        // Pre-tokenization regex (GPT-2 style): uses GeneratedRegex for optimal performance
+        // Matches contractions, letters, numbers, punctuation, and whitespace sequences
+        // Removed static readonly field - now using centralized RegexPatterns.Gpt2PreTokenize()
         
         // Byte-level BPE mapping (GPT-2 style)
         private readonly Dictionary<byte, string>? _byteToChar;
@@ -72,10 +75,7 @@ namespace SmallMind.Tokenizers.Text
                 _charToByte = BuildCharToByteMap(_byteToChar);
             }
 
-            // Pre-tokenization regex (GPT-2 style)
-            // Matches: letters, numbers, single non-whitespace, whitespace sequences
-            _preTokenizeRegex = new Regex(@"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+", 
-                RegexOptions.Compiled);
+            // Pre-tokenization regex now uses static field (no per-instance compilation)
 
             Info = new TokenizerInfo(
                 name: "GgufBpeTokenizer",
@@ -156,8 +156,8 @@ namespace SmallMind.Tokenizers.Text
 
             var result = new List<int>();
 
-            // Pre-tokenize text
-            var matches = _preTokenizeRegex.Matches(text);
+            // Pre-tokenize text using GeneratedRegex
+            var matches = RegexPatterns.Gpt2PreTokenize().Matches(text);
 
             foreach (Match match in matches)
             {
@@ -185,17 +185,21 @@ namespace SmallMind.Tokenizers.Text
                     }
                 }
 
-                // Apply BPE merges
-                while (tokens.Count > 1)
+                // Apply BPE merges - O(N) forward-scan algorithm (no RemoveAt)
+                // We alternate between tokens and tempTokens to avoid allocations
+                List<string> currentTokens = tokens;
+                List<string> tempTokens = new List<string>(tokens.Count);
+                
+                while (currentTokens.Count > 1)
                 {
                     // Find the pair with the lowest merge rank
                     (string, string)? bestPair = null;
                     int bestRank = int.MaxValue;
                     int bestIndex = -1;
 
-                    for (int i = 0; i < tokens.Count - 1; i++)
+                    for (int i = 0; i < currentTokens.Count - 1; i++)
                     {
-                        var pair = (tokens[i], tokens[i + 1]);
+                        var pair = (currentTokens[i], currentTokens[i + 1]);
                         if (_mergeRanks.TryGetValue(pair, out int rank) && rank < bestRank)
                         {
                             bestPair = pair;
@@ -207,14 +211,29 @@ namespace SmallMind.Tokenizers.Text
                     if (bestPair == null)
                         break;
 
-                    // Merge the pair
+                    // Apply the merge using forward scan (O(N) instead of O(N²))
+                    tempTokens.Clear();
                     string merged = bestPair.Value.Item1 + bestPair.Value.Item2;
-                    tokens[bestIndex] = merged;
-                    tokens.RemoveAt(bestIndex + 1);
+                    
+                    for (int i = 0; i < currentTokens.Count; i++)
+                    {
+                        if (i == bestIndex)
+                        {
+                            tempTokens.Add(merged);
+                            i++; // Skip next token (it's part of the merge)
+                        }
+                        else
+                        {
+                            tempTokens.Add(currentTokens[i]);
+                        }
+                    }
+                    
+                    // Swap buffers for next iteration
+                    (currentTokens, tempTokens) = (tempTokens, currentTokens);
                 }
 
-                // Convert tokens to IDs
-                foreach (var token in tokens)
+                // Convert tokens to IDs (use currentTokens as it has final result)
+                foreach (var token in currentTokens)
                 {
                     if (_vocab.TryGetValue(token, out int id))
                     {

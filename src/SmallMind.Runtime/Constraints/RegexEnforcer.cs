@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
 namespace SmallMind.Runtime.Constraints
@@ -11,6 +12,14 @@ namespace SmallMind.Runtime.Constraints
     {
         private readonly Regex _pattern;
         private readonly string _patternString;
+        
+        // Static cache to reuse compiled regex instances across constraint instances
+        // Thread-safe for concurrent access during inference
+        private static readonly ConcurrentDictionary<string, Regex> PatternCache = 
+            new(StringComparer.Ordinal);
+        
+        // Timeout for user-provided regex patterns to prevent ReDoS attacks
+        private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
         /// <summary>
         /// Creates a new RegexEnforcer with the specified pattern.
@@ -22,7 +31,9 @@ namespace SmallMind.Runtime.Constraints
                 throw new ArgumentException("Pattern cannot be null or empty", nameof(pattern));
 
             _patternString = pattern;
-            _pattern = new Regex(pattern, RegexOptions.Compiled);
+            // Reuse compiled regex from cache or create new one with timeout protection
+            _pattern = PatternCache.GetOrAdd(pattern, 
+                p => new Regex(p, RegexOptions.Compiled, RegexTimeout));
         }
 
         public string ConstraintDescription => $"Regex pattern: {_patternString}";
@@ -49,7 +60,15 @@ namespace SmallMind.Runtime.Constraints
             if (string.IsNullOrEmpty(generatedSoFar))
                 return false;
 
-            return _pattern.IsMatch(generatedSoFar);
+            try
+            {
+                return _pattern.IsMatch(generatedSoFar);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // Timeout occurred - treat as invalid to prevent ReDoS attacks
+                return false;
+            }
         }
     }
 }

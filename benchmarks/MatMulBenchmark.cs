@@ -86,11 +86,11 @@ namespace SmallMind.Benchmarks
             for (int i = 0; i < warmup; i++)
             {
                 Array.Clear(C);
-                MatMulOps.MatMul(A, B, C, M, K, N);
+                GemmMicrokernels.MatMul(A.AsSpan(), B.AsSpan(), C.AsSpan(), M, K, N);
             }
             
             // Report which kernel is being used
-            Console.WriteLine($"Kernel Selected: {MatMulOps.LastKernelUsed}");
+            Console.WriteLine($"Kernel Selected: GemmMicrokernels (optimized blocked GEMM)");
             Console.WriteLine();
             
             // Force GC before measurement
@@ -110,7 +110,7 @@ namespace SmallMind.Benchmarks
             for (int i = 0; i < iterations; i++)
             {
                 Array.Clear(C);
-                MatMulOps.MatMul(A, B, C, M, K, N);
+                GemmMicrokernels.MatMul(A.AsSpan(), B.AsSpan(), C.AsSpan(), M, K, N);
             }
             sw.Stop();
             

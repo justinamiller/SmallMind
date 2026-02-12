@@ -179,39 +179,67 @@ namespace SmallMind.Core.Core
                 // Clear the rented array (ArrayPool may return larger array with stale data)
                 counts.AsSpan(0, countsSize).Clear();
                 
-                // Accumulate all window outputs
+                // Accumulate all window outputs using indexed for-loop instead of foreach
                 int position = 0;
-                foreach (var window in windowOutputs)
+                int windowCount = windowOutputs.Count;
+                
+                // Use unsafe pointers for better performance in tight nested loop
+                unsafe
                 {
-                    int windowLen = window.Shape[1];
-                    
-                    for (int b = 0; b < batchSize; b++)
+                    fixed (float* pCombined = combined.Data)
+                    fixed (float* pCounts = counts)
                     {
-                        for (int t = 0; t < windowLen; t++)
+                        for (int w = 0; w < windowCount; w++)
                         {
-                            int globalPos = position + t;
-                            if (globalPos >= originalSeqLength) break;
+                            var window = windowOutputs[w];
+                            int windowLen = window.Shape[1];
                             
-                            for (int d = 0; d < outputDim; d++)
+                            fixed (float* pWindow = window.Data)
                             {
-                                int windowIdx = (b * windowLen + t) * outputDim + d;
-                                int combIdx = (b * originalSeqLength + globalPos) * outputDim + d;
-                                
-                                combined.Data[combIdx] += window.Data[windowIdx];
-                                counts[combIdx] += 1.0f;
+                                for (int b = 0; b < batchSize; b++)
+                                {
+                                    int bOffset = b * originalSeqLength * outputDim;
+                                    int bWindowOffset = b * windowLen * outputDim;
+                                    
+                                    for (int t = 0; t < windowLen; t++)
+                                    {
+                                        int globalPos = position + t;
+                                        if (globalPos >= originalSeqLength) break;
+                                        
+                                        int combRowStart = bOffset + globalPos * outputDim;
+                                        int windowRowStart = bWindowOffset + t * outputDim;
+                                        
+                                        // Use pointers for innermost loop to eliminate bounds checking
+                                        for (int d = 0; d < outputDim; d++)
+                                        {
+                                            int combIdx = combRowStart + d;
+                                            int windowIdx = windowRowStart + d;
+                                            
+                                            pCombined[combIdx] += pWindow[windowIdx];
+                                            pCounts[combIdx] += 1.0f;
+                                        }
+                                    }
+                                }
                             }
+                            
+                            position += _stride;
                         }
                     }
-                    
-                    position += _stride;
                 }
                 
-                // Average overlapping regions
-                for (int i = 0; i < combined.Size; i++)
+                // Average overlapping regions with unsafe pointers
+                unsafe
                 {
-                    if (counts[i] > 0)
+                    fixed (float* pCombined = combined.Data)
+                    fixed (float* pCounts = counts)
                     {
-                        combined.Data[i] /= counts[i];
+                        for (int i = 0; i < combined.Size; i++)
+                        {
+                            if (pCounts[i] > 0)
+                            {
+                                pCombined[i] /= pCounts[i];
+                            }
+                        }
                     }
                 }
             }
@@ -255,30 +283,52 @@ namespace SmallMind.Core.Core
                 combined.Data[i] = float.NegativeInfinity;
             }
             
-            // Take maximum across all windows
+            // Take maximum across all windows using indexed for-loop and unsafe pointers
             int position = 0;
-            foreach (var window in windowOutputs)
+            int windowCount = windowOutputs.Count;
+            
+            unsafe
             {
-                int windowLen = window.Shape[1];
-                
-                for (int b = 0; b < batchSize; b++)
+                fixed (float* pCombined = combined.Data)
                 {
-                    for (int t = 0; t < windowLen; t++)
+                    for (int w = 0; w < windowCount; w++)
                     {
-                        int globalPos = position + t;
-                        if (globalPos >= originalSeqLength) break;
+                        var window = windowOutputs[w];
+                        int windowLen = window.Shape[1];
                         
-                        for (int d = 0; d < outputDim; d++)
+                        fixed (float* pWindow = window.Data)
                         {
-                            int windowIdx = (b * windowLen + t) * outputDim + d;
-                            int combIdx = (b * originalSeqLength + globalPos) * outputDim + d;
-                            
-                            combined.Data[combIdx] = Math.Max(combined.Data[combIdx], window.Data[windowIdx]);
+                            for (int b = 0; b < batchSize; b++)
+                            {
+                                int bOffset = b * originalSeqLength * outputDim;
+                                int bWindowOffset = b * windowLen * outputDim;
+                                
+                                for (int t = 0; t < windowLen; t++)
+                                {
+                                    int globalPos = position + t;
+                                    if (globalPos >= originalSeqLength) break;
+                                    
+                                    int combRowStart = bOffset + globalPos * outputDim;
+                                    int windowRowStart = bWindowOffset + t * outputDim;
+                                    
+                                    for (int d = 0; d < outputDim; d++)
+                                    {
+                                        int combIdx = combRowStart + d;
+                                        int windowIdx = windowRowStart + d;
+                                        
+                                        float windowVal = pWindow[windowIdx];
+                                        if (windowVal > pCombined[combIdx])
+                                        {
+                                            pCombined[combIdx] = windowVal;
+                                        }
+                                    }
+                                }
+                            }
                         }
+                        
+                        position += _stride;
                     }
                 }
-                
-                position += _stride;
             }
             
             return combined;

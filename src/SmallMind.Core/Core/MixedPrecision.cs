@@ -113,21 +113,32 @@ namespace SmallMind.Core.Core
         public bool CheckAndUnscaleGradients(System.Collections.Generic.List<Tensor> parameters)
         {
             bool hasOverflow = false;
+            int paramCount = parameters.Count;
             
-            // Check for overflow and unscale
-            for (int i = 0; i < parameters.Count; i++)
+            // Check for overflow and unscale using indexed for-loop
+            for (int i = 0; i < paramCount; i++)
             {
                 if (parameters[i].Grad == null) continue;
                 
-                // Unscale gradients
-                for (int j = 0; j < parameters[i].Grad.Length; j++)
+                var grad = parameters[i].Grad;
+                int gradLength = grad.Length;
+                
+                // Unscale gradients with unsafe pointers for better performance
+                unsafe
                 {
-                    parameters[i].Grad[j] /= _lossScale;
-                    
-                    if (float.IsInfinity(parameters[i].Grad[j]) || float.IsNaN(parameters[i].Grad[j]))
+                    fixed (float* pGrad = grad)
                     {
-                        hasOverflow = true;
-                        break;
+                        float invScale = 1.0f / _lossScale;
+                        for (int j = 0; j < gradLength; j++)
+                        {
+                            pGrad[j] *= invScale;
+                            
+                            if (float.IsInfinity(pGrad[j]) || float.IsNaN(pGrad[j]))
+                            {
+                                hasOverflow = true;
+                                break;
+                            }
+                        }
                     }
                 }
                 
@@ -140,10 +151,10 @@ namespace SmallMind.Core.Core
                 _lossScale /= SCALE_FACTOR;
                 _stepsSinceScale = 0;
                 
-                // Zero out gradients
-                foreach (var param in parameters)
+                // Zero out gradients using indexed for-loop instead of foreach
+                for (int i = 0; i < paramCount; i++)
                 {
-                    param.ZeroGrad();
+                    parameters[i].ZeroGrad();
                 }
                 
                 return false;

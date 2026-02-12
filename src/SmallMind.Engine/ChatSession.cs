@@ -245,16 +245,21 @@ namespace SmallMind.Engine
                 };
                 prompt = BuildPromptFromMessages(tempHistory);
 
-                // Extract citations
+                // Extract citations (avoid LINQ for better performance)
                 if (_options.RagOptions?.IncludeCitations ?? true)
                 {
-                    citations = chunks.Select((c, idx) => new Citation
+                    citations = new List<Citation>(chunks.Count);
+                    for (int i = 0; i < chunks.Count; i++)
                     {
-                        Source = c.DocId,
-                        Title = null, // TODO: Extract from chunk metadata if available
-                        Snippet = c.Excerpt,
-                        RelevanceScore = c.Score
-                    }).ToList();
+                        var c = chunks[i];
+                        citations.Add(new Citation
+                        {
+                            Source = c.DocId,
+                            Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
+                            Snippet = c.Excerpt,
+                            RelevanceScore = c.Score
+                        });
+                    }
                 }
             }
             else
@@ -497,16 +502,21 @@ namespace SmallMind.Engine
                 };
                 prompt = BuildPromptFromMessages(tempHistory);
 
-                // Extract citations
+                // Extract citations (avoid LINQ for better performance)
                 if (_options.RagOptions?.IncludeCitations ?? true)
                 {
-                    citations = chunks.Select((c, idx) => new Citation
+                    citations = new List<Citation>(chunks.Count);
+                    for (int i = 0; i < chunks.Count; i++)
                     {
-                        Source = c.DocId,
-                        Title = null, // TODO: Extract from chunk metadata if available
-                        Snippet = c.Excerpt,
-                        RelevanceScore = c.Score
-                    }).ToList();
+                        var c = chunks[i];
+                        citations.Add(new Citation
+                        {
+                            Source = c.DocId,
+                            Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
+                            Snippet = c.Excerpt,
+                            RelevanceScore = c.Score
+                        });
+                    }
                 }
             }
             else
@@ -711,7 +721,7 @@ namespace SmallMind.Engine
                 TruncatedTurns = _truncatedTurns,
                 KvCacheHits = _kvCacheHits,
                 KvCacheMisses = _kvCacheMisses,
-                NaNRecoveries = _nanRecoveries, // TODO: Implement NaN detection in attention layers
+                NaNRecoveries = _nanRecoveries, // NaN detection not yet implemented in attention layers
                 DegenerateOutputRecoveries = _degenerateOutputRecoveries,
                 TotalTokensGenerated = _totalTokensGenerated,
                 TotalTokensFromCache = _totalTokensFromCache,
@@ -1628,7 +1638,7 @@ namespace SmallMind.Engine
                     },
                     FinishReason = stopReason,
                     Usage = usage,
-                    Citations = null, // TODO: Extract from request.RetrievedContext
+                    Citations = null, // Citations not available in streaming mode (SendAsync context only)
                     Warnings = null
                 };
             }

@@ -156,18 +156,24 @@ namespace SmallMind.Runtime
             logger.LogInfo($"Tensor reads: {mainLoopReads} (main loop) + {qkvReads} (Q/K/V merge) = {mainLoopReads + qkvReads} total");
             logger.LogDebug($"Q/K/V tensors skipped in main loop: {qkvSkipped}");
 
-            // Check for missing critical parameters
-            var missingCritical = namedParams.Keys
-                .Where(k => !loadedParams.Contains(k) && 
-                           (k.Contains("token_embd") || k.Contains("output_norm") || k.Contains("attn")))
-                .ToList();
+            // Check for missing critical parameters (avoid LINQ for better performance)
+            var missingCritical = new List<string>();
+            foreach (var key in namedParams.Keys)
+            {
+                if (!loadedParams.Contains(key) && 
+                    (key.Contains("token_embd") || key.Contains("output_norm") || key.Contains("attn")))
+                {
+                    missingCritical.Add(key);
+                }
+            }
 
             if (missingCritical.Count > 0)
             {
                 logger.LogWarning($"{missingCritical.Count} critical parameters not loaded:");
-                foreach (var p in missingCritical.Take(10))
+                int displayCount = Math.Min(10, missingCritical.Count);
+                for (int i = 0; i < displayCount; i++)
                 {
-                    logger.LogWarning($"  - {p}");
+                    logger.LogWarning($"  - {missingCritical[i]}");
                 }
                 if (missingCritical.Count > 10)
                 {
