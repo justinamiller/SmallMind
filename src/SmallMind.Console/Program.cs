@@ -311,7 +311,7 @@ namespace SmallMind.ConsoleApp
                 );
 
                 // Training
-                var trainer = new SmallMind.Runtime.Training(
+                var trainer = new SmallMind.Training.Training(
                     model: model,
                     tokenizer: tokenizer,
                     trainingText: trainingText,

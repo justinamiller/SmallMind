@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\src\SmallMind.Runtime\SmallMind.Runtime.csproj" />
     <ProjectReference Include="..\..\src\SmallMind.Rag\SmallMind.Rag.csproj" />
     <ProjectReference Include="..\..\src\SmallMind.Console\SmallMind.Console.csproj" />
+    <ProjectReference Include="..\..\src\SmallMind.Training\SmallMind.Training.csproj" />
   </ItemGroup>
 
   <ItemGroup>

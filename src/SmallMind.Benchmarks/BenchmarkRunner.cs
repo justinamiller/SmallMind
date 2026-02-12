@@ -34,12 +34,20 @@ namespace SmallMind.Benchmarks
             CheckConfiguration();
             CollectEnvironmentInfo();
 
-            // Run benchmarks - compare original vs optimized
+            // Run FP32 MatMul benchmarks (targeting 60+ GFLOPS)
+            Console.WriteLine("\n=== FP32 MatMul Benchmarks (GFLOPS Target: 60+) ===\n");
+            RunFP32MatMulBenchmark(64, 64, 64);
+            RunFP32MatMulBenchmark(128, 128, 128);
+            RunFP32MatMulBenchmark(256, 256, 256);
+            RunFP32MatMulBenchmark(512, 512, 512);
+            RunFP32MatMulBenchmark(1024, 1024, 1024);
+            RunFP32MatMulBenchmark(2048, 2048, 2048);
+
+            // Run Q4 quantized benchmarks (for comparison)
+            Console.WriteLine("\n=== Q4 Quantized MatMul Benchmarks ===\n");
             RunQ4MatMulComparison(128, 128, 128);
             RunQ4MatMulComparison(256, 256, 256);
             RunQ4MatMulComparison(512, 512, 512);
-            // Skip 1024x1024 for now (too slow with current kernel)
-            // RunQ4MatMulBenchmark(1024, 1024, 1024);
 
             // Write reports
             WriteReports();
@@ -81,6 +89,135 @@ namespace SmallMind.Benchmarks
             _environment["Avx2.IsSupported"] = System.Runtime.Intrinsics.X86.Avx2.IsSupported;
             _environment["Avx512F.IsSupported"] = System.Runtime.Intrinsics.X86.Avx512F.IsSupported;
 #endif
+        }
+
+        /// <summary>
+        /// Benchmark FP32 matrix multiplication (pure SIMD performance).
+        /// This tests raw MatMul GFLOPS without quantization overhead.
+        /// Target: 60+ GFLOPS on 128×128 matrices.
+        /// </summary>
+        private void RunFP32MatMulBenchmark(int m, int k, int n)
+        {
+            Console.WriteLine($"Running FP32 MatMul Benchmark: {m}x{k} * {k}x{n}");
+
+            // Create test data
+            var random = new Random(_config.Seed);
+            var a = new float[m * k];
+            for (int i = 0; i < a.Length; i++)
+                a[i] = (float)(random.NextDouble() * 2.0 - 1.0);
+
+            var b = new float[k * n];
+            for (int i = 0; i < b.Length; i++)
+                b[i] = (float)(random.NextDouble() * 2.0 - 1.0);
+
+            var c = new float[m * n];
+
+            // Warmup
+            Console.Write($"  Warmup ({_config.WarmupIterations} iterations)... ");
+            for (int i = 0; i < _config.WarmupIterations; i++)
+            {
+                Array.Clear(c);
+                SmallMind.Core.Simd.MatMulOps.MatMul(a, b, c, m, k, n);
+            }
+            Console.WriteLine("Done");
+
+            // Benchmark
+            Console.Write($"  Measuring ({_config.MeasuredIterations} iterations)... ");
+            
+            var collector = new MetricsCollector();
+            var times = new List<double>();
+
+            collector.Start();
+
+            for (int i = 0; i < _config.MeasuredIterations; i++)
+            {
+                Array.Clear(c);
+
+                var sw = Stopwatch.StartNew();
+                SmallMind.Core.Simd.MatMulOps.MatMul(a, b, c, m, k, n);
+                sw.Stop();
+
+                times.Add(sw.Elapsed.TotalMilliseconds);
+                
+                if (i % 3 == 0)
+                    collector.UpdatePeak();
+            }
+
+            var (alloc, gen0, gen1, gen2, peakRSS, managedHeap) = collector.Stop();
+            Console.WriteLine("Done");
+
+            // Calculate statistics
+            times.Sort();
+            var median = times[times.Count / 2];
+            var mean = 0.0;
+            foreach (var t in times)
+                mean += t;
+            mean /= times.Count;
+
+            // Calculate GFLOPS
+            // FP32 MatMul: 2*M*N*K FLOPs (multiply-add counted as 2 operations)
+            var operations = 2.0 * m * n * k;
+            var gflops = operations / (mean * 1e6);
+            
+            // Get kernel info
+            var kernel = SmallMind.Core.Simd.MatMulOps.LastKernelUsed.ToString();
+
+            Console.WriteLine($"  Time:      {mean:F3} ms (median: {median:F3} ms)");
+            Console.WriteLine($"  GFLOPS:    {gflops:F2}");
+            Console.WriteLine($"  Kernel:    {kernel}");
+            Console.WriteLine($"  Allocated: {alloc / 1024.0:F2} KB, Gen0: {gen0}");
+            
+            // Highlight if we're meeting the 60+ GFLOPS goal
+            if (gflops >= 60.0)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"  ✓ GOAL MET: {gflops:F2} GFLOPS >= 60.0 GFLOPS");
+                Console.ResetColor();
+            }
+            else if (gflops >= 40.0)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"  ⚠ CLOSE: {gflops:F2} GFLOPS (goal: 60+ GFLOPS)");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"  ✗ BELOW TARGET: {gflops:F2} GFLOPS (goal: 60+ GFLOPS)");
+                Console.ResetColor();
+            }
+            Console.WriteLine();
+
+            // Store result
+            var result = new BenchmarkResult
+            {
+                Name = $"FP32MatMul_{m}x{k}x{n}",
+                Config = _config,
+                Metrics = new PerformanceMetrics
+                {
+                    AllocatedBytesForDecode = alloc,
+                    Gen0Collections = gen0,
+                    Gen1Collections = gen1,
+                    Gen2Collections = gen2,
+                    PeakRSS = peakRSS,
+                    ManagedHeapSize = managedHeap,
+                    CustomMetrics = new Dictionary<string, object>
+                    {
+                        ["TimeMs"] = mean,
+                        ["MedianMs"] = median,
+                        ["GFLOPS"] = gflops,
+                        ["Kernel"] = kernel,
+                        ["M"] = m,
+                        ["K"] = k,
+                        ["N"] = n,
+                        ["Operations"] = operations,
+                        ["MeetsGoal"] = gflops >= 60.0
+                    }
+                },
+                Environment = _environment
+            };
+
+            _results.Add(result);
         }
 
         /// <summary>

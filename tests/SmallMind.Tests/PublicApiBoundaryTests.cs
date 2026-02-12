@@ -124,7 +124,11 @@ namespace SmallMind.Tests
             {
                 "SmallMind.Abstractions.NoOpTelemetry",       // Default no-op implementation of IChatTelemetry
                 "SmallMind.Abstractions.ConsoleTelemetry",    // Console logging implementation of IChatTelemetry
-                "SmallMind.Abstractions.NoOpRetrievalProvider" // Default no-op implementation of IRetrievalProvider
+                "SmallMind.Abstractions.NoOpRetrievalProvider", // Default no-op implementation of IRetrievalProvider
+                "SmallMind.Abstractions.Telemetry.ConsoleRuntimeLogger",  // Console implementation of IRuntimeLogger
+                "SmallMind.Abstractions.Telemetry.NullRuntimeLogger",     // Null implementation of IRuntimeLogger
+                "SmallMind.Abstractions.Telemetry.InMemoryRuntimeMetrics", // In-memory implementation of IRuntimeMetrics
+                "SmallMind.Abstractions.Telemetry.NullRuntimeMetrics"     // Null implementation of IRuntimeMetrics
             };
 
             foreach (var type in publicTypes)
@@ -221,7 +225,8 @@ namespace SmallMind.Tests
                     break;
 
                 case "SmallMind.Tokenizers":
-                    // Only exception types should be public in Tokenizers
+                    // TokenizerDiagnostics is a public diagnostics DTO
+                    allowed.Add("SmallMind.Tokenizers.Gguf.TokenizerDiagnostics");
                     break;
 
                 case "SmallMind.Quantization":

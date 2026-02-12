@@ -7,6 +7,7 @@ using SmallMind.Core.Core;
 using SmallMind.Runtime;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
+using TrainingEngine = SmallMind.Training.Training;
 
 namespace SmallMind.IntegrationTests
 {
@@ -55,7 +56,7 @@ Time flies like an arrow.";
                 seed: 42
             );
 
-            var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+            var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
 
             // Act & Assert - Should complete without throwing
             training.Train(
@@ -85,7 +86,7 @@ Time flies like an arrow.";
                 seed: 42
             );
 
-            var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+            var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
 
             // Act - Use Train instead of TrainOptimized (which is disabled in v0.2)
             training.Train(
@@ -121,7 +122,7 @@ Time flies like an arrow.";
                 seed: 42
             );
 
-            var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+            var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
 
             // Train for a few steps
             training.Train(steps: 2, learningRate: 0.001, logEvery: 10, saveEvery: 100, checkpointDir: _testOutputDir);
@@ -141,7 +142,7 @@ Time flies like an arrow.";
                 seed: 999 // Different seed
             );
 
-            var loadedTraining = new Training(loadedModel, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 999);
+            var loadedTraining = new TrainingEngine(loadedModel, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 999);
 
             // Act
             loadedTraining.LoadCheckpoint(checkpointPath);
@@ -174,7 +175,7 @@ Time flies like an arrow.";
                 seed: 42
             );
 
-            var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+            var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
             var checkpointPath = Path.Combine(_testOutputDir, "checkpoint.json");
 
             // Act
@@ -210,7 +211,7 @@ Time flies like an arrow.";
             );
 
             // Train briefly
-            var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+            var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
             training.Train(steps: 3, learningRate: 0.001, logEvery: 10, saveEvery: 100, checkpointDir: _testOutputDir);
 
             var sampling = new Sampling(model, tokenizer, 16);
@@ -268,7 +269,7 @@ Time flies like an arrow.";
                 seed: 42
             );
 
-            var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+            var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
             var cts = new CancellationTokenSource();
 
             // Act - Start training in background and cancel after short delay
@@ -307,7 +308,7 @@ Time flies like an arrow.";
                 seed: 42
             );
 
-            var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+            var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
             var cts = new CancellationTokenSource();
             cts.CancelAfter(10); // Cancel very quickly
 
@@ -356,7 +357,7 @@ Time flies like an arrow.";
                     seed: 42
                 );
 
-                var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+                var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
                 training.Train(steps: 2, learningRate: 0.001, logEvery: 10, saveEvery: 100, checkpointDir: _testOutputDir);
             }
 
@@ -383,7 +384,7 @@ Time flies like an arrow.";
                 seed: 42
             );
 
-            var training = new Training(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
+            var training = new TrainingEngine(model, tokenizer, TestData, blockSize: 16, batchSize: 2, seed: 42);
 
             // Act & Assert
             training.Train(steps: 3, learningRate: 0.001, logEvery: 10, saveEvery: 100, checkpointDir: _testOutputDir);

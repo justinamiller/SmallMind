@@ -45,7 +45,7 @@ namespace SmallMind.Quantization.IO.Gguf
                     sb.AppendLine($"  - {name}: {type}");
                 }
                 sb.AppendLine();
-                sb.AppendLine("Supported types: F32, F16, Q8_0, Q4_0, Q4_1, Q5_0");
+                sb.AppendLine("Supported types: F32, F16, Q8_0, Q4_0, Q4_1, Q5_0, Q4_K, Q6_K");
                 throw new UnsupportedQuantizationException(sb.ToString());
             }
 
@@ -105,7 +105,9 @@ namespace SmallMind.Quantization.IO.Gguf
                 || type == GgufTensorType.Q8_0 
                 || type == GgufTensorType.Q4_0
                 || type == GgufTensorType.Q4_1
-                || type == GgufTensorType.Q5_0;
+                || type == GgufTensorType.Q5_0
+                || type == GgufTensorType.Q4_K
+                || type == GgufTensorType.Q6_K;
         }
 
         /// <summary>
@@ -124,6 +126,8 @@ namespace SmallMind.Quantization.IO.Gguf
                 GgufTensorType.Q4_0 => ConvertQ4_0Tensor(rawData, tensorInfo.Dimensions),
                 GgufTensorType.Q4_1 => ConvertQ4_1Tensor(rawData, tensorInfo.Dimensions),
                 GgufTensorType.Q5_0 => ConvertQ5_0Tensor(rawData, tensorInfo.Dimensions),
+                GgufTensorType.Q4_K => ConvertQ4KTensor(rawData, tensorInfo.Dimensions),
+                GgufTensorType.Q6_K => ConvertQ6KTensor(rawData, tensorInfo.Dimensions),
                 _ => throw new UnsupportedQuantizationException($"Unsupported tensor type: {tensorInfo.Type}")
             };
         }
@@ -506,6 +510,126 @@ namespace SmallMind.Quantization.IO.Gguf
 
             // Return native Q5_0Tensor (no re-quantization needed since block sizes match)
             return new Q5_0Tensor(rows, cols, dataLow, dataHigh, scales);
+        }
+
+        /// <summary>
+        /// Convert GGUF Q4_K tensor to native Q4KTensor.
+        /// GGUF Q4_K format: block_size=256, each super-block has:
+        /// - d (fp16): super-block scale
+        /// - dmin (fp16): super-block min
+        /// - scales (12 bytes): 8 6-bit scales packed
+        /// - qs (128 bytes): 256 4-bit values (2 per byte)
+        /// Total: 144 bytes per block.
+        /// </summary>
+        private Q4KTensor ConvertQ4KTensor(byte[] rawData, ulong[] dimensions)
+        {
+            // Calculate total elements from dimensions
+            int totalElements = 1;
+            foreach (var dim in dimensions)
+            {
+                totalElements *= (int)dim;
+            }
+            
+            // For tensor, we need rows and cols
+            int rows, cols;
+            if (dimensions.Length == 1)
+            {
+                rows = 1;
+                cols = (int)dimensions[0];
+            }
+            else if (dimensions.Length == 2)
+            {
+                rows = (int)dimensions[0];
+                cols = (int)dimensions[1];
+            }
+            else
+            {
+                // Flatten multi-dimensional tensors to 2D
+                rows = (int)dimensions[0];
+                cols = totalElements / rows;
+            }
+
+            // Q4_K uses block size 256
+            const int Q4K_BLOCK_SIZE = 256;
+            const int Q4K_BYTES_PER_BLOCK = 144;
+            
+            if (totalElements % Q4K_BLOCK_SIZE != 0)
+                throw new InvalidDataException(
+                    $"Q4_K tensor size {totalElements} is not divisible by block size {Q4K_BLOCK_SIZE}");
+            
+            int numBlocks = totalElements / Q4K_BLOCK_SIZE;
+            
+            // Validate raw data size
+            int expectedSize = numBlocks * Q4K_BYTES_PER_BLOCK;
+            if (rawData.Length != expectedSize)
+                throw new InvalidDataException(
+                    $"Q4_K tensor data size mismatch: expected {expectedSize} bytes, got {rawData.Length} bytes");
+            
+            // Create Q4KTensor and copy the raw data directly (GGUF format matches our internal format)
+            var tensor = new Q4KTensor(rows, cols);
+            Buffer.BlockCopy(rawData, 0, tensor.Data, 0, rawData.Length);
+            
+            return tensor;
+        }
+
+        /// <summary>
+        /// Convert GGUF Q6_K tensor to native Q6KTensor.
+        /// GGUF Q6_K format: block_size=256, each super-block has:
+        /// - ql (128 bytes): low 4 bits of 256 6-bit values
+        /// - qh (64 bytes): high 2 bits of 256 6-bit values (4 values per byte)
+        /// - scales (16 bytes): 16 int8 scales (one per sub-block)
+        /// - d (fp16): super-block scale
+        /// Total: 210 bytes per block.
+        /// </summary>
+        private Q6KTensor ConvertQ6KTensor(byte[] rawData, ulong[] dimensions)
+        {
+            // Calculate total elements from dimensions
+            int totalElements = 1;
+            foreach (var dim in dimensions)
+            {
+                totalElements *= (int)dim;
+            }
+            
+            // For tensor, we need rows and cols
+            int rows, cols;
+            if (dimensions.Length == 1)
+            {
+                rows = 1;
+                cols = (int)dimensions[0];
+            }
+            else if (dimensions.Length == 2)
+            {
+                rows = (int)dimensions[0];
+                cols = (int)dimensions[1];
+            }
+            else
+            {
+                // Flatten multi-dimensional tensors to 2D
+                rows = (int)dimensions[0];
+                cols = totalElements / rows;
+            }
+
+            // Q6_K uses block size 256
+            const int Q6K_BLOCK_SIZE = 256;
+            const int Q6K_BYTES_PER_BLOCK = 210;
+            
+            if (totalElements % Q6K_BLOCK_SIZE != 0)
+                throw new InvalidDataException(
+                    $"Q6_K tensor size {totalElements} is not divisible by block size {Q6K_BLOCK_SIZE}");
+            
+            int numBlocks = totalElements / Q6K_BLOCK_SIZE;
+            
+            // Validate raw data size
+            int expectedSize = numBlocks * Q6K_BYTES_PER_BLOCK;
+            if (rawData.Length != expectedSize)
+                throw new InvalidDataException(
+                    $"Q6_K tensor data size mismatch: expected {expectedSize} bytes, got {rawData.Length} bytes");
+            
+            // Create Q6KTensor and copy the raw data directly (GGUF format matches our internal format)
+            var tensor = new Q6KTensor(rows, cols);
+            Buffer.BlockCopy(rawData, 0, tensor.Data, 0, rawData.Length);
+            
+            return tensor;
         }
 
         /// <summary>

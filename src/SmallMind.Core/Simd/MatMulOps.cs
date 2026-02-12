@@ -51,6 +51,10 @@ namespace SmallMind.Core.Simd
         /// Enhanced matrix multiplication: C = A × B
         /// A: (M × K), B: (K × N), C: (M × N)
         /// Automatically selects best implementation based on CPU capabilities.
+        /// 
+        /// Uses cache-blocked GEMM with B-matrix packing for optimal performance.
+        /// For matrices >= 64×64, uses optimized GemmMicrokernels implementation.
+        /// For very small matrices, uses direct SIMD path to avoid packing overhead.
         /// </summary>
         public static void MatMul(
             float[] A, float[] B, float[] C,
@@ -62,6 +66,17 @@ namespace SmallMind.Core.Simd
             // NOTE: Caller must ensure C is zeroed before calling
             // Kernels use accumulation (C += A * B) via FMA operations
 
+            // For medium-to-large matrices, use optimized GemmMicrokernels with B-matrix packing
+            // Threshold: 64×64 is break-even point where packing overhead is amortized
+            if (M >= 64 && K >= 64 && N >= 64)
+            {
+                // Use cache-blocked GEMM with implicit B-matrix packing
+                LastKernelUsed = MatMulKernel.Avx2Unsafe; // Track as AVX2 (GemmMicrokernels will select best)
+                GemmMicrokernels.MatMul(A.AsSpan(), B.AsSpan(), C.AsSpan(), M, K, N);
+                return;
+            }
+
+            // For small matrices, use direct SIMD path (avoid packing overhead)
             // Select best implementation based on CPU capabilities
             if (Avx512F.IsSupported && K >= 16)
             {
@@ -94,6 +109,10 @@ namespace SmallMind.Core.Simd
         /// Enhanced matrix multiplication with Span overload: C = A × B
         /// A: (M × K), B: (K × N), C: (M × N)
         /// Zero-allocation version that works directly on spans.
+        /// 
+        /// Uses cache-blocked GEMM with B-matrix packing for optimal performance.
+        /// For matrices >= 64×64, uses optimized GemmMicrokernels implementation.
+        /// For very small matrices, uses direct SIMD path to avoid packing overhead.
         /// </summary>
         public static void MatMul(
             ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
@@ -105,6 +124,17 @@ namespace SmallMind.Core.Simd
             // NOTE: Caller must ensure C is zeroed before calling
             // Kernels use accumulation (C += A * B) via FMA operations
 
+            // For medium-to-large matrices, use optimized GemmMicrokernels with B-matrix packing
+            // Threshold: 64×64 is break-even point where packing overhead is amortized
+            if (M >= 64 && K >= 64 && N >= 64)
+            {
+                // Use cache-blocked GEMM with implicit B-matrix packing
+                LastKernelUsed = MatMulKernel.Avx2Unsafe; // Track as AVX2 (GemmMicrokernels will select best)
+                GemmMicrokernels.MatMul(A, B, C, M, K, N);
+                return;
+            }
+
+            // For small matrices, use direct SIMD path (avoid packing overhead)
             // Use unsafe fixed pointers for SIMD operations
             unsafe
             {
