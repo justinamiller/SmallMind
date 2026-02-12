@@ -1087,7 +1087,7 @@ namespace SmallMind.Core.Simd
                         acc7 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 7), acc7);
                     }
                     
-                    // Handle remaining K iteration (0 or 1)
+                    // Handle remaining K iterations (0-3)
                     for (; k < K; k++)
                     {
                         Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
