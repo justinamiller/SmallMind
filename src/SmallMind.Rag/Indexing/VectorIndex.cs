@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Rag.Retrieval;
 using SmallMind.Core.Validation;
 
@@ -297,8 +298,11 @@ namespace SmallMind.Rag.Indexing
         /// <summary>
         /// Save the index to disk (JSONL format).
         /// </summary>
-        public void Save()
+        /// <param name="logger">Optional logger for diagnostic messages.</param>
+        public void Save(IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
+            
             using var writer = new StreamWriter(_indexFilePath, false, Encoding.UTF8);
             
             for (int i = 0; i < _entries.Count; i++)
@@ -308,17 +312,20 @@ namespace SmallMind.Rag.Indexing
                 writer.WriteLine(json);
             }
 
-            Console.WriteLine($"Index saved to {_indexFilePath} ({_entries.Count} entries)");
+            logger.Info($"Index saved to {_indexFilePath} ({_entries.Count} entries)");
         }
 
         /// <summary>
         /// Load the index from disk.
         /// </summary>
-        public void Load()
+        /// <param name="logger">Optional logger for diagnostic messages.</param>
+        public void Load(IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
+            
             if (!File.Exists(_indexFilePath))
             {
-                Console.WriteLine($"Index file not found: {_indexFilePath}");
+                logger.Warn($"Index file not found: {_indexFilePath}");
                 return;
             }
 
@@ -351,11 +358,11 @@ namespace SmallMind.Rag.Indexing
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Warning: Failed to parse line: {ex.Message}");
+                    logger.Warn($"Failed to parse line: {ex.Message}");
                 }
             }
 
-            Console.WriteLine($"Index loaded from {_indexFilePath} ({_entries.Count} entries)");
+            logger.Info($"Index loaded from {_indexFilePath} ({_entries.Count} entries)");
         }
 
         /// <summary>
@@ -363,9 +370,12 @@ namespace SmallMind.Rag.Indexing
         /// </summary>
         /// <param name="documents">Documents to index</param>
         /// <param name="metadataList">Optional metadata for each document</param>
-        public void Rebuild(List<string> documents, List<Dictionary<string, string>>? metadataList = null)
+        /// <param name="logger">Optional logger for diagnostic messages.</param>
+        public void Rebuild(List<string> documents, List<Dictionary<string, string>>? metadataList = null, IRuntimeLogger? logger = null)
         {
-            Console.WriteLine("Rebuilding index...");
+            logger ??= NullRuntimeLogger.Instance;
+            
+            logger.Info("Rebuilding index...");
             
             _entries.Clear();
             _nextId = 0;
@@ -373,13 +383,13 @@ namespace SmallMind.Rag.Indexing
             // If using TF-IDF, fit the vocabulary first
             if (_embeddingProvider is TfidfEmbeddingProvider tfidf)
             {
-                tfidf.Fit(documents);
+                tfidf.Fit(documents, logger);
             }
 
             // Add all documents
             AddBatch(documents, metadataList);
 
-            Console.WriteLine($"Index rebuilt with {_entries.Count} entries");
+            logger.Info($"Index rebuilt with {_entries.Count} entries");
         }
 
         /// <summary>
