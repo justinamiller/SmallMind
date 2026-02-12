@@ -104,12 +104,9 @@ namespace SmallMind.Runtime.Batching
                 return await GenerateDirectAsync(prompt, options, metrics, cancellationToken);
             }
 
-            // Encode prompt
-            var tokens = _tokenizer.Encode(prompt);
-            var tokenArray = tokens.ToArray();
-
-            // Create request
+            // Encode prompt to array (ToArray is necessary for int[] API)
             var sessionId = SessionId.NewId();
+            var tokenArray = _tokenizer.Encode(prompt).ToArray();
             var request = new InferenceRequest(sessionId, tokenArray, options, cancellationToken);
 
             try
@@ -166,13 +163,9 @@ namespace SmallMind.Runtime.Batching
                 yield break;
             }
 
-            // Encode prompt
-            var tokens = _tokenizer.Encode(prompt);
-            var tokenArray = tokens.ToArray();
-
-            // Create request
+            // Encode prompt directly to array (ToArray is necessary for int[] API)
             var sessionId = SessionId.NewId();
-            var request = new InferenceRequest(sessionId, tokenArray, options, cancellationToken);
+            var request = new InferenceRequest(sessionId, _tokenizer.Encode(prompt).ToArray(), options, cancellationToken);
 
             try
             {

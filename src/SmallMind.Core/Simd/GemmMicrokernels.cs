@@ -250,18 +250,24 @@ namespace SmallMind.Core.Simd
                 // Parallel execution over MC blocks
                 int numMcBlocks = (M + L2_BLOCK_M - 1) / L2_BLOCK_M;
                 
-                // Convert to arrays for lambda capture (can't use Span in lambda)
-                float[] aArray = A.ToArray();
-                float[] bArray = B.ToArray();
-                float[] cArray = C.ToArray();
-                
-                Parallel.For(0, numMcBlocks, mcIdx =>
+                // Use unsafe pointers captured as IntPtr to avoid ToArray() allocations
+                // Fixed pointers must be captured before lambda - store as IntPtr for lambda capture
+                fixed (float* pAFixed = A, pBFixed = B, pCFixed = C)
                 {
-                    int mc = mcIdx * L2_BLOCK_M;
-                    int mb = Math.Min(L2_BLOCK_M, M - mc);
+                    IntPtr pAIntPtr = (IntPtr)pAFixed;
+                    IntPtr pBIntPtr = (IntPtr)pBFixed;
+                    IntPtr pCIntPtr = (IntPtr)pCFixed;
                     
-                    fixed (float* pA = aArray, pB = bArray, pC = cArray)
+                    Parallel.For(0, numMcBlocks, mcIdx =>
                     {
+                        int mc = mcIdx * L2_BLOCK_M;
+                        int mb = Math.Min(L2_BLOCK_M, M - mc);
+                        
+                        // Restore pointers from IntPtr within lambda
+                        float* pA = (float*)pAIntPtr;
+                        float* pB = (float*)pBIntPtr;
+                        float* pC = (float*)pCIntPtr;
+                        
                         for (int nc = 0; nc < N; nc += L2_BLOCK_N)
                         {
                             int nb = Math.Min(L2_BLOCK_N, N - nc);
@@ -278,11 +284,8 @@ namespace SmallMind.Core.Simd
                                     mb, kb, nb, K, N, N);
                             }
                         }
-                    }
-                });
-                
-                // Copy result back to C span
-                cArray.CopyTo(C);
+                    });
+                }
             }
             else
             {
