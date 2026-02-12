@@ -245,16 +245,21 @@ namespace SmallMind.Engine
                 };
                 prompt = BuildPromptFromMessages(tempHistory);
 
-                // Extract citations
+                // Extract citations (avoid LINQ for better performance)
                 if (_options.RagOptions?.IncludeCitations ?? true)
                 {
-                    citations = chunks.Select((c, idx) => new Citation
+                    citations = new List<Citation>(chunks.Count);
+                    for (int i = 0; i < chunks.Count; i++)
                     {
-                        Source = c.DocId,
-                        Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
-                        Snippet = c.Excerpt,
-                        RelevanceScore = c.Score
-                    }).ToList();
+                        var c = chunks[i];
+                        citations.Add(new Citation
+                        {
+                            Source = c.DocId,
+                            Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
+                            Snippet = c.Excerpt,
+                            RelevanceScore = c.Score
+                        });
+                    }
                 }
             }
             else
@@ -497,16 +502,21 @@ namespace SmallMind.Engine
                 };
                 prompt = BuildPromptFromMessages(tempHistory);
 
-                // Extract citations
+                // Extract citations (avoid LINQ for better performance)
                 if (_options.RagOptions?.IncludeCitations ?? true)
                 {
-                    citations = chunks.Select((c, idx) => new Citation
+                    citations = new List<Citation>(chunks.Count);
+                    for (int i = 0; i < chunks.Count; i++)
                     {
-                        Source = c.DocId,
-                        Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
-                        Snippet = c.Excerpt,
-                        RelevanceScore = c.Score
-                    }).ToList();
+                        var c = chunks[i];
+                        citations.Add(new Citation
+                        {
+                            Source = c.DocId,
+                            Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
+                            Snippet = c.Excerpt,
+                            RelevanceScore = c.Score
+                        });
+                    }
                 }
             }
             else

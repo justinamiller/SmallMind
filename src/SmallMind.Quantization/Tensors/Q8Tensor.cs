@@ -87,32 +87,40 @@ namespace SmallMind.Quantization.Tensors
             var data = new sbyte[totalSize];
             var scales = new float[numBlocks];
 
-            for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
+            // Use unsafe pointers for better performance (eliminates bounds checking)
+            unsafe
             {
-                int blockStart = blockIdx * blockSize;
-                int blockEnd = Math.Min(blockStart + blockSize, totalSize);
-                int currentBlockSize = blockEnd - blockStart;
-
-                // Find max absolute value in block
-                float maxAbs = 0f;
-                for (int i = blockStart; i < blockEnd; i++)
+                fixed (float* pSource = source)
+                fixed (sbyte* pData = data)
+                fixed (float* pScales = scales)
                 {
-                    float absVal = MathF.Abs(source[i]);
-                    if (absVal > maxAbs) maxAbs = absVal;
-                }
+                    for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
+                    {
+                        int blockStart = blockIdx * blockSize;
+                        int blockEnd = Math.Min(blockStart + blockSize, totalSize);
 
-                // Compute scale (avoid division by zero)
-                float scale = maxAbs > 0f ? maxAbs / 127f : 1f;
-                scales[blockIdx] = scale;
+                        // Find max absolute value in block
+                        float maxAbs = 0f;
+                        for (int i = blockStart; i < blockEnd; i++)
+                        {
+                            float absVal = MathF.Abs(pSource[i]);
+                            if (absVal > maxAbs) maxAbs = absVal;
+                        }
 
-                // Quantize values in block
-                float invScale = 1f / scale;
-                for (int i = blockStart; i < blockEnd; i++)
-                {
-                    float quantized = source[i] * invScale;
-                    // Clamp to [-127, 127] and round
-                    int clamped = (int)MathF.Round(Math.Clamp(quantized, -127f, 127f));
-                    data[i] = (sbyte)clamped;
+                        // Compute scale (avoid division by zero)
+                        float scale = maxAbs > 0f ? maxAbs / 127f : 1f;
+                        pScales[blockIdx] = scale;
+
+                        // Quantize values in block with precomputed inverse scale
+                        float invScale = 1f / scale;
+                        for (int i = blockStart; i < blockEnd; i++)
+                        {
+                            float quantized = pSource[i] * invScale;
+                            // Clamp to [-127, 127] and round
+                            int clamped = (int)MathF.Round(Math.Clamp(quantized, -127f, 127f));
+                            pData[i] = (sbyte)clamped;
+                        }
+                    }
                 }
             }
 
@@ -129,15 +137,23 @@ namespace SmallMind.Quantization.Tensors
             var result = new float[totalSize];
             int numBlocks = Scales.Length;
 
-            for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
+            // Use unsafe pointers for better performance (eliminates bounds checking)
+            unsafe
             {
-                int blockStart = blockIdx * BlockSize;
-                int blockEnd = Math.Min(blockStart + BlockSize, totalSize);
-                float scale = Scales[blockIdx];
-
-                for (int i = blockStart; i < blockEnd; i++)
+                fixed (sbyte* pData = Data)
+                fixed (float* pResult = result, pScales = Scales)
                 {
-                    result[i] = Data[i] * scale;
+                    for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
+                    {
+                        int blockStart = blockIdx * BlockSize;
+                        int blockEnd = Math.Min(blockStart + BlockSize, totalSize);
+                        float scale = pScales[blockIdx];
+
+                        for (int i = blockStart; i < blockEnd; i++)
+                        {
+                            pResult[i] = pData[i] * scale;
+                        }
+                    }
                 }
             }
 

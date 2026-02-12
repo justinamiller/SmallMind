@@ -773,14 +773,19 @@ namespace SmallMind.Core.Core
             int cols = Shape[1];
             var result = new Tensor(new int[] { cols, rows }, RequiresGrad);
             
-            ReadOnlySpan<float> dataSpan = Data;
-            Span<float> resultSpan = result.Data;
-            
-            for (int i = 0; i < rows; i++)
+            // Use unsafe pointers for better performance (eliminates bounds checking)
+            unsafe
             {
-                for (int j = 0; j < cols; j++)
+                fixed (float* pData = Data, pResult = result.Data)
                 {
-                    resultSpan[j * rows + i] = dataSpan[i * cols + j];
+                    for (int i = 0; i < rows; i++)
+                    {
+                        int srcRowStart = i * cols;
+                        for (int j = 0; j < cols; j++)
+                        {
+                            pResult[j * rows + i] = pData[srcRowStart + j];
+                        }
+                    }
                 }
             }
             
@@ -788,11 +793,19 @@ namespace SmallMind.Core.Core
             {
                 result.SetBackward(() =>
                 {
-                    for (int i = 0; i < rows; i++)
+                    // Use unsafe pointers in backward pass as well
+                    unsafe
                     {
-                        for (int j = 0; j < cols; j++)
+                        fixed (float* pGrad = Grad, pResultGrad = result.Grad)
                         {
-                            Grad[i * cols + j] += result.Grad[j * rows + i];
+                            for (int i = 0; i < rows; i++)
+                            {
+                                int dstRowStart = i * cols;
+                                for (int j = 0; j < cols; j++)
+                                {
+                                    pGrad[dstRowStart + j] += pResultGrad[j * rows + i];
+                                }
+                            }
                         }
                     }
                 });
