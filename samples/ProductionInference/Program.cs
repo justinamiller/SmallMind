@@ -5,6 +5,7 @@ using SmallMind.Runtime;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
 using SmallMind.Core.Core;
+using SmallMind.Core.Utilities;
 
 namespace ProductionInference
 {
@@ -226,15 +227,15 @@ namespace ProductionInference
 
             // Estimate memory for single session
             long sessionBytes = MemoryEstimator.EstimateSessionBytes(modelParams, options, nEmbd, nLayer, nHead);
-            Console.WriteLine($"Single session estimate: {MemoryEstimator.FormatBytes(sessionBytes)}");
+            Console.WriteLine($"Single session estimate: {ByteSizeFormatter.FormatBytes(sessionBytes)}");
 
             // Estimate KV cache
             long kvCacheBytes = MemoryEstimator.EstimateKvCacheBytes(options.MaxContextTokens, nEmbd, nLayer, nHead);
-            Console.WriteLine($"KV cache per session: {MemoryEstimator.FormatBytes(kvCacheBytes)}");
+            Console.WriteLine($"KV cache per session: {ByteSizeFormatter.FormatBytes(kvCacheBytes)}");
 
             // Estimate for 10 concurrent sessions
             long engineBytes = MemoryEstimator.EstimateEngineBytes(modelParams, options, nEmbd, nLayer, nHead, 10);
-            Console.WriteLine($"10 concurrent sessions: {MemoryEstimator.FormatBytes(engineBytes)}");
+            Console.WriteLine($"10 concurrent sessions: {ByteSizeFormatter.FormatBytes(engineBytes)}");
 
             Console.WriteLine();
         }

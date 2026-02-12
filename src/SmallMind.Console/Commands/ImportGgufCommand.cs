@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using SmallMind.Core.Utilities;
 using SmallMind.Quantization.IO.Gguf;
 
 namespace SmallMind.ConsoleApp.Commands
@@ -47,8 +48,8 @@ namespace SmallMind.ConsoleApp.Commands
                 long ggufSize = new FileInfo(inputPath).Length;
                 long smqSize = new FileInfo(outputPath).Length;
 
-                System.Console.WriteLine($"  GGUF size: {FormatBytes(ggufSize)}");
-                System.Console.WriteLine($"  SMQ size: {FormatBytes(smqSize)}");
+                System.Console.WriteLine($"  GGUF size: {ByteSizeFormatter.FormatBytes(ggufSize)}");
+                System.Console.WriteLine($"  SMQ size: {ByteSizeFormatter.FormatBytes(smqSize)}");
 
                 return 0;
             }
@@ -87,19 +88,6 @@ namespace SmallMind.ConsoleApp.Commands
             System.Console.WriteLine();
             System.Console.WriteLine("Example:");
             System.Console.WriteLine("  smallmind import-gguf model.gguf model.smq");
-        }
-
-        private static string FormatBytes(long bytes)
-        {
-            string[] sizes = { "B", "KB", "MB", "GB" };
-            double len = bytes;
-            int order = 0;
-            while (len >= 1024 && order < sizes.Length - 1)
-            {
-                order++;
-                len /= 1024;
-            }
-            return $"{len:F2} {sizes[order]}";
         }
     }
 }

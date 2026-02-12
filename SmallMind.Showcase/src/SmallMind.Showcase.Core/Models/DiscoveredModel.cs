@@ -1,3 +1,5 @@
+using SmallMind.Core.Utilities;
+
 namespace SmallMind.Showcase.Core.Models;
 
 /// <summary>
@@ -14,20 +16,5 @@ public sealed class DiscoveredModel
     public string? Description { get; init; }
     public DateTime LastModified { get; init; }
 
-    public string SizeFormatted => FormatBytes(SizeBytes);
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-        int suffixIndex = 0;
-        double size = bytes;
-
-        while (size >= 1024 && suffixIndex < suffixes.Length - 1)
-        {
-            size /= 1024;
-            suffixIndex++;
-        }
-
-        return $"{size:F2} {suffixes[suffixIndex]}";
-    }
+    public string SizeFormatted => ByteSizeFormatter.FormatBytes(SizeBytes);
 }

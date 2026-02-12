@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using SmallMind.ModelRegistry;
+using SmallMind.Core.Utilities;
 
 namespace SmallMind.ConsoleApp.Commands
 {
@@ -68,12 +69,12 @@ namespace SmallMind.ConsoleApp.Commands
                 {
                     totalSize += file.SizeBytes;
                     Console.WriteLine($"  - {file.Path}");
-                    Console.WriteLine($"    Size: {FormatBytes(file.SizeBytes)}");
+                    Console.WriteLine($"    Size: {ByteSizeFormatter.FormatBytes(file.SizeBytes)}");
                     Console.WriteLine($"    SHA256: {file.Sha256}");
                 }
 
                 Console.WriteLine();
-                Console.WriteLine($"Total Size: {FormatBytes(totalSize)}");
+                Console.WriteLine($"Total Size: {ByteSizeFormatter.FormatBytes(totalSize)}");
 
                 return Task.FromResult(0);
             }
@@ -115,21 +116,6 @@ namespace SmallMind.ConsoleApp.Commands
                 }
             }
             return null;
-        }
-
-        private string FormatBytes(long bytes)
-        {
-            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-            int suffixIndex = 0;
-            double size = bytes;
-
-            while (size >= 1024 && suffixIndex < suffixes.Length - 1)
-            {
-                size /= 1024;
-                suffixIndex++;
-            }
-
-            return $"{size:F2} {suffixes[suffixIndex]}";
         }
     }
 }
