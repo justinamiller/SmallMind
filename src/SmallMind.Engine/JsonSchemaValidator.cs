@@ -18,6 +18,9 @@ namespace SmallMind.Engine
             new(StringComparer.Ordinal);
         private static readonly object PatternCacheLock = new();
         
+        // Timeout for schema patterns to prevent ReDoS attacks
+        private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
+        
         /// <summary>
         /// Validates JSON against a schema.
         /// </summary>
@@ -181,25 +184,32 @@ namespace SmallMind.Engine
                 }
             }
 
-            // Validate pattern (basic regex support) - use cached compiled regex
+            // Validate pattern (basic regex support) - use cached compiled regex with timeout
             if (schema.TryGetProperty("pattern", out var pattern))
             {
                 var patternStr = pattern.GetString() ?? "";
                 Regex regex;
                 
-                // Check cache first, compile and cache if not present
+                // Check cache first, compile and cache if not present (with timeout protection)
                 lock (PatternCacheLock)
                 {
                     if (!PatternCache.TryGetValue(patternStr, out regex))
                     {
-                        regex = new Regex(patternStr, RegexOptions.Compiled);
+                        regex = new Regex(patternStr, RegexOptions.Compiled, RegexTimeout);
                         PatternCache[patternStr] = regex;
                     }
                 }
                 
-                if (!regex.IsMatch(value))
+                try
                 {
-                    errors.Add($"{path}: String does not match pattern '{patternStr}'");
+                    if (!regex.IsMatch(value))
+                    {
+                        errors.Add($"{path}: String does not match pattern '{patternStr}'");
+                    }
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    errors.Add($"{path}: Pattern match timed out (possible ReDoS attack)");
                 }
             }
         }

@@ -21,10 +21,9 @@ namespace SmallMind.Tokenizers
         private readonly List<(string, string)> _merges;
         private readonly FrozenDictionary<(string, string), int> _mergeRanks;
         
-        // Pre-tokenization regex: shared across all instances for efficiency
+        // Pre-tokenization regex: uses GeneratedRegex for optimal performance
         // Pattern matches sequences of letters, digits, or individual punctuation/whitespace
-        private static readonly Regex PreTokenizeRegex = 
-            new Regex(@"\w+|[^\w\s]|\s+", RegexOptions.Compiled);
+        // Removed static readonly field - now using centralized RegexPatterns.BpePreTokenize()
         
         private const string UnknownToken = "[UNK]";
         private const string EndOfTextToken = "[EOT]";
@@ -216,8 +215,8 @@ namespace SmallMind.Tokenizers
 
             var result = new List<int>(text.Length / 3);
 
-            // Pre-tokenize: split into words and punctuation
-            var matches = PreTokenizeRegex.Matches(text);
+            // Pre-tokenize: split into words and punctuation using GeneratedRegex
+            var matches = RegexPatterns.BpePreTokenize().Matches(text);
             
             foreach (Match match in matches)
             {

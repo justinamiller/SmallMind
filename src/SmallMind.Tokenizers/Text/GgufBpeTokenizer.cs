@@ -18,11 +18,9 @@ namespace SmallMind.Tokenizers.Text
         private readonly Dictionary<(string, string), int> _mergeRanks;
         private readonly bool _isByteLevelBpe;
         
-        // Pre-tokenization regex (GPT-2 style): shared across all instances for efficiency
+        // Pre-tokenization regex (GPT-2 style): uses GeneratedRegex for optimal performance
         // Matches contractions, letters, numbers, punctuation, and whitespace sequences
-        private static readonly Regex PreTokenizeRegex = new Regex(
-            @"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+", 
-            RegexOptions.Compiled);
+        // Removed static readonly field - now using centralized RegexPatterns.Gpt2PreTokenize()
         
         // Byte-level BPE mapping (GPT-2 style)
         private readonly Dictionary<byte, string>? _byteToChar;
@@ -158,8 +156,8 @@ namespace SmallMind.Tokenizers.Text
 
             var result = new List<int>();
 
-            // Pre-tokenize text
-            var matches = PreTokenizeRegex.Matches(text);
+            // Pre-tokenize text using GeneratedRegex
+            var matches = RegexPatterns.Gpt2PreTokenize().Matches(text);
 
             foreach (Match match in matches)
             {
