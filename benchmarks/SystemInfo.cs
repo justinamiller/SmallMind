@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SmallMind.Core.Utilities;
 
 namespace SmallMind.Benchmarks
 {
@@ -38,23 +39,8 @@ namespace SmallMind.Benchmarks
         public long TotalMemoryBytes { get; set; }
         public long AvailableMemoryBytes { get; set; }
         
-        public string TotalMemoryFormatted => FormatBytes(TotalMemoryBytes);
-        public string AvailableMemoryFormatted => FormatBytes(AvailableMemoryBytes);
-
-        private static string FormatBytes(long bytes)
-        {
-            if (bytes <= 0) return "Unknown";
-            
-            const long GB = 1024L * 1024L * 1024L;
-            const long MB = 1024L * 1024L;
-            
-            if (bytes >= GB)
-                return $"{bytes / (double)GB:F1} GB";
-            if (bytes >= MB)
-                return $"{bytes / (double)MB:F1} MB";
-            
-            return $"{bytes:N0} bytes";
-        }
+        public string TotalMemoryFormatted => ByteSizeFormatter.FormatBytes(TotalMemoryBytes);
+        public string AvailableMemoryFormatted => ByteSizeFormatter.FormatBytes(AvailableMemoryBytes);
     }
 
     /// <summary>
