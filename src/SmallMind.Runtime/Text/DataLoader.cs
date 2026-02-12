@@ -1,3 +1,4 @@
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Core;
 using SmallMind.Transformers;
 using System;
@@ -23,9 +24,11 @@ namespace SmallMind.Runtime
         /// </summary>
         /// <param name="filePath">Path to the text file</param>
         /// <param name="separator">Separator to join sentences (default: newline)</param>
+        /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Concatenated text from all lines</returns>
-        public static string FromTextFile(string filePath, string separator = "\n")
+        public static string FromTextFile(string filePath, string separator = "\n", IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
             if (!File.Exists(filePath))
             {
                 throw new FileNotFoundException($"Text file not found: {filePath}");
@@ -46,7 +49,7 @@ namespace SmallMind.Runtime
                 }
             }
             
-            Console.WriteLine($"Loaded {sentences.Count} sentences from {filePath}");
+            logger.Info($"Loaded {sentences.Count} sentences from {filePath}");
             return string.Join(separator, sentences);
         }
 
@@ -56,9 +59,11 @@ namespace SmallMind.Runtime
         /// </summary>
         /// <param name="filePath">Path to the JSON file</param>
         /// <param name="separator">Separator to join sentences (default: newline)</param>
+        /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Concatenated text from all sentences</returns>
-        public static string FromJsonFile(string filePath, string separator = "\n")
+        public static string FromJsonFile(string filePath, string separator = "\n", IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
             if (!File.Exists(filePath))
             {
                 throw new FileNotFoundException($"JSON file not found: {filePath}");
@@ -85,7 +90,7 @@ namespace SmallMind.Runtime
                 }
             }
 
-            Console.WriteLine($"Loaded {sentences.Count} sentences from JSON file {filePath}");
+            logger.Info($"Loaded {sentences.Count} sentences from JSON file {filePath}");
             return string.Join(separator, sentences);
         }
 
@@ -96,9 +101,11 @@ namespace SmallMind.Runtime
         /// <param name="filePath">Path to the XML file</param>
         /// <param name="elementName">Name of the XML element to extract text from</param>
         /// <param name="separator">Separator to join sentences (default: newline)</param>
+        /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Concatenated text from all matching elements</returns>
-        public static string FromXmlFile(string filePath, string elementName = "sentence", string separator = "\n")
+        public static string FromXmlFile(string filePath, string elementName = "sentence", string separator = "\n", IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
             if (!File.Exists(filePath))
             {
                 throw new FileNotFoundException($"XML file not found: {filePath}");
@@ -117,7 +124,7 @@ namespace SmallMind.Runtime
                 }
             }
 
-            Console.WriteLine($"Loaded {sentences.Count} sentences from XML file {filePath}");
+            logger.Info($"Loaded {sentences.Count} sentences from XML file {filePath}");
             return string.Join(separator, sentences);
         }
 
@@ -131,10 +138,12 @@ namespace SmallMind.Runtime
         /// <param name="hasHeader">Whether the CSV file has a header row</param>
         /// <param name="separator">Separator to join sentences (default: newline)</param>
         /// <param name="delimiter">CSV delimiter (default: comma)</param>
+        /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Concatenated text from the specified column</returns>
         public static string FromCsvFile(string filePath, int columnIndex = 0, bool hasHeader = true, 
-            string separator = "\n", char delimiter = ',')
+            string separator = "\n", char delimiter = ',', IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
             if (!File.Exists(filePath))
             {
                 throw new FileNotFoundException($"CSV file not found: {filePath}");
@@ -167,7 +176,7 @@ namespace SmallMind.Runtime
                 }
             }
 
-            Console.WriteLine($"Loaded {sentences.Count} sentences from CSV file {filePath}");
+            logger.Info($"Loaded {sentences.Count} sentences from CSV file {filePath}");
             return string.Join(separator, sentences);
         }
 
@@ -178,9 +187,11 @@ namespace SmallMind.Runtime
         /// <param name="directoryPath">Path to the directory</param>
         /// <param name="searchPattern">File search pattern (default: "*.*")</param>
         /// <param name="separator">Separator to join content from different files (default: double newline)</param>
+        /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Concatenated text from all files</returns>
-        public static string FromDirectory(string directoryPath, string searchPattern = "*.*", string separator = "\n\n")
+        public static string FromDirectory(string directoryPath, string searchPattern = "*.*", string separator = "\n\n", IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
             if (!Directory.Exists(directoryPath))
             {
                 throw new DirectoryNotFoundException($"Directory not found: {directoryPath}");
@@ -199,19 +210,19 @@ namespace SmallMind.Runtime
                     string text;
                     if (extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
                     {
-                        text = FromTextFile(file);
+                        text = FromTextFile(file, logger: logger);
                     }
                     else if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
                     {
-                        text = FromJsonFile(file);
+                        text = FromJsonFile(file, logger: logger);
                     }
                     else if (extension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
                     {
-                        text = FromXmlFile(file);
+                        text = FromXmlFile(file, logger: logger);
                     }
                     else if (extension.Equals(".csv", StringComparison.OrdinalIgnoreCase))
                     {
-                        text = FromCsvFile(file);
+                        text = FromCsvFile(file, logger: logger);
                     }
                     else
                     {
@@ -225,11 +236,11 @@ namespace SmallMind.Runtime
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Warning: Failed to load file {file}: {ex.Message}");
+                    logger.Warn($"Failed to load file {file}: {ex.Message}");
                 }
             }
 
-            Console.WriteLine($"Loaded {allTexts.Count} files from directory {directoryPath}");
+            logger.Info($"Loaded {allTexts.Count} files from directory {directoryPath}");
             return string.Join(separator, allTexts);
         }
 
@@ -242,9 +253,11 @@ namespace SmallMind.Runtime
         /// <param name="text">Input text to split</param>
         /// <param name="delimiters">Array of single-character delimiters to split on (default: period, exclamation, question mark)</param>
         /// <param name="separator">Separator to join sentences (default: newline)</param>
+        /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Concatenated text with sentences separated</returns>
-        public static string FromTextWithDelimiters(string text, string[]? delimiters = null, string separator = "\n")
+        public static string FromTextWithDelimiters(string text, string[]? delimiters = null, string separator = "\n", IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
             if (string.IsNullOrWhiteSpace(text))
             {
                 throw new ArgumentException("Input text cannot be null or empty", nameof(text));
@@ -298,7 +311,7 @@ namespace SmallMind.Runtime
                 }
             }
 
-            Console.WriteLine($"Split text into {sentences.Count} sentences using delimiters");
+            logger.Info($"Split text into {sentences.Count} sentences using delimiters");
             return string.Join(separator, sentences);
         }
 

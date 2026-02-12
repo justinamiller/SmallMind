@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Runtime.PretrainedModels
 {
@@ -44,10 +45,11 @@ namespace SmallMind.Runtime.PretrainedModels
         /// Labels should be: positive, negative, neutral
         /// </summary>
         /// <param name="filePath">Path to the dataset file</param>
+        /// <param name="logger">Optional logger for warnings and info</param>
         /// <returns>List of labeled samples</returns>
-        public static List<LabeledSample> LoadSentimentData(string filePath)
+        public static List<LabeledSample> LoadSentimentData(string filePath, IRuntimeLogger? logger = null)
         {
-            return LoadLabeledData(filePath, new[] { "positive", "negative", "neutral" });
+            return LoadLabeledData(filePath, new[] { "positive", "negative", "neutral" }, logger);
         }
 
         /// <summary>
@@ -56,10 +58,11 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         /// <param name="filePath">Path to the dataset file</param>
         /// <param name="expectedLabels">Expected labels/categories (optional validation)</param>
+        /// <param name="logger">Optional logger for warnings and info</param>
         /// <returns>List of labeled samples</returns>
-        public static List<LabeledSample> LoadClassificationData(string filePath, string[]? expectedLabels = null)
+        public static List<LabeledSample> LoadClassificationData(string filePath, string[]? expectedLabels = null, IRuntimeLogger? logger = null)
         {
-            return LoadLabeledData(filePath, expectedLabels);
+            return LoadLabeledData(filePath, expectedLabels, logger);
         }
 
         /// <summary>
@@ -68,9 +71,12 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         /// <param name="filePath">Path to the JSONL file</param>
         /// <param name="expectedLabels">Expected labels for validation (optional)</param>
+        /// <param name="logger">Optional logger for warnings and info</param>
         /// <returns>List of labeled samples</returns>
-        public static List<LabeledSample> LoadFromJsonl(string filePath, string[]? expectedLabels = null)
+        public static List<LabeledSample> LoadFromJsonl(string filePath, string[]? expectedLabels = null, IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
+
             if (!File.Exists(filePath))
             {
                 throw new FileNotFoundException($"Dataset file not found: {filePath}");
@@ -104,7 +110,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     var sample = JsonSerializer.Deserialize<LabeledSample>(line, options);
                     if (sample == null)
                     {
-                        Console.WriteLine($"Warning: Failed to deserialize line {lineNumber}");
+                        logger.Warn($"Failed to deserialize line {lineNumber}");
                         continue;
                     }
 
@@ -112,13 +118,13 @@ namespace SmallMind.Runtime.PretrainedModels
                     if (expectedLabelSet != null && !string.IsNullOrWhiteSpace(sample.Label) 
                         && !expectedLabelSet.Contains(sample.Label))
                     {
-                        Console.WriteLine($"Warning: Unexpected label '{sample.Label}' at line {lineNumber}. Expected one of: {string.Join(", ", expectedLabels!)}");
+                        logger.Warn($"Unexpected label '{sample.Label}' at line {lineNumber}. Expected one of: {string.Join(", ", expectedLabels!)}");
                         continue;
                     }
 
                     if (string.IsNullOrWhiteSpace(sample.Text))
                     {
-                        Console.WriteLine($"Warning: Empty text at line {lineNumber}");
+                        logger.Warn($"Empty text at line {lineNumber}");
                         continue;
                     }
 
@@ -126,7 +132,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 }
                 catch (JsonException ex)
                 {
-                    Console.WriteLine($"Warning: JSON parse error at line {lineNumber}: {ex.Message}");
+                    logger.Warn($"JSON parse error at line {lineNumber}: {ex.Message}");
                     continue;
                 }
             }
@@ -141,8 +147,9 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         /// <param name="filePath">Path to the dataset file</param>
         /// <param name="expectedLabels">Expected labels for validation (optional)</param>
+        /// <param name="logger">Optional logger for warnings and info</param>
         /// <returns>List of labeled samples</returns>
-        public static List<LabeledSample> LoadLabeledData(string filePath, string[]? expectedLabels = null)
+        public static List<LabeledSample> LoadLabeledData(string filePath, string[]? expectedLabels = null, IRuntimeLogger? logger = null)
         {
             if (!File.Exists(filePath))
             {
@@ -152,7 +159,7 @@ namespace SmallMind.Runtime.PretrainedModels
             // Auto-detect format by checking file extension or first line
             if (filePath.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase))
             {
-                return LoadFromJsonl(filePath, expectedLabels);
+                return LoadFromJsonl(filePath, expectedLabels, logger);
             }
 
             // Check first non-empty line to detect format
@@ -168,7 +175,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     // Check if it's JSON
                     if (line.StartsWith("{"))
                     {
-                        return LoadFromJsonl(filePath, expectedLabels);
+                        return LoadFromJsonl(filePath, expectedLabels, logger);
                     }
                     
                     // Otherwise assume legacy pipe-delimited format
@@ -177,14 +184,16 @@ namespace SmallMind.Runtime.PretrainedModels
             }
 
             // Load as legacy pipe-delimited format
-            return LoadLegacyFormat(filePath, expectedLabels);
+            return LoadLegacyFormat(filePath, expectedLabels, logger);
         }
 
         /// <summary>
         /// Load labeled data from legacy pipe-delimited format: label|text
         /// </summary>
-        private static List<LabeledSample> LoadLegacyFormat(string filePath, string[]? expectedLabels = null)
+        private static List<LabeledSample> LoadLegacyFormat(string filePath, string[]? expectedLabels = null, IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
+
             if (!File.Exists(filePath))
             {
                 throw new FileNotFoundException($"Dataset file not found: {filePath}");
@@ -213,7 +222,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 var parts = line.Split('|', 2);
                 if (parts.Length != 2)
                 {
-                    Console.WriteLine($"Warning: Skipping malformed line {lineNumber}: {line}");
+                    logger.Warn($"Skipping malformed line {lineNumber}: {line}");
                     continue;
                 }
 
@@ -223,13 +232,13 @@ namespace SmallMind.Runtime.PretrainedModels
                 // Validate label if expected labels provided
                 if (expectedLabelSet != null && !expectedLabelSet.Contains(label))
                 {
-                    Console.WriteLine($"Warning: Unexpected label '{label}' at line {lineNumber}. Expected one of: {string.Join(", ", expectedLabels!)}");
+                    logger.Warn($"Unexpected label '{label}' at line {lineNumber}. Expected one of: {string.Join(", ", expectedLabels!)}");
                     continue;
                 }
 
                 if (string.IsNullOrWhiteSpace(text))
                 {
-                    Console.WriteLine($"Warning: Empty text at line {lineNumber}");
+                    logger.Warn($"Empty text at line {lineNumber}");
                     continue;
                 }
 
@@ -338,17 +347,20 @@ namespace SmallMind.Runtime.PretrainedModels
         /// </summary>
         /// <param name="samples">Labeled samples</param>
         /// <param name="datasetName">Name of the dataset (for display)</param>
-        public static void PrintStatistics(List<LabeledSample> samples, string datasetName = "Dataset")
+        /// <param name="logger">Optional logger for warnings and info</param>
+        public static void PrintStatistics(List<LabeledSample> samples, string datasetName = "Dataset", IRuntimeLogger? logger = null)
         {
-            Console.WriteLine($"\n{datasetName} Statistics:");
-            Console.WriteLine($"Total samples: {samples.Count}");
+            logger ??= NullRuntimeLogger.Instance;
+
+            logger.Info($"\n{datasetName} Statistics:");
+            logger.Info($"Total samples: {samples.Count}");
             
             var distribution = GetLabelDistribution(samples);
-            Console.WriteLine("\nLabel distribution:");
+            logger.Info("\nLabel distribution:");
             foreach (var kvp in distribution)
             {
                 double percentage = (double)kvp.Value / samples.Count * 100;
-                Console.WriteLine($"  {kvp.Key}: {kvp.Value} ({percentage:F1}%)");
+                logger.Info($"  {kvp.Key}: {kvp.Value} ({percentage:F1}%)");
             }
 
             // Text length statistics
@@ -368,10 +380,10 @@ namespace SmallMind.Runtime.PretrainedModels
                 
                 double average = (double)sum / samples.Count;
                 
-                Console.WriteLine($"\nText length statistics:");
-                Console.WriteLine($"  Min: {min}");
-                Console.WriteLine($"  Max: {max}");
-                Console.WriteLine($"  Average: {average:F1}");
+                logger.Info($"\nText length statistics:");
+                logger.Info($"  Min: {min}");
+                logger.Info($"  Max: {max}");
+                logger.Info($"  Average: {average:F1}");
             }
         }
     }

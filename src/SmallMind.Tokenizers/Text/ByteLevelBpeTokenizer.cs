@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Tokenizers;
 
@@ -123,7 +124,8 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
     /// <param name="trainingText">Text to train on</param>
     /// <param name="targetVocabSize">Target vocabulary size (must be >= 260)</param>
     /// <param name="minFrequency">Minimum frequency for a pair to be merged (default: 2)</param>
-    public void Train(string trainingText, int targetVocabSize, int minFrequency = 2)
+    /// <param name="logger">Optional logger for training progress</param>
+    public void Train(string trainingText, int targetVocabSize, int minFrequency = 2, IRuntimeLogger? logger = null)
     {
         if (targetVocabSize < FirstMergeTokenId)
         {
@@ -138,8 +140,9 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
             throw new ArgumentException("Training text cannot be null or empty", nameof(trainingText));
         }
 
-        Console.WriteLine($"Training BPE tokenizer on {trainingText.Length} characters...");
-        Console.WriteLine($"Target vocabulary size: {targetVocabSize}");
+        var log = logger ?? NullRuntimeLogger.Instance;
+        log.Info($"Training BPE tokenizer on {trainingText.Length} characters...");
+        log.Info($"Target vocabulary size: {targetVocabSize}");
 
         // Clear any existing merges
         _merges.Clear();
@@ -167,7 +170,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
 
             if (pairCounts.Count == 0)
             {
-                Console.WriteLine("No more pairs to merge.");
+                log.Info("No more pairs to merge.");
                 break;
             }
 
@@ -176,7 +179,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
 
             if (frequency < minFrequency)
             {
-                Console.WriteLine($"Most frequent pair has frequency {frequency} < {minFrequency}. Stopping.");
+                log.Info($"Most frequent pair has frequency {frequency} < {minFrequency}. Stopping.");
                 break;
             }
 
@@ -203,7 +206,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
 
             if (currentVocabSize % 100 == 0 || currentVocabSize == targetVocabSize)
             {
-                Console.WriteLine(
+                log.Info(
                     $"Vocab size: {currentVocabSize}, " +
                     $"Last merge: ({tokenA},{tokenB})->{newTokenId}, " +
                     $"Frequency: {frequency}");
@@ -213,8 +216,8 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
         VocabSize = currentVocabSize;
         Info = CreateTokenizerInfo();
 
-        Console.WriteLine($"Training complete. Final vocabulary size: {VocabSize}");
-        Console.WriteLine($"Learned {_merges.Count} merge rules.");
+        log.Info($"Training complete. Final vocabulary size: {VocabSize}");
+        log.Info($"Learned {_merges.Count} merge rules.");
     }
 
     /// <summary>
@@ -470,7 +473,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
     /// <summary>
     /// Save vocabulary and merge rules to a JSON file.
     /// </summary>
-    public void SaveVocabulary(string path)
+    public void SaveVocabulary(string path, IRuntimeLogger? logger = null)
     {
         var vocabDict = new Dictionary<string, int>();
 
@@ -523,14 +526,15 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
         string json = JsonSerializer.Serialize(vocabData, options);
         File.WriteAllText(path, json);
 
-        Console.WriteLine($"Vocabulary saved to: {path}");
-        Console.WriteLine($"Vocab size: {VocabSize}, Merges: {_merges.Count}");
+        var log = logger ?? NullRuntimeLogger.Instance;
+        log.Info($"Vocabulary saved to: {path}");
+        log.Info($"Vocab size: {VocabSize}, Merges: {_merges.Count}");
     }
 
     /// <summary>
     /// Load vocabulary and merge rules from a JSON file.
     /// </summary>
-    public void LoadVocabulary(string path)
+    public void LoadVocabulary(string path, IRuntimeLogger? logger = null)
     {
         if (!File.Exists(path))
         {
@@ -551,7 +555,8 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
                 $"Unsupported vocabulary version: {vocabData.Version}. Expected: smallmind-bpe-v1");
         }
 
-        Console.WriteLine($"Loading vocabulary from: {path}");
+        var log = logger ?? NullRuntimeLogger.Instance;
+        log.Info($"Loading vocabulary from: {path}");
 
         // Clear existing state
         _tokenToBytes.Clear();
@@ -610,7 +615,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
         VocabSize = vocabData.VocabSize;
         Info = CreateTokenizerInfo();
 
-        Console.WriteLine($"Vocabulary loaded. Size: {VocabSize}, Merges: {_merges.Count}");
+        log.Info($"Vocabulary loaded. Size: {VocabSize}, Merges: {_merges.Count}");
     }
 
     /// <summary>

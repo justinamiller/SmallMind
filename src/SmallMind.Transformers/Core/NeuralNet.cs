@@ -1,3 +1,4 @@
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Exceptions;
 using SmallMind.Core.Core;
 using SmallMind.Core.Simd;
@@ -175,11 +176,12 @@ namespace SmallMind.Transformers
         private int _embeddingDim;
         private Random _random;
 
-        public Embedding(int numEmbeddings, int embeddingDim, Random? random = null)
+        public Embedding(int numEmbeddings, int embeddingDim, Random? random = null, IRuntimeLogger? logger = null)
         {
             _numEmbeddings = numEmbeddings;
             _embeddingDim = embeddingDim;
             _random = random ?? new Random(42);
+            var log = logger ?? NullRuntimeLogger.Instance;
             
             // Check if we need chunked storage
             long totalElements = (long)numEmbeddings * embeddingDim;
@@ -189,7 +191,7 @@ namespace SmallMind.Transformers
                 // Use chunked storage for large embedding tables
                 Weight = Tensor.CreateChunked(new int[] { numEmbeddings, embeddingDim }, requiresGrad: true);
                 Weight.InitializeRandom(_random, 0.02f);
-                Console.WriteLine($"Embedding using chunked storage: {numEmbeddings:N0} x {embeddingDim:N0} = {totalElements:N0} elements ({Weight.GetChunkedBuffer().ChunkCount} chunks)");
+                log.Debug($"Embedding using chunked storage: {numEmbeddings:N0} x {embeddingDim:N0} = {totalElements:N0} elements ({Weight.GetChunkedBuffer().ChunkCount} chunks)");
             }
             else
             {

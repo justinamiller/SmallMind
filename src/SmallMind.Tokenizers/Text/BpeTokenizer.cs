@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Tokenizers
 {
@@ -20,6 +21,7 @@ namespace SmallMind.Tokenizers
         private readonly FrozenDictionary<int, string> _inverseVocab;
         private readonly List<(string, string)> _merges;
         private readonly FrozenDictionary<(string, string), int> _mergeRanks;
+        private readonly IRuntimeLogger _logger;
         
         // Pre-tokenization regex: uses GeneratedRegex for optimal performance
         // Pattern matches sequences of letters, digits, or individual punctuation/whitespace
@@ -52,8 +54,11 @@ namespace SmallMind.Tokenizers
         /// Creates a new BpeTokenizer by loading assets from the specified directory.
         /// </summary>
         /// <param name="assetsPath">Path to directory containing vocab.json and merges.txt</param>
-        public BpeTokenizer(string assetsPath)
+        /// <param name="logger">Optional logger</param>
+        public BpeTokenizer(string assetsPath, IRuntimeLogger? logger = null)
         {
+            _logger = logger ?? NullRuntimeLogger.Instance;
+            
             if (string.IsNullOrWhiteSpace(assetsPath))
             {
                 throw new TokenizationException("Assets path cannot be null or empty.");
@@ -161,13 +166,17 @@ namespace SmallMind.Tokenizers
         /// <param name="bosTokenId">BOS token ID (or -1 if not present)</param>
         /// <param name="eosTokenId">EOS token ID (or -1 if not present)</param>
         /// <param name="unkTokenId">UNK token ID (or -1 if not present)</param>
+        /// <param name="logger">Optional logger</param>
         public BpeTokenizer(
             Dictionary<string, int> vocab, 
             List<(string, string)> merges,
             int bosTokenId = -1,
             int eosTokenId = -1,
-            int unkTokenId = -1)
+            int unkTokenId = -1,
+            IRuntimeLogger? logger = null)
         {
+            _logger = logger ?? NullRuntimeLogger.Instance;
+            
             if (vocab == null || vocab.Count == 0)
                 throw new ArgumentException("Vocabulary cannot be null or empty", nameof(vocab));
             if (merges == null)
@@ -330,7 +339,7 @@ namespace SmallMind.Tokenizers
                     {
                         result.Add(unkId);
 #if DEBUG
-                        Console.WriteLine($"Warning: Unknown token '{token}' replaced with [UNK]");
+                        _logger.Warn($"Unknown token '{token}' replaced with [UNK]");
 #endif
                     }
                     else

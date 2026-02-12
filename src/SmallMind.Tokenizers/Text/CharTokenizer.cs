@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Text;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Tokenizers
 {
@@ -15,6 +16,7 @@ namespace SmallMind.Tokenizers
     {
         private readonly FrozenDictionary<char, int> _charToIdx;
         private readonly FrozenDictionary<int, char> _idxToChar;
+        private readonly IRuntimeLogger _logger;
 
         public int VocabSize { get; }
         
@@ -25,8 +27,11 @@ namespace SmallMind.Tokenizers
         /// Builds a vocabulary from all unique characters in the text.
         /// </summary>
         /// <param name="text">Training text to extract vocabulary from</param>
-        public CharTokenizer(string text)
+        /// <param name="logger">Optional logger</param>
+        public CharTokenizer(string text, IRuntimeLogger? logger = null)
         {
+            _logger = logger ?? NullRuntimeLogger.Instance;
+            
             // Build vocabulary from unique characters in the text
             var charSet = new HashSet<char>();
             for (int i = 0; i < text.Length; i++)
@@ -59,7 +64,7 @@ namespace SmallMind.Tokenizers
                 vocabSize: VocabSize,
                 supportsByteFallback: false
             );
-            Console.WriteLine($"CharTokenizer: Vocabulary built with {VocabSize} unique characters");
+            _logger.Info($"CharTokenizer: Vocabulary built with {VocabSize} unique characters");
         }
 
         /// <summary>
@@ -79,7 +84,7 @@ namespace SmallMind.Tokenizers
                 else
                 {
                     // Unknown character - skip it
-                    Console.WriteLine($"Warning: Unknown character '{ch}' skipped during encoding");
+                    _logger.Warn($"Unknown character '{ch}' skipped during encoding");
                 }
             }
             return result;
