@@ -1571,7 +1571,10 @@ namespace SmallMind.Transformers
             // q, k: (B, nHead, T, headSize)
             // output: (B, nHead, T, T)
             
-            var scores = new Tensor(new int[] { B, _nHead, T, T }, requiresGrad: true);
+            // Use pooled tensor to reduce allocation pressure in inference hot path
+            var scores = _isTraining 
+                ? new Tensor(new int[] { B, _nHead, T, T }, requiresGrad: true)
+                : Tensor.CreatePooled(new int[] { B, _nHead, T, T }, requiresGrad: false);
             float scale = 1.0f / MathF.Sqrt(_headSize);
             
             // Parallelize over batch and head dimensions for better performance
@@ -1660,7 +1663,10 @@ namespace SmallMind.Transformers
 
         private Tensor ApplySoftmax(Tensor scores, int B, int T)
         {
-            var result = new Tensor(scores.Shape, requiresGrad: true);
+            // Use pooled tensor for inference to reduce allocation pressure
+            var result = _isTraining
+                ? new Tensor(scores.Shape, requiresGrad: true)
+                : Tensor.CreatePooled(scores.Shape, requiresGrad: false);
             
             // Parallelize softmax computation over batch and head dimensions
             int totalParallelWork = B * _nHead;
@@ -1759,7 +1765,10 @@ namespace SmallMind.Transformers
             // v: (B, nHead, T, headSize)
             // output: (B, nHead, T, headSize)
             
-            var output = new Tensor(new int[] { B, _nHead, T, _headSize }, requiresGrad: true);
+            // Use pooled tensor for inference to reduce allocation pressure
+            var output = _isTraining
+                ? new Tensor(new int[] { B, _nHead, T, _headSize }, requiresGrad: true)
+                : Tensor.CreatePooled(new int[] { B, _nHead, T, _headSize }, requiresGrad: false);
             
             // Parallelize attention application over batch and head dimensions
             int totalParallelWork = B * _nHead;
@@ -1819,7 +1828,10 @@ namespace SmallMind.Transformers
         private Tensor ReshapeAttentionOutput(Tensor y, int B, int T)
         {
             // y: (B, nHead, T, headSize) -> (B, T, n_embd)
-            var output = new Tensor(new int[] { B, T, _nEmbd }, requiresGrad: true);
+            // Use pooled tensor for inference to reduce allocation pressure
+            var output = _isTraining
+                ? new Tensor(new int[] { B, T, _nEmbd }, requiresGrad: true)
+                : Tensor.CreatePooled(new int[] { B, T, _nEmbd }, requiresGrad: false);
             
             // Optimized version: process by head chunks with Array.Copy
             for (int b = 0; b < B; b++)

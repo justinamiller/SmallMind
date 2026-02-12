@@ -1,12 +1,13 @@
 using System;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Runtime.Telemetry
 {
     /// <summary>
-    /// Simple logging interface for runtime diagnostics.
-    /// No dependencies on external logging frameworks.
+    /// Simple logging interface for runtime diagnostics (internal adapter).
+    /// Bridges to the public IRuntimeLogger from SmallMind.Abstractions.
     /// </summary>
-    internal interface IRuntimeLogger
+    internal interface IInternalRuntimeLogger
     {
         void LogDebug(string message);
         void LogInfo(string message);
@@ -15,41 +16,51 @@ namespace SmallMind.Runtime.Telemetry
     }
 
     /// <summary>
-    /// Console-based runtime logger.
+    /// Adapter that bridges internal logging to public IRuntimeLogger.
     /// </summary>
-    internal sealed class ConsoleRuntimeLogger : IRuntimeLogger
+    internal sealed class RuntimeLoggerAdapter : IInternalRuntimeLogger
     {
+        private readonly IRuntimeLogger _publicLogger;
+
+        public RuntimeLoggerAdapter(IRuntimeLogger publicLogger)
+        {
+            _publicLogger = publicLogger ?? NullRuntimeLogger.Instance;
+        }
+
+        /// <summary>
+        /// Gets the underlying public logger.
+        /// </summary>
+        public IRuntimeLogger PublicLogger => _publicLogger;
+
         public void LogDebug(string message)
         {
-            Console.WriteLine($"[DEBUG] {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff} - {message}");
+            _publicLogger.Debug(message);
         }
 
         public void LogInfo(string message)
         {
-            Console.WriteLine($"[INFO] {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff} - {message}");
+            _publicLogger.Info(message);
         }
 
         public void LogWarning(string message)
         {
-            Console.WriteLine($"[WARN] {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff} - {message}");
+            _publicLogger.Warn(message);
         }
 
         public void LogError(string message, Exception? exception = null)
         {
-            Console.WriteLine($"[ERROR] {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff} - {message}");
-            if (exception != null)
-                Console.WriteLine($"Exception: {exception}");
+            _publicLogger.Error(message, exception);
         }
     }
 
     /// <summary>
     /// Null logger that does nothing (for production where logging is not desired).
     /// </summary>
-    internal sealed class NullRuntimeLogger : IRuntimeLogger
+    internal sealed class NullInternalRuntimeLogger : IInternalRuntimeLogger
     {
-        public static readonly NullRuntimeLogger Instance = new NullRuntimeLogger();
+        public static readonly NullInternalRuntimeLogger Instance = new NullInternalRuntimeLogger();
         
-        private NullRuntimeLogger() { }
+        private NullInternalRuntimeLogger() { }
 
         public void LogDebug(string message) { }
         public void LogInfo(string message) { }

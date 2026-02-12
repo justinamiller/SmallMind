@@ -4,8 +4,11 @@ using System.IO;
 using System.Linq;
 using SmallMind.Quantization.IO.Gguf;
 using SmallMind.Tokenizers;
+using SmallMind.Tokenizers.Gguf;
 using SmallMind.Transformers;
 using SmallMind.Quantization.Tensors;
+using SmallMind.Runtime.Telemetry;
+using SmallMind.Abstractions.Telemetry;
 using Tensor = SmallMind.Core.Core.Tensor;
 
 namespace SmallMind.Runtime
@@ -27,18 +30,22 @@ namespace SmallMind.Runtime
         /// <param name="ggufPath">Path to GGUF file</param>
         /// <param name="seed">Random seed for model initialization</param>
         /// <param name="useMmap">Whether to use memory-mapped file reading for faster loading</param>
+        /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Tuple of (model, tokenizer, config)</returns>
         public static (TransformerModel model, ITokenizer tokenizer, ModelConfig config) LoadFromGguf(
             string ggufPath, 
             int seed = 42,
-            bool useMmap = false)
+            bool useMmap = false,
+            IInternalRuntimeLogger? logger = null)
         {
+            logger ??= NullInternalRuntimeLogger.Instance;
+            
             if (string.IsNullOrEmpty(ggufPath))
                 throw new ArgumentNullException(nameof(ggufPath));
             if (!File.Exists(ggufPath))
                 throw new FileNotFoundException($"GGUF file not found: {ggufPath}");
 
-            Console.WriteLine($"Loading GGUF model from: {ggufPath}");
+            logger.LogInfo($"Loading GGUF model from: {ggufPath}");
 
             // Read GGUF model info
             GgufModelInfo modelInfo;
@@ -50,28 +57,51 @@ namespace SmallMind.Runtime
 
             // Extract ModelConfig from metadata
             var config = ModelConfig.FromGgufMetadata(modelInfo.Metadata);
-            Console.WriteLine($"Model architecture: {config.Architecture}");
-            Console.WriteLine($"Context length: {config.ContextLength}, Embedding: {config.EmbeddingLength}");
-            Console.WriteLine($"Layers: {config.BlockCount}, Heads: {config.HeadCount} (KV: {config.HeadCountKv})");
-            Console.WriteLine($"RoPE freq base: {config.RopeFreqBase}");
-            Console.WriteLine($"Vocab size: {config.VocabSize}");
+            logger.LogInfo($"Model architecture: {config.Architecture}");
+            logger.LogInfo($"Context length: {config.ContextLength}, Embedding: {config.EmbeddingLength}");
+            logger.LogInfo($"Layers: {config.BlockCount}, Heads: {config.HeadCount} (KV: {config.HeadCountKv})");
+            logger.LogInfo($"RoPE freq base: {config.RopeFreqBase}");
+            logger.LogInfo($"Vocab size: {config.VocabSize}");
 
-            // Extract tokenizer from metadata
-            var tokenizer = GgufTokenizerExtractor.ExtractTokenizer(modelInfo.Metadata);
+            // Extract tokenizer from metadata using new GgufTokenizerFactory
+            // Convert internal logger to public logger for tokenizer factory
+            IRuntimeLogger publicLogger = logger is RuntimeLoggerAdapter adapter
+                ? adapter.PublicLogger
+                : NullRuntimeLogger.Instance;
+            
+            var (tokenizer, diagnostics) = GgufTokenizerFactory.CreateTokenizer(
+                modelInfo.Metadata, 
+                publicLogger);
+            
             if (tokenizer == null)
             {
                 throw new NotSupportedException(
-                    "Failed to extract tokenizer from GGUF file. " +
-                    "Ensure the file contains tokenizer metadata (tokenizer.ggml.*).");
+                    "Failed to create tokenizer from GGUF file. " +
+                    "Ensure the file contains tokenizer metadata (tokenizer.ggml.*). " +
+                    $"Diagnostics: {string.Join(", ", diagnostics.Issues.Select(i => i.message))}");
             }
+            
+            // Log tokenizer diagnostics
+            if (diagnostics.HasIssues)
+            {
+                foreach (var (reason, message) in diagnostics.Issues)
+                {
+                    logger.LogWarning($"Tokenizer diagnostic [{reason}]: {message}");
+                }
+            }
+            
+            logger.LogInfo($"Created tokenizer: {diagnostics.TokenizerType ?? "Unknown"} " +
+                          $"(vocab size: {diagnostics.VocabSize}, " +
+                          $"has merges: {diagnostics.HasMerges}, " +
+                          $"merge count: {diagnostics.MergeCount})");
 
             // Build TransformerModel from config
             var model = new TransformerModel(config, seed);
 
             // Load weights from GGUF into model
-            Console.WriteLine($"Loading weights from GGUF{(useMmap ? " (using mmap)" : "")}...");
-            LoadWeights(ggufPath, model, modelInfo, config, useMmap);
-            Console.WriteLine("Model loaded successfully.");
+            logger.LogInfo($"Loading weights from GGUF{(useMmap ? " (using mmap)" : "")}...");
+            LoadWeights(ggufPath, model, modelInfo, config, useMmap, logger);
+            logger.LogInfo("Model loaded successfully.");
 
             return (model, tokenizer, config);
         }
@@ -80,7 +110,7 @@ namespace SmallMind.Runtime
         /// Load weights from GGUF file into TransformerModel.
         /// Reads tensors, dequantizes them, and injects into model parameters.
         /// </summary>
-        private static void LoadWeights(string ggufPath, TransformerModel model, GgufModelInfo modelInfo, ModelConfig config, bool useMmap)
+        private static void LoadWeights(string ggufPath, TransformerModel model, GgufModelInfo modelInfo, ModelConfig config, bool useMmap, IInternalRuntimeLogger logger)
         {
             // Get named parameters from model
             var namedParams = model.GetNamedParameters();
@@ -102,7 +132,7 @@ namespace SmallMind.Runtime
                 using (var mmapReader = new GgufMmapReader(ggufPath))
                 {
                     LoadWeightsWithReader(mmapReader, modelInfo, tensorMapping, namedParams, loadedParams, 
-                        ref mainLoopReads, ref qkvSkipped, ref qkvReads);
+                        ref mainLoopReads, ref qkvSkipped, ref qkvReads, logger);
                 }
             }
             else
@@ -114,17 +144,17 @@ namespace SmallMind.Runtime
                     reader.ReadModelInfo();
                     
                     LoadWeightsWithReader(reader, modelInfo, tensorMapping, namedParams, loadedParams,
-                        ref mainLoopReads, ref qkvSkipped, ref qkvReads);
+                        ref mainLoopReads, ref qkvSkipped, ref qkvReads, logger);
                 }
             }
 
             // Handle weight tying (copy token embeddings to output if missing)
-            HandleWeightTying(namedParams, loadedParams, config);
+            HandleWeightTying(namedParams, loadedParams, config, logger);
 
             // Report loading summary
-            Console.WriteLine($"Loaded {loadedParams.Count} / {namedParams.Count} parameters");
-            Console.WriteLine($"Tensor reads: {mainLoopReads} (main loop) + {qkvReads} (Q/K/V merge) = {mainLoopReads + qkvReads} total");
-            Console.WriteLine($"Q/K/V tensors skipped in main loop: {qkvSkipped}");
+            logger.LogInfo($"Loaded {loadedParams.Count} / {namedParams.Count} parameters");
+            logger.LogInfo($"Tensor reads: {mainLoopReads} (main loop) + {qkvReads} (Q/K/V merge) = {mainLoopReads + qkvReads} total");
+            logger.LogDebug($"Q/K/V tensors skipped in main loop: {qkvSkipped}");
 
             // Check for missing critical parameters
             var missingCritical = namedParams.Keys
@@ -134,14 +164,14 @@ namespace SmallMind.Runtime
 
             if (missingCritical.Count > 0)
             {
-                Console.WriteLine($"Warning: {missingCritical.Count} critical parameters not loaded:");
+                logger.LogWarning($"{missingCritical.Count} critical parameters not loaded:");
                 foreach (var p in missingCritical.Take(10))
                 {
-                    Console.WriteLine($"  - {p}");
+                    logger.LogWarning($"  - {p}");
                 }
                 if (missingCritical.Count > 10)
                 {
-                    Console.WriteLine($"  ... and {missingCritical.Count - 10} more");
+                    logger.LogWarning($"  ... and {missingCritical.Count - 10} more");
                 }
             }
         }
@@ -151,7 +181,7 @@ namespace SmallMind.Runtime
         /// </summary>
         private static void LoadWeightsWithReader(ITensorDataReader reader, GgufModelInfo modelInfo, 
             Dictionary<string, string> tensorMapping, Dictionary<string, Tensor> namedParams,
-            HashSet<string> loadedParams, ref int mainLoopReads, ref int qkvSkipped, ref int qkvReads)
+            HashSet<string> loadedParams, ref int mainLoopReads, ref int qkvSkipped, ref int qkvReads, IInternalRuntimeLogger logger)
         {
             foreach (var tensorInfo in modelInfo.Tensors)
             {
@@ -160,7 +190,7 @@ namespace SmallMind.Runtime
                 // Skip if this tensor isn't in our mapping
                 if (!tensorMapping.ContainsKey(ggufName))
                 {
-                    Console.WriteLine($"  Skipping unmapped tensor: {ggufName}");
+                    logger.LogDebug($"  Skipping unmapped tensor: {ggufName}");
                     continue;
                 }
 
@@ -187,17 +217,17 @@ namespace SmallMind.Runtime
                 // Get target parameter
                 if (!namedParams.TryGetValue(smName, out var targetParam))
                 {
-                    Console.WriteLine($"  Warning: No parameter found for {smName} (from {ggufName})");
+                    logger.LogWarning($"  No parameter found for {smName} (from {ggufName})");
                     continue;
                 }
 
                 // Copy weights with shape validation
-                CopyWeights(data, targetParam, ggufName, smName, tensorInfo.Dimensions);
+                CopyWeights(data, targetParam, ggufName, smName, tensorInfo.Dimensions, logger);
                 loadedParams.Add(smName);
             }
 
             // Handle QKV merging
-            qkvReads = MergeQKVWeights(reader, modelInfo, namedParams, tensorMapping, loadedParams);
+            qkvReads = MergeQKVWeights(reader, modelInfo, namedParams, tensorMapping, loadedParams, logger);
         }
 
         /// <summary>
@@ -883,7 +913,7 @@ namespace SmallMind.Runtime
         /// Handles transposition if needed based on Linear weight layout (outFeatures, inFeatures).
         /// </summary>
         private static void CopyWeights(float[] source, Tensor target, 
-            string ggufName, string smName, ulong[] ggufDims)
+            string ggufName, string smName, ulong[] ggufDims, IInternalRuntimeLogger logger)
         {
             // Validate total element count matches
             int sourceSize = source.Length;
@@ -902,7 +932,7 @@ namespace SmallMind.Runtime
                     // If dimensions are swapped, transpose
                     if (ggufRows == targetCols && ggufCols == targetRows)
                     {
-                        Console.WriteLine($"  {smName}: Transposing from ({ggufRows}, {ggufCols}) to ({targetRows}, {targetCols})");
+                        logger.LogDebug($"  {smName}: Transposing from ({ggufRows}, {ggufCols}) to ({targetRows}, {targetCols})");
                         TransposeAndCopy(source, target.Data, ggufRows, ggufCols);
                         return;
                     }
@@ -916,7 +946,7 @@ namespace SmallMind.Runtime
 
             // Direct copy
             Array.Copy(source, target.Data, sourceSize);
-            Console.WriteLine($"  {smName}: Loaded {sourceSize} elements from {ggufName}");
+            logger.LogDebug($"  {smName}: Loaded {sourceSize} elements from {ggufName}");
         }
 
         /// <summary>
@@ -939,7 +969,7 @@ namespace SmallMind.Runtime
         /// </summary>
         private static int MergeQKVWeights(ITensorDataReader reader, GgufModelInfo modelInfo, 
             Dictionary<string, Tensor> namedParams, 
-            Dictionary<string, string> tensorMapping, HashSet<string> loadedParams)
+            Dictionary<string, string> tensorMapping, HashSet<string> loadedParams, IInternalRuntimeLogger logger)
         {
             int qkvReadsCount = 0;
             
@@ -978,14 +1008,14 @@ namespace SmallMind.Runtime
             {
                 if (q == null || k == null || v == null)
                 {
-                    Console.WriteLine($"  Warning: Incomplete Q/K/V set for layer {layer}");
+                    logger.LogWarning($"  Incomplete Q/K/V set for layer {layer}");
                     continue;
                 }
 
                 string targetName = $"blk.{layer}.attn_qkv.weight";
                 if (!namedParams.TryGetValue(targetName, out var targetParam))
                 {
-                    Console.WriteLine($"  Warning: No target parameter for {targetName}");
+                    logger.LogWarning($"  No target parameter for {targetName}");
                     continue;
                 }
 
@@ -1015,7 +1045,7 @@ namespace SmallMind.Runtime
                 Array.Copy(kData, 0, targetParam.Data, qSize, kSize);
                 Array.Copy(vData, 0, targetParam.Data, qSize + kSize, vSize);
 
-                Console.WriteLine($"  blk.{layer}.attn_qkv.weight: Merged Q({qSize}) + K({kSize}) + V({vSize}) = {totalSize} elements");
+                logger.LogDebug($"  blk.{layer}.attn_qkv.weight: Merged Q({qSize}) + K({kSize}) + V({vSize}) = {totalSize} elements");
                 loadedParams.Add(targetName);
             }
             
@@ -1037,12 +1067,12 @@ namespace SmallMind.Runtime
         /// Handle weight tying: copy token embeddings to output head if missing.
         /// </summary>
         private static void HandleWeightTying(Dictionary<string, Tensor> namedParams, 
-            HashSet<string> loadedParams, ModelConfig config)
+            HashSet<string> loadedParams, ModelConfig config, IInternalRuntimeLogger logger)
         {
             // Check if output.weight is loaded
             if (!loadedParams.Contains("output.weight") && namedParams.ContainsKey("output.weight"))
             {
-                Console.WriteLine("  Applying weight tying: copying token_embd.weight to output.weight");
+                logger.LogInfo("  Applying weight tying: copying token_embd.weight to output.weight");
                 
                 var tokenEmbed = namedParams["token_embd.weight"];
                 var outputWeight = namedParams["output.weight"];
@@ -1107,12 +1137,16 @@ namespace SmallMind.Runtime
             using var reader = new GgufReader(stream);
             var modelInfo = reader.ReadModelInfo();
 
-            var tokenizer = GgufTokenizerExtractor.ExtractTokenizer(modelInfo.Metadata);
+            var (tokenizer, diagnostics) = GgufTokenizerFactory.CreateTokenizer(
+                modelInfo.Metadata, 
+                NullRuntimeLogger.Instance);
+                
             if (tokenizer == null)
             {
                 throw new NotSupportedException(
-                    "Failed to extract tokenizer from GGUF file. " +
-                    "Ensure the file contains tokenizer metadata.");
+                    "Failed to create tokenizer from GGUF file. " +
+                    "Ensure the file contains tokenizer metadata. " +
+                    $"Diagnostics: {string.Join(", ", diagnostics.Issues.Select(i => i.message))}");
             }
 
             return tokenizer;

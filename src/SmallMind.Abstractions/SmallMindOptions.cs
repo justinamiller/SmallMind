@@ -1,3 +1,5 @@
+using SmallMind.Abstractions.Telemetry;
+
 namespace SmallMind.Abstractions
 {
     /// <summary>
@@ -36,5 +38,52 @@ namespace SmallMind.Abstractions
         /// Default: true.
         /// </summary>
         public bool EnableRag { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets the request timeout. If null, no timeout is applied.
+        /// Default: null.
+        /// </summary>
+        public System.TimeSpan? RequestTimeout { get; set; }
+
+        /// <summary>
+        /// Gets or sets the maximum number of buffered tokens for streaming backpressure.
+        /// If null, no backpressure limit is applied.
+        /// Default: null.
+        /// </summary>
+        public int? MaxBufferedTokens { get; set; }
+
+        /// <summary>
+        /// Gets or sets the maximum queue depth for batched/multi-session scenarios.
+        /// If null, no queue depth limit is applied.
+        /// Default: null.
+        /// </summary>
+        public int? MaxQueueDepth { get; set; }
+
+        /// <summary>
+        /// Gets or sets the maximum tensor memory budget in bytes.
+        /// If null, no memory budget enforcement.
+        /// Default: null.
+        /// </summary>
+        public long? MaxTensorBytes { get; set; }
+
+        /// <summary>
+        /// Gets or sets the memory budget enforcement mode.
+        /// Default: None.
+        /// </summary>
+        public MemoryBudgetMode MemoryBudgetMode { get; set; } = MemoryBudgetMode.None;
+
+        /// <summary>
+        /// Gets or sets the runtime logger for diagnostics and debugging.
+        /// If null, uses NullRuntimeLogger.
+        /// Default: null.
+        /// </summary>
+        public IRuntimeLogger? Logger { get; set; }
+
+        /// <summary>
+        /// Gets or sets the runtime metrics collector for performance tracking.
+        /// If null, uses NullRuntimeMetrics.
+        /// Default: null.
+        /// </summary>
+        public IRuntimeMetrics? Metrics { get; set; }
     }
 }

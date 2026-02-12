@@ -30,6 +30,9 @@ namespace SmallMind.Runtime
         private readonly System.Random _random;
         private readonly int _blockSize;
         
+        // Thread-safety guard: Sessions are NOT thread-safe and must not be used concurrently
+        private int _inUse = 0; // 0 = not in use, 1 = in use
+        
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
         
@@ -124,6 +127,28 @@ namespace SmallMind.Runtime
         }
         
         /// <summary>
+        /// Acquires the session for use. Throws if already in use by another thread.
+        /// </summary>
+        private void AcquireSession()
+        {
+            if (Interlocked.CompareExchange(ref _inUse, 1, 0) != 0)
+            {
+                throw new InvalidOperationException(
+                    $"InferenceSession '{SessionId}' is already in use. " +
+                    "Sessions are not thread-safe and must not be accessed concurrently. " +
+                    "Create separate sessions for concurrent requests.");
+            }
+        }
+        
+        /// <summary>
+        /// Releases the session after use.
+        /// </summary>
+        private void ReleaseSession()
+        {
+            Interlocked.Exchange(ref _inUse, 0);
+        }
+        
+        /// <summary>
         /// Generate text from a prompt (non-streaming).
         /// </summary>
         /// <param name="prompt">Input text prompt</param>
@@ -135,11 +160,14 @@ namespace SmallMind.Runtime
             PerformanceMetrics? metrics = null,
             CancellationToken cancellationToken = default)
         {
-            ThrowIfDisposed();
-            
-            // Create timeout cancellation if configured
-            using var timeoutCts = _options.MaxTimeMs > 0 
-                ? new CancellationTokenSource(_options.MaxTimeMs) 
+            AcquireSession();
+            try
+            {
+                ThrowIfDisposed();
+                
+                // Create timeout cancellation if configured
+                using var timeoutCts = _options.MaxTimeMs > 0 
+                    ? new CancellationTokenSource(_options.MaxTimeMs) 
                 : null;
             
             using var linkedCts = timeoutCts != null
@@ -276,6 +304,11 @@ namespace SmallMind.Runtime
                     _currentPosition = 0;
                 }
             }
+            }
+            finally
+            {
+                ReleaseSession();
+            }
         }
         
         /// <summary>
@@ -290,20 +323,23 @@ namespace SmallMind.Runtime
             PerformanceMetrics? metrics = null,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            ThrowIfDisposed();
-            
-            // Create timeout cancellation if configured
-            using var timeoutCts = _options.MaxTimeMs > 0 
-                ? new CancellationTokenSource(_options.MaxTimeMs) 
-                : null;
-            
-            using var linkedCts = timeoutCts != null
-                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token)
-                : null;
-            
-            var effectiveToken = linkedCts?.Token ?? cancellationToken;
-            
+            AcquireSession();
             try
+            {
+                ThrowIfDisposed();
+                
+                // Create timeout cancellation if configured
+                using var timeoutCts = _options.MaxTimeMs > 0 
+                    ? new CancellationTokenSource(_options.MaxTimeMs) 
+                    : null;
+                
+                using var linkedCts = timeoutCts != null
+                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token)
+                    : null;
+                
+                var effectiveToken = linkedCts?.Token ?? cancellationToken;
+                
+                try
             {
                 // Encode and validate input
                 var context = _tokenizer.Encode(prompt);
@@ -437,6 +473,11 @@ namespace SmallMind.Runtime
                     _currentPosition = 0;
                 }
             }
+            }
+            finally
+            {
+                ReleaseSession();
+            }
         }
         
         private async Task<int> GenerateNextTokenAsync(List<int> context, CancellationToken cancellationToken)
@@ -474,13 +515,12 @@ namespace SmallMind.Runtime
                 int promptLength = contextCropped.Count;
                 
                 // Build tensor from full prompt: shape (1, promptLength)
-                // Use exact allocation for Tensor (validates data.Length == shape product)
-                var prefillData = new float[promptLength];
+                // Use pooled tensor to reduce allocation pressure
+                using var prefillTensor = Tensor.CreatePooled(new int[] { 1, promptLength }, requiresGrad: false);
                 for (int j = 0; j < promptLength; j++)
                 {
-                    prefillData[j] = contextCropped[j];
+                    prefillTensor.Data[j] = contextCropped[j];
                 }
-                var prefillTensor = new Tensor(prefillData, new int[] { 1, promptLength });
                 
                 // Forward pass with position offset 0 (start of sequence)
                 logits = _model.Forward(prefillTensor, positionOffset: 0);

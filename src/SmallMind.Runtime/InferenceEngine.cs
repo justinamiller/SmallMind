@@ -6,9 +6,11 @@ using System.Threading.Tasks;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 using SmallMind.Tokenizers;
+using SmallMind.Tokenizers.Gguf;
 using SmallMind.Transformers;
 using SmallMind.Runtime.Quantization;
 using SmallMind.Quantization.IO.Gguf;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Runtime
 {
@@ -117,11 +119,14 @@ namespace SmallMind.Runtime
             // Load the SMQ file
             var metadata = QuantizedModelLoader.LoadQuantizedModelMetadata(smqPath);
 
-            // Extract tokenizer from GGUF metadata
+            // Extract tokenizer from GGUF metadata using new GgufTokenizerFactory
             ITokenizer tokenizer;
             try
             {
-                var extractedTokenizer = GgufTokenizerExtractor.ExtractTokenizer(metadata.Metadata);
+                var (extractedTokenizer, diagnostics) = GgufTokenizerFactory.CreateTokenizer(
+                    metadata.Metadata, 
+                    NullRuntimeLogger.Instance);
+                    
                 if (extractedTokenizer != null)
                 {
                     tokenizer = extractedTokenizer;
