@@ -1,4 +1,5 @@
 using System;
+using SmallMind.Core.Utilities;
 using SmallMind.Core.Validation;
 
 namespace SmallMind.Core.Core
@@ -138,22 +139,22 @@ namespace SmallMind.Core.Core
             else if (parameterCount < SHARDING_THRESHOLD)
             {
                 return $"⚠ Model size ({FormatParameters(parameterCount)}): Recommend Q8 or Q4 quantization for memory efficiency.\n" +
-                       $"  Expected memory: FP32={FormatBytes(EstimateMemoryBytes(parameterCount, 4.0))}, " +
-                       $"Q8={FormatBytes(EstimateMemoryBytes(parameterCount, 1.0))}, " +
-                       $"Q4={FormatBytes(EstimateMemoryBytes(parameterCount, 0.5))}";
+                       $"  Expected memory: FP32={ByteSizeFormatter.FormatBytes(EstimateMemoryBytes(parameterCount, 4.0))}, " +
+                       $"Q8={ByteSizeFormatter.FormatBytes(EstimateMemoryBytes(parameterCount, 1.0))}, " +
+                       $"Q4={ByteSizeFormatter.FormatBytes(EstimateMemoryBytes(parameterCount, 0.5))}";
             }
             else if (parameterCount < MAX_SAFE_PARAMS_FP32)
             {
                 return $"⚠ Large model ({FormatParameters(parameterCount)}): REQUIRES quantization (Q8/Q4) to avoid memory overflow.\n" +
-                       $"  Expected memory: Q8={FormatBytes(EstimateMemoryBytes(parameterCount, 1.0))}, " +
-                       $"Q4={FormatBytes(EstimateMemoryBytes(parameterCount, 0.5))}\n" +
-                       $"  Note: FP32 ({FormatBytes(EstimateMemoryBytes(parameterCount, 4.0))}) may exceed available RAM.";
+                       $"  Expected memory: Q8={ByteSizeFormatter.FormatBytes(EstimateMemoryBytes(parameterCount, 1.0))}, " +
+                       $"Q4={ByteSizeFormatter.FormatBytes(EstimateMemoryBytes(parameterCount, 0.5))}\n" +
+                       $"  Note: FP32 ({ByteSizeFormatter.FormatBytes(EstimateMemoryBytes(parameterCount, 4.0))}) may exceed available RAM.";
             }
             else
             {
                 return $"❌ Very large model ({FormatParameters(parameterCount)}): Exceeds safe single-tensor limits.\n" +
                        $"  Required: Model sharding + Q4 quantization.\n" +
-                       $"  Expected memory with Q4: {FormatBytes(EstimateMemoryBytes(parameterCount, 0.5))}\n" +
+                       $"  Expected memory with Q4: {ByteSizeFormatter.FormatBytes(EstimateMemoryBytes(parameterCount, 0.5))}\n" +
                        $"  Consider using specialized frameworks (LLaMA.cpp, vLLM) for models > 2B parameters.";
             }
         }
@@ -199,7 +200,7 @@ namespace SmallMind.Core.Core
                 if (requiredMemory > availableMemoryBytes)
                 {
                     throw new Exceptions.ValidationException(
-                        $"Model requires {FormatBytes(requiredMemory)} but only {FormatBytes(availableMemoryBytes)} available. " +
+                        $"Model requires {ByteSizeFormatter.FormatBytes(requiredMemory)} but only {ByteSizeFormatter.FormatBytes(availableMemoryBytes)} available. " +
                         $"Consider using stronger quantization or reducing model size.",
                         nameof(availableMemoryBytes));
                 }
@@ -221,21 +222,6 @@ namespace SmallMind.Core.Core
                 return count.ToString();
         }
 
-        /// <summary>
-        /// Format bytes in human-readable form.
-        /// </summary>
-        public static string FormatBytes(long bytes)
-        {
-            if (bytes >= 1_099_511_627_776L) // 1 TB
-                return $"{bytes / 1_099_511_627_776.0:F2} TB";
-            else if (bytes >= 1_073_741_824L) // 1 GB
-                return $"{bytes / 1_073_741_824.0:F2} GB";
-            else if (bytes >= 1_048_576L) // 1 MB
-                return $"{bytes / 1_048_576.0:F2} MB";
-            else if (bytes >= 1024L) // 1 KB
-                return $"{bytes / 1024.0:F2} KB";
-            else
-                return $"{bytes} B";
-        }
+
     }
 }

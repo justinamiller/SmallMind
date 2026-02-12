@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using SmallMind.Core;
+using SmallMind.Core.Utilities;
 using SmallMind.Transformers;
 using SmallMind.Quantization.Tensors;
 using SmallMind.Quantization.IO.Smq;
@@ -150,8 +151,8 @@ namespace SmallMind.ConsoleApp.Commands
                 long quantizedSize = new FileInfo(outputPath).Length;
                 double compressionRatio = (double)originalSize / quantizedSize;
 
-                System.Console.WriteLine($"  Original size: {FormatBytes(originalSize)}");
-                System.Console.WriteLine($"  Quantized size: {FormatBytes(quantizedSize)}");
+                System.Console.WriteLine($"  Original size: {ByteSizeFormatter.FormatBytes(originalSize)}");
+                System.Console.WriteLine($"  Quantized size: {ByteSizeFormatter.FormatBytes(quantizedSize)}");
                 System.Console.WriteLine($"  Compression: {compressionRatio:F2}x");
 
                 return 0;
@@ -189,19 +190,6 @@ namespace SmallMind.ConsoleApp.Commands
                     return args[i + 1];
             }
             return defaultValue;
-        }
-
-        private static string FormatBytes(long bytes)
-        {
-            string[] sizes = { "B", "KB", "MB", "GB" };
-            double len = bytes;
-            int order = 0;
-            while (len >= 1024 && order < sizes.Length - 1)
-            {
-                order++;
-                len /= 1024;
-            }
-            return $"{len:F2} {sizes[order]}";
         }
     }
 }

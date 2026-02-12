@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
+using SmallMind.Core.Utilities;
 
 namespace SmallMind.ConsoleApp.Commands
 {
@@ -85,7 +86,7 @@ namespace SmallMind.ConsoleApp.Commands
                 System.Console.WriteLine($"  Saved to: {outputPath}");
                 
                 long fileSize = new FileInfo(outputPath).Length;
-                System.Console.WriteLine($"  Size: {FormatBytes(fileSize)}");
+                System.Console.WriteLine($"  Size: {ByteSizeFormatter.FormatBytes(fileSize)}");
                 System.Console.WriteLine();
                 System.Console.WriteLine("Next steps:");
                 System.Console.WriteLine($"  1. Import to SMQ format:");
@@ -156,7 +157,7 @@ namespace SmallMind.ConsoleApp.Commands
                         var elapsed = DateTime.UtcNow - startTime;
                         double mbPerSec = totalRead / 1024.0 / 1024.0 / Math.Max(1, elapsed.TotalSeconds);
                         
-                        System.Console.Write($"\r  Progress: {percent}% ({FormatBytes(totalRead)} / {FormatBytes(totalBytes.Value)}) - {mbPerSec:F2} MB/s");
+                        System.Console.Write($"\r  Progress: {percent}% ({ByteSizeFormatter.FormatBytes(totalRead)} / {ByteSizeFormatter.FormatBytes(totalBytes.Value)}) - {mbPerSec:F2} MB/s");
                         lastPercent = percent;
                     }
                 }
@@ -165,7 +166,7 @@ namespace SmallMind.ConsoleApp.Commands
                     // No total size, just show bytes downloaded
                     if (totalRead % (1024 * 1024 * 10) == 0) // Every 10 MB
                     {
-                        System.Console.Write($"\r  Downloaded: {FormatBytes(totalRead)}");
+                        System.Console.Write($"\r  Downloaded: {ByteSizeFormatter.FormatBytes(totalRead)}");
                     }
                 }
             }
@@ -201,19 +202,6 @@ namespace SmallMind.ConsoleApp.Commands
             System.Console.WriteLine("  - TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF");
             System.Console.WriteLine("  - TheBloke/Mistral-7B-Instruct-v0.2-GGUF");
             System.Console.WriteLine("  - microsoft/phi-2-GGUF");
-        }
-
-        private static string FormatBytes(long bytes)
-        {
-            string[] sizes = { "B", "KB", "MB", "GB" };
-            double len = bytes;
-            int order = 0;
-            while (len >= 1024 && order < sizes.Length - 1)
-            {
-                order++;
-                len /= 1024;
-            }
-            return $"{len:F2} {sizes[order]}";
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using SmallMind.Core.Utilities;
 using SmallMind.Quantization.IO.Smq;
 
 namespace SmallMind.ConsoleApp.Commands
@@ -45,7 +46,7 @@ namespace SmallMind.ConsoleApp.Commands
                 // File info
                 var fileInfo = new FileInfo(smqPath);
                 System.Console.WriteLine("File Information:");
-                System.Console.WriteLine($"  Size: {FormatBytes(fileInfo.Length)}");
+                System.Console.WriteLine($"  Size: {ByteSizeFormatter.FormatBytes(fileInfo.Length)}");
                 System.Console.WriteLine($"  Created: {fileInfo.CreationTime}");
                 System.Console.WriteLine();
 
@@ -82,13 +83,13 @@ namespace SmallMind.ConsoleApp.Commands
                         {
                             type = "Q8_0";
                             shape = $"{q8.Rows}×{q8.Cols}";
-                            size = FormatBytes(q8.Data.Length + q8.Scales.Length * 4);
+                            size = ByteSizeFormatter.FormatBytes(q8.Data.Length + q8.Scales.Length * 4);
                         }
                         else if (tensor is SmallMind.Quantization.Tensors.Q4Tensor q4)
                         {
                             type = "Q4_0";
                             shape = $"{q4.Rows}×{q4.Cols}";
-                            size = FormatBytes(q4.Data.Length + q4.Scales.Length * 4);
+                            size = ByteSizeFormatter.FormatBytes(q4.Data.Length + q4.Scales.Length * 4);
                         }
                         else
                         {
@@ -145,19 +146,6 @@ namespace SmallMind.ConsoleApp.Commands
             System.Console.WriteLine("  smallmind inspect model.smq");
             System.Console.WriteLine("  smallmind inspect model.smq --tensors");
             System.Console.WriteLine("  smallmind inspect model.smq -v -t");
-        }
-
-        private static string FormatBytes(long bytes)
-        {
-            string[] sizes = { "B", "KB", "MB", "GB" };
-            double len = bytes;
-            int order = 0;
-            while (len >= 1024 && order < sizes.Length - 1)
-            {
-                order++;
-                len /= 1024;
-            }
-            return $"{len:F2} {sizes[order]}";
         }
     }
 }

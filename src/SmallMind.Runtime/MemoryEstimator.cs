@@ -1,4 +1,5 @@
 using System;
+using SmallMind.Core.Utilities;
 
 namespace SmallMind.Runtime
 {
@@ -135,24 +136,5 @@ namespace SmallMind.Runtime
             return cachePerLayer * nLayer;
         }
         
-        /// <summary>
-        /// Format bytes as human-readable string.
-        /// </summary>
-        public static string FormatBytes(long bytes)
-        {
-            if (bytes < 1024)
-                return $"{bytes} B";
-            
-            double kb = bytes / 1024.0;
-            if (kb < 1024)
-                return $"{kb:F2} KB";
-            
-            double mb = kb / 1024.0;
-            if (mb < 1024)
-                return $"{mb:F2} MB";
-            
-            double gb = mb / 1024.0;
-            return $"{gb:F2} GB";
-        }
     }
 }

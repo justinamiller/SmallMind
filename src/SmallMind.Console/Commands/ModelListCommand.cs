@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using SmallMind.Core.Utilities;
 using SmallMind.ModelRegistry;
 
 namespace SmallMind.ConsoleApp.Commands
@@ -50,7 +51,7 @@ namespace SmallMind.ConsoleApp.Commands
                         totalSize += file.SizeBytes;
                     }
 
-                    string sizeStr = FormatBytes(totalSize);
+                    string sizeStr = ByteSizeFormatter.FormatBytes(totalSize);
                     string createdStr = ParseAndFormatDate(model.CreatedUtc);
 
                     Console.WriteLine($"{Truncate(model.ModelId, 30),-30} {Truncate(model.DisplayName, 30),-30} {model.Format,-10} {sizeStr,-15} {createdStr}");
@@ -93,21 +94,6 @@ namespace SmallMind.ConsoleApp.Commands
                 }
             }
             return null;
-        }
-
-        private string FormatBytes(long bytes)
-        {
-            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-            int suffixIndex = 0;
-            double size = bytes;
-
-            while (size >= 1024 && suffixIndex < suffixes.Length - 1)
-            {
-                size /= 1024;
-                suffixIndex++;
-            }
-
-            return $"{size:F2} {suffixes[suffixIndex]}";
         }
 
         private string ParseAndFormatDate(string dateStr)
