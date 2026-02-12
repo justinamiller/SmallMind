@@ -193,9 +193,12 @@ namespace SmallMind.Core.Core
                 }
 
                 // TTFT statistics (Time To First Token) - in milliseconds
+                // Use pre-allocated array instead of List and indexed for-loop for better performance
                 var ttftValues = new List<double>(completedRequests.Count);
-                foreach (var req in completedRequests)
+                int requestCount = completedRequests.Count;
+                for (int i = 0; i < requestCount; i++)
                 {
+                    var req = completedRequests[i];
                     if (req.FirstTokenTime.HasValue)
                     {
                         double ttft = (req.FirstTokenTime.Value - req.StartTime).TotalMilliseconds;
@@ -208,9 +211,11 @@ namespace SmallMind.Core.Core
                 }
 
                 // End-to-end latency statistics - in milliseconds
+                // Use indexed for-loop instead of foreach for better performance
                 var e2eValues = new List<double>(completedRequests.Count);
-                foreach (var req in completedRequests)
+                for (int i = 0; i < requestCount; i++)
                 {
+                    var req = completedRequests[i];
                     if (req.EndTime.HasValue)
                     {
                         double latency = (req.EndTime.Value - req.StartTime).TotalMilliseconds;
@@ -222,7 +227,7 @@ namespace SmallMind.Core.Core
                     summary.E2eLatencyStats = PercentileCalculator.CalculateStats(e2eValues);
                 }
 
-                // Tokens per request statistics - manual conversion
+                // Tokens per request statistics - already using indexed for-loop (good)
                 var tokensPerReq = new List<double>(completedRequests.Count);
                 for (int i = 0; i < completedRequests.Count; i++)
                 {
