@@ -185,17 +185,21 @@ namespace SmallMind.Tokenizers.Text
                     }
                 }
 
-                // Apply BPE merges
-                while (tokens.Count > 1)
+                // Apply BPE merges - O(N) forward-scan algorithm (no RemoveAt)
+                // We alternate between tokens and tempTokens to avoid allocations
+                List<string> currentTokens = tokens;
+                List<string> tempTokens = new List<string>(tokens.Count);
+                
+                while (currentTokens.Count > 1)
                 {
                     // Find the pair with the lowest merge rank
                     (string, string)? bestPair = null;
                     int bestRank = int.MaxValue;
                     int bestIndex = -1;
 
-                    for (int i = 0; i < tokens.Count - 1; i++)
+                    for (int i = 0; i < currentTokens.Count - 1; i++)
                     {
-                        var pair = (tokens[i], tokens[i + 1]);
+                        var pair = (currentTokens[i], currentTokens[i + 1]);
                         if (_mergeRanks.TryGetValue(pair, out int rank) && rank < bestRank)
                         {
                             bestPair = pair;
@@ -207,14 +211,29 @@ namespace SmallMind.Tokenizers.Text
                     if (bestPair == null)
                         break;
 
-                    // Merge the pair
+                    // Apply the merge using forward scan (O(N) instead of O(N²))
+                    tempTokens.Clear();
                     string merged = bestPair.Value.Item1 + bestPair.Value.Item2;
-                    tokens[bestIndex] = merged;
-                    tokens.RemoveAt(bestIndex + 1);
+                    
+                    for (int i = 0; i < currentTokens.Count; i++)
+                    {
+                        if (i == bestIndex)
+                        {
+                            tempTokens.Add(merged);
+                            i++; // Skip next token (it's part of the merge)
+                        }
+                        else
+                        {
+                            tempTokens.Add(currentTokens[i]);
+                        }
+                    }
+                    
+                    // Swap buffers for next iteration
+                    (currentTokens, tempTokens) = (tempTokens, currentTokens);
                 }
 
-                // Convert tokens to IDs
-                foreach (var token in tokens)
+                // Convert tokens to IDs (use currentTokens as it has final result)
+                foreach (var token in currentTokens)
                 {
                     if (_vocab.TryGetValue(token, out int id))
                     {

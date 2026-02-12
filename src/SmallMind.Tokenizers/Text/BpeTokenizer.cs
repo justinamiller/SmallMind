@@ -30,6 +30,7 @@ namespace SmallMind.Tokenizers
         
         // Reusable buffers to reduce allocations during encoding
         private List<string>? _tokensBuffer;
+        private List<string>? _mergeOutputBuffer;
         
         // Cache for single-character strings (ASCII range)
         private static readonly string[] _charStringCache = new string[128];
@@ -226,6 +227,7 @@ namespace SmallMind.Tokenizers
                 if (_tokensBuffer == null)
                 {
                     _tokensBuffer = new List<string>(word.Length);
+                    _mergeOutputBuffer = new List<string>(word.Length);
                 }
                 else
                 {
@@ -233,6 +235,15 @@ namespace SmallMind.Tokenizers
                     if (_tokensBuffer.Capacity < word.Length)
                     {
                         _tokensBuffer.Capacity = word.Length;
+                    }
+                    
+                    if (_mergeOutputBuffer == null)
+                    {
+                        _mergeOutputBuffer = new List<string>(word.Length);
+                    }
+                    else if (_mergeOutputBuffer.Capacity < word.Length)
+                    {
+                        _mergeOutputBuffer.Capacity = word.Length;
                     }
                 }
                 
@@ -251,17 +262,21 @@ namespace SmallMind.Tokenizers
                     _tokensBuffer.Add(charStr);
                 }
 
-                // Apply BPE merges
-                while (_tokensBuffer.Count > 1)
+                // Apply BPE merges - O(N) forward-scan algorithm (no RemoveAt)
+                // We alternate between _tokensBuffer and _mergeOutputBuffer to avoid allocations
+                List<string> currentTokens = _tokensBuffer;
+                List<string> nextTokens = _mergeOutputBuffer;
+                
+                while (currentTokens.Count > 1)
                 {
                     // Find the pair with the lowest merge rank
                     (string, string)? bestPair = null;
                     int bestRank = int.MaxValue;
                     int bestIndex = -1;
 
-                    for (int i = 0; i < _tokensBuffer.Count - 1; i++)
+                    for (int i = 0; i < currentTokens.Count - 1; i++)
                     {
-                        var pair = (_tokensBuffer[i], _tokensBuffer[i + 1]);
+                        var pair = (currentTokens[i], currentTokens[i + 1]);
                         if (_mergeRanks.TryGetValue(pair, out int rank) && rank < bestRank)
                         {
                             bestPair = pair;
@@ -276,10 +291,32 @@ namespace SmallMind.Tokenizers
                         break;
                     }
 
-                    // Apply the merge - use string concatenation (these are already interned in vocab)
+                    // Apply the merge using forward scan (O(N) instead of O(N²))
+                    nextTokens.Clear();
                     string merged = bestPair.Value.Item1 + bestPair.Value.Item2;
-                    _tokensBuffer[bestIndex] = merged;
-                    _tokensBuffer.RemoveAt(bestIndex + 1);
+                    
+                    for (int i = 0; i < currentTokens.Count; i++)
+                    {
+                        if (i == bestIndex)
+                        {
+                            nextTokens.Add(merged);
+                            i++; // Skip next token (it's part of the merge)
+                        }
+                        else
+                        {
+                            nextTokens.Add(currentTokens[i]);
+                        }
+                    }
+                    
+                    // Swap buffers for next iteration
+                    (currentTokens, nextTokens) = (nextTokens, currentTokens);
+                }
+                
+                // Ensure final result is in _tokensBuffer for conversion below
+                if (currentTokens != _tokensBuffer)
+                {
+                    _tokensBuffer.Clear();
+                    _tokensBuffer.AddRange(currentTokens);
                 }
 
                 // Convert tokens to IDs
