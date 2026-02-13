@@ -6,7 +6,7 @@ namespace SmallMind.Core.Utilities
     /// <summary>
     /// Chat template types for different model architectures.
     /// </summary>
-    public enum ChatTemplateType
+    internal enum ChatTemplateType
     {
         /// <summary>No template formatting.</summary>
         None,
