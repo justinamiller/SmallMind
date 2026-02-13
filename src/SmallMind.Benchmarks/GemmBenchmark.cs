@@ -129,7 +129,7 @@ namespace SmallMind.Benchmarks
             try
             {
                 // Pack B outside the timed region (amortized cost)
-                var packedB = PackedMatMul.CreatePackedMatrix(B.AsSpan(0, K * N), K, N);
+                var packedB = PackedMatMul.Pack(B.AsSpan(0, K * N), K, N);
                 
                 packedGflops = BenchmarkKernel("PackedMM", M, K, N, () =>
                 {

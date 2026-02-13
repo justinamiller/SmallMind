@@ -133,7 +133,7 @@ namespace SmallMind.Quantization.Tests
             MatMulReference(a, b, expected, m, k, n);
 
             // Act: packed matmul
-            var bPacked = PackedMatMul.CreatePackedMatrix(b, k, n);
+            var bPacked = PackedMatMul.Pack(b, k, n);
             var actual = new float[m * n];
             PackedMatMul.Multiply(a, bPacked, actual, m, k, n);
             bPacked.Dispose();
@@ -162,7 +162,7 @@ namespace SmallMind.Quantization.Tests
             MatMulReference(a, b, expected, m, k, n);
 
             // Act
-            var bPacked = PackedMatMul.CreatePackedMatrix(b, k, n);
+            var bPacked = PackedMatMul.Pack(b, k, n);
             var actual = new float[m * n];
             PackedMatMul.Multiply(a, bPacked, actual, m, k, n);
             bPacked.Dispose();
@@ -188,7 +188,7 @@ namespace SmallMind.Quantization.Tests
             MatMulReference(a, b, expected, m, k, n);
 
             // Act
-            var bPacked = PackedMatMul.CreatePackedMatrix(b, k, n);
+            var bPacked = PackedMatMul.Pack(b, k, n);
             var actual = new float[m * n];
             PackedMatMul.Multiply(a, bPacked, actual, m, k, n);
             bPacked.Dispose();
@@ -204,7 +204,7 @@ namespace SmallMind.Quantization.Tests
             var random = new Random(42);
             int k = 128, n = 64;
             var b = GenerateRandomFloats(random, k * n, -1f, 1f);
-            var bPacked = PackedMatMul.CreatePackedMatrix(b, k, n);
+            var bPacked = PackedMatMul.Pack(b, k, n);
 
             try
             {
