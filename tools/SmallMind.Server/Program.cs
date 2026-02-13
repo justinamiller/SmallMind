@@ -16,6 +16,7 @@ builder.Services.AddSingleton(serverOptions);
 builder.Services.AddSingleton<RequestQueue>(sp => 
     new RequestQueue(serverOptions.MaxConcurrentRequests, serverOptions.MaxQueueDepth));
 builder.Services.AddSingleton<ServerMetrics>();
+builder.Services.AddSingleton<RequestValidator>();
 builder.Services.AddSingleton<ISmallMindEngine>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
@@ -120,6 +121,7 @@ app.MapPost("/v1/chat/completions", async (
     ISmallMindEngine engine,
     RequestQueue queue,
     ServerMetrics metrics,
+    RequestValidator validator,
     ServerOptions opts,
     HttpContext httpContext,
     CancellationToken cancellationToken) =>
@@ -130,6 +132,31 @@ app.MapPost("/v1/chat/completions", async (
     
     try
     {
+        // Build prompt first to estimate tokens
+        var prompt = PromptBuilder.BuildPrompt(request.Messages);
+        int estimatedPromptTokens = validator.EstimatePromptTokens(prompt);
+        
+        // Validate request limits
+        var validationResult = validator.ValidateRequest(
+            request.MaxTokens,
+            estimatedPromptTokens,
+            request.Temperature,
+            request.TopP);
+        
+        if (!validationResult.IsValid)
+        {
+            return Results.Json(new ErrorResponse
+            {
+                Error = new ErrorDetail
+                {
+                    Message = validationResult.ErrorMessage!,
+                    Type = validationResult.ErrorType!,
+                    Code = validationResult.ErrorType!,
+                    Param = validationResult.ErrorParam
+                }
+            }, statusCode: 400);
+        }
+        
         using var slot = await queue.EnqueueAsync(clientId: null, timeout: null, cancellationToken);
         
         if (!slot.Success)
@@ -138,14 +165,13 @@ app.MapPost("/v1/chat/completions", async (
             {
                 Error = new ErrorDetail
                 {
-                    Message = "Queue full - too many concurrent requests",
+                    Message = slot.FailureReason ?? "Queue full - too many concurrent requests",
                     Type = "server_error",
                     Code = "queue_full"
                 }
             }, statusCode: 429);
         }
         
-        var prompt = PromptBuilder.BuildPrompt(request.Messages);
         var stopSequences = request.GetStopSequences();
         
         var genOptions = new TextGenerationOptions
@@ -153,7 +179,9 @@ app.MapPost("/v1/chat/completions", async (
             Temperature = request.Temperature ?? opts.DefaultTemperature,
             TopP = request.TopP ?? opts.DefaultTopP,
             TopK = opts.DefaultTopK,
-            MaxOutputTokens = request.MaxTokens ?? opts.DefaultMaxTokens,
+            MaxOutputTokens = Math.Min(
+                request.MaxTokens ?? opts.DefaultMaxTokens,
+                opts.MaxCompletionTokens),
             StopSequences = stopSequences.Length > 0 ? stopSequences : Array.Empty<string>()
         };
         
@@ -165,14 +193,20 @@ app.MapPost("/v1/chat/completions", async (
             Seed = request.Seed.HasValue ? (int)request.Seed.Value : null
         };
         
+        // Create timeout for entire request
+        using var requestTimeoutCts = new CancellationTokenSource(opts.RequestTimeoutMs);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, 
+            requestTimeoutCts.Token);
+        
         if (request.Stream)
         {
             return await StreamChatCompletionAsync(session, genRequest, GetModelName(opts), 
-                metrics, sw, cancellationToken);
+                metrics, sw, linkedCts.Token);
         }
         else
         {
-            var result = await Task.Run(() => session.Generate(genRequest, cancellationToken), cancellationToken);
+            var result = await Task.Run(() => session.Generate(genRequest, linkedCts.Token), linkedCts.Token);
             
             var response = new ChatCompletionResponse
             {
@@ -203,6 +237,34 @@ app.MapPost("/v1/chat/completions", async (
             metrics.RecordRequest("chat.completions", sw.Elapsed.TotalMilliseconds, result.Usage.CompletionTokens, true);
             return Results.Ok(response);
         }
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+        metrics.RecordRequest("chat.completions", sw.Elapsed.TotalMilliseconds, 0, false);
+        
+        return Results.Json(new ErrorResponse
+        {
+            Error = new ErrorDetail
+            {
+                Message = "Request cancelled by client",
+                Type = "request_cancelled",
+                Code = "cancelled"
+            }
+        }, statusCode: 499); // Client Closed Request
+    }
+    catch (OperationCanceledException)
+    {
+        metrics.RecordRequest("chat.completions", sw.Elapsed.TotalMilliseconds, 0, false);
+        
+        return Results.Json(new ErrorResponse
+        {
+            Error = new ErrorDetail
+            {
+                Message = "Request timeout exceeded",
+                Type = "timeout",
+                Code = "timeout"
+            }
+        }, statusCode: 504); // Gateway Timeout
     }
     catch (Exception ex)
     {

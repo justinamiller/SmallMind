@@ -1157,5 +1157,35 @@ namespace SmallMind.Runtime
 
             return tokenizer;
         }
+
+        /// <summary>
+        /// Generates a compatibility report for a GGUF model without loading it.
+        /// Use this to check if a model is supported before attempting to load.
+        /// </summary>
+        /// <param name="ggufPath">Path to GGUF file</param>
+        /// <returns>Compatibility report with detailed diagnostics</returns>
+        public static Gguf.GgufCompatibilityReport GetCompatibilityReport(string ggufPath)
+        {
+            if (string.IsNullOrEmpty(ggufPath))
+                throw new ArgumentNullException(nameof(ggufPath));
+            if (!File.Exists(ggufPath))
+                throw new FileNotFoundException($"GGUF file not found: {ggufPath}");
+
+            // Read GGUF model info
+            GgufModelInfo modelInfo;
+            using (var stream = File.OpenRead(ggufPath))
+            using (var reader = new GgufReader(stream))
+            {
+                modelInfo = reader.ReadModelInfo();
+            }
+
+            // Create decoder registry to check support
+            var registry = new Gguf.TensorDecoders.TensorDecoderRegistry();
+
+            // Generate report
+            return Gguf.GgufCompatibilityReport.FromModelInfo(
+                modelInfo,
+                type => registry.IsSupported(type));
+        }
     }
 }
