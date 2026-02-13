@@ -5,7 +5,7 @@ namespace SmallMind.Core.Utilities
     /// <summary>
     /// Provides formatting utilities for converting byte sizes to human-readable strings.
     /// </summary>
-    public static class ByteSizeFormatter
+    internal static class ByteSizeFormatter
     {
         /// <summary>
         /// Formats a byte count into a human-readable string with appropriate unit suffix.

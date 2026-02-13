@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-02-12 - Pre-Production Release
+
+### Changed
+- **Repository Organization**: Complete restructuring for production readiness
+  - Moved all documentation files to `docs/` folder
+  - Consolidated all example projects into `examples/` folder (merged `samples/` and `benchmarks/`)
+  - Moved build and utility scripts to `scripts/` folder
+  - Root directory now contains only: README.md, LICENSE, CHANGELOG.md, and essential build files
+  - Solution file properly organized with src, tests, tools, and examples folders
+
+### Removed
+- **DELETE_ME folder**: Removed obsolete build artifacts and old examples
+- **Duplicate solution file**: Removed SmallMind.slnx, keeping only SmallMind.sln
+
+### Fixed
+- **ByteSizeFormatter visibility**: Changed from public to internal (implementation detail)
+- **Solution organization**: Added missing tests and tools folder hierarchies
+- **API boundary tests**: All tests passing with proper public API surface
+
+### Documentation
+- **README.md**: Complete rewrite with professional technical writing style
+  - Clear quickstart section with installation and basic usage
+  - Architecture overview with component diagram
+  - Comprehensive supported models section with size limits and quantization table
+  - Simplified structure focused on getting users productive quickly
+- **Old README**: Preserved as `docs/README.old.md` for reference
+
+## [Unreleased - Level 3.0 Enhancements]
+
 ### Added - Level 3.0 Enhancements
 
 #### GGUF Loading Improvements
