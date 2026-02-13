@@ -33,6 +33,15 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       
+      - name: Download Previous Results
+        uses: dawidd6/action-download-artifact@v3
+        continue-on-error: true
+        with:
+          workflow: bench-ci.yml
+          name: benchmark-results-${{ matrix.name }}
+          path: bench/results/
+          if_no_artifact_found: warn
+      
       - name: Restore dependencies
         run: dotnet restore
       
@@ -60,9 +69,20 @@ jobs:
         if: always() && (runner.os == 'Linux' || runner.os == 'macOS')
         shell: bash
         run: |
-          echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo "### Benchmark Results - ${{ matrix.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if ls bench/results/*_comparison.md 1> /dev/null 2>&1; then
+            echo "#### Comparison with Previous Run" >> $GITHUB_STEP_SUMMARY
+            cat bench/results/*_comparison.md >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
           if ls bench/results/*.md 1> /dev/null 2>&1; then
-            cat bench/results/*.md >> $GITHUB_STEP_SUMMARY
+            echo "#### Latest Results" >> $GITHUB_STEP_SUMMARY
+            for f in bench/results/*.md; do
+              if [[ "$f" != *"_comparison.md"* ]] && [[ "$f" != *"_cross_architecture.md"* ]]; then
+                cat "$f" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
           else
             echo "No results generated" >> $GITHUB_STEP_SUMMARY
           fi
@@ -71,9 +91,77 @@ jobs:
         if: always() && runner.os == 'Windows'
         shell: pwsh
         run: |
-          Write-Output "### Benchmark Results" >> $env:GITHUB_STEP_SUMMARY
+          Write-Output "### Benchmark Results - ${{ matrix.name }}" >> $env:GITHUB_STEP_SUMMARY
+          Write-Output "" >> $env:GITHUB_STEP_SUMMARY
+          if (Test-Path "bench/results/*_comparison.md") {
+            Write-Output "#### Comparison with Previous Run" >> $env:GITHUB_STEP_SUMMARY
+            Get-Content bench/results/*_comparison.md >> $env:GITHUB_STEP_SUMMARY
+            Write-Output "" >> $env:GITHUB_STEP_SUMMARY
+          }
           if (Test-Path "bench/results/*.md") {
-            Get-Content bench/results/*.md >> $env:GITHUB_STEP_SUMMARY
+            Write-Output "#### Latest Results" >> $env:GITHUB_STEP_SUMMARY
+            Get-ChildItem bench/results/*.md | Where-Object { 
+              $_.Name -notlike "*_comparison.md" -and $_.Name -notlike "*_cross_architecture.md"
+            } | ForEach-Object {
+              Get-Content $_.FullName >> $env:GITHUB_STEP_SUMMARY
+            }
           } else {
             Write-Output "No results generated" >> $env:GITHUB_STEP_SUMMARY
           }
+
+  consolidate:
+    name: Consolidate Multi-Architecture Results
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: always()
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      
+      - name: Download All Results
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-results/
+      
+      - name: Consolidate Results
+        shell: bash
+        run: |
+          mkdir -p bench/results
+          # Copy all results to a single directory
+          find downloaded-results -name "*.json" -exec cp {} bench/results/ \;
+          find downloaded-results -name "*.md" -exec cp {} bench/results/ \;
+          find downloaded-results -name "*.csv" -exec cp {} bench/results/ \;
+          
+          echo "Consolidated $(ls bench/results/*.json 2>/dev/null | wc -l) result files"
+      
+      - name: Build Comparison Tool
+        run: dotnet build bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -c Release
+      
+      - name: Generate Cross-Architecture Comparison
+        run: |
+          dotnet run -c Release --project bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -- \
+            compare --results-dir bench/results
+      
+      - name: Upload Consolidated Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-consolidated
+          path: bench/results/
+          retention-days: 90
+      
+      - name: Display Consolidated Summary
+        shell: bash
+        run: |
+          echo "# Multi-Architecture Benchmark Comparison" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if ls bench/results/*_cross_architecture_comparison.md 1> /dev/null 2>&1; then
+            cat bench/results/*_cross_architecture_comparison.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No cross-architecture comparison available" >> $GITHUB_STEP_SUMMARY
+          fi

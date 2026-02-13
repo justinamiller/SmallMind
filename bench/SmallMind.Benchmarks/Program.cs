@@ -18,6 +18,11 @@ class Program
             {
                 return await MergeResultsAsync(args.Skip(1).ToArray());
             }
+            
+            if (args.Length > 0 && args[0] == "compare")
+            {
+                return await CompareResultsAsync(args.Skip(1).ToArray());
+            }
 
             return await RunBenchmarksAsync(args);
         }
@@ -139,6 +144,34 @@ class Program
         }
 
         Console.WriteLine($"\nResults written to: {outputDir}");
+
+        // Generate comparison reports if previous results exist
+        var enableComparison = !options.ContainsKey("no-comparison");
+        if (enableComparison)
+        {
+            Console.WriteLine("\nGenerating comparison reports...");
+            var allHistoricalResults = await BenchmarkComparer.LoadResultsFromDirectoryAsync(outputDir);
+            
+            foreach (var results in allResults)
+            {
+                var previous = BenchmarkComparer.FindPreviousResult(allHistoricalResults, results);
+                if (previous != null)
+                {
+                    var modelName = results.Model.Name.Replace("/", "_").Replace(" ", "_");
+                    var comparisonPath = Path.Combine(outputDir, $"{baseFileName}_{modelName}_comparison.md");
+                    await BenchmarkComparer.WriteComparisonReportAsync(results, previous, comparisonPath);
+                }
+                else
+                {
+                    Console.WriteLine($"  No previous results found for {results.Model.Name} on {results.Environment.OsArchitecture}");
+                }
+            }
+
+            // Generate cross-architecture comparison
+            var crossArchPath = Path.Combine(outputDir, $"{baseFileName}_cross_architecture.md");
+            await BenchmarkComparer.WriteCrossArchitectureComparisonAsync(allHistoricalResults, crossArchPath);
+        }
+
         return 0;
     }
 
@@ -165,6 +198,57 @@ class Program
     {
         Console.WriteLine("Merge not yet implemented.");
         return 1;
+    }
+
+    static async Task<int> CompareResultsAsync(string[] args)
+    {
+        Console.WriteLine("SmallMind Benchmark Comparison Tool");
+        Console.WriteLine("====================================");
+        Console.WriteLine();
+
+        var options = ParseArguments(args);
+        var benchRoot = GetBenchRoot();
+        var resultsDir = options.GetValueOrDefault("results-dir", Path.Combine(benchRoot, "results"));
+        var outputDir = options.GetValueOrDefault("output-dir", resultsDir);
+
+        Console.WriteLine($"Loading results from: {resultsDir}");
+        var allResults = await BenchmarkComparer.LoadResultsFromDirectoryAsync(resultsDir);
+        
+        if (allResults.Count == 0)
+        {
+            Console.WriteLine("No benchmark results found.");
+            return 1;
+        }
+
+        Console.WriteLine($"Loaded {allResults.Count} result file(s)");
+        Console.WriteLine();
+
+        // Generate cross-architecture comparison
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+        var crossArchPath = Path.Combine(outputDir, $"{timestamp}_cross_architecture_comparison.md");
+        await BenchmarkComparer.WriteCrossArchitectureComparisonAsync(allResults, crossArchPath);
+
+        // Generate individual comparison reports for latest results
+        var latestByArch = allResults
+            .GroupBy(r => $"{r.Model.Name}_{r.Environment.OsArchitecture}")
+            .Select(g => g.OrderByDescending(r => r.Timestamp).First())
+            .ToList();
+
+        foreach (var latest in latestByArch)
+        {
+            var previous = BenchmarkComparer.FindPreviousResult(allResults, latest);
+            if (previous != null)
+            {
+                var modelName = latest.Model.Name.Replace("/", "_").Replace(" ", "_");
+                var arch = latest.Environment.OsArchitecture.ToLowerInvariant();
+                var comparisonPath = Path.Combine(outputDir, 
+                    $"{timestamp}_{modelName}_{arch}_comparison.md");
+                await BenchmarkComparer.WriteComparisonReportAsync(latest, previous, comparisonPath);
+            }
+        }
+
+        Console.WriteLine($"\nComparison reports written to: {outputDir}");
+        return 0;
     }
 
     static Dictionary<string, string> ParseArguments(string[] args)
