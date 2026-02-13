@@ -31,14 +31,22 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
                     ushort scaleHalf = br.ReadUInt16();
                     float scale = HalfToFloat(scaleHalf);
 
-                    // Read 32 int8 values (or fewer for last block)
+                    // GGUF Q8_0 always stores exactly 32 int8 values per block
+                    // even if the last block has fewer elements
                     int blockStart = blockIdx * GgufBlockSize;
                     int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
+                    int elementsInBlock = blockEnd - blockStart;
 
-                    for (int i = blockStart; i < blockEnd; i++)
+                    // Read all 32 int8 values
+                    for (int j = 0; j < GgufBlockSize; j++)
                     {
                         sbyte quantized = br.ReadSByte();
-                        floatData[i] = quantized * scale;
+                        
+                        // Only use the first 'elementsInBlock' values
+                        if (j < elementsInBlock)
+                        {
+                            floatData[blockStart + j] = quantized * scale;
+                        }
                     }
                 }
             }

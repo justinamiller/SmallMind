@@ -21,11 +21,13 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
             int numBlocks = (totalElements + GgufBlockSize - 1) / GgufBlockSize;
 
             var floatData = new float[totalElements];
-            var packedData = new byte[(totalElements + 1) / 2];
 
             using (var ms = new MemoryStream(rawData))
             using (var br = new BinaryReader(ms))
             {
+                // Reusable buffer for packed nibbles (16 bytes per block = 32 nibbles)
+                byte[] blockBuffer = new byte[16];
+
                 for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
                 {
                     // Read fp16 scale and convert to fp32
@@ -33,26 +35,21 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
                     float scale = HalfToFloat(scaleHalf);
 
                     // Read 16 bytes (32 x 4-bit values packed)
+                    // GGUF Q4_0 always stores 16 bytes per block
+                    br.Read(blockBuffer, 0, 16);
+
                     int blockStart = blockIdx * GgufBlockSize;
                     int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
 
-                    for (int i = blockStart; i < blockEnd; i += 2)
-                    {
-                        byte packedByte = br.ReadByte();
-
-                        // GGUF packs low nibble first, then high nibble
-                        int byteIdx = i / 2;
-                        packedData[byteIdx] = packedByte;
-                    }
-
-                    // Dequantize the block
+                    // Decode nibbles directly into floatData
                     for (int i = blockStart; i < blockEnd; i++)
                     {
-                        int byteIdx = i / 2;
-                        byte packedByte = packedData[byteIdx];
+                        int localIdx = i - blockStart;
+                        int byteIdx = localIdx / 2;
+                        byte packedByte = blockBuffer[byteIdx];
 
                         // Extract nibble (low nibble for even indices, high nibble for odd)
-                        byte nibble = (i % 2 == 0) 
+                        byte nibble = (localIdx % 2 == 0) 
                             ? (byte)(packedByte & 0xF) 
                             : (byte)((packedByte >> 4) & 0xF);
 
