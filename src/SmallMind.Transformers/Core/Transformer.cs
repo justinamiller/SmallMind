@@ -1072,50 +1072,7 @@ namespace SmallMind.Transformers
         /// (e.g., MatMulTransposeB, softmax output). Keep true for accumulation kernels (e.g., MatMul FMA).</param>
         /// <returns>Workspace tensor ready for use</returns>
         private Tensor GetOrAllocateWorkspace(ref Tensor? workspace, int[] shape, bool clearBeforeReuse = true)
-        {
-            // Check if we can reuse existing workspace
-            if (workspace != null && workspace.Shape.Length == shape.Length)
-            {
-                bool shapeMatches = true;
-                for (int i = 0; i < shape.Length; i++)
-                {
-                    if (workspace.Shape[i] != shape[i])
-                    {
-                        shapeMatches = false;
-                        break;
-                    }
-                }
-
-                if (shapeMatches)
-                {
-                    // TIER-1 OPTIMIZATION: Conditionally clear workspace based on kernel requirements.
-                    // - Accumulation kernels (MatMul with FMA: C += A*B) require zeroed buffers.
-                    // - Store-once kernels (MatMulTransposeB: C = sum, softmax) can skip clearing.
-                    // - Newly allocated arrays are already zeroed by runtime, skip redundant clear.
-
-                    bool isFresh = _freshWorkspaces.TryGetValue(workspace, out _);
-                    if (!isFresh && clearBeforeReuse)
-                    {
-                        Array.Clear(workspace.Data, 0, workspace.Data.Length);
-                    }
-
-                    // Mark as used (no longer fresh)
-                    _freshWorkspaces.Remove(workspace);
-
-                    return workspace;
-                }
-            }
-
-            // Allocate new workspace (use regular Tensor, not PooledTensor)
-            // These persist across forward passes so we don't want them returned to pool
-            workspace = new Tensor(shape, requiresGrad: _isTraining);
-
-            // TIER-1 OPTIMIZATION: Mark newly allocated workspace as fresh.
-            // The backing array is zeroed by the runtime, so no need to clear it.
-            _freshWorkspaces.AddOrUpdate(workspace, null);
-
-            return workspace;
-        }
+            => GetOrAllocateWorkspace(ref workspace, new ReadOnlySpan<int>(shape), clearBeforeReuse);
 
         /// <summary>
         /// Get or allocate workspace tensor for the given shape (span-based, zero-allocation).
@@ -1131,36 +1088,23 @@ namespace SmallMind.Transformers
         private Tensor GetOrAllocateWorkspace(ref Tensor? workspace, ReadOnlySpan<int> shape, bool clearBeforeReuse = true)
         {
             // Check if we can reuse existing workspace
-            if (workspace != null && workspace.Shape.Length == shape.Length)
+            if (workspace != null && TransformerHelpers.ShapesMatch(workspace.Shape, shape))
             {
-                bool shapeMatches = true;
-                for (int i = 0; i < shape.Length; i++)
+                // TIER-1 OPTIMIZATION: Conditionally clear workspace based on kernel requirements.
+                // - Accumulation kernels (MatMul with FMA: C += A*B) require zeroed buffers.
+                // - Store-once kernels (MatMulTransposeB: C = sum, softmax) can skip clearing.
+                // - Newly allocated arrays are already zeroed by runtime, skip redundant clear.
+
+                bool isFresh = _freshWorkspaces.TryGetValue(workspace, out _);
+                if (!isFresh && clearBeforeReuse)
                 {
-                    if (workspace.Shape[i] != shape[i])
-                    {
-                        shapeMatches = false;
-                        break;
-                    }
+                    Array.Clear(workspace.Data, 0, workspace.Data.Length);
                 }
 
-                if (shapeMatches)
-                {
-                    // TIER-1 OPTIMIZATION: Conditionally clear workspace based on kernel requirements.
-                    // - Accumulation kernels (MatMul with FMA: C += A*B) require zeroed buffers.
-                    // - Store-once kernels (MatMulTransposeB: C = sum, softmax) can skip clearing.
-                    // - Newly allocated arrays are already zeroed by runtime, skip redundant clear.
+                // Mark as used (no longer fresh)
+                _freshWorkspaces.Remove(workspace);
 
-                    bool isFresh = _freshWorkspaces.TryGetValue(workspace, out _);
-                    if (!isFresh && clearBeforeReuse)
-                    {
-                        Array.Clear(workspace.Data, 0, workspace.Data.Length);
-                    }
-
-                    // Mark as used (no longer fresh)
-                    _freshWorkspaces.Remove(workspace);
-
-                    return workspace;
-                }
+                return workspace;
             }
 
             // Allocate new workspace (must create array here, but only on shape change)
@@ -1184,20 +1128,9 @@ namespace SmallMind.Transformers
             var qkv = _qkv.Forward(x);
 
             // Use cached shape arrays to avoid allocations (update in place)
-            _qShapeCache[0] = B;
-            _qShapeCache[1] = _nHead;
-            _qShapeCache[2] = T;
-            _qShapeCache[3] = _headSize;
-
-            _kShapeCache[0] = B;
-            _kShapeCache[1] = _nKvHead;
-            _kShapeCache[2] = T;
-            _kShapeCache[3] = _headSize;
-
-            _vShapeCache[0] = B;
-            _vShapeCache[1] = _nKvHead;
-            _vShapeCache[2] = T;
-            _vShapeCache[3] = _headSize;
+            TransformerHelpers.UpdateShapeCache4D(_qShapeCache, B, _nHead, T, _headSize);
+            TransformerHelpers.UpdateShapeCache4D(_kShapeCache, B, _nKvHead, T, _headSize);
+            TransformerHelpers.UpdateShapeCache4D(_vShapeCache, B, _nKvHead, T, _headSize);
 
             // TIER-1 AUDIT: These workspaces are fully overwritten by Array.Copy (store-once).
             // clearBeforeReuse=false skips redundant zeroing for 30-50% speedup on workspace reuse.
@@ -1234,10 +1167,7 @@ namespace SmallMind.Transformers
                 if (_cachedKeys == null)
                 {
                     // Use cached shape array to avoid allocation
-                    _cacheShapeCache[0] = B;
-                    _cacheShapeCache[1] = _nKvHead;
-                    _cacheShapeCache[2] = _blockSize;
-                    _cacheShapeCache[3] = _headSize;
+                    TransformerHelpers.UpdateShapeCache4D(_cacheShapeCache, B, _nKvHead, _blockSize, _headSize);
                     // Clone the cache shape for tensor storage (one-time allocation)
                     _cachedKeys = new Tensor((int[])_cacheShapeCache.Clone(), requiresGrad: false);
                     _cachedValues = new Tensor((int[])_cacheShapeCache.Clone(), requiresGrad: false);
@@ -1275,10 +1205,7 @@ namespace SmallMind.Transformers
             }
 
             // Use workspace for attention scores (update cached shape)
-            _scoresShapeCache[0] = B;
-            _scoresShapeCache[1] = _nHead;
-            _scoresShapeCache[2] = T;
-            _scoresShapeCache[3] = fullSeqLen;
+            TransformerHelpers.UpdateShapeCache4D(_scoresShapeCache, B, _nHead, T, fullSeqLen);
             // TIER-1 AUDIT: Scores workspace is fully overwritten by MatMulTransposeB (store-once: C = sum).
             // clearBeforeReuse=false eliminates unnecessary zeroing of potentially large (T×T) score matrices.
             var att = GetOrAllocateWorkspace(ref _scoresWorkspace, _scoresShapeCache, clearBeforeReuse: false);
@@ -1292,9 +1219,7 @@ namespace SmallMind.Transformers
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
             // Use cached shape array to avoid allocation
-            _reshapedShapeCache[0] = B;
-            _reshapedShapeCache[1] = T;
-            _reshapedShapeCache[2] = _nEmbd;
+            TransformerHelpers.UpdateShapeCache3D(_reshapedShapeCache, B, T, _nEmbd);
             // TIER-1 AUDIT: Reshaped workspace is fully overwritten by Array.Copy (store-once).
             var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, _reshapedShapeCache, clearBeforeReuse: false);
             ReshapeAttentionOutputInPlace(y, yReshaped, B, T);
