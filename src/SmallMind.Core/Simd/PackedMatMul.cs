@@ -155,17 +155,6 @@ namespace SmallMind.Core.Simd
         }
         
         /// <summary>
-        /// Creates a packed B-matrix ready for cache-blocked GEMM.
-        /// Pack once, reuse many times for batch inference.
-        /// (Alias for Pack method for backward compatibility)
-        /// </summary>
-        [Obsolete("Use Pack(ReadOnlySpan<float>, int, int) instead")]
-        public static PackedMatrix CreatePackedMatrix(ReadOnlySpan<float> B, int rows, int cols)
-        {
-            return Pack(B, rows, cols);
-        }
-        
-        /// <summary>
         /// Matrix multiply with packed B: C[M×N] = A[M×K] × B_packed[K×N]
         /// Uses cache-blocked algorithm with static thread tiling.
         /// </summary>
