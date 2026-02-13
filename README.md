@@ -205,6 +205,57 @@ var options = new SmallMindOptions
 **Supported GGUF quantizations**: Q8_0, Q4_K, Q6_K  
 **See**: [docs/GGUF_MILESTONE_SUMMARY.md](docs/GGUF_MILESTONE_SUMMARY.md)
 
+## Benchmarking
+
+SmallMind includes comprehensive benchmarking tools for measuring CPU inference performance.
+
+### Quick Benchmark
+
+Run the default MatMul/SIMD benchmarks:
+
+```bash
+cd src/SmallMind.Benchmarks
+dotnet run --configuration Release
+```
+
+### Real Model Benchmarks
+
+Benchmark model inference with token throughput and TTFT metrics:
+
+```bash
+# Benchmark a model file
+dotnet run --configuration Release -- run --model path/to/model.gguf --tokens 256
+
+# Custom prompt and iterations
+dotnet run --configuration Release -- run \
+  --model path/to/model.gguf \
+  --tokens 128 \
+  --prompt "Once upon a time" \
+  --iterations 20
+
+# Output results to custom directory
+dotnet run --configuration Release -- run \
+  --model path/to/model.gguf \
+  --output ./my-results
+```
+
+**Available commands:**
+- `run` - Real-model inference benchmark (TTFT, tok/s, memory)
+- `matmul` - Matrix multiplication benchmarks (default)
+- `gemm` - GEMM-specific benchmarks
+- `help` - Show usage information
+
+**Metrics reported:**
+- Time to First Token (TTFT)
+- Token throughput (tokens/sec)
+- Memory usage (RSS, managed heap)
+- GC statistics
+- JSON and Markdown reports
+
+Results are saved to `artifacts/perf/` with both JSON (for CI integration) and Markdown (for human review) formats.
+
+For detailed benchmark documentation, see [docs/RUNNING_BENCHMARKS_GUIDE.md](docs/RUNNING_BENCHMARKS_GUIDE.md).
+
 ## Documentation
 
 ### Getting Started
