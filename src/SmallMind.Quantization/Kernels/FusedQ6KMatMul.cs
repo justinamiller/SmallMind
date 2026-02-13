@@ -92,8 +92,16 @@ namespace SmallMind.Quantization.Kernels
                             for (int mr = 0; mr < mb; mr++)
                             {
                                 int m_idx = mc + mr;
-                                float* pA_row = pA + m_idx * K + kc;
-                                float* pC_row = pC + m_idx * N + nc;
+                                int offsetA = m_idx * K + kc;
+                                int offsetC = m_idx * N + nc;
+
+                                // Validate pointer arithmetic offsets
+                                if (offsetA < 0 || offsetA >= A.Length ||
+                                    offsetC < 0 || offsetC >= C.Length)
+                                    continue;
+
+                                float* pA_row = pA + offsetA;
+                                float* pC_row = pC + offsetC;
 
                                 int num_blocks = kb / Q6K_BLOCK_SIZE;
                                 for (int kb_idx = 0; kb_idx < num_blocks; kb_idx++)
@@ -131,7 +139,13 @@ namespace SmallMind.Quantization.Kernels
             for (int sb = 0; sb < Q6K_SUB_BLOCKS; sb++)
             {
                 float sc = d * scales_ptr[sb];
-                float* pA_sub = pA + sb * Q6K_SUB_BLOCK_SIZE;
+                
+                // Validate sub-block offset
+                int subBlockOffset = sb * Q6K_SUB_BLOCK_SIZE;
+                if (subBlockOffset < 0 || subBlockOffset >= Q6K_BLOCK_SIZE)
+                    continue;
+                
+                float* pA_sub = pA + subBlockOffset;
 
                 for (int i = 0; i < Q6K_SUB_BLOCK_SIZE; i++)
                 {

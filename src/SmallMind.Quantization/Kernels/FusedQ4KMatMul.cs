@@ -103,8 +103,16 @@ namespace SmallMind.Quantization.Kernels
                             for (int mr = 0; mr < mb; mr++)
                             {
                                 int m_idx = mc + mr;
-                                float* pA_row = pA + m_idx * K + kc;
-                                float* pC_row = pC + m_idx * N + nc;
+                                int offsetA = m_idx * K + kc;
+                                int offsetC = m_idx * N + nc;
+
+                                // Validate pointer arithmetic offsets
+                                if (offsetA < 0 || offsetA >= A.Length ||
+                                    offsetC < 0 || offsetC >= C.Length)
+                                    continue;
+
+                                float* pA_row = pA + offsetA;
+                                float* pC_row = pC + offsetC;
 
                                 // Process K dimension in Q4_K blocks
                                 int num_blocks = kb / Q4K_BLOCK_SIZE;
@@ -159,8 +167,13 @@ namespace SmallMind.Quantization.Kernels
                 float sc = d * scales[sb];
                 float m = dmin * mins[sb];
 
+                // Validate sub-block offset
+                int subBlockOffset = sb * Q4K_SUB_BLOCK_SIZE;
+                if (subBlockOffset < 0 || subBlockOffset >= Q4K_BLOCK_SIZE)
+                    continue;
+
                 // Process 32 values in sub-block
-                float* pA_sub = pA + sb * Q4K_SUB_BLOCK_SIZE;
+                float* pA_sub = pA + subBlockOffset;
                 byte* qs_sub = qs_ptr + sb * (Q4K_SUB_BLOCK_SIZE / 2);
 
                 // Vectorized inner loop (process 8 values at a time)

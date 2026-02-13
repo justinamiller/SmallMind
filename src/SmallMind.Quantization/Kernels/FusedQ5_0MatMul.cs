@@ -102,12 +102,20 @@ namespace SmallMind.Quantization.Kernels
                         {
                             int kb = Math.Min(L1_BLOCK_K, K - kc);
 
-                            // Process this L1 block with AVX2 microkernels
-                            FusedQ5_0BlockAvx2(
-                                pA + mc * K + kc,
-                                pBDataLow, pBDataHigh, pBScales,
-                                pC + mc * N + nc,
-                                mb, kb, nb, K, N, blockSize, kc, nc);
+                            // Validate pointer arithmetic offsets
+                            int offsetA = mc * K + kc;
+                            int offsetC = mc * N + nc;
+                            
+                            if (offsetA >= 0 && offsetA < A.Length &&
+                                offsetC >= 0 && offsetC < C.Length)
+                            {
+                                // Process this L1 block with AVX2 microkernels
+                                FusedQ5_0BlockAvx2(
+                                    pA + offsetA,
+                                    pBDataLow, pBDataHigh, pBScales,
+                                    pC + offsetC,
+                                    mb, kb, nb, K, N, blockSize, kc, nc);
+                            }
                         }
                     }
                 }
