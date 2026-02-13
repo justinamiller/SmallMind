@@ -1,0 +1,15 @@
+name: "CodeQL Config"
+
+# Only scan code in the src directory
+paths:
+  - src
+
+# Exclude all other directories
+paths-ignore:
+  - tests
+  - benchmarks
+  - examples
+  - tools
+  - scripts
+  - docs
+  - data

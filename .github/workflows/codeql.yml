@@ -54,6 +54,8 @@ jobs:
           languages: ${{ matrix.language }}
           # Specify queries to run (optional - default is security-extended)
           queries: security-and-quality
+          # Use configuration file to limit scanning to src directory only
+          config-file: ./.github/codeql-config.yml
 
       - name: Restore dependencies
         run: dotnet restore SmallMind.sln
