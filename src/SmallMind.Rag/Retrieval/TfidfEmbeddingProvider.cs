@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Rag.Retrieval
 {
@@ -35,8 +36,12 @@ namespace SmallMind.Rag.Retrieval
         /// Build the vocabulary and IDF scores from a corpus of documents.
         /// Call this before using Embed() or EmbedBatch().
         /// </summary>
-        public void Fit(List<string> documents)
+        /// <param name="documents">Documents to build the vocabulary from.</param>
+        /// <param name="logger">Optional logger for diagnostic messages.</param>
+        public void Fit(List<string> documents, IRuntimeLogger? logger = null)
         {
+            logger ??= NullRuntimeLogger.Instance;
+            
             if (documents == null || documents.Count == 0)
             {
                 throw new ArgumentException("Documents cannot be null or empty", nameof(documents));
@@ -102,7 +107,7 @@ namespace SmallMind.Rag.Retrieval
                 }
             }
 
-            Console.WriteLine($"TF-IDF vocabulary built: {_vocabulary.Count} terms from {totalDocs} documents");
+            logger.Info($"TF-IDF vocabulary built: {_vocabulary.Count} terms from {totalDocs} documents");
         }
 
         /// <summary>

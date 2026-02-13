@@ -1,6 +1,7 @@
 using SmallMind.Tokenizers;
 using SmallMind.Core.Core;
 using SmallMind.Transformers;
+using SmallMind.Abstractions.Telemetry;
 using System;
 using System.Collections.Generic;
 
@@ -51,8 +52,11 @@ namespace SmallMind.Runtime
             int? seed = null, 
             bool showPerf = false, 
             bool isPerfJsonMode = false, 
-            PerformanceMetrics? metrics = null)
+            PerformanceMetrics? metrics = null,
+            IRuntimeLogger? logger = null)
         {
+            logger = logger ?? NullRuntimeLogger.Instance;
+            
             _model.Eval();
 
             Random random;
@@ -69,7 +73,7 @@ namespace SmallMind.Runtime
             var context = _tokenizer.Encode(prompt);
             if (context.Count == 0)
             {
-                Console.WriteLine("Warning: Empty prompt, starting with empty context");
+                logger.Warn("Empty prompt, starting with empty context");
                 context = new List<int> { 0 }; // Start with first token in vocab
             }
 
@@ -86,14 +90,14 @@ namespace SmallMind.Runtime
 
             if (!isPerfJsonMode)
             {
-                Console.WriteLine($"\nGenerating {maxNewTokens} tokens...");
-                Console.WriteLine($"Temperature: {temperature}, Top-k: {topK}, Top-p: {topP}");
-                Console.WriteLine($"Prompt: \"{prompt}\"");
+                logger.Info($"Generating {maxNewTokens} tokens...");
+                logger.Info($"Temperature: {temperature}, Top-k: {topK}, Top-p: {topP}");
+                logger.Info($"Prompt: \"{prompt}\"");
                 if (showPerf)
                 {
-                    Console.WriteLine("Performance tracking enabled");
+                    logger.Info("Performance tracking enabled");
                 }
-                Console.WriteLine("---");
+                logger.Info("---");
             }
 
             var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -251,7 +255,7 @@ namespace SmallMind.Runtime
                     // Optional: print progress
                     if (!showPerf && !isPerfJsonMode && (i + 1) % 50 == 0)
                     {
-                        Console.Write(".");
+                        logger.Debug(".");
                     }
                 }
             }
@@ -276,7 +280,7 @@ namespace SmallMind.Runtime
 
             if (!showPerf && !isPerfJsonMode && maxNewTokens >= 50)
             {
-                Console.WriteLine(); // New line after progress dots
+                logger.Debug(""); // New line after progress dots
             }
 
             // Output performance metrics
@@ -288,12 +292,12 @@ namespace SmallMind.Runtime
                 if (isPerfJsonMode)
                 {
                     // JSON output only
-                    Console.WriteLine(MetricsFormatter.FormatJson(summary));
+                    logger.Info(MetricsFormatter.FormatJson(summary));
                 }
                 else if (showPerf)
                 {
                     // Text output
-                    Console.WriteLine(MetricsFormatter.FormatText(summary));
+                    logger.Info(MetricsFormatter.FormatText(summary));
                 }
             }
 

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Tokenizers
 {
@@ -13,8 +14,9 @@ namespace SmallMind.Tokenizers
         /// </summary>
         /// <param name="options">Tokenizer configuration options</param>
         /// <param name="trainingText">Training text for CharTokenizer (required for Char mode or Auto fallback)</param>
+        /// <param name="logger">Optional logger</param>
         /// <returns>ITokenizer instance</returns>
-        public static ITokenizer Create(TokenizerOptions options, string? trainingText = null)
+        public static ITokenizer Create(TokenizerOptions options, string? trainingText = null, IRuntimeLogger? logger = null)
         {
             if (options == null)
             {
@@ -24,13 +26,13 @@ namespace SmallMind.Tokenizers
             switch (options.Mode)
             {
                 case TokenizerMode.Char:
-                    return CreateCharTokenizer(trainingText);
+                    return CreateCharTokenizer(trainingText, logger);
 
                 case TokenizerMode.Bpe:
-                    return CreateBpeTokenizer(options, trainingText);
+                    return CreateBpeTokenizer(options, trainingText, logger);
 
                 case TokenizerMode.Auto:
-                    return CreateAutoTokenizer(options, trainingText);
+                    return CreateAutoTokenizer(options, trainingText, logger);
 
                 default:
                     throw new TokenizationException($"Unknown tokenizer mode: {options.Mode}");
@@ -40,7 +42,7 @@ namespace SmallMind.Tokenizers
         /// <summary>
         /// Creates a CharTokenizer instance.
         /// </summary>
-        private static ITokenizer CreateCharTokenizer(string? trainingText)
+        private static ITokenizer CreateCharTokenizer(string? trainingText, IRuntimeLogger? logger = null)
         {
             if (string.IsNullOrEmpty(trainingText))
             {
@@ -49,13 +51,13 @@ namespace SmallMind.Tokenizers
                     "Provide training text when creating a CharTokenizer or using Auto mode without BPE assets.");
             }
 
-            return new CharTokenizer(trainingText);
+            return new CharTokenizer(trainingText, logger);
         }
 
         /// <summary>
         /// Creates a BpeTokenizer instance.
         /// </summary>
-        private static ITokenizer CreateBpeTokenizer(TokenizerOptions options, string? trainingText)
+        private static ITokenizer CreateBpeTokenizer(TokenizerOptions options, string? trainingText, IRuntimeLogger? logger = null)
         {
             string? assetsPath = FindTokenizerAssets(options);
 
@@ -81,29 +83,29 @@ namespace SmallMind.Tokenizers
                 }
 
                 // Fallback to CharTokenizer
-                Console.WriteLine($"BPE assets not found for '{options.TokenizerName}'. Falling back to CharTokenizer.");
-                return CreateCharTokenizer(trainingText);
+                (logger ?? NullRuntimeLogger.Instance).Info($"BPE assets not found for '{options.TokenizerName}'. Falling back to CharTokenizer.");
+                return CreateCharTokenizer(trainingText, logger);
             }
 
             try
             {
-                return new BpeTokenizer(assetsPath);
+                return new BpeTokenizer(assetsPath, logger);
             }
             catch (TokenizationException) when (!options.Strict)
             {
                 // Fallback to CharTokenizer on BPE load failure (non-strict mode)
-                Console.WriteLine($"Failed to load BPE tokenizer. Falling back to CharTokenizer.");
-                return CreateCharTokenizer(trainingText);
+                (logger ?? NullRuntimeLogger.Instance).Info($"Failed to load BPE tokenizer. Falling back to CharTokenizer.");
+                return CreateCharTokenizer(trainingText, logger);
             }
         }
 
         /// <summary>
         /// Creates a tokenizer in Auto mode: tries BPE if assets exist, otherwise falls back to CharTokenizer.
         /// </summary>
-        private static ITokenizer CreateAutoTokenizer(TokenizerOptions options, string? trainingText)
+        private static ITokenizer CreateAutoTokenizer(TokenizerOptions options, string? trainingText, IRuntimeLogger? logger = null)
         {
             // Try BPE first (will fallback to Char if not found since Strict is already false in Auto mode)
-            return CreateBpeTokenizer(options, trainingText);
+            return CreateBpeTokenizer(options, trainingText, logger);
         }
 
         /// <summary>

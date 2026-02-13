@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using SmallMind.Abstractions;
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Core;
 
 namespace SmallMind.Engine;
@@ -90,8 +91,10 @@ internal static class ModelValidator
     /// </summary>
     public static void ValidateMetadata(
         Dictionary<string, object>? metadata,
-        string modelPath)
+        string modelPath,
+        IRuntimeLogger? logger = null)
     {
+        logger ??= NullRuntimeLogger.Instance;
         if (metadata == null || metadata.Count == 0)
         {
             // Metadata is optional for some model formats, but warn
@@ -225,7 +228,7 @@ internal static class ModelValidator
             if (paramCount >= LargeModelSupport.QUANTIZATION_THRESHOLD)
             {
                 var recommendation = LargeModelSupport.GetRecommendation(paramCount);
-                Console.WriteLine($"\n{recommendation}\n");
+                logger.Info($"\n{recommendation}\n");
             }
         }
         catch (Exception ex) when (ex is not UnsupportedModelException)

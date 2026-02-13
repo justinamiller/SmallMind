@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SmallMind.Abstractions\SmallMind.Abstractions.csproj" />
     <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
     <ProjectReference Include="..\SmallMind.Transformers\SmallMind.Transformers.csproj" />
     <ProjectReference Include="..\SmallMind.Runtime\SmallMind.Runtime.csproj" />

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Rag.Indexing.Sparse;
 using SmallMind.Rag.Ingestion;
 
@@ -43,10 +44,13 @@ internal sealed class IncrementalIndexer
     /// </summary>
     /// <param name="docs">The list of document records to index.</param>
     /// <param name="docContents">A dictionary mapping document IDs to their text content.</param>
+    /// <param name="logger">Optional logger for diagnostic messages.</param>
     /// <exception cref="ArgumentNullException">Thrown when docs or docContents is null.</exception>
     /// <exception cref="IOException">Thrown when index files cannot be written.</exception>
-    public void RebuildIndex(List<DocumentRecord> docs, Dictionary<string, string> docContents)
+    public void RebuildIndex(List<DocumentRecord> docs, Dictionary<string, string> docContents, IRuntimeLogger? logger = null)
     {
+        logger ??= NullRuntimeLogger.Instance;
+        
         if (docs == null)
             throw new ArgumentNullException(nameof(docs));
         if (docContents == null)
@@ -65,7 +69,7 @@ internal sealed class IncrementalIndexer
 
             if (!docContents.TryGetValue(doc.DocId, out string? content))
             {
-                Console.WriteLine($"[WARNING] Content not found for document '{doc.DocId}', skipping.");
+                logger.Warn($"Content not found for document '{doc.DocId}', skipping.");
                 continue;
             }
 
@@ -78,7 +82,7 @@ internal sealed class IncrementalIndexer
 
         IndexSerializer.SaveIndex(_indexDir, index, chunks, manifest);
 
-        Console.WriteLine($"[INFO] Rebuilt index: {manifest.TotalDocuments} documents, {manifest.TotalChunks} chunks.");
+        logger.Info($"Rebuilt index: {manifest.TotalDocuments} documents, {manifest.TotalChunks} chunks.");
     }
 
     /// <summary>
@@ -87,10 +91,13 @@ internal sealed class IncrementalIndexer
     /// </summary>
     /// <param name="newDocs">The list of document records to add or update.</param>
     /// <param name="docContents">A dictionary mapping document IDs to their text content.</param>
+    /// <param name="logger">Optional logger for diagnostic messages.</param>
     /// <exception cref="ArgumentNullException">Thrown when newDocs or docContents is null.</exception>
     /// <exception cref="IOException">Thrown when index files cannot be read or written.</exception>
-    public void UpdateIndex(List<DocumentRecord> newDocs, Dictionary<string, string> docContents)
+    public void UpdateIndex(List<DocumentRecord> newDocs, Dictionary<string, string> docContents, IRuntimeLogger? logger = null)
     {
+        logger ??= NullRuntimeLogger.Instance;
+        
         if (newDocs == null)
             throw new ArgumentNullException(nameof(newDocs));
         if (docContents == null)
@@ -108,7 +115,7 @@ internal sealed class IncrementalIndexer
 
             if (optionsChanged)
             {
-                Console.WriteLine("[WARNING] Chunking options changed. Consider rebuilding the entire index.");
+                logger.Warn("Chunking options changed. Consider rebuilding the entire index.");
             }
         }
 
@@ -121,7 +128,7 @@ internal sealed class IncrementalIndexer
 
             if (!docContents.TryGetValue(doc.DocId, out string? content))
             {
-                Console.WriteLine($"[WARNING] Content not found for document '{doc.DocId}', skipping.");
+                logger.Warn($"Content not found for document '{doc.DocId}', skipping.");
                 continue;
             }
 
@@ -150,7 +157,7 @@ internal sealed class IncrementalIndexer
 
         IndexSerializer.SaveIndex(_indexDir, index, chunks, manifest);
 
-        Console.WriteLine($"[INFO] Updated index: {addedCount} added, {updatedCount} updated. Total: {manifest.TotalDocuments} documents, {manifest.TotalChunks} chunks.");
+        logger.Info($"Updated index: {addedCount} added, {updatedCount} updated. Total: {manifest.TotalDocuments} documents, {manifest.TotalChunks} chunks.");
     }
 
     /// <summary>

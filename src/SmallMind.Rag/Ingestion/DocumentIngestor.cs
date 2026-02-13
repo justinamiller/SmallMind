@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Rag.Ingestion;
 
@@ -17,11 +18,14 @@ internal sealed class DocumentIngestor
     /// </summary>
     /// <param name="path">The directory path to scan for documents.</param>
     /// <param name="includePatterns">Semicolon-separated file patterns (e.g., "*.txt;*.md;*.json;*.log").</param>
+    /// <param name="logger">Optional logger for diagnostic messages.</param>
     /// <returns>A list of document records for successfully ingested files.</returns>
     /// <exception cref="ArgumentNullException">Thrown when path is null.</exception>
     /// <exception cref="DirectoryNotFoundException">Thrown when the specified directory does not exist.</exception>
-    public List<DocumentRecord> IngestDirectory(string path, string includePatterns = "*.txt;*.md;*.json;*.log")
+    public List<DocumentRecord> IngestDirectory(string path, string includePatterns = "*.txt;*.md;*.json;*.log", IRuntimeLogger? logger = null)
     {
+        logger ??= NullRuntimeLogger.Instance;
+        
         if (path == null)
             throw new ArgumentNullException(nameof(path));
         
@@ -45,7 +49,7 @@ internal sealed class DocumentIngestor
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WARNING] Failed to enumerate files with pattern '{patterns[i]}': {ex.Message}");
+                logger.Warn($"Failed to enumerate files with pattern '{patterns[i]}': {ex.Message}");
             }
         }
         
@@ -59,7 +63,7 @@ internal sealed class DocumentIngestor
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WARNING] Failed to ingest file '{filePaths[i]}': {ex.Message}");
+                logger.Warn($"Failed to ingest file '{filePaths[i]}': {ex.Message}");
             }
         }
         

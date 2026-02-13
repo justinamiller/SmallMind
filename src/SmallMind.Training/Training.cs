@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Tokenizers;
 using SmallMind.Runtime.Metrics;
+using SmallMind.Abstractions.Telemetry;
 
 // Use aliases to avoid ambiguity
 using Tensor = SmallMind.Core.Core.Tensor;
@@ -46,6 +47,7 @@ namespace SmallMind.Training
         private readonly List<int> _data;
         private readonly Random _random;
         private readonly ICheckpointStore _checkpointStore;
+        private readonly IRuntimeLogger _logger;
 
         /// <summary>
         /// Metrics tracker for monitoring model quality and training progress.
@@ -53,7 +55,8 @@ namespace SmallMind.Training
         public TrainingMetrics Metrics { get; } = new TrainingMetrics();
 
         public Training(TransformerModel model, ITokenizer tokenizer, string trainingText, 
-                       int blockSize, int batchSize, int seed, ICheckpointStore? checkpointStore = null)
+                       int blockSize, int batchSize, int seed, ICheckpointStore? checkpointStore = null,
+                       IRuntimeLogger? logger = null)
         {
             Guard.NotNull(model);
             Guard.NotNull(tokenizer);
@@ -67,10 +70,11 @@ namespace SmallMind.Training
             _checkpointStore = checkpointStore ?? new BinaryCheckpointStore();
             _batchSize = batchSize;
             _random = new Random(seed);
+            _logger = logger ?? NullRuntimeLogger.Instance;
 
             // Encode the entire training text
             _data = _tokenizer.Encode(trainingText);
-            Console.WriteLine($"Training data: {_data.Count} tokens");
+            _logger.Info($"Training data: {_data.Count} tokens");
 
             if (_data.Count < blockSize + 1)
             {
@@ -163,15 +167,15 @@ namespace SmallMind.Training
 
             _model.Train();
 
-            Console.WriteLine($"\nStarting enhanced training for {steps} steps...");
-            Console.WriteLine($"Batch size: {_batchSize}, Block size: {_blockSize}, Base learning rate: {learningRate}");
-            Console.WriteLine($"Gradient accumulation steps: {gradAccumSteps}, Warmup steps: {warmupSteps}");
-            Console.WriteLine($"Validation every {valEvery} steps with {valBatches} batches");
-            Console.WriteLine($"Model parameters: {_model.Parameters.Count} tensors");
-            Console.WriteLine("Model quality metrics tracking: ENABLED");
+            _logger.Info($"\nStarting enhanced training for {steps} steps...");
+            _logger.Info($"Batch size: {_batchSize}, Block size: {_blockSize}, Base learning rate: {learningRate}");
+            _logger.Info($"Gradient accumulation steps: {gradAccumSteps}, Warmup steps: {warmupSteps}");
+            _logger.Info($"Validation every {valEvery} steps with {valBatches} batches");
+            _logger.Info($"Model parameters: {_model.Parameters.Count} tensors");
+            _logger.Info("Model quality metrics tracking: ENABLED");
             if (showPerf)
             {
-                Console.WriteLine("Performance tracking enabled");
+                _logger.Info("Performance tracking enabled");
             }
 
             var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -186,7 +190,7 @@ namespace SmallMind.Training
                 {
                     var cancelledCheckpoint = Path.Combine(checkpointDir, "model_cancelled.json");
                     SaveCheckpoint(cancelledCheckpoint);
-                    Console.WriteLine($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
+                    _logger.Info($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
                     cancellationToken.ThrowIfCancellationRequested();
                 }
 
@@ -286,13 +290,13 @@ namespace SmallMind.Training
                     double stepTimeMs = stepStopwatch.Elapsed.TotalMilliseconds;
                     double tokensPerSec = stepTimeMs > 0 ? tokensThisStep / (stepTimeMs / 1000.0) : 0;
                     double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
-                    Console.WriteLine($"Step {step + 1}/{totalSteps}, Loss: {loss:F4}, LR: {learningRate:F6}, " +
+                    _logger.Info($"Step {step + 1}/{totalSteps}, Loss: {loss:F4}, LR: {learningRate:F6}, " +
                                     $"Time: {stepTimeMs:F0}ms, Tokens/sec: {tokensPerSec:F0}, " +
                                     $"Avg step: {avgTimePerStep:F0}ms");
                 }
                 else
                 {
-                    Console.WriteLine($"Step {step + 1}/{totalSteps}, Loss: {loss:F4}, LR: {learningRate:F6}");
+                    _logger.Info($"Step {step + 1}/{totalSteps}, Loss: {loss:F4}, LR: {learningRate:F6}");
                 }
             }
         }
@@ -309,7 +313,7 @@ namespace SmallMind.Training
                 float perplexity = MetricsComputer.ComputePerplexity(valLoss);
                 float? accuracy = Metrics.GetCurrentTokenAccuracy();
                 
-                Console.WriteLine($"Validation - Loss: {valLoss:F4}, Perplexity: {perplexity:F2}" + 
+                _logger.Info($"Validation - Loss: {valLoss:F4}, Perplexity: {perplexity:F2}" + 
                     (accuracy.HasValue ? $", Accuracy: {accuracy.Value * 100:F2}%" : ""));
                 
                 // Save best model
@@ -318,7 +322,7 @@ namespace SmallMind.Training
                     bestValLoss = valLoss;
                     var bestCheckpointPath = Path.Combine(checkpointDir, "model_best.json");
                     SaveCheckpoint(bestCheckpointPath);
-                    Console.WriteLine($"New best validation loss! Saved to {bestCheckpointPath}");
+                    _logger.Info($"New best validation loss! Saved to {bestCheckpointPath}");
                 }
             }
             
@@ -334,7 +338,7 @@ namespace SmallMind.Training
             {
                 var checkpointPath = Path.Combine(checkpointDir, "model.json");
                 SaveCheckpoint(checkpointPath);
-                Console.WriteLine($"Checkpoint saved to {checkpointPath}");
+                _logger.Info($"Checkpoint saved to {checkpointPath}");
             }
         }
 
@@ -348,21 +352,21 @@ namespace SmallMind.Training
             // Save final checkpoint
             var finalCheckpointPath = Path.Combine(checkpointDir, "model.json");
             SaveCheckpoint(finalCheckpointPath);
-            Console.WriteLine($"\nTraining completed. Final checkpoint saved to {finalCheckpointPath}");
+            _logger.Info($"\nTraining completed. Final checkpoint saved to {finalCheckpointPath}");
 
             if (showPerf)
             {
                 double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
                 double avgTokensPerSec = totalTimeSeconds > 0 ? totalTokens / totalTimeSeconds : 0;
-                Console.WriteLine($"Total training time: {totalTimeSeconds:F2}s");
-                Console.WriteLine($"Total tokens processed: {totalTokens:N0}");
-                Console.WriteLine($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
-                Console.WriteLine($"Best validation loss: {bestValLoss:F4}");
+                _logger.Info($"Total training time: {totalTimeSeconds:F2}s");
+                _logger.Info($"Total tokens processed: {totalTokens:N0}");
+                _logger.Info($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
+                _logger.Info($"Best validation loss: {bestValLoss:F4}");
             }
 
             // Print comprehensive metrics report
-            Console.WriteLine();
-            Console.WriteLine(Metrics.GetReport());
+            _logger.Info("");
+            _logger.Info(Metrics.GetReport());
         }
 
         /// <summary>
@@ -421,12 +425,12 @@ namespace SmallMind.Training
 
             _model.Train();
 
-            Console.WriteLine($"\nStarting training for {steps} steps...");
-            Console.WriteLine($"Batch size: {_batchSize}, Block size: {_blockSize}, Learning rate: {learningRate}");
-            Console.WriteLine($"Model parameters: {_model.Parameters.Count} tensors");
+            _logger.Info($"\nStarting training for {steps} steps...");
+            _logger.Info($"Batch size: {_batchSize}, Block size: {_blockSize}, Learning rate: {learningRate}");
+            _logger.Info($"Model parameters: {_model.Parameters.Count} tensors");
             if (showPerf)
             {
-                Console.WriteLine("Performance tracking enabled");
+                _logger.Info("Performance tracking enabled");
             }
 
             var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -440,7 +444,7 @@ namespace SmallMind.Training
                 {
                     var cancelledCheckpoint = Path.Combine(checkpointDir, "model_cancelled.json");
                     SaveCheckpoint(cancelledCheckpoint);
-                    Console.WriteLine($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
+                    _logger.Info($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
                     cancellationToken.ThrowIfCancellationRequested();
                 }
 
@@ -477,13 +481,13 @@ namespace SmallMind.Training
                         double stepTimeMs = stepStopwatch.Elapsed.TotalMilliseconds;
                         double tokensPerSec = stepTimeMs > 0 ? tokensThisStep / (stepTimeMs / 1000.0) : 0;
                         double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
-                        Console.WriteLine($"Step {step + 1}/{steps}, Loss: {lossValue:F4}, " +
+                        _logger.Info($"Step {step + 1}/{steps}, Loss: {lossValue:F4}, " +
                                         $"Time: {stepTimeMs:F0}ms, Tokens/sec: {tokensPerSec:F0}, " +
                                         $"Avg step: {avgTimePerStep:F0}ms");
                     }
                     else
                     {
-                        Console.WriteLine($"Step {step + 1}/{steps}, Loss: {lossValue:F4}");
+                        _logger.Info($"Step {step + 1}/{steps}, Loss: {lossValue:F4}");
                     }
                 }
 
@@ -492,7 +496,7 @@ namespace SmallMind.Training
                 {
                     var checkpointPath = Path.Combine(checkpointDir, "model.json");
                     SaveCheckpoint(checkpointPath);
-                    Console.WriteLine($"Checkpoint saved to {checkpointPath}");
+                    _logger.Info($"Checkpoint saved to {checkpointPath}");
                 }
             }
 
@@ -501,15 +505,15 @@ namespace SmallMind.Training
             // Save final checkpoint
             var finalCheckpointPath = Path.Combine(checkpointDir, "model.json");
             SaveCheckpoint(finalCheckpointPath);
-            Console.WriteLine($"\nTraining completed. Final checkpoint saved to {finalCheckpointPath}");
+            _logger.Info($"\nTraining completed. Final checkpoint saved to {finalCheckpointPath}");
 
             if (showPerf)
             {
                 double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
                 double avgTokensPerSec = totalTimeSeconds > 0 ? totalTokens / totalTimeSeconds : 0;
-                Console.WriteLine($"Total training time: {totalTimeSeconds:F2}s");
-                Console.WriteLine($"Total tokens processed: {totalTokens:N0}");
-                Console.WriteLine($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
+                _logger.Info($"Total training time: {totalTimeSeconds:F2}s");
+                _logger.Info($"Total tokens processed: {totalTokens:N0}");
+                _logger.Info($"Average throughput: {avgTokensPerSec:F0} tokens/sec");
             }
         }
 
@@ -652,7 +656,7 @@ namespace SmallMind.Training
             }
 
             _model.LoadFromCheckpoint(checkpoint);
-            Console.WriteLine($"Checkpoint loaded from {path}");
+            _logger.Info($"Checkpoint loaded from {path}");
         }
 
         /* TrainOptimized method temporarily disabled for v0.2 - requires additional dependencies
@@ -702,24 +706,24 @@ namespace SmallMind.Training
             if (config.UseMixedPrecision)
             {
                 mixedPrecisionTrainer = new MixedPrecisionTrainer(optimizer, _model.Parameters);
-                Console.WriteLine("Mixed precision training enabled (FP16/FP32)");
+                _logger.Info("Mixed precision training enabled (FP16/FP32)");
             }
 
             _model.Train();
 
-            Console.WriteLine($"\n╔══════════════════════════════════════════════════════════════════════════╗");
-            Console.WriteLine($"║            PHASE 2 OPTIMIZED TRAINING STARTED                         ║");
-            Console.WriteLine($"╠══════════════════════════════════════════════════════════════════════════╣");
-            Console.WriteLine($"║ Steps: {steps,12} │ Batch Size: {_batchSize,8} │ Block Size: {_blockSize,8}    ║");
-            Console.WriteLine($"║ Learning Rate: {learningRate,6:F4} │ Warmup Steps: {warmupSteps,6} │ Min LR: {minLr,8:F6} ║");
-            Console.WriteLine($"║ Grad Accum: {gradAccumSteps,7} │ Val Every: {valEvery,9} │ Val Batches: {valBatches,6}  ║");
-            Console.WriteLine($"╠══════════════════════════════════════════════════════════════════════════╣");
-            Console.WriteLine($"║ Optimizations:                                                        ║");
-            Console.WriteLine($"║   Mixed Precision: {(config.UseMixedPrecision ? "✓ Enabled " : "✗ Disabled"),44}║");
-            Console.WriteLine($"║   Gradient Checkpointing: {(config.UseGradientCheckpointing ? "✓ Enabled " : "✗ Disabled"),38}║");
-            Console.WriteLine($"║   Diagnostics: {(config.EnableDiagnostics ? "✓ Enabled " : "✗ Disabled"),48}║");
-            Console.WriteLine($"║   Gradient Health Check: {(config.CheckGradientHealth ? "✓ Enabled " : "✗ Disabled"),38}║");
-            Console.WriteLine($"╚══════════════════════════════════════════════════════════════════════════╝\n");
+            _logger.Info($"\n╔══════════════════════════════════════════════════════════════════════════╗");
+            _logger.Info($"║            PHASE 2 OPTIMIZED TRAINING STARTED                         ║");
+            _logger.Info($"╠══════════════════════════════════════════════════════════════════════════╣");
+            _logger.Info($"║ Steps: {steps,12} │ Batch Size: {_batchSize,8} │ Block Size: {_blockSize,8}    ║");
+            _logger.Info($"║ Learning Rate: {learningRate,6:F4} │ Warmup Steps: {warmupSteps,6} │ Min LR: {minLr,8:F6} ║");
+            _logger.Info($"║ Grad Accum: {gradAccumSteps,7} │ Val Every: {valEvery,9} │ Val Batches: {valBatches,6}  ║");
+            _logger.Info($"╠══════════════════════════════════════════════════════════════════════════╣");
+            _logger.Info($"║ Optimizations:                                                        ║");
+            _logger.Info($"║   Mixed Precision: {(config.UseMixedPrecision ? "✓ Enabled " : "✗ Disabled"),44}║");
+            _logger.Info($"║   Gradient Checkpointing: {(config.UseGradientCheckpointing ? "✓ Enabled " : "✗ Disabled"),38}║");
+            _logger.Info($"║   Diagnostics: {(config.EnableDiagnostics ? "✓ Enabled " : "✗ Disabled"),48}║");
+            _logger.Info($"║   Gradient Health Check: {(config.CheckGradientHealth ? "✓ Enabled " : "✗ Disabled"),38}║");
+            _logger.Info($"╚══════════════════════════════════════════════════════════════════════════╝\n");
 
             var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
             var stepStopwatch = new System.Diagnostics.Stopwatch();
@@ -733,7 +737,7 @@ namespace SmallMind.Training
                 {
                     var cancelledCheckpoint = Path.Combine(checkpointDir, "model_cancelled.json");
                     SaveCheckpoint(cancelledCheckpoint);
-                    Console.WriteLine($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
+                    _logger.Info($"\nTraining cancelled. Checkpoint saved to {cancelledCheckpoint}");
                     cancellationToken.ThrowIfCancellationRequested();
                 }
 
@@ -814,7 +818,7 @@ namespace SmallMind.Training
 
                 if (!gradientsValid)
                 {
-                    Console.WriteLine($"⚠️  Step {step + 1}: Gradient overflow detected, skipping update. " +
+                    _logger.Warn($"⚠️  Step {step + 1}: Gradient overflow detected, skipping update. " +
                                     $"Loss scale: {mixedPrecisionTrainer?.LossScale:F0}");
                     continue; // Skip this update
                 }
@@ -876,7 +880,7 @@ namespace SmallMind.Training
                     double tokensPerSec = stepTimeMs > 0 ? tokensThisStep / (stepTimeMs / 1000.0) : 0;
                     double avgTimePerStep = totalStopwatch.Elapsed.TotalMilliseconds / (step + 1);
                     
-                    Console.WriteLine($"Step {step + 1,5}/{steps} | Loss: {avgLoss,7:F4} | LR: {currentLr,8:F6} | " +
+                    _logger.Info($"Step {step + 1,5}/{steps} | Loss: {avgLoss,7:F4} | LR: {currentLr,8:F6} | " +
                                     $"Time: {stepTimeMs,5:F0}ms | Tok/s: {tokensPerSec,6:F0} | " +
                                     $"Avg: {avgTimePerStep,5:F0}ms" +
                                     (mixedPrecisionTrainer != null ? $" | Scale: {mixedPrecisionTrainer.LossScale,6:F0}" : ""));
@@ -892,7 +896,7 @@ namespace SmallMind.Training
                 if (valEvery > 0 && (step + 1) % valEvery == 0)
                 {
                     float valLoss = EvaluateValidationLoss(valBatches);
-                    Console.WriteLine($"═══ Validation Loss: {valLoss:F4} ═══");
+                    _logger.Info($"═══ Validation Loss: {valLoss:F4} ═══");
                     
                     // Save best model
                     if (valLoss < bestValLoss)
@@ -900,7 +904,7 @@ namespace SmallMind.Training
                         bestValLoss = valLoss;
                         var bestCheckpointPath = Path.Combine(checkpointDir, "model_best.json");
                         SaveCheckpoint(bestCheckpointPath);
-                        Console.WriteLine($"✓ New best validation loss! Saved to {bestCheckpointPath}");
+                        _logger.Info($"✓ New best validation loss! Saved to {bestCheckpointPath}");
                     }
                 }
 
@@ -909,7 +913,7 @@ namespace SmallMind.Training
                 {
                     var checkpointPath = Path.Combine(checkpointDir, "model.json");
                     SaveCheckpoint(checkpointPath);
-                    Console.WriteLine($"✓ Checkpoint saved to {checkpointPath}");
+                    _logger.Info($"✓ Checkpoint saved to {checkpointPath}");
                 }
             }
 
@@ -918,22 +922,22 @@ namespace SmallMind.Training
             // Save final checkpoint
             var finalCheckpointPath = Path.Combine(checkpointDir, "model.json");
             SaveCheckpoint(finalCheckpointPath);
-            Console.WriteLine($"\n✓ Training completed. Final checkpoint saved to {finalCheckpointPath}");
+            _logger.Info($"\n✓ Training completed. Final checkpoint saved to {finalCheckpointPath}");
 
             // Print performance summary
             double totalTimeSeconds = totalStopwatch.Elapsed.TotalSeconds;
             double avgTokensPerSec = totalTimeSeconds > 0 ? totalTokens / totalTimeSeconds : 0;
             
-            Console.WriteLine($"\n╔══════════════════════════════════════════════════════════════════════════╗");
-            Console.WriteLine($"║                          TRAINING SUMMARY                             ║");
-            Console.WriteLine($"╠══════════════════════════════════════════════════════════════════════════╣");
-            Console.WriteLine($"║ Total time: {totalTimeSeconds,12:F2}s │ Tokens: {totalTokens,16:N0}          ║");
-            Console.WriteLine($"║ Throughput: {avgTokensPerSec,12:F0} tok/s │ Best Val Loss: {bestValLoss,10:F4}      ║");
+            _logger.Info($"\n╔══════════════════════════════════════════════════════════════════════════╗");
+            _logger.Info($"║                          TRAINING SUMMARY                             ║");
+            _logger.Info($"╠══════════════════════════════════════════════════════════════════════════╣");
+            _logger.Info($"║ Total time: {totalTimeSeconds,12:F2}s │ Tokens: {totalTokens,16:N0}          ║");
+            _logger.Info($"║ Throughput: {avgTokensPerSec,12:F0} tok/s │ Best Val Loss: {bestValLoss,10:F4}      ║");
             if (mixedPrecisionTrainer != null)
             {
-                Console.WriteLine($"║ FP16 Overflows: {mixedPrecisionTrainer.OverflowCount,8} │ Final Loss Scale: {mixedPrecisionTrainer.LossScale,10:F0}  ║");
+                _logger.Info($"║ FP16 Overflows: {mixedPrecisionTrainer.OverflowCount,8} │ Final Loss Scale: {mixedPrecisionTrainer.LossScale,10:F0}  ║");
             }
-            Console.WriteLine($"╚══════════════════════════════════════════════════════════════════════════╝");
+            _logger.Info($"╚══════════════════════════════════════════════════════════════════════════╝");
             
             // Print diagnostics if enabled
             if (profiler != null)

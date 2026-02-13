@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SmallMind.Abstractions\SmallMind.Abstractions.csproj" />
     <ProjectReference Include="..\SmallMind.Quantization\SmallMind.Quantization.csproj" />
     <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
   </ItemGroup>

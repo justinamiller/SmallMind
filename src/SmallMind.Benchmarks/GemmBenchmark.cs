@@ -4,6 +4,7 @@ using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Simd;
 using SmallMind.Quantization.Kernels;
 
@@ -38,41 +39,43 @@ namespace SmallMind.Benchmarks
         /// <summary>
         /// Run complete benchmark suite and output results.
         /// </summary>
-        public static void Run()
+        public static void Run(IRuntimeLogger? logger = null)
         {
-            Console.WriteLine("╔═══════════════════════════════════════════════════════════════════════════╗");
-            Console.WriteLine("║           SmallMind GEMM Benchmark - Phase 0 Baseline                    ║");
-            Console.WriteLine("╚═══════════════════════════════════════════════════════════════════════════╝");
-            Console.WriteLine();
+            var log = logger ?? NullRuntimeLogger.Instance;
+            
+            log.Info("╔═══════════════════════════════════════════════════════════════════════════╗");
+            log.Info("║           SmallMind GEMM Benchmark - Phase 0 Baseline                    ║");
+            log.Info("╚═══════════════════════════════════════════════════════════════════════════╝");
+            log.Info("");
 
-            PrintEnvironmentInfo();
-            Console.WriteLine();
+            PrintEnvironmentInfo(log);
+            log.Info("");
 
             var results = new List<BenchmarkResult>();
 
             foreach (var (M, K, N) in BenchmarkSizes)
             {
-                Console.WriteLine($"Benchmarking {M}×{K}×{N}...");
+                log.Info($"Benchmarking {M}×{K}×{N}...");
                 
                 // Force full GC collection between different sizes
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
                 GC.Collect();
 
-                var result = BenchmarkSize(M, K, N);
+                var result = BenchmarkSize(M, K, N, log);
                 results.Add(result);
                 
-                Console.WriteLine($"  MatMulOps: {result.MatMulOpsGflops:F2} GFLOPS (kernel: {result.KernelUsed})");
-                Console.WriteLine($"  GemmMicro: {result.GemmMicroGflops:F2} GFLOPS");
-                Console.WriteLine($"  PackedMM:  {result.PackedMmGflops:F2} GFLOPS");
-                Console.WriteLine();
+                log.Info($"  MatMulOps: {result.MatMulOpsGflops:F2} GFLOPS (kernel: {result.KernelUsed})");
+                log.Info($"  GemmMicro: {result.GemmMicroGflops:F2} GFLOPS");
+                log.Info($"  PackedMM:  {result.PackedMmGflops:F2} GFLOPS");
+                log.Info("");
             }
 
-            PrintMarkdownTable(results);
-            WriteJsonResults(results);
+            PrintMarkdownTable(results, log);
+            WriteJsonResults(results, log);
         }
 
-        private static BenchmarkResult BenchmarkSize(int M, int K, int N)
+        private static BenchmarkResult BenchmarkSize(int M, int K, int N, IRuntimeLogger log)
         {
             var random = new Random(RANDOM_SEED);
             
@@ -146,7 +149,7 @@ namespace SmallMind.Benchmarks
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"  Warning: PackedMatMul failed: {ex.Message}");
+                log.Warn($"  Warning: PackedMatMul failed: {ex.Message}");
                 packedGflops = 0.0;
             }
 
@@ -248,62 +251,57 @@ namespace SmallMind.Benchmarks
                 
                 if (relError > scaledTolerance)
                 {
-                    if (errorCount < MAX_ERRORS_TO_SHOW)
-                    {
-                        Console.WriteLine($"  MISMATCH at [{i}]: expected {e}, got {a}, relErr={relError:F6} (tol={scaledTolerance:F6})");
-                    }
                     errorCount++;
                 }
             }
             
             if (errorCount > 0)
             {
-                Console.WriteLine($"  Total mismatches: {errorCount}/{length} ({100.0 * errorCount / length:F3}%)");
                 return errorCount < (length / 1000); // Allow < 0.1% error rate
             }
             
             return true;
         }
 
-        private static void PrintEnvironmentInfo()
+        private static void PrintEnvironmentInfo(IRuntimeLogger log)
         {
-            Console.WriteLine("Environment:");
-            Console.WriteLine($"  Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
-            Console.WriteLine($"  OS: {RuntimeInformation.OSDescription}");
-            Console.WriteLine($"  Architecture: {RuntimeInformation.ProcessArchitecture}");
-            Console.WriteLine($"  .NET: {RuntimeInformation.FrameworkDescription}");
-            Console.WriteLine($"  CPU Cores: {Environment.ProcessorCount}");
-            Console.WriteLine($"  GC Mode: {(GCSettings.IsServerGC ? "Server" : "Workstation")}");
-            Console.WriteLine();
-            Console.WriteLine("SIMD Capabilities:");
-            Console.WriteLine($"  Vector<float>.Count: {System.Numerics.Vector<float>.Count}");
-            Console.WriteLine($"  Vector.IsHardwareAccelerated: {System.Numerics.Vector.IsHardwareAccelerated}");
+            log.Info("Environment:");
+            log.Info($"  Date: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+            log.Info($"  OS: {RuntimeInformation.OSDescription}");
+            log.Info($"  Architecture: {RuntimeInformation.ProcessArchitecture}");
+            log.Info($"  .NET: {RuntimeInformation.FrameworkDescription}");
+            log.Info($"  CPU Cores: {Environment.ProcessorCount}");
+            log.Info($"  GC Mode: {(GCSettings.IsServerGC ? "Server" : "Workstation")}");
+            log.Info("");
+            log.Info("SIMD Capabilities:");
+            log.Info($"  Vector<float>.Count: {System.Numerics.Vector<float>.Count}");
+            log.Info($"  Vector.IsHardwareAccelerated: {System.Numerics.Vector.IsHardwareAccelerated}");
             
             #if NET7_0_OR_GREATER
-            Console.WriteLine($"  AVX2: {System.Runtime.Intrinsics.X86.Avx2.IsSupported}");
-            Console.WriteLine($"  AVX-512F: {System.Runtime.Intrinsics.X86.Avx512F.IsSupported}");
-            Console.WriteLine($"  FMA: {System.Runtime.Intrinsics.X86.Fma.IsSupported}");
+            log.Info($"  AVX2: {System.Runtime.Intrinsics.X86.Avx2.IsSupported}");
+            log.Info($"  AVX-512F: {System.Runtime.Intrinsics.X86.Avx512F.IsSupported}");
+            log.Info($"  FMA: {System.Runtime.Intrinsics.X86.Fma.IsSupported}");
             #endif
         }
 
-        private static void PrintMarkdownTable(List<BenchmarkResult> results)
+        private static void PrintMarkdownTable(List<BenchmarkResult> results, IRuntimeLogger log)
         {
-            Console.WriteLine();
-            Console.WriteLine("╔═══════════════════════════════════════════════════════════════════════════╗");
-            Console.WriteLine("║                           Baseline Results                                ║");
-            Console.WriteLine("╚═══════════════════════════════════════════════════════════════════════════╝");
-            Console.WriteLine();
-            Console.WriteLine("## Baseline Results — " + results[0].Timestamp.ToString("yyyy-MM-dd"));
-            Console.WriteLine();
-            Console.WriteLine("| Size       | MatMulOps | GemmMicro | PackedMM | Kernel Used |");
-            Console.WriteLine("|------------|-----------|-----------|----------|-------------|");
+            log.Info("");
+            log.Info("╔═══════════════════════════════════════════════════════════════════════════╗");
+            log.Info("║                           Baseline Results                                ║");
+            log.Info("╚═══════════════════════════════════════════════════════════════════════════╝");
+            log.Info("");
+            log.Info("## Baseline Results — " + results[0].Timestamp.ToString("yyyy-MM-dd"));
+            log.Info("");
+            log.Info("| Size       | MatMulOps | GemmMicro | PackedMM | Kernel Used |");
+            log.Info("|------------|-----------|-----------|----------|-------------|");
             
             foreach (var r in results)
             {
                 string size = FormatSize(r.M, r.K, r.N);
-                Console.WriteLine($"| {size,-10} | {r.MatMulOpsGflops,9:F2} | {r.GemmMicroGflops,9:F2} | {r.PackedMmGflops,8:F2} | {r.KernelUsed,-11} |");
+                log.Info($"| {size,-10} | {r.MatMulOpsGflops,9:F2} | {r.GemmMicroGflops,9:F2} | {r.PackedMmGflops,8:F2} | {r.KernelUsed,-11} |");
             }
-            Console.WriteLine();
+            log.Info("");
         }
 
         private static string FormatSize(int M, int K, int N)
@@ -314,7 +312,7 @@ namespace SmallMind.Benchmarks
                 return $"{M}×{K}×{N}";
         }
 
-        private static void WriteJsonResults(List<BenchmarkResult> results)
+        private static void WriteJsonResults(List<BenchmarkResult> results, IRuntimeLogger log)
         {
             var report = new
             {
@@ -345,7 +343,7 @@ namespace SmallMind.Benchmarks
             
             string filename = "benchmark-results.json";
             File.WriteAllText(filename, json);
-            Console.WriteLine($"Results written to {filename}");
+            log.Info($"Results written to {filename}");
         }
 
         private class BenchmarkResult

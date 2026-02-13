@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
 using SmallMind.Core.Validation;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Transformers
 {
@@ -23,6 +24,7 @@ namespace SmallMind.Transformers
         private readonly int _nHead;
         private readonly double _dropout;
         private readonly Random _random;
+        private readonly IRuntimeLogger _logger;
         
         /// <summary>
         /// Whether the model is in training mode.
@@ -77,7 +79,7 @@ namespace SmallMind.Transformers
         /// </summary>
         public int NumLayers => _nLayer;
 
-        public TransformerModel(int vocabSize, int blockSize, int nEmbd, int nLayer, int nHead, double dropout, int seed = 42)
+        public TransformerModel(int vocabSize, int blockSize, int nEmbd, int nLayer, int nHead, double dropout, int seed = 42, IRuntimeLogger? logger = null)
         {
             Guard.GreaterThan(vocabSize, 0);
             Guard.GreaterThan(blockSize, 0);
@@ -93,6 +95,7 @@ namespace SmallMind.Transformers
                     nameof(nEmbd));
             }
             
+            _logger = logger ?? NullRuntimeLogger.Instance;
             _vocabSize = vocabSize;
             _blockSize = blockSize;
             _nEmbd = nEmbd;
@@ -136,14 +139,14 @@ namespace SmallMind.Transformers
             Parameters.AddRange(_lmHead.Parameters);
 
             long totalParams = GetTotalParameterCount();
-            Console.WriteLine($"TransformerModel initialized: vocab={_vocabSize}, block_size={_blockSize}, " +
+            _logger.Info($"TransformerModel initialized: vocab={_vocabSize}, block_size={_blockSize}, " +
                             $"n_embd={_nEmbd}, n_layer={_nLayer}, n_head={_nHead}, dropout={_dropout}");
-            Console.WriteLine($"Total parameters: {totalParams:N0} ({Parameters.Count} tensors)");
+            _logger.Info($"Total parameters: {totalParams:N0} ({Parameters.Count} tensors)");
             
             // Warn if approaching billion-parameter scale
             if (totalParams > 500_000_000)
             {
-                Console.WriteLine($"WARNING: Large model detected ({totalParams / 1_000_000}M parameters). " +
+                _logger.Warn($"Large model detected ({totalParams / 1_000_000}M parameters). " +
                                 "Consider using quantization (Q8/Q4) for memory efficiency.");
             }
         }
@@ -152,7 +155,7 @@ namespace SmallMind.Transformers
         /// ModelConfig-based constructor for Llama/Mistral/Phi architectures.
         /// Supports RoPE, RMSNorm, GQA, and SwiGLU based on config.
         /// </summary>
-        public TransformerModel(ModelConfig config, int seed = 42)
+        public TransformerModel(ModelConfig config, int seed = 42, IRuntimeLogger? logger = null)
         {
             if (config == null)
                 throw new ArgumentNullException(nameof(config));
@@ -164,6 +167,7 @@ namespace SmallMind.Transformers
             Guard.GreaterThan(config.HeadCount, 0);
             Guard.InRange(config.Dropout, 0.0, 1.0);
             
+            _logger = logger ?? NullRuntimeLogger.Instance;
             _vocabSize = config.VocabSize;
             _blockSize = config.ContextLength;
             _nEmbd = config.EmbeddingLength;
@@ -228,16 +232,16 @@ namespace SmallMind.Transformers
             Parameters.AddRange(_lmHead.Parameters);
 
             long totalParams = GetTotalParameterCount();
-            Console.WriteLine($"TransformerModel initialized from ModelConfig:");
-            Console.WriteLine($"  Architecture: {config.Architecture}");
-            Console.WriteLine($"  Vocab: {_vocabSize}, Context: {_blockSize}, Embedding: {_nEmbd}");
-            Console.WriteLine($"  Layers: {_nLayer}, Heads: {_nHead} (KV heads: {config.HeadCountKv})");
-            Console.WriteLine($"  Features: RoPE={_useRope}, RMSNorm={config.UseRmsNorm}, SwiGLU={config.UseSwiGlu}");
-            Console.WriteLine($"  Total parameters: {totalParams:N0} ({Parameters.Count} tensors)");
+            _logger.Info($"TransformerModel initialized from ModelConfig:");
+            _logger.Info($"  Architecture: {config.Architecture}");
+            _logger.Info($"  Vocab: {_vocabSize}, Context: {_blockSize}, Embedding: {_nEmbd}");
+            _logger.Info($"  Layers: {_nLayer}, Heads: {_nHead} (KV heads: {config.HeadCountKv})");
+            _logger.Info($"  Features: RoPE={_useRope}, RMSNorm={config.UseRmsNorm}, SwiGLU={config.UseSwiGlu}");
+            _logger.Info($"  Total parameters: {totalParams:N0} ({Parameters.Count} tensors)");
             
             if (totalParams > 500_000_000)
             {
-                Console.WriteLine($"WARNING: Large model detected ({totalParams / 1_000_000}M parameters).");
+                _logger.Warn($"Large model detected ({totalParams / 1_000_000}M parameters).");
             }
         }
 
