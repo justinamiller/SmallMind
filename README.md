@@ -4,7 +4,7 @@
 [![CodeQL](https://github.com/justinamiller/SmallMind/actions/workflows/codeql.yml/badge.svg)](https://github.com/justinamiller/SmallMind/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET Version](https://img.shields.io/badge/.NET-10.0%2B-512BD4)](https://dotnet.microsoft.com/download)
-[![NuGet](https://img.shields.io/badge/NuGet-Coming%20Soon-blue)](https://www.nuget.org/)
+![NuGet](https://img.shields.io/badge/NuGet-Coming%20Soon-blue)
 
 **Production-ready LLM inference runtime for .NET with zero external dependencies.**
 

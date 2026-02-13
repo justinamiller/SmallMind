@@ -400,9 +400,8 @@ namespace SmallMind.Benchmarks
 
             foreach (var format in formats)
             {
-                switch (format.ToLowerInvariant())
+                if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
                 {
-                    case "json":
                         var jsonPath = Path.Combine(outputDir, $"perf-results-{timestamp}.json");
                         JsonReportWriter.WriteReport(jsonPath, _results);
                         _logger.Info($"  JSON: {jsonPath}");
@@ -410,10 +409,10 @@ namespace SmallMind.Benchmarks
                         // Also write latest
                         var latestJsonPath = Path.Combine(outputDir, "perf-results-latest.json");
                         JsonReportWriter.WriteReport(latestJsonPath, _results);
-                        break;
-
-                    case "markdown":
-                    case "md":
+                }
+                else if (format.Equals("markdown", StringComparison.OrdinalIgnoreCase) || 
+                         format.Equals("md", StringComparison.OrdinalIgnoreCase))
+                {
                         var mdPath = Path.Combine(outputDir, $"perf-results-{timestamp}.md");
                         
                         // Try to load baseline (look in common locations)
@@ -437,7 +436,6 @@ namespace SmallMind.Benchmarks
                         {
                             CheckRegressions(baseline);
                         }
-                        break;
                 }
             }
 

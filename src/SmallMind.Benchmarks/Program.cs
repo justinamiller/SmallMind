@@ -57,57 +57,61 @@ namespace SmallMind.Benchmarks
             {
                 var arg = args[i];
 
-                switch (arg.ToLowerInvariant())
+                if (arg.Equals("--help", StringComparison.OrdinalIgnoreCase) || 
+                    arg.Equals("-h", StringComparison.OrdinalIgnoreCase))
                 {
-                    case "--help":
-                    case "-h":
-                        options.ShowHelp = true;
-                        break;
-
-                    case "--warmup":
-                        if (i + 1 < args.Length && int.TryParse(args[i + 1], out var warmup))
+                    options.ShowHelp = true;
+                }
+                else if (arg.Equals("--warmup", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var warmup))
+                    {
+                        options.WarmupIterations = warmup;
+                        i++;
+                    }
+                }
+                else if (arg.Equals("--iterations", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var iters))
+                    {
+                        options.MeasuredIterations = iters;
+                        i++;
+                    }
+                }
+                else if (arg.Equals("--seed", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var seed))
+                    {
+                        options.Seed = seed;
+                        i++;
+                    }
+                }
+                else if (arg.Equals("--output-dir", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        options.OutputDir = args[i + 1];
+                        i++;
+                    }
+                }
+                else if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        var formats = args[i + 1].Split(',');
+                        options.Formats = new List<string>();
+                        foreach (var fmt in formats)
                         {
-                            options.WarmupIterations = warmup;
-                            i++;
+                            var trimmed = fmt.Trim();
+                            if (!string.IsNullOrEmpty(trimmed))
+                                options.Formats.Add(trimmed);
                         }
-                        break;
-
-                    case "--iterations":
-                        if (i + 1 < args.Length && int.TryParse(args[i + 1], out var iters))
-                        {
-                            options.MeasuredIterations = iters;
-                            i++;
-                        }
-                        break;
-
-                    case "--seed":
-                        if (i + 1 < args.Length && int.TryParse(args[i + 1], out var seed))
-                        {
-                            options.Seed = seed;
-                            i++;
-                        }
-                        break;
-
-                    case "--output-dir":
-                        if (i + 1 < args.Length)
-                        {
-                            options.OutputDir = args[i + 1];
-                            i++;
-                        }
-                        break;
-
-                    case "--format":
-                        if (i + 1 < args.Length)
-                        {
-                            var formats = args[i + 1].Split(',');
-                            options.Formats = new List<string>(formats);
-                            i++;
-                        }
-                        break;
-
-                    case "gemm":
-                        options.BenchmarkType = "gemm";
-                        break;
+                        i++;
+                    }
+                }
+                else if (arg.Equals("gemm", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.BenchmarkType = "gemm";
                 }
             }
 
