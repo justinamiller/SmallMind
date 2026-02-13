@@ -1,17 +1,18 @@
 #!/bin/bash
-# Multi-Architecture Benchmark Result Consolidator
+# Multi-Architecture Benchmark Result Consolidator with Comparison
 # Usage: ./consolidate-bench-results.sh <results-dir>
 
 set -e
 
 RESULTS_DIR="${1:-bench/results}"
 OUTPUT_FILE="CONSOLIDATED_BENCHMARK_RESULTS.md"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Consolidating benchmark results from: $RESULTS_DIR"
 echo "Output file: $OUTPUT_FILE"
 
 # Start consolidated report
-cat > "$OUTPUT_FILE" << 'EOF'
+cat > "$OUTPUT_FILE" << EOF
 # SmallMind Consolidated Multi-Architecture Benchmark Results
 
 **Generated**: $(date -u +"%Y-%m-%d %H:%M UTC")
@@ -19,56 +20,96 @@ cat > "$OUTPUT_FILE" << 'EOF'
 
 ## Summary
 
-This report consolidates benchmark results from multiple CPU architectures.
+This report consolidates benchmark results from multiple CPU architectures with historical comparison.
 
 ---
 
 EOF
 
-# Find all markdown result files
-echo "Searching for benchmark result files..."
-RESULT_FILES=$(find "$RESULTS_DIR" -name "*.md" -type f 2>/dev/null || true)
+# Find all cross-architecture comparison files (most recent)
+echo "Searching for cross-architecture comparison files..."
+CROSS_ARCH_FILE=$(find "$RESULTS_DIR" -name "*_cross_architecture_comparison.md" -type f 2>/dev/null | sort -r | head -1)
 
-if [ -z "$RESULT_FILES" ]; then
-    echo "No benchmark result files found in $RESULTS_DIR"
-    echo "## No Results Found" >> "$OUTPUT_FILE"
+if [ -n "$CROSS_ARCH_FILE" ]; then
+    echo "Found cross-architecture comparison: $(basename $CROSS_ARCH_FILE)"
+    echo "## Multi-Architecture Performance Comparison" >> "$OUTPUT_FILE"
     echo "" >> "$OUTPUT_FILE"
-    echo "No benchmark result files were found. Please run benchmarks first." >> "$OUTPUT_FILE"
-    exit 0
-fi
-
-# Process each result file
-COUNT=0
-for FILE in $RESULT_FILES; do
-    echo "Processing: $(basename $FILE)"
-    
-    # Extract architecture from filename (format: timestamp_gitsha_arch_model.md)
-    FILENAME=$(basename "$FILE")
-    ARCH=$(echo "$FILENAME" | cut -d'_' -f3)
-    
-    echo "" >> "$OUTPUT_FILE"
-    echo "## Architecture: $ARCH" >> "$OUTPUT_FILE"
-    echo "" >> "$OUTPUT_FILE"
-    
-    # Append the file content
-    cat "$FILE" >> "$OUTPUT_FILE"
+    cat "$CROSS_ARCH_FILE" >> "$OUTPUT_FILE"
     echo "" >> "$OUTPUT_FILE"
     echo "---" >> "$OUTPUT_FILE"
     echo "" >> "$OUTPUT_FILE"
-    
-    COUNT=$((COUNT + 1))
-done
+fi
 
+# Find all individual comparison files
+echo "Searching for individual comparison files..."
+COMPARISON_FILES=$(find "$RESULTS_DIR" -name "*_comparison.md" -type f ! -name "*_cross_architecture_comparison.md" 2>/dev/null | sort -r || true)
+
+if [ -n "$COMPARISON_FILES" ]; then
+    echo "## Architecture-Specific Comparisons" >> "$OUTPUT_FILE"
+    echo "" >> "$OUTPUT_FILE"
+    
+    for FILE in $COMPARISON_FILES; do
+        echo "Processing comparison: $(basename $FILE)"
+        
+        # Extract architecture from filename
+        FILENAME=$(basename "$FILE")
+        ARCH=$(echo "$FILENAME" | grep -oP '(?<=_)[^_]+(?=_comparison\.md$)' || echo "unknown")
+        
+        echo "### Architecture: $ARCH" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+        cat "$FILE" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+        echo "---" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+    done
+fi
+
+# Find latest result files (non-comparison)
+echo "Searching for latest benchmark result files..."
+RESULT_FILES=$(find "$RESULTS_DIR" -name "*.md" -type f ! -name "*_comparison.md" ! -name "*_cross_architecture.md" 2>/dev/null | sort -r | head -10 || true)
+
+if [ -n "$RESULT_FILES" ]; then
+    echo "## Latest Benchmark Results" >> "$OUTPUT_FILE"
+    echo "" >> "$OUTPUT_FILE"
+    
+    COUNT=0
+    for FILE in $RESULT_FILES; do
+        echo "Processing result: $(basename $FILE)"
+        
+        # Extract architecture from filename (format: timestamp_gitsha_arch_model.md)
+        FILENAME=$(basename "$FILE")
+        ARCH=$(echo "$FILENAME" | cut -d'_' -f3)
+        MODEL=$(echo "$FILENAME" | sed 's/^[^_]*_[^_]*_[^_]*_//' | sed 's/\.md$//')
+        
+        echo "### $ARCH - $MODEL" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+        cat "$FILE" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+        echo "---" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+        
+        COUNT=$((COUNT + 1))
+    done
+fi
+
+# Generate summary statistics
 echo "" >> "$OUTPUT_FILE"
-echo "## Summary" >> "$OUTPUT_FILE"
+echo "## Consolidation Summary" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
-echo "Consolidated $COUNT benchmark result(s) from different architectures." >> "$OUTPUT_FILE"
+
+TOTAL_JSON=$(find "$RESULTS_DIR" -name "*.json" -type f 2>/dev/null | wc -l)
+TOTAL_COMPARISONS=$(find "$RESULTS_DIR" -name "*_comparison.md" -type f 2>/dev/null | wc -l)
+
+echo "- **Total benchmark runs**: $TOTAL_JSON" >> "$OUTPUT_FILE"
+echo "- **Comparison reports**: $TOTAL_COMPARISONS" >> "$OUTPUT_FILE"
+echo "- **Cross-architecture comparisons**: $([ -n "$CROSS_ARCH_FILE" ] && echo "1" || echo "0")" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 echo "*Generated by SmallMind Multi-Architecture Benchmark Consolidator*" >> "$OUTPUT_FILE"
 
 echo ""
 echo "✅ Consolidation complete!"
-echo "   Results: $COUNT architecture(s)"
+echo "   Total benchmark runs: $TOTAL_JSON"
+echo "   Comparison reports: $TOTAL_COMPARISONS"
 echo "   Output: $OUTPUT_FILE"
 echo ""
 echo "To view: cat $OUTPUT_FILE"
