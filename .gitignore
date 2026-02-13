@@ -36,6 +36,9 @@ profiling-results-*/
 
 # Model files (GGUF, SMQ, etc.)
 models/
+!bench/models/
+!bench/models/.gitignore
+!bench/models/models.manifest.json
 *.gguf
 *.smq
 *.smq.manifest.json

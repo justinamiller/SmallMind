@@ -1,0 +1,6 @@
+# Downloaded models (large binary files)
+*.gguf
+*.bin
+
+# Allow manifest
+!models.manifest.json
