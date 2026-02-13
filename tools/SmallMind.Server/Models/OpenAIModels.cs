@@ -323,6 +323,9 @@ public sealed class ErrorDetail
 
     [JsonPropertyName("code")]
     public string? Code { get; set; }
+
+    [JsonPropertyName("param")]
+    public string? Param { get; set; }
 }
 
 #endregion
