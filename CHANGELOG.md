@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactoring
+- **Removed duplicate utility methods across projects** - Promoted shared utility methods into canonical static helpers to reduce code duplication and maintenance drift:
+  - Created `ChatTemplateFormatter` in `SmallMind.Core/Utilities` for chat template formatting (used by Engine and Console)
+  - Created `GgufTokenizerHelpers` in `SmallMind.Tokenizers/Gguf` for byte token detection (used by GgufBpeTokenizer and GgufTokenTableTokenizer)
+  - Created `GgufMetadataHelpers` in `SmallMind.Core/Utilities` for GGUF metadata extraction (used by Engine and Runtime)
+  - Benefits: Reduces duplication, ensures consistent behavior across projects, simplifies future updates
+  - Added 48 comprehensive unit and integration tests for the new canonical helpers
+
 ## [0.4.0] - 2026-02-12 - Pre-Production Release
 
 ### Changed
