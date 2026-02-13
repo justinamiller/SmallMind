@@ -223,9 +223,10 @@ namespace SmallMind.Runtime.Batching
             }
             else
             {
-                // Full batching: batch both prefill and decode (more complex)
-                // For now, fall back to individual processing
-                // TODO: Implement full batched decode
+                // KNOWN LIMITATION: Full batched decode not yet implemented
+                // Currently falls back to individual processing for non-prefill-only batching.
+                // Full batched decode requires complex KV cache management and attention masking
+                // for variable-length sequences. This is a planned enhancement for production use.
                 for (int i = 0; i < batch.Count; i++)
                 {
                     await ProcessSingleRequestAsync(batch[i]);
