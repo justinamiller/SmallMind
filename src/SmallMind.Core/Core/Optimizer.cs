@@ -243,33 +243,37 @@ namespace SmallMind.Core.Core
                     {
                         for (; i <= size - 8; i += 8)
                         {
-                            // Load current state
-                            var vGrad = Avx.LoadVector256(pGrad + i);
-                            var vM = Avx.LoadVector256(pM + i);
-                            var vV = Avx.LoadVector256(pV + i);
-                            var vData = Avx.LoadVector256(pData + i);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 8 <= size)
+                            {
+                                // Load current state
+                                var vGrad = Avx.LoadVector256(pGrad + i);
+                                var vM = Avx.LoadVector256(pM + i);
+                                var vV = Avx.LoadVector256(pV + i);
+                                var vData = Avx.LoadVector256(pData + i);
 
-                            // Update biased first moment: m = beta1 * m + (1 - beta1) * grad
-                            vM = Fma.MultiplyAdd(vBeta1_256, vM, Avx.Multiply(vOneMinusBeta1_256, vGrad));
+                                // Update biased first moment: m = beta1 * m + (1 - beta1) * grad
+                                vM = Fma.MultiplyAdd(vBeta1_256, vM, Avx.Multiply(vOneMinusBeta1_256, vGrad));
 
-                            // Update biased second moment: v = beta2 * v + (1 - beta2) * grad^2
-                            vV = Fma.MultiplyAdd(vBeta2_256, vV, Avx.Multiply(vOneMinusBeta2_256, Avx.Multiply(vGrad, vGrad)));
+                                // Update biased second moment: v = beta2 * v + (1 - beta2) * grad^2
+                                vV = Fma.MultiplyAdd(vBeta2_256, vV, Avx.Multiply(vOneMinusBeta2_256, Avx.Multiply(vGrad, vGrad)));
 
-                            // Store updated moments
-                            Avx.Store(pM + i, vM);
-                            Avx.Store(pV + i, vV);
+                                // Store updated moments
+                                Avx.Store(pM + i, vM);
+                                Avx.Store(pV + i, vV);
 
-                            // Bias-corrected moments
-                            var vMHat = Avx.Multiply(vM, vBeta1Correction_256);
-                            var vVHat = Avx.Multiply(vV, vBeta2Correction_256);
+                                // Bias-corrected moments
+                                var vMHat = Avx.Multiply(vM, vBeta1Correction_256);
+                                var vVHat = Avx.Multiply(vV, vBeta2Correction_256);
 
-                            // AdamW update: data -= lr * (mHat / sqrt(vHat + eps) + weightDecay * data)
-                            var vDenom = Avx.Sqrt(Avx.Add(vVHat, vEps_256));
-                            var vUpdate = Avx.Divide(vMHat, vDenom);
-                            vUpdate = Fma.MultiplyAdd(vWeightDecay_256, vData, vUpdate);
-                            vData = Avx.Subtract(vData, Avx.Multiply(vLr_256, vUpdate));
+                                // AdamW update: data -= lr * (mHat / sqrt(vHat + eps) + weightDecay * data)
+                                var vDenom = Avx.Sqrt(Avx.Add(vVHat, vEps_256));
+                                var vUpdate = Avx.Divide(vMHat, vDenom);
+                                vUpdate = Fma.MultiplyAdd(vWeightDecay_256, vData, vUpdate);
+                                vData = Avx.Subtract(vData, Avx.Multiply(vLr_256, vUpdate));
 
-                            Avx.Store(pData + i, vData);
+                                Avx.Store(pData + i, vData);
+                            }
                         }
                     }
                 }
