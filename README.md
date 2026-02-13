@@ -2,6 +2,7 @@
 
 [![Build and Test](https://github.com/justinamiller/SmallMind/actions/workflows/build.yml/badge.svg)](https://github.com/justinamiller/SmallMind/actions/workflows/build.yml)
 [![CodeQL](https://github.com/justinamiller/SmallMind/actions/workflows/codeql.yml/badge.svg)](https://github.com/justinamiller/SmallMind/actions/workflows/codeql.yml)
+[![NuGet](https://img.shields.io/nuget/v/SmallMind.svg)](https://www.nuget.org/packages/SmallMind)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET Version](https://img.shields.io/badge/.NET-10.0%2B-512BD4)](https://dotnet.microsoft.com/download)
 
