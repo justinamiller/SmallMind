@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using System.Runtime.Intrinsics.Arm;
 using System.Threading.Tasks;
 
 namespace SmallMind.Core.Simd
@@ -309,6 +310,10 @@ namespace SmallMind.Core.Simd
             {
                 GemmMicrokernelAvx2(A, Bpacked, C, M, K, N, ldA, panelStride, ldC);
             }
+            else if (AdvSimd.Arm64.IsSupported)
+            {
+                GemmMicrokernelNeon(A, Bpacked, C, M, K, N, ldA, panelStride, ldC);
+            }
             else
             {
                 GemmMicrokernelScalar(A, Bpacked, C, M, K, N, ldA, ldC);
@@ -591,6 +596,121 @@ namespace SmallMind.Core.Simd
             Avx.Store(C + 4 * ldC + 8, c41);
             Avx.Store(C + 5 * ldC + 0, c50);
             Avx.Store(C + 5 * ldC + 8, c51);
+        }
+        
+        /// <summary>
+        /// ARM64 AdvSimd/NEON microkernel: 4×8 tile (MR=4, NR=8 using 2x4 vectors).
+        /// Optimized for Apple Silicon and ARM64 servers.
+        /// Uses NEON FMA for high throughput on ARM64.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+        private static unsafe void GemmMicrokernelNeon(
+            float* A, float* Bpacked, float* C,
+            int M, int K, int N,
+            int ldA, int panelStride, int ldC)
+        {
+            if (!AdvSimd.Arm64.IsSupported)
+            {
+                GemmMicrokernelScalar(A, Bpacked, C, M, K, N, ldA, ldC);
+                return;
+            }
+            
+            // NR=8 for ARM64 (2 NEON vectors of 4 floats each)
+            const int MR_NEON = 4;
+            const int NR_NEON = 8;
+            
+            for (int i = 0; i < M; i += MR_NEON)
+            {
+                int mr = Math.Min(MR_NEON, M - i);
+                
+                for (int j = 0; j < N; j += NR_NEON)
+                {
+                    int nr = Math.Min(NR_NEON, N - j);
+                    
+                    if (mr == MR_NEON && nr == NR_NEON)
+                    {
+                        // Full tile fast path
+                        // Panel index for this j (NR=16 in packed layout, but we process NR_NEON=8 at a time)
+                        int panelIdx = j / NR;
+                        // Use panelStride (full K) for panel offset
+                        float* panelBase = Bpacked + panelIdx * panelStride * NR;
+                        int jInPanel = j % NR;
+                        
+                        GemmKernelNeon_4x8(
+                            A + i * ldA,
+                            panelBase + jInPanel,
+                            C + i * ldC + j,
+                            K, ldA, NR, ldC);
+                    }
+                    else
+                    {
+                        // Edge case: scalar fallback
+                        int panelIdx = j / NR;
+                        float* panelBase = Bpacked + panelIdx * panelStride * NR;
+                        int jInPanel = j % NR;
+                        
+                        GemmKernelScalar(A + i * ldA, panelBase + jInPanel, C + i * ldC + j,
+                                        mr, K, nr, ldA, NR, ldC);
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// NEON kernel: 4×8 tile with FMA.
+        /// Processes 4 rows × 8 columns using NEON register blocking.
+        /// Bpacked uses panel-major layout: sequential access pattern k*ldB+offset.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+        private static unsafe void GemmKernelNeon_4x8(
+            float* A, float* Bpacked, float* C,
+            int K, int ldA, int ldB, int ldC)
+        {
+            // Load accumulators (4 rows × 2 NEON vectors of 4 floats)
+            var c00 = AdvSimd.LoadVector128(C + 0 * ldC + 0);
+            var c01 = AdvSimd.LoadVector128(C + 0 * ldC + 4);
+            var c10 = AdvSimd.LoadVector128(C + 1 * ldC + 0);
+            var c11 = AdvSimd.LoadVector128(C + 1 * ldC + 4);
+            var c20 = AdvSimd.LoadVector128(C + 2 * ldC + 0);
+            var c21 = AdvSimd.LoadVector128(C + 2 * ldC + 4);
+            var c30 = AdvSimd.LoadVector128(C + 3 * ldC + 0);
+            var c31 = AdvSimd.LoadVector128(C + 3 * ldC + 4);
+            
+            // K-dimension loop - panel-major access
+            for (int k = 0; k < K; k++)
+            {
+                // Load B (8 elements from panel-major layout)
+                var b0 = AdvSimd.LoadVector128(Bpacked + k * ldB + 0);
+                var b1 = AdvSimd.LoadVector128(Bpacked + k * ldB + 4);
+                
+                // Broadcast A and FMA
+                // ARM64 FMA signature: FusedMultiplyAdd(addend, left, right) = addend + (left * right)
+                var a0 = AdvSimd.DuplicateToVector128(A[0 * ldA + k]);
+                c00 = AdvSimd.FusedMultiplyAdd(c00, a0, b0);
+                c01 = AdvSimd.FusedMultiplyAdd(c01, a0, b1);
+                
+                var a1 = AdvSimd.DuplicateToVector128(A[1 * ldA + k]);
+                c10 = AdvSimd.FusedMultiplyAdd(c10, a1, b0);
+                c11 = AdvSimd.FusedMultiplyAdd(c11, a1, b1);
+                
+                var a2 = AdvSimd.DuplicateToVector128(A[2 * ldA + k]);
+                c20 = AdvSimd.FusedMultiplyAdd(c20, a2, b0);
+                c21 = AdvSimd.FusedMultiplyAdd(c21, a2, b1);
+                
+                var a3 = AdvSimd.DuplicateToVector128(A[3 * ldA + k]);
+                c30 = AdvSimd.FusedMultiplyAdd(c30, a3, b0);
+                c31 = AdvSimd.FusedMultiplyAdd(c31, a3, b1);
+            }
+            
+            // Store results
+            AdvSimd.Store(C + 0 * ldC + 0, c00);
+            AdvSimd.Store(C + 0 * ldC + 4, c01);
+            AdvSimd.Store(C + 1 * ldC + 0, c10);
+            AdvSimd.Store(C + 1 * ldC + 4, c11);
+            AdvSimd.Store(C + 2 * ldC + 0, c20);
+            AdvSimd.Store(C + 2 * ldC + 4, c21);
+            AdvSimd.Store(C + 3 * ldC + 0, c30);
+            AdvSimd.Store(C + 3 * ldC + 4, c31);
         }
         
         /// <summary>
