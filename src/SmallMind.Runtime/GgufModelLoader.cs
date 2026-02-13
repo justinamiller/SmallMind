@@ -261,7 +261,7 @@ namespace SmallMind.Runtime
                 mapping["output_norm.weight"] = "output_norm.weight";
 
                 // Output head (may not exist due to weight tying)
-                if (modelInfo.Tensors.Any(t => t.Name == "output.weight"))
+                if (tensorNames.Contains("output.weight"))
                 {
                     mapping["output.weight"] = "output.weight";
                 }

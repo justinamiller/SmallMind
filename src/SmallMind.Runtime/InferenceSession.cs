@@ -714,6 +714,7 @@ namespace SmallMind.Runtime
             return _probabilityBuffer;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int SampleFromProbs(float[] probs)
         {
             double target = _deterministicRng?.NextDouble() ?? _random.NextDouble();

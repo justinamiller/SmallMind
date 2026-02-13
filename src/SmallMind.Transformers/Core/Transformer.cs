@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
@@ -329,6 +330,7 @@ namespace SmallMind.Transformers
         /// Helper to forward through norm layer with destination tensor.
         /// Supports both LayerNorm and RMSNorm which have dest-overload methods.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void ForwardNorm(Module norm, Tensor input, Tensor dest)
         {
             if (norm is LayerNorm layerNorm)
@@ -347,6 +349,7 @@ namespace SmallMind.Transformers
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, Tensor dest, int B, int T, int nEmbd)
         {
             int vectorSize = Vector<float>.Count;
@@ -828,6 +831,7 @@ namespace SmallMind.Transformers
         /// Helper to forward through norm layer with destination tensor.
         /// Supports both LayerNorm and RMSNorm which have dest-overload methods.
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void ForwardNorm(Module norm, Tensor input, Tensor dest)
         {
             if (norm is LayerNorm layerNorm)
@@ -846,6 +850,7 @@ namespace SmallMind.Transformers
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Tensor AddTensors(Tensor a, Tensor b, Tensor? dest = null)
         {
             var result = dest ?? new Tensor(a.Shape, requiresGrad: _isTraining);
