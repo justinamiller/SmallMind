@@ -26,7 +26,7 @@ Use this checklist before publishing a new SmallMind release.
 
 ## Release
 
-1. Create a git tag: `git tag v{VERSION}`
+1. Create an annotated git tag: `git tag -a v{VERSION} -m "Release v{VERSION}"`
 2. Push the tag: `git push origin v{VERSION}`
 3. Create a GitHub Release from the tag with changelog notes
 4. The `release.yml` workflow will:
