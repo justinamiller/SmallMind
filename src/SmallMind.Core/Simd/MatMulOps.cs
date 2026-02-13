@@ -272,8 +272,8 @@ namespace SmallMind.Core.Simd
                                             // Unrolled SIMD loop (2x unroll, 32 floats per iteration)
                                             for (; j <= jMax - (vecSize * 2); j += vecSize * 2)
                                             {
-                                                if (bRowStart + j >= 0 && bRowStart + j + vecSize * 2 <= B.Length &&
-                                                    cRowStart + j >= 0 && cRowStart + j + vecSize * 2 <= C.Length)
+                                                if (bRowStart + j + vecSize * 2 <= B.Length &&
+                                                    cRowStart + j + vecSize * 2 <= C.Length)
                                                 {
                                                     Vector512<float> vB0 = Avx512F.LoadVector512(pB + bRowStart + j);
                                                     Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
@@ -290,8 +290,8 @@ namespace SmallMind.Core.Simd
                                             // SIMD remainder (16 floats)
                                             for (; j <= jMax - vecSize; j += vecSize)
                                             {
-                                                if (bRowStart + j >= 0 && bRowStart + j + vecSize <= B.Length &&
-                                                    cRowStart + j >= 0 && cRowStart + j + vecSize <= C.Length)
+                                                if (bRowStart + j + vecSize <= B.Length &&
+                                                    cRowStart + j + vecSize <= C.Length)
                                                 {
                                                     Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + j);
                                                     Vector512<float> vC = Avx512F.LoadVector512(pC + cRowStart + j);
@@ -301,13 +301,13 @@ namespace SmallMind.Core.Simd
                                             }
 
                                             // Scalar remainder within tile
-                                            if (aRowStart + k >= 0 && aRowStart + k < A.Length)
+                                            if (aRowStart + k < A.Length)
                                             {
                                                 float aVal = pA[aRowStart + k];
                                                 for (; j < jMax; j++)
                                                 {
-                                                    if (bRowStart + j >= 0 && bRowStart + j < B.Length &&
-                                                        cRowStart + j >= 0 && cRowStart + j < C.Length)
+                                                    if (bRowStart + j < B.Length &&
+                                                        cRowStart + j < C.Length)
                                                     {
                                                         pC[cRowStart + j] += aVal * pB[bRowStart + j];
                                                     }
@@ -356,8 +356,8 @@ namespace SmallMind.Core.Simd
                                             // Unrolled SIMD loop (2x unroll, 32 floats per iteration)
                                             for (; j <= jMax - (vecSize * 2); j += vecSize * 2)
                                             {
-                                                if (bRowStart + j >= 0 && bRowStart + j + vecSize * 2 <= B.Length &&
-                                                    cRowStart + j >= 0 && cRowStart + j + vecSize * 2 <= C.Length)
+                                                if (bRowStart + j + vecSize * 2 <= B.Length &&
+                                                    cRowStart + j + vecSize * 2 <= C.Length)
                                                 {
                                                     Vector512<float> vB0 = Avx512F.LoadVector512(pB + bRowStart + j);
                                                     Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
@@ -374,8 +374,8 @@ namespace SmallMind.Core.Simd
                                             // SIMD remainder (16 floats)
                                             for (; j <= jMax - vecSize; j += vecSize)
                                             {
-                                                if (bRowStart + j >= 0 && bRowStart + j + vecSize <= B.Length &&
-                                                    cRowStart + j >= 0 && cRowStart + j + vecSize <= C.Length)
+                                                if (bRowStart + j + vecSize <= B.Length &&
+                                                    cRowStart + j + vecSize <= C.Length)
                                                 {
                                                     Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + j);
                                                     Vector512<float> vC = Avx512F.LoadVector512(pC + cRowStart + j);
@@ -385,13 +385,13 @@ namespace SmallMind.Core.Simd
                                             }
 
                                             // Scalar remainder within tile
-                                            if (aRowStart + k >= 0 && aRowStart + k < A.Length)
+                                            if (aRowStart + k < A.Length)
                                             {
                                                 float aVal = pA[aRowStart + k];
                                                 for (; j < jMax; j++)
                                                 {
-                                                    if (bRowStart + j >= 0 && bRowStart + j < B.Length &&
-                                                        cRowStart + j >= 0 && cRowStart + j < C.Length)
+                                                    if (bRowStart + j < B.Length &&
+                                                        cRowStart + j < C.Length)
                                                     {
                                                         pC[cRowStart + j] += aVal * pB[bRowStart + j];
                                                     }
@@ -454,8 +454,8 @@ namespace SmallMind.Core.Simd
                                             // SIMD loop within tile
                                             for (; j <= jMax - vecSize; j += vecSize)
                                             {
-                                                if (bRowStart + j >= 0 && bRowStart + j + vecSize <= B.Length &&
-                                                    cRowStart + j >= 0 && cRowStart + j + vecSize <= C.Length)
+                                                if (bRowStart + j + vecSize <= B.Length &&
+                                                    cRowStart + j + vecSize <= C.Length)
                                                 {
                                                     Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
                                                     Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
@@ -465,13 +465,13 @@ namespace SmallMind.Core.Simd
                                             }
 
                                             // Scalar remainder within tile
-                                            if (aRowStart + k >= 0 && aRowStart + k < A.Length)
+                                            if (aRowStart + k < A.Length)
                                             {
                                                 float aVal = pA[aRowStart + k];
                                                 for (; j < jMax; j++)
                                                 {
-                                                    if (bRowStart + j >= 0 && bRowStart + j < B.Length &&
-                                                        cRowStart + j >= 0 && cRowStart + j < C.Length)
+                                                    if (bRowStart + j < B.Length &&
+                                                        cRowStart + j < C.Length)
                                                     {
                                                         pC[cRowStart + j] += aVal * pB[bRowStart + j];
                                                     }
@@ -520,8 +520,8 @@ namespace SmallMind.Core.Simd
                                             // SIMD loop within tile
                                             for (; j <= jMax - vecSize; j += vecSize)
                                             {
-                                                if (bRowStart + j >= 0 && bRowStart + j + vecSize <= B.Length &&
-                                                    cRowStart + j >= 0 && cRowStart + j + vecSize <= C.Length)
+                                                if (bRowStart + j + vecSize <= B.Length &&
+                                                    cRowStart + j + vecSize <= C.Length)
                                                 {
                                                     Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
                                                     Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
@@ -531,13 +531,13 @@ namespace SmallMind.Core.Simd
                                             }
 
                                             // Scalar remainder within tile
-                                            if (aRowStart + k >= 0 && aRowStart + k < A.Length)
+                                            if (aRowStart + k < A.Length)
                                             {
                                                 float aVal = pA[aRowStart + k];
                                                 for (; j < jMax; j++)
                                                 {
-                                                    if (bRowStart + j >= 0 && bRowStart + j < B.Length &&
-                                                        cRowStart + j >= 0 && cRowStart + j < C.Length)
+                                                    if (bRowStart + j < B.Length &&
+                                                        cRowStart + j < C.Length)
                                                     {
                                                         pC[cRowStart + j] += aVal * pB[bRowStart + j];
                                                     }
@@ -579,8 +579,8 @@ namespace SmallMind.Core.Simd
                     // Unrolled SIMD loop (2x unroll, 32 floats per iteration)
                     for (; j <= N - (vecSize * 2); j += vecSize * 2)
                     {
-                        if (bRowStart + j >= 0 && bRowStart + j + vecSize * 2 <= B.Length &&
-                            cRowStart + j >= 0 && cRowStart + j + vecSize * 2 <= C.Length)
+                        if (bRowStart + j + vecSize * 2 <= B.Length &&
+                                                    cRowStart + j + vecSize * 2 <= C.Length)
                         {
                             Vector512<float> vB0 = Avx512F.LoadVector512(pB + bRowStart + j);
                             Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
@@ -597,8 +597,8 @@ namespace SmallMind.Core.Simd
                     // SIMD remainder (16 floats)
                     for (; j <= N - vecSize; j += vecSize)
                     {
-                        if (bRowStart + j >= 0 && bRowStart + j + vecSize <= B.Length &&
-                            cRowStart + j >= 0 && cRowStart + j + vecSize <= C.Length)
+                        if (bRowStart + j + vecSize <= B.Length &&
+                                                    cRowStart + j + vecSize <= C.Length)
                         {
                             Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + j);
                             Vector512<float> vC = Avx512F.LoadVector512(pC + cRowStart + j);
@@ -610,13 +610,13 @@ namespace SmallMind.Core.Simd
                     }
 
                     // Scalar remainder
-                    if (aRowStart + k >= 0 && aRowStart + k < A.Length)
+                    if (aRowStart + k < A.Length)
                     {
                         float aVal = pA[aRowStart + k];
                         for (; j < N; j++)
                         {
-                            if (bRowStart + j >= 0 && bRowStart + j < B.Length &&
-                                cRowStart + j >= 0 && cRowStart + j < C.Length)
+                            if (bRowStart + j < B.Length &&
+                                                        cRowStart + j < C.Length)
                             {
                                 pC[cRowStart + j] += aVal * pB[bRowStart + j];
                             }
@@ -656,8 +656,8 @@ namespace SmallMind.Core.Simd
                     // SIMD loop with FMA
                     for (; j <= N - vecSize; j += vecSize)
                     {
-                        if (bRowStart + j >= 0 && bRowStart + j + vecSize <= B.Length &&
-                            cRowStart + j >= 0 && cRowStart + j + vecSize <= C.Length)
+                        if (bRowStart + j + vecSize <= B.Length &&
+                                                    cRowStart + j + vecSize <= C.Length)
                         {
                             Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
                             Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
@@ -669,13 +669,13 @@ namespace SmallMind.Core.Simd
                     }
 
                     // Scalar remainder
-                    if (aRowStart + k >= 0 && aRowStart + k < A.Length)
+                    if (aRowStart + k < A.Length)
                     {
                         float aVal = pA[aRowStart + k];
                         for (; j < N; j++)
                         {
-                            if (bRowStart + j >= 0 && bRowStart + j < B.Length &&
-                                cRowStart + j >= 0 && cRowStart + j < C.Length)
+                            if (bRowStart + j < B.Length &&
+                                                        cRowStart + j < C.Length)
                             {
                                 pC[cRowStart + j] += aVal * pB[bRowStart + j];
                             }
@@ -740,8 +740,8 @@ namespace SmallMind.Core.Simd
                     // SIMD loop (multiply + add separately, no FMA)
                     for (; j <= N - vecSize; j += vecSize)
                     {
-                        if (bRowStart + j >= 0 && bRowStart + j + vecSize <= B.Length &&
-                            cRowStart + j >= 0 && cRowStart + j + vecSize <= C.Length)
+                        if (bRowStart + j + vecSize <= B.Length &&
+                                                    cRowStart + j + vecSize <= C.Length)
                         {
                             Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + j);
                             Vector256<float> vC = Avx.LoadVector256(pC + cRowStart + j);
@@ -753,13 +753,13 @@ namespace SmallMind.Core.Simd
                     }
 
                     // Scalar remainder
-                    if (aRowStart + k >= 0 && aRowStart + k < A.Length)
+                    if (aRowStart + k < A.Length)
                     {
                         float aVal = pA[aRowStart + k];
                         for (; j < N; j++)
                         {
-                            if (bRowStart + j >= 0 && bRowStart + j < B.Length &&
-                                cRowStart + j >= 0 && cRowStart + j < C.Length)
+                            if (bRowStart + j < B.Length &&
+                                                        cRowStart + j < C.Length)
                             {
                                 pC[cRowStart + j] += aVal * pB[bRowStart + j];
                             }
@@ -931,16 +931,16 @@ namespace SmallMind.Core.Simd
                                     {
                                         fixed (float* pB = BSpan, pC = CSpan)
                                         {
-                                            if (bRowStart >= 0 && bRowStart < BSpan.Length &&
-                                                cRowStart >= 0 && cRowStart < CSpan.Length)
+                                            if (bRowStart < BSpan.Length &&
+                                                cRowStart < CSpan.Length)
                                             {
                                                 float* pBRow = pB + bRowStart;
                                                 float* pCRow = pC + cRowStart;
 
                                                 for (; j <= jMax - vectorSize; j += vectorSize)
                                                 {
-                                                    if (j >= 0 && j + vectorSize <= BSpan.Length - bRowStart &&
-                                                        j >= 0 && j + vectorSize <= CSpan.Length - cRowStart)
+                                                    if (j + vectorSize <= BSpan.Length - bRowStart &&
+                                                        j + vectorSize <= CSpan.Length - cRowStart)
                                                     {
                                                         var vB = Unsafe.Read<Vector<float>>(pBRow + j);
                                                         var vC = Unsafe.Read<Vector<float>>(pCRow + j);
@@ -954,8 +954,8 @@ namespace SmallMind.Core.Simd
                                     // Scalar remainder within tile
                                     for (; j < jMax; j++)
                                     {
-                                        if (bRowStart + j >= 0 && bRowStart + j < BSpan.Length &&
-                                            cRowStart + j >= 0 && cRowStart + j < CSpan.Length)
+                                        if (bRowStart + j < BSpan.Length &&
+                                            cRowStart + j < CSpan.Length)
                                         {
                                             CSpan[cRowStart + j] += aVal * BSpan[bRowStart + j];
                                         }
@@ -1886,12 +1886,9 @@ namespace SmallMind.Core.Simd
                         var sumVec512 = Vector512<float>.Zero;
                         for (; i <= length - 16; i += 16)
                         {
-                            if (i >= 0 && i + 16 <= length)
-                            {
-                                var va = Avx512F.LoadVector512(pA + i);
-                                var vb = Avx512F.LoadVector512(pB + i);
-                                sumVec512 = Avx512F.FusedMultiplyAdd(va, vb, sumVec512);
-                            }
+                            var va = Avx512F.LoadVector512(pA + i);
+                            var vb = Avx512F.LoadVector512(pB + i);
+                            sumVec512 = Avx512F.FusedMultiplyAdd(va, vb, sumVec512);
                         }
                         // Horizontal sum: 512 → scalar
                         sum = SimdCapabilities.HorizontalSum(sumVec512);
@@ -1908,12 +1905,9 @@ namespace SmallMind.Core.Simd
                         var sumVec = Vector128<float>.Zero;
                         for (; i <= length - 4; i += 4)
                         {
-                            if (i >= 0 && i + 4 <= length)
-                            {
-                                var va = AdvSimd.LoadVector128(pA + i);
-                                var vb = AdvSimd.LoadVector128(pB + i);
-                                sumVec = AdvSimd.FusedMultiplyAdd(sumVec, va, vb);
-                            }
+                            var va = AdvSimd.LoadVector128(pA + i);
+                            var vb = AdvSimd.LoadVector128(pB + i);
+                            sumVec = AdvSimd.FusedMultiplyAdd(sumVec, va, vb);
                         }
                         // Horizontal sum: manual extraction and add
                         sum = sumVec.GetElement(0) + sumVec.GetElement(1) +
@@ -1936,12 +1930,9 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            if (i >= 0 && i + vectorSize <= length)
-                            {
-                                var va = Unsafe.Read<Vector<float>>(pA + i);
-                                var vb = Unsafe.Read<Vector<float>>(pB + i);
-                                sumVec2 += va * vb;
-                            }
+                            var va = Unsafe.Read<Vector<float>>(pA + i);
+                            var vb = Unsafe.Read<Vector<float>>(pB + i);
+                            sumVec2 += va * vb;
                         }
                     }
                 }
