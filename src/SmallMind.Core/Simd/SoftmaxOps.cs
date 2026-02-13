@@ -49,6 +49,12 @@ namespace SmallMind.Core.Simd
         [SkipLocalsInit]
         private static void SoftmaxRowIndexed(float[] input, float[] output, int offset, int length)
         {
+            // Validate offset is within bounds before any pointer arithmetic
+            if (offset < 0 || offset > input.Length || offset > output.Length)
+                throw new ArgumentOutOfRangeException(nameof(offset));
+            if (length < 0 || offset + length > input.Length || offset + length > output.Length)
+                throw new ArgumentOutOfRangeException(nameof(length));
+
             // Step 1: Find max with SIMD
             int i = 0;
             float max = float.NegativeInfinity;
@@ -409,6 +415,14 @@ namespace SmallMind.Core.Simd
             for (int i = 0; i < rows; i++)
             {
                 int offset = i * cols;
+
+                // Validate offset is within bounds before any pointer arithmetic
+                if (offset < 0 || offset > input.Length || offset > output.Length ||
+                    offset + cols > input.Length || offset + cols > output.Length)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(offset), 
+                        "Computed offset exceeds array bounds");
+                }
 
                 unsafe
                 {
