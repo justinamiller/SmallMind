@@ -126,9 +126,8 @@ namespace SmallMind.Core.Simd
             public void Dispose()
             {
                 if (_disposed) return;
-                // _data will be GC'd
+                // _data will be GC'd - no finalization needed
                 _disposed = true;
-                GC.SuppressFinalize(this);
             }
         }
         

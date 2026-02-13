@@ -228,7 +228,6 @@ namespace SmallMind.Core.Core
         /// implementing true strided access. This is a performance optimization tradeoff
         /// that requires callers to manually handle stride calculations. A future enhancement
         /// would use unsafe pointer arithmetic to create a proper strided view.
-        /// Tracked in: https://github.com/justinamiller/SmallMind/issues (Performance)
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ReadOnlySpan<float> GetStridedView(
@@ -343,6 +342,11 @@ namespace SmallMind.Core.Core
 
             _disposed = true;
             GC.SuppressFinalize(this);
+        }
+
+        ~AlignedFloatBuffer()
+        {
+            Dispose();
         }
     }
 }
