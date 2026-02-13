@@ -17,9 +17,12 @@ namespace SmallMind.Core.Simd
     /// - Static thread tiling avoids Parallel.For overhead for large matrices
     /// 
     /// Expected improvement: 1.3-1.8x vs naive tiled MatMul on reused weights
+    /// 
+    /// Public API for LLM inference with weight reuse:
+    /// 1. Pack weight matrix once: var packed = PackedMatMul.Pack(weights, K, N);
+    /// 2. Reuse for many batch inferences: PackedMatMul.Multiply(activations, packed, output, M, K, N);
     /// </summary>
-    [SkipLocalsInit]
-    internal static class PackedMatMul
+    public static class PackedMatMul
     {
         // Cache-friendly block sizes (tuned for typical L1=32KB, L2=256KB)
         private const int MC = 256;  // M-dimension blocking for L2 cache
@@ -37,8 +40,11 @@ namespace SmallMind.Core.Simd
         /// Packed B-matrix storage optimized for cache-blocked GEMM.
         /// Layout: [NC panels] -> [KC blocks] -> [NR columns] -> [KC rows]
         /// Ensures microkernel accesses B sequentially (optimal cache line usage).
+        /// 
+        /// Public API for high-performance LLM inference with reusable weight matrices.
+        /// Pack once, reuse for multiple batches to amortize packing cost.
         /// </summary>
-        internal sealed class PackedMatrix : IDisposable
+        public sealed class PackedMatrix : IDisposable
         {
             internal readonly float[] _data;  // Made internal for access
             private readonly int _rows;
@@ -46,9 +52,24 @@ namespace SmallMind.Core.Simd
             internal readonly int _paddedCols;  // Made internal for access
             private bool _disposed;
             
+            /// <summary>
+            /// Number of rows (K dimension) in the packed matrix.
+            /// </summary>
             public int Rows => _rows;
+            
+            /// <summary>
+            /// Number of columns (N dimension) in the packed matrix.
+            /// </summary>
             public int Cols => _cols;
+            
+            /// <summary>
+            /// Read-only view of the packed data.
+            /// </summary>
             public ReadOnlySpan<float> Data => _data;
+            
+            /// <summary>
+            /// Padded column count (aligned to NR boundary for vectorization).
+            /// </summary>
             public int PaddedCols => _paddedCols;  // Public accessor
             
             internal PackedMatrix(int rows, int cols)
@@ -113,10 +134,20 @@ namespace SmallMind.Core.Simd
         }
         
         /// <summary>
-        /// Creates a packed B-matrix ready for cache-blocked GEMM.
-        /// Pack once, reuse many times for batch inference.
+        /// Packs a B-matrix into optimized panel-major layout for cache-blocked GEMM.
+        /// Pack once, reuse many times for batch inference (weight reuse).
+        /// 
+        /// Usage:
+        ///   var packed = PackedMatMul.Pack(weightMatrix, K, N);
+        ///   // Reuse packed for multiple batches
+        ///   PackedMatMul.Multiply(batch1, packed, output1, M1, K, N);
+        ///   PackedMatMul.Multiply(batch2, packed, output2, M2, K, N);
         /// </summary>
-        public static PackedMatrix CreatePackedMatrix(ReadOnlySpan<float> B, int rows, int cols)
+        /// <param name="B">Source matrix in row-major layout (K × N)</param>
+        /// <param name="rows">Number of rows (K dimension)</param>
+        /// <param name="cols">Number of columns (N dimension)</param>
+        /// <returns>Packed matrix ready for optimized multiplication</returns>
+        public static PackedMatrix Pack(ReadOnlySpan<float> B, int rows, int cols)
         {
             var packed = new PackedMatrix(rows, cols);
             packed.Pack(B, rows, cols);
@@ -124,13 +155,28 @@ namespace SmallMind.Core.Simd
         }
         
         /// <summary>
+        /// Creates a packed B-matrix ready for cache-blocked GEMM.
+        /// Pack once, reuse many times for batch inference.
+        /// (Alias for Pack method for backward compatibility)
+        /// </summary>
+        [Obsolete("Use Pack(ReadOnlySpan<float>, int, int) instead")]
+        public static PackedMatrix CreatePackedMatrix(ReadOnlySpan<float> B, int rows, int cols)
+        {
+            return Pack(B, rows, cols);
+        }
+        
+        /// <summary>
         /// Matrix multiply with packed B: C[M×N] = A[M×K] × B_packed[K×N]
         /// Uses cache-blocked algorithm with static thread tiling.
         /// </summary>
+        /// <param name="accumulate">
+        /// If false (default): C is overwritten with A×B (fastest, no pre-zero needed).
+        /// If true: C += A×B (accumulates into existing C values).
+        /// </param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static void Multiply(
             float[] A, PackedMatrix B, float[] C,
-            int M, int K, int N)
+            int M, int K, int N, bool accumulate = false)
         {
             if (B.Rows != K || B.Cols != N)
                 throw new ArgumentException($"B dims {B.Rows}×{B.Cols} != expected {K}×{N}");
@@ -139,17 +185,20 @@ namespace SmallMind.Core.Simd
             if (C.Length < M * N)
                 throw new ArgumentException($"C length {C.Length} < {M * N}");
             
-            // Zero output
-            Array.Clear(C);
+            // Zero output only if not accumulating (overwrite mode)
+            if (!accumulate)
+            {
+                Array.Clear(C);
+            }
             
             // Dispatch based on size
             if (M >= PARALLEL_THRESHOLD_M)
             {
-                MultiplyParallel(A, B._data, C, M, K, N, B._paddedCols);
+                MultiplyParallel(A, B._data, C, M, K, N, B._paddedCols, accumulate);
             }
             else
             {
-                MultiplySerial(A.AsSpan(), B.Data, C.AsSpan(), M, K, N, B._paddedCols);
+                MultiplySerial(A.AsSpan(), B.Data, C.AsSpan(), M, K, N, B._paddedCols, accumulate);
             }
         }
         
@@ -157,10 +206,14 @@ namespace SmallMind.Core.Simd
         /// Matrix multiply with packed B (Span overload): C[M×N] = A[M×K] × B_packed[K×N]
         /// Uses cache-blocked algorithm (serial only for Span version).
         /// </summary>
+        /// <param name="accumulate">
+        /// If false (default): C is overwritten with A×B (fastest, no pre-zero needed).
+        /// If true: C += A×B (accumulates into existing C values).
+        /// </param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static void Multiply(
             ReadOnlySpan<float> A, PackedMatrix B, Span<float> C,
-            int M, int K, int N)
+            int M, int K, int N, bool accumulate = false)
         {
             if (B.Rows != K || B.Cols != N)
                 throw new ArgumentException($"B dims {B.Rows}×{B.Cols} != expected {K}×{N}");
@@ -169,11 +222,14 @@ namespace SmallMind.Core.Simd
             if (C.Length < M * N)
                 throw new ArgumentException($"C length {C.Length} < {M * N}");
             
-            // Zero output
-            C.Clear();
+            // Zero output only if not accumulating (overwrite mode)
+            if (!accumulate)
+            {
+                C.Clear();
+            }
             
             // Use serial path (Span can't be captured in Parallel.For)
-            MultiplySerial(A, B.Data, C, M, K, N, B._paddedCols);
+            MultiplySerial(A, B.Data, C, M, K, N, B._paddedCols, accumulate);
         }
         
         /// <summary>
@@ -182,7 +238,7 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static unsafe void MultiplySerial(
             ReadOnlySpan<float> A, ReadOnlySpan<float> Bpacked, Span<float> C,
-            int M, int K, int N, int ldB)
+            int M, int K, int N, int ldB, bool accumulate)
         {
             fixed (float* pA = A, pB = Bpacked, pC = C)
             {
@@ -226,7 +282,7 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static void MultiplyParallel(
             float[] A, float[] Bpacked, float[] C,
-            int M, int K, int N, int ldB)
+            int M, int K, int N, int ldB, bool accumulate)
         {
             int numThreads = Environment.ProcessorCount;
             int chunkSize = (M + numThreads - 1) / numThreads;
@@ -243,7 +299,7 @@ namespace SmallMind.Core.Simd
                 var spanB = Bpacked.AsSpan();
                 var spanC = C.AsSpan();
                 
-                ProcessChunk(spanA, spanB, spanC, mcStart, mcEnd, M, K, N, ldB);
+                ProcessChunk(spanA, spanB, spanC, mcStart, mcEnd, M, K, N, ldB, accumulate);
             });
         }
         
@@ -253,7 +309,7 @@ namespace SmallMind.Core.Simd
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static unsafe void ProcessChunk(
             Span<float> A, Span<float> Bpacked, Span<float> C,
-            int mcStart, int mcEnd, int M, int K, int N, int ldB)
+            int mcStart, int mcEnd, int M, int K, int N, int ldB, bool accumulate)
         {
             fixed (float* pA = A, pB = Bpacked, pC = C)
             {
