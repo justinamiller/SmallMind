@@ -4,6 +4,11 @@ using SmallMind.Transformers;
 using SmallMind.Abstractions.Telemetry;
 using System;
 using System.Collections.Generic;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+using System.Runtime.Intrinsics.Arm;
 
 namespace SmallMind.Runtime
 {
@@ -214,13 +219,10 @@ namespace SmallMind.Runtime
                         _logitsLastBuffer[v] = logits.Data[lastPosOffset + v];
                     }
 
-                    // Apply temperature - operate on buffer directly
+                    // Apply temperature - operate on buffer directly with SIMD
                     if (temperature != 1.0)
                     {
-                        for (int v = 0; v < bufferLength; v++)
-                        {
-                            _logitsLastBuffer[v] /= (float)temperature;
-                        }
+                        ApplyTemperatureSIMD(_logitsLastBuffer, bufferLength, (float)temperature);
                     }
 
                     // Apply top-k filtering - returns reference to buffer or filtered buffer
@@ -433,30 +435,154 @@ namespace SmallMind.Runtime
         }
 
         /// <summary>
-        /// Compute softmax over an array (reuses buffer for performance)
+        /// Apply temperature scaling to logits using SIMD acceleration.
+        /// Divides each logit by the temperature value for sampling control.
+        /// Lower temperature = more deterministic, higher = more random.
         /// </summary>
-        private float[] Softmax(float[] logits, int logitsLength)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ApplyTemperatureSIMD(float[] logits, int length, float temperature)
         {
-            // Reuse probability buffer to reduce allocations
-            // Allocate new buffer if size doesn't match to avoid stale data
-            if (_probabilityBuffer == null || _probabilityBuffer.Length != logitsLength)
+            float invTemp = 1.0f / temperature;
+            int i = 0;
+
+            // AVX-512 path (16 floats per iteration)
+            if (Avx512F.IsSupported && length >= 16)
             {
-                _probabilityBuffer = new float[logitsLength];
-            }
-            
-            // Find max for numerical stability
-            float max = float.NegativeInfinity;
-            for (int i = 0; i < logitsLength; i++)
-            {
-                if (logits[i] != float.NegativeInfinity)
+                var vInvTemp = Vector512.Create(invTemp);
+                unsafe
                 {
-                    max = MathF.Max(max, logits[i]);
+                    fixed (float* pLogits = logits)
+                    {
+                        for (; i <= length - 16; i += 16)
+                        {
+                            var v = Avx512F.LoadVector512(pLogits + i);
+                            Avx512F.Store(pLogits + i, Avx512F.Multiply(v, vInvTemp));
+                        }
+                    }
+                }
+            }
+            // ARM NEON path (4 floats per iteration)
+            else if (AdvSimd.Arm64.IsSupported && length >= 4)
+            {
+                var vInvTemp = Vector128.Create(invTemp);
+                unsafe
+                {
+                    fixed (float* pLogits = logits)
+                    {
+                        for (; i <= length - 4; i += 4)
+                        {
+                            var v = AdvSimd.LoadVector128(pLogits + i);
+                            AdvSimd.Store(pLogits + i, AdvSimd.Multiply(v, vInvTemp));
+                        }
+                    }
                 }
             }
 
-            // Compute exp and sum
-            float sum = 0;
-            for (int i = 0; i < logitsLength; i++)
+            // Vector<T> fallback for remaining elements
+            if (Vector.IsHardwareAccelerated)
+            {
+                var vInvTemp = new Vector<float>(invTemp);
+                int vectorSize = Vector<float>.Count;
+                
+                unsafe
+                {
+                    fixed (float* pLogits = logits)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var v = Unsafe.Read<Vector<float>>(pLogits + i);
+                            Unsafe.Write(pLogits + i, v * vInvTemp);
+                        }
+                    }
+                }
+            }
+
+            // Scalar remainder
+            for (; i < length; i++)
+            {
+                logits[i] *= invTemp;
+            }
+        }
+
+        /// <summary>
+        /// SIMD-optimized Softmax operation - converts logits to probabilities.
+        /// Uses hardware intrinsics for max-finding and normalization.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private float[] Softmax(float[] logits, int logitsLength)
+        {
+            // Reuse probability buffer to reduce allocations
+            if (_probabilityBuffer == null || _probabilityBuffer.Length < logitsLength)
+            {
+                _probabilityBuffer = new float[logitsLength];
+            }
+
+            // Step 1: Find max with SIMD acceleration for numerical stability
+            int i = 0;
+            float max = float.NegativeInfinity;
+
+            // AVX-512 max finding (16 floats)
+            if (Avx512F.IsSupported && logitsLength >= 16)
+            {
+                unsafe
+                {
+                    fixed (float* pLogits = logits)
+                    {
+                        var maxVec512 = Vector512.Create(float.NegativeInfinity);
+                        for (; i <= logitsLength - 16; i += 16)
+                        {
+                            var v = Avx512F.LoadVector512(pLogits + i);
+                            maxVec512 = Avx512F.Max(maxVec512, v);
+                        }
+                        
+                        // Reduce 512 -> 256 -> scalar
+                        var upper = Avx512F.ExtractVector256(maxVec512, 1);
+                        var lower = Avx512F.ExtractVector256(maxVec512, 0);
+                        var maxVec256 = Avx.Max(upper, lower);
+                        
+                        float* temp = stackalloc float[8];
+                        Avx.Store(temp, maxVec256);
+                        for (int j = 0; j < 8; j++)
+                        {
+                            if (temp[j] > max && temp[j] != float.NegativeInfinity) 
+                                max = temp[j];
+                        }
+                    }
+                }
+            }
+
+            // Vector<T> fallback for max finding
+            if (Vector.IsHardwareAccelerated)
+            {
+                var maxVec = new Vector<float>(max);
+                int vectorSize = Vector<float>.Count;
+                for (; i <= logitsLength - vectorSize; i += vectorSize)
+                {
+                    var v = new Vector<float>(logits, i);
+                    maxVec = Vector.Max(maxVec, v);
+                }
+                
+                // Horizontal max reduction
+                for (int j = 0; j < vectorSize; j++)
+                {
+                    if (maxVec[j] > max && maxVec[j] != float.NegativeInfinity) 
+                        max = maxVec[j];
+                }
+            }
+
+            // Scalar remainder for max
+            for (; i < logitsLength; i++)
+            {
+                if (logits[i] != float.NegativeInfinity && logits[i] > max)
+                {
+                    max = logits[i];
+                }
+            }
+
+            // Step 2: Compute exp(x - max) and sum
+            // NOTE: exp() has no SIMD intrinsic, remains scalar
+            float sum = 0f;
+            for (i = 0; i < logitsLength; i++)
             {
                 if (logits[i] != float.NegativeInfinity)
                 {
@@ -469,12 +595,52 @@ namespace SmallMind.Runtime
                 }
             }
 
-            // Normalize
+            // Step 3: Normalize with SIMD
             if (sum > 0)
             {
-                for (int i = 0; i < logitsLength; i++)
+                float invSum = 1.0f / sum;
+                i = 0;
+
+                // AVX-512 normalization (16 floats)
+                if (Avx512F.IsSupported && logitsLength >= 16)
                 {
-                    _probabilityBuffer[i] /= sum;
+                    var vInvSum = Vector512.Create(invSum);
+                    unsafe
+                    {
+                        fixed (float* pProbs = _probabilityBuffer)
+                        {
+                            for (; i <= logitsLength - 16; i += 16)
+                            {
+                                var v = Avx512F.LoadVector512(pProbs + i);
+                                Avx512F.Store(pProbs + i, Avx512F.Multiply(v, vInvSum));
+                            }
+                        }
+                    }
+                }
+
+                // Vector<T> fallback for normalization
+                if (Vector.IsHardwareAccelerated)
+                {
+                    var vInvSum = new Vector<float>(invSum);
+                    int vectorSize = Vector<float>.Count;
+                    
+                    unsafe
+                    {
+                        fixed (float* pProbs = _probabilityBuffer)
+                        {
+                            for (; i <= logitsLength - vectorSize; i += vectorSize)
+                            {
+                                var v = Unsafe.Read<Vector<float>>(pProbs + i);
+                                Unsafe.Write(pProbs + i, v * vInvSum);
+                            }
+                        }
+                    }
+                }
+
+                // Scalar remainder
+                for (; i < logitsLength; i++)
+                {
+                    _probabilityBuffer[i] *= invSum;
                 }
             }
 
