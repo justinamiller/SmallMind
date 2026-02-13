@@ -12,7 +12,6 @@ namespace SmallMind.Tokenizers.Gguf
     internal sealed class GgufTokenTableTokenizer : ITokenizer
     {
         private const int MaxTokenLength = 50; // Maximum length to search for matching tokens
-        private const int ByteTokenLength = 6; // Length of byte tokens (e.g., "<0x20>")
         
         private readonly Dictionary<string, int> _vocab;
         private readonly List<string> _reverseVocab;
@@ -124,7 +123,7 @@ namespace SmallMind.Tokenizers.Gguf
                     string tokenStr = _reverseVocab[tokenId];
                     
                     // Handle byte tokens (e.g., <0x20> for space)
-                    if (IsByteToken(tokenStr, out byte byteValue))
+                    if (GgufTokenizerHelpers.IsByteToken(tokenStr, out byte byteValue))
                     {
                         sb.Append((char)byteValue);
                         continue;
@@ -135,24 +134,6 @@ namespace SmallMind.Tokenizers.Gguf
             }
 
             return sb.ToString();
-        }
-        
-        private static bool IsByteToken(string tokenStr, out byte byteValue)
-        {
-            // Check if token is in byte format: <0xXX> where XX is hex
-            if (tokenStr.Length == ByteTokenLength && 
-                tokenStr.StartsWith("<0x") && 
-                tokenStr.EndsWith(">"))
-            {
-                return byte.TryParse(
-                    tokenStr.Substring(3, 2), 
-                    System.Globalization.NumberStyles.HexNumber, 
-                    null, 
-                    out byteValue);
-            }
-            
-            byteValue = 0;
-            return false;
         }
 
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
@@ -190,7 +171,7 @@ namespace SmallMind.Tokenizers.Gguf
                 string tokenStr = _reverseVocab[tokenId];
                 
                 // Handle byte tokens
-                if (IsByteToken(tokenStr, out byte byteValue))
+                if (GgufTokenizerHelpers.IsByteToken(tokenStr, out byte byteValue))
                 {
                     return ((char)byteValue).ToString();
                 }
