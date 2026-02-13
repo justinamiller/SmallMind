@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -193,7 +190,7 @@ namespace SmallMind.Runtime.PretrainedModels
         {
             var summary = $"Available Pretrained Packs ({Packs.Count}):\n";
             summary += new string('-', 60) + "\n";
-            
+
             foreach (var pack in Packs)
             {
                 summary += $"\n{pack.Name} ({pack.Id})\n";
@@ -203,7 +200,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 summary += $"  Status: {pack.Status}\n";
                 summary += $"  Path: {pack.Path}\n";
             }
-            
+
             return summary;
         }
     }

@@ -1,7 +1,5 @@
-using System;
-using Xunit;
-using SmallMind.Transformers;
 using SmallMind.Core.Core;
+using SmallMind.Transformers;
 
 namespace SmallMind.Tests
 {
@@ -30,7 +28,7 @@ namespace SmallMind.Tests
             // Create test input
             var inputShape = new int[] { batchSize, seqLen, nEmbd };
             var input = new Tensor(inputShape, requiresGrad: false);
-            
+
             // Fill with random values
             for (int i = 0; i < input.Size; i++)
             {
@@ -73,7 +71,7 @@ namespace SmallMind.Tests
             var inputShape = new int[] { batchSize, seqLen, nEmbd };
             var input1 = new Tensor(inputShape, requiresGrad: false);
             var input2 = new Tensor(inputShape, requiresGrad: false);
-            
+
             for (int i = 0; i < input1.Size; i++)
             {
                 float value = (float)random.NextDouble() * 4f - 2f; // Range [-2, 2]

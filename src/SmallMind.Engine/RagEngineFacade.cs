@@ -1,20 +1,13 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
 using SmallMind.Abstractions;
-using RagNamespace = SmallMind.Rag;
 using SmallMind.Rag.Common;
-using SmallMind.Rag.Pipeline;
 using SmallMind.Rag.Indexing;
-using SmallMind.Rag.Generation;
+using SmallMind.Rag.Pipeline;
 using SmallMind.Runtime;
 using PublicGenerationOptions = SmallMind.Abstractions.GenerationOptions;
 using RagGenerationOptions = SmallMind.Rag.Generation.GenerationOptions;
 using RagITextGenerator = SmallMind.Rag.Generation.ITextGenerator;
+using RagNamespace = SmallMind.Rag;
 
 namespace SmallMind.Engine
 {
@@ -76,7 +69,7 @@ namespace SmallMind.Engine
                     var directory = Path.GetDirectoryName(sourcePath);
                     var fileName = Path.GetFileName(sourcePath);
                     var extension = Path.GetExtension(sourcePath);
-                    
+
                     if (!string.IsNullOrEmpty(directory))
                     {
                         pipeline.IngestDocuments(directory, rebuild: false, includePatterns: $"*{extension}");
@@ -129,7 +122,7 @@ namespace SmallMind.Engine
             // Note: charRange uses placeholder (0,0) because chunk store doesn't expose
             // character positions. Future enhancement would require chunk store schema update.
             var chunks = pipeline.Retrieve(request.Query, userContext: null, topK: request.TopK);
-            
+
             // Replace LINQ with manual loop - avoid Where().Select().ToArray() allocation chain
             int citationCount = 0;
             for (int i = 0; i < chunks.Count; i++)
@@ -137,7 +130,7 @@ namespace SmallMind.Engine
                 if (chunks[i].Score >= request.MinConfidence)
                     citationCount++;
             }
-            
+
             var citations = new RagCitation[citationCount];
             int citationIndex = 0;
             for (int i = 0; i < chunks.Count; i++)
@@ -217,7 +210,7 @@ namespace SmallMind.Engine
             {
                 hasValidChunk = true;
             }
-            
+
             if (!hasValidChunk)
             {
                 throw new RagInsufficientEvidenceException(request.Query, request.MinConfidence);

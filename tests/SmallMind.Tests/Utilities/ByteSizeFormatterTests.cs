@@ -1,5 +1,5 @@
-using Xunit;
 using SmallMind.Core.Utilities;
+using Xunit;
 
 namespace SmallMind.Tests.Utilities
 {

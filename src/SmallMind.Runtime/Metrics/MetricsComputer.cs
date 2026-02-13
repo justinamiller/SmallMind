@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Core.Core;
 
 namespace SmallMind.Runtime.Metrics
@@ -84,7 +83,7 @@ namespace SmallMind.Runtime.Metrics
             int nanCount = 0;
             int infCount = 0;
             int paramCount = 0;
-            
+
             int parametersCount = parameters.Count;
 
             // Use indexed for-loop instead of foreach for better performance
@@ -95,7 +94,7 @@ namespace SmallMind.Runtime.Metrics
 
                 float norm = 0f;
                 int gradLength = param.Grad.Length;
-                
+
                 // Use unsafe pointers for tight inner loop
                 unsafe
                 {
@@ -104,7 +103,7 @@ namespace SmallMind.Runtime.Metrics
                         for (int i = 0; i < gradLength; i++)
                         {
                             float g = pGrad[i];
-                            
+
                             if (float.IsNaN(g))
                             {
                                 nanCount++;
@@ -122,7 +121,7 @@ namespace SmallMind.Runtime.Metrics
                 }
 
                 norm = MathF.Sqrt(norm);
-                
+
                 if (!float.IsNaN(norm) && !float.IsInfinity(norm))
                 {
                     sumNorms += norm;
@@ -133,7 +132,7 @@ namespace SmallMind.Runtime.Metrics
             }
 
             float meanNorm = paramCount > 0 ? sumNorms / paramCount : 0f;
-            
+
             // Handle case where no valid gradients found
             if (paramCount == 0)
             {
@@ -153,7 +152,7 @@ namespace SmallMind.Runtime.Metrics
         /// <param name="infCount">Number of Inf gradients</param>
         /// <param name="maxAllowedNorm">Maximum allowed gradient norm (default: 100)</param>
         /// <returns>True if gradients are healthy</returns>
-        public static bool AreGradientsHealthy(float meanNorm, float maxNorm, int nanCount, int infCount, 
+        public static bool AreGradientsHealthy(float meanNorm, float maxNorm, int nanCount, int infCount,
             float maxAllowedNorm = 100f)
         {
             // Check for NaN or Inf

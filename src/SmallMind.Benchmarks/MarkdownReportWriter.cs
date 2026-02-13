@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 
 namespace SmallMind.Benchmarks
@@ -80,7 +77,7 @@ namespace SmallMind.Benchmarks
             WriteMetricRow(sb, "Peak RSS", result.Metrics.PeakRSS / 1024.0 / 1024.0, baseline?.Metrics.PeakRSS / 1024.0 / 1024.0, "MB", lowerIsBetter: true);
             WriteMetricRow(sb, "Managed Heap", result.Metrics.ManagedHeapSize / 1024.0 / 1024.0, baseline?.Metrics.ManagedHeapSize / 1024.0 / 1024.0, "MB", lowerIsBetter: true);
             WriteMetricRow(sb, "Alloc bytes/token", result.Metrics.AllocatedBytesPerToken, baseline?.Metrics.AllocatedBytesPerToken, "bytes", lowerIsBetter: true);
-            
+
             sb.AppendLine($"| Gen0 Collections | {result.Metrics.Gen0Collections} | {baseline?.Metrics.Gen0Collections.ToString() ?? "N/A"} | {GetChangeString(result.Metrics.Gen0Collections, baseline?.Metrics.Gen0Collections, "", lowerIsBetter: true)} |");
             sb.AppendLine($"| Gen1 Collections | {result.Metrics.Gen1Collections} | {baseline?.Metrics.Gen1Collections.ToString() ?? "N/A"} | {GetChangeString(result.Metrics.Gen1Collections, baseline?.Metrics.Gen1Collections, "", lowerIsBetter: true)} |");
             sb.AppendLine($"| Gen2 Collections | {result.Metrics.Gen2Collections} | {baseline?.Metrics.Gen2Collections.ToString() ?? "N/A"} | {GetChangeString(result.Metrics.Gen2Collections, baseline?.Metrics.Gen2Collections, "", lowerIsBetter: true)} |");
@@ -139,7 +136,7 @@ namespace SmallMind.Benchmarks
                 return "N/A";
 
             var change = value - baselineValue.Value;
-            
+
             if (change == 0)
                 return "≈";
 

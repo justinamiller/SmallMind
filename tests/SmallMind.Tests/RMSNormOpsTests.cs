@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Core;
 
 namespace SmallMind.Tests
@@ -95,7 +93,7 @@ namespace SmallMind.Tests
             // Seq 0: [1, 2, 3]
             float sumSqSeq0 = 1f * 1f + 2f * 2f + 3f * 3f;
             float invRmsSeq0 = 1f / MathF.Sqrt(sumSqSeq0 / 3f + 1e-5f);
-            
+
             Assert.Equal(1f * invRmsSeq0, output[0], Tolerance);
             Assert.Equal(2f * invRmsSeq0, output[1], Tolerance);
             Assert.Equal(3f * invRmsSeq0, output[2], Tolerance);

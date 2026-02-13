@@ -1,19 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
 using SmallMind.Abstractions;
 using SmallMind.Core.Core;
 using SmallMind.Core.Utilities;
+using SmallMind.Quantization.IO.Gguf;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Quantization;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
-using SmallMind.Rag.Pipeline;
-using SmallMind.Rag;
-using SmallMind.Quantization.IO.Gguf;
 
 namespace SmallMind.Engine
 {
@@ -165,8 +158,8 @@ namespace SmallMind.Engine
                     Text = text,
                     GeneratedTokens = generatedTokens,
                     StoppedByBudget = budgetEnforcer.BudgetExceeded,
-                    StopReason = budgetEnforcer.BudgetExceeded 
-                        ? $"budget_exceeded_{budgetEnforcer.ExceededReason}" 
+                    StopReason = budgetEnforcer.BudgetExceeded
+                        ? $"budget_exceeded_{budgetEnforcer.ExceededReason}"
                         : "completed"
                 };
             }
@@ -228,7 +221,7 @@ namespace SmallMind.Engine
             try
             {
                 session = internalHandle.CreateInferenceSession(request.Options, _options);
-                
+
                 // Tokenize prompt to validate context length (use tokenizer from model handle)
                 var promptTokens = internalHandle.Tokenizer.Encode(request.Prompt);
                 budgetEnforcer.ValidateContextLength(promptTokens.Count);
@@ -323,7 +316,7 @@ namespace SmallMind.Engine
                 else
                 {
                     // Fallback to default tokenizer
-                    int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size", 
+                    int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
                                     GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
                     tokenizer = CreateDefaultTokenizer(vocabSize);
                 }
@@ -337,7 +330,7 @@ namespace SmallMind.Engine
             }
 
             // Check if this is a Llama model (from GGUF)
-            bool isLlamaModel = metadata.Metadata != null && 
+            bool isLlamaModel = metadata.Metadata != null &&
                               metadata.Metadata.TryGetValue("general.architecture", out var arch) &&
                               arch?.ToString() == "llama";
 
@@ -349,7 +342,7 @@ namespace SmallMind.Engine
                 try
                 {
                     var config = ModelConfig.FromGgufMetadata(metadata.Metadata!);
-                    
+
                     // For now, create a GPT-style model with Llama dimensions
                     // TODO: Full Llama model creation with RoPE, RMSNorm, SwiGLU
                     model = new TransformerModel(
@@ -380,7 +373,7 @@ namespace SmallMind.Engine
                     enableGradientCheckpointing: false,
                     enableMixedPrecision: false,
                     enableMemoryMapping: false,
-                    strictBudget: request.EnableStrictMemoryBudget 
+                    strictBudget: request.EnableStrictMemoryBudget
                         ? new StrictMemoryBudget(
                             request.MaxMemoryBytes.Value,
                             maxBytesPerSession: request.MaxMemoryBytes.Value,
@@ -481,7 +474,7 @@ namespace SmallMind.Engine
             // WARNING: This is a fallback tokenizer for demonstration purposes only.
             // Production deployments should load tokenizer configuration from model metadata.
             // This simple character tokenizer is NOT suitable for real models.
-            
+
             var vocab = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?;:'-\n";
             if (vocab.Length < vocabSize)
             {

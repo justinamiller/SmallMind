@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Rag.Ingestion;
 
 /// <summary>
@@ -24,34 +21,34 @@ internal sealed class Chunker
             throw new ArgumentNullException(nameof(content));
         if (options == null)
             throw new ArgumentNullException(nameof(options));
-        
+
         var chunks = new List<Chunk>();
-        
+
         if (string.IsNullOrWhiteSpace(content))
             return chunks;
-        
+
         // Try markdown-aware chunking first
         List<string> segments = TryMarkdownChunking(content, options.MaxChunkSize);
-        
+
         // If markdown chunking didn't produce good results, fall back to window chunking
         if (segments.Count == 0)
         {
             segments = ApplyWindowChunking(content, options.MaxChunkSize, options.OverlapSize);
         }
-        
+
         // Convert segments to Chunk objects
         int charOffset = 0;
         for (int i = 0; i < segments.Count; i++)
         {
             string segmentText = segments[i];
-            
+
             // Skip chunks that are too small
             if (segmentText.Length < options.MinChunkSize)
             {
                 charOffset += segmentText.Length;
                 continue;
             }
-            
+
             // Find the actual position in the original content
             int charStart;
             if (charOffset < content.Length)
@@ -64,9 +61,9 @@ internal sealed class Chunker
             {
                 charStart = charOffset; // At or past end, use current offset
             }
-            
+
             int charEnd = charStart + segmentText.Length;
-            
+
             var chunk = new Chunk
             {
                 ChunkId = Chunk.ComputeChunkId(doc.DocId, segmentText, charStart, charEnd),
@@ -79,11 +76,11 @@ internal sealed class Chunker
                 CreatedUtc = DateTime.UtcNow,
                 Version = doc.Version
             };
-            
+
             chunks.Add(chunk);
             charOffset = charEnd;
         }
-        
+
         return chunks;
     }
 
@@ -93,25 +90,25 @@ internal sealed class Chunker
     private List<string> TryMarkdownChunking(string text, int maxChunkSize)
     {
         var chunks = new List<string>();
-        
+
         // Quick check: if no markdown indicators present, return empty to trigger fallback
         if (text.IndexOf('#') < 0)
             return chunks;
-        
+
         // Split into lines
         List<string> lines = SplitLines(text);
-        
+
         // Group lines into sections based on headings
         var currentSection = new List<string>();
         int currentSize = 0;
-        
+
         for (int i = 0; i < lines.Count; i++)
         {
             string line = lines[i];
-            
+
             // Check if this is a markdown heading
             bool isHeading = IsMarkdownHeading(line.AsSpan());
-            
+
             // If we hit a heading and have accumulated content, flush the current section
             if (isHeading && currentSection.Count > 0)
             {
@@ -132,15 +129,15 @@ internal sealed class Chunker
                         chunks.Add(sectionText);
                     }
                 }
-                
+
                 currentSection.Clear();
                 currentSize = 0;
             }
-            
+
             // Add line to current section
             currentSection.Add(line);
             currentSize += line.Length + 1; // +1 for newline
-            
+
             // If section gets too large, flush it
             if (currentSize > maxChunkSize)
             {
@@ -153,12 +150,12 @@ internal sealed class Chunker
                         chunks.Add(subChunks[j]);
                     }
                 }
-                
+
                 currentSection.Clear();
                 currentSize = 0;
             }
         }
-        
+
         // Flush remaining section
         if (currentSection.Count > 0)
         {
@@ -179,7 +176,7 @@ internal sealed class Chunker
                 }
             }
         }
-        
+
         return chunks;
     }
 
@@ -193,11 +190,11 @@ internal sealed class Chunker
         var chunks = new List<string>();
         var currentChunk = new List<string>();
         int currentSize = 0;
-        
+
         for (int i = 0; i < paragraphs.Count; i++)
         {
             string para = paragraphs[i];
-            
+
             // If a single paragraph exceeds max size, it needs character-based splitting
             if (para.Length > maxChunkSize)
             {
@@ -208,7 +205,7 @@ internal sealed class Chunker
                     currentChunk.Clear();
                     currentSize = 0;
                 }
-                
+
                 // Split the large paragraph
                 List<string> subChunks = SplitByCharacters(para, maxChunkSize);
                 for (int j = 0; j < subChunks.Count; j++)
@@ -225,7 +222,7 @@ internal sealed class Chunker
                     currentChunk.Clear();
                     currentSize = 0;
                 }
-                
+
                 // Start new chunk with this paragraph
                 currentChunk.Add(para);
                 currentSize = para.Length;
@@ -237,13 +234,13 @@ internal sealed class Chunker
                 currentSize += para.Length + 2; // +2 for paragraph separator
             }
         }
-        
+
         // Flush remaining chunk
         if (currentChunk.Count > 0)
         {
             chunks.Add(JoinParagraphs(currentChunk));
         }
-        
+
         return chunks;
     }
 
@@ -254,24 +251,24 @@ internal sealed class Chunker
     {
         if (line.Length == 0)
             return false;
-        
+
         // Trim leading whitespace
         int start = 0;
         while (start < line.Length && char.IsWhiteSpace(line[start]))
             start++;
-        
+
         if (start >= line.Length)
             return false;
-        
+
         // Check if it starts with #
         if (line[start] != '#')
             return false;
-        
+
         // Count consecutive # characters
         int hashCount = 0;
         for (int i = start; i < line.Length && line[i] == '#'; i++)
             hashCount++;
-        
+
         // Valid markdown heading has 1-6 # characters followed by whitespace or end of line
         if (hashCount >= 1 && hashCount <= 6)
         {
@@ -279,7 +276,7 @@ internal sealed class Chunker
             if (afterHash >= line.Length || char.IsWhiteSpace(line[afterHash]))
                 return true;
         }
-        
+
         return false;
     }
 
@@ -291,20 +288,20 @@ internal sealed class Chunker
         var paragraphs = new List<string>();
         int start = 0;
         int length = text.Length;
-        
+
         while (start < length)
         {
             // Skip leading whitespace/newlines
             while (start < length && char.IsWhiteSpace(text[start]))
                 start++;
-            
+
             if (start >= length)
                 break;
-            
+
             // Find end of paragraph (blank line or end of text)
             int end = start;
             int consecutiveNewlines = 0;
-            
+
             while (end < length)
             {
                 if (text[end] == '\n' || text[end] == '\r')
@@ -317,10 +314,10 @@ internal sealed class Chunker
                 {
                     consecutiveNewlines = 0;
                 }
-                
+
                 end++;
             }
-            
+
             // Extract paragraph and trim
             if (end > start)
             {
@@ -330,10 +327,10 @@ internal sealed class Chunker
                     paragraphs.Add(paragraph);
                 }
             }
-            
+
             start = end;
         }
-        
+
         return paragraphs;
     }
 
@@ -345,40 +342,40 @@ internal sealed class Chunker
         var chunks = new List<string>();
         int length = text.Length;
         int position = 0;
-        
+
         while (position < length)
         {
             // Calculate chunk end
             int chunkEnd = Math.Min(position + maxChars, length);
-            
+
             // Try to break at a sentence or word boundary if not at end
             if (chunkEnd < length)
             {
                 chunkEnd = FindBestBreakPoint(text, position, chunkEnd);
             }
-            
+
             // Store the original chunkEnd before trimming
             int originalChunkEnd = chunkEnd;
-            
+
             // Extract chunk
             string chunk = text.Substring(position, chunkEnd - position).Trim();
             if (chunk.Length > 0)
             {
                 chunks.Add(chunk);
             }
-            
+
             // Move position forward with overlap, but ensure we always make progress
             int newPosition = originalChunkEnd - overlapChars;
-            
+
             // Ensure we make progress even if overlap is large or chunk was all whitespace
             if (newPosition <= position)
             {
                 newPosition = originalChunkEnd;
             }
-            
+
             position = newPosition;
         }
-        
+
         return chunks;
     }
 
@@ -390,26 +387,26 @@ internal sealed class Chunker
         var chunks = new List<string>();
         int position = 0;
         int length = text.Length;
-        
+
         while (position < length)
         {
             int chunkEnd = Math.Min(position + maxChars, length);
-            
+
             // Try to break at word boundary
             if (chunkEnd < length)
             {
                 chunkEnd = FindWordBoundary(text, position, chunkEnd);
             }
-            
+
             string chunk = text.Substring(position, chunkEnd - position).Trim();
             if (chunk.Length > 0)
             {
                 chunks.Add(chunk);
             }
-            
+
             position = chunkEnd;
         }
-        
+
         return chunks;
     }
 
@@ -427,7 +424,7 @@ internal sealed class Chunker
                 return i + 1;
             }
         }
-        
+
         // Fall back to word boundary
         return FindWordBoundary(text, start, preferredEnd);
     }
@@ -445,7 +442,7 @@ internal sealed class Chunker
                 return i + 1;
             }
         }
-        
+
         // No whitespace found, use preferred end
         return preferredEnd;
     }
@@ -458,7 +455,7 @@ internal sealed class Chunker
         var lines = new List<string>();
         int start = 0;
         int length = text.Length;
-        
+
         for (int i = 0; i < length; i++)
         {
             if (text[i] == '\n')
@@ -467,18 +464,18 @@ internal sealed class Chunker
                 int lineEnd = i;
                 if (lineEnd > start && text[lineEnd - 1] == '\r')
                     lineEnd--;
-                
+
                 lines.Add(text.Substring(start, lineEnd - start));
                 start = i + 1;
             }
         }
-        
+
         // Add last line if it doesn't end with newline
         if (start < length)
         {
             lines.Add(text.Substring(start));
         }
-        
+
         return lines;
     }
 
@@ -489,29 +486,29 @@ internal sealed class Chunker
     {
         if (lines.Count == 0)
             return string.Empty;
-        
+
         int totalLength = 0;
         for (int i = 0; i < lines.Count; i++)
         {
             totalLength += lines[i].Length + 1; // +1 for newline
         }
-        
+
         var result = new char[totalLength - 1]; // -1 because last line doesn't have newline
         int position = 0;
-        
+
         for (int i = 0; i < lines.Count; i++)
         {
             string line = lines[i];
             line.CopyTo(0, result, position, line.Length);
             position += line.Length;
-            
+
             if (i < lines.Count - 1)
             {
                 result[position] = '\n';
                 position++;
             }
         }
-        
+
         return new string(result);
     }
 
@@ -522,7 +519,7 @@ internal sealed class Chunker
     {
         if (paragraphs.Count == 0)
             return string.Empty;
-        
+
         int totalLength = 0;
         for (int i = 0; i < paragraphs.Count; i++)
         {
@@ -530,16 +527,16 @@ internal sealed class Chunker
             if (i < paragraphs.Count - 1)
                 totalLength += 2; // Two newlines between paragraphs
         }
-        
+
         var result = new char[totalLength];
         int position = 0;
-        
+
         for (int i = 0; i < paragraphs.Count; i++)
         {
             string para = paragraphs[i];
             para.CopyTo(0, result, position, para.Length);
             position += para.Length;
-            
+
             if (i < paragraphs.Count - 1)
             {
                 result[position] = '\n';
@@ -547,7 +544,7 @@ internal sealed class Chunker
                 position += 2;
             }
         }
-        
+
         return new string(result);
     }
 }

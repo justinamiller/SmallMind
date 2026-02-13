@@ -1,8 +1,4 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using SmallMind.Core;
-using SmallMind.Core.Core;
 
 namespace SmallMind.Transformers
 {
@@ -35,10 +31,10 @@ namespace SmallMind.Transformers
             {
                 var shape = new int[param.Shape.Length];
                 Array.Copy(param.Shape, shape, param.Shape.Length);
-                
+
                 var data = new float[param.Data.Length];
                 Array.Copy(param.Data, data, param.Data.Length);
-                
+
                 checkpoint.Parameters.Add(new TensorData
                 {
                     Shape = shape,
@@ -85,7 +81,7 @@ namespace SmallMind.Transformers
         public static TransformerModel FromCheckpoint(ModelCheckpoint checkpoint, double dropout = 0.1, int seed = 42)
         {
             var metadata = checkpoint.Metadata;
-            
+
             if (string.IsNullOrEmpty(metadata.ModelType) || metadata.ModelType != "TransformerModel")
             {
                 throw new InvalidOperationException(

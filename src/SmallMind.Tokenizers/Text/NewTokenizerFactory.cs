@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.Text.Json;
 
 namespace SmallMind.Tokenizers
@@ -39,7 +37,7 @@ namespace SmallMind.Tokenizers
 
             string json = File.ReadAllText(configPath);
             var config = JsonSerializer.Deserialize<TokenizerConfig>(json);
-            
+
             if (config == null)
                 throw new TokenizationException($"Failed to parse configuration file: {configPath}");
 
@@ -53,7 +51,7 @@ namespace SmallMind.Tokenizers
         public static ITokenizer? CreateFromEnvironment(string variableName = "SMALLMIND_TOKENIZER_CONFIG")
         {
             string? value = Environment.GetEnvironmentVariable(variableName);
-            
+
             if (string.IsNullOrWhiteSpace(value))
                 return null;
 
@@ -150,7 +148,7 @@ namespace SmallMind.Tokenizers
 
             string unkToken = config.SpecialTokens?.Unk ?? "[UNK]";
             int maxChars = 200;
-            
+
             if (config.Options != null && config.Options.TryGetValue("maxInputCharsPerWord", out object? maxObj))
             {
                 if (maxObj is int maxInt)

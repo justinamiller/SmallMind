@@ -1,10 +1,6 @@
-using System;
-using System.IO;
-using System.Linq;
 using SmallMind.Rag;
 using SmallMind.Rag.Pipeline;
 using SmallMind.Rag.Security;
-using Xunit;
 
 namespace SmallMind.Tests.Rag
 {

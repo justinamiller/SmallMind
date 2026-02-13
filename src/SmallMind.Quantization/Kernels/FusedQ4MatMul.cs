@@ -1,4 +1,3 @@
-using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
@@ -26,11 +25,11 @@ namespace SmallMind.Quantization.Kernels
         private const int L1_BLOCK_M = 32;
         private const int L1_BLOCK_K = 512;  // Larger K block since Q4 fits more in cache
         private const int L1_BLOCK_N = 128;
-        
+
         // Microkernel sizes
         private const int MR = 6;   // M-register blocking
         private const int NR = 16;  // N-register blocking (matches AVX2 2x8 or AVX-512 1x16)
-        
+
         /// <summary>
         /// Fused Q4 dequantize-and-multiply: C[M×N] = A[M×K] * B_q4[K×N]
         /// A is fp32 activations, B is Q4-quantized weights.
@@ -47,10 +46,10 @@ namespace SmallMind.Quantization.Kernels
                 throw new ArgumentException($"A length {A.Length} < {M * K}");
             if (C.Length < M * N)
                 throw new ArgumentException($"C length {C.Length} < {M * N}");
-            
+
             // Zero output
             C.Clear();
-            
+
             // Dispatch to optimal implementation
             if (Avx512F.IsSupported && K >= 16 && N >= 16)
             {
@@ -70,7 +69,7 @@ namespace SmallMind.Quantization.Kernels
                 MatMulF32Q4Optimized.Multiply(A, B, C, M, K, N);
             }
         }
-        
+
         /// <summary>
         /// AVX-512-fused Q4 matmul with in-register dequantization.
         /// Processes data in cache-friendly blocks using AVX-512 16-wide vectors.
@@ -86,9 +85,9 @@ namespace SmallMind.Quantization.Kernels
                 MultiplyAvx2Fused(A, B, C, M, K, N);
                 return;
             }
-            
+
             int blockSize = B.BlockSize;
-            
+
             fixed (float* pA = A, pC = C)
             fixed (byte* pBData = B.Data)
             fixed (float* pBScales = B.Scales)
@@ -97,19 +96,19 @@ namespace SmallMind.Quantization.Kernels
                 const int AVX512_BLOCK_M = 32;
                 const int AVX512_BLOCK_K = 512;
                 const int AVX512_BLOCK_N = 256;  // Larger N block for AVX-512
-                
+
                 for (int mc = 0; mc < M; mc += AVX512_BLOCK_M)
                 {
                     int mb = Math.Min(AVX512_BLOCK_M, M - mc);
-                    
+
                     for (int nc = 0; nc < N; nc += AVX512_BLOCK_N)
                     {
                         int nb = Math.Min(AVX512_BLOCK_N, N - nc);
-                        
+
                         for (int kc = 0; kc < K; kc += AVX512_BLOCK_K)
                         {
                             int kb = Math.Min(AVX512_BLOCK_K, K - kc);
-                            
+
                             // Process this L1 block with AVX-512 microkernels
                             FusedQ4BlockAvx512(
                                 pA + mc * K + kc,
@@ -121,7 +120,7 @@ namespace SmallMind.Quantization.Kernels
                 }
             }
         }
-        
+
         /// <summary>
         /// L1-blocked fused Q4 matmul for AVX-512.
         /// Uses 16-wide SIMD vectors for 2x throughput vs AVX2.
@@ -135,16 +134,16 @@ namespace SmallMind.Quantization.Kernels
         {
             const int MR_AVX512 = 6;
             const int NR_AVX512 = 32;  // 2x AVX-512 vectors (2x16)
-            
+
             // Process in MR×NR microkernels
             for (int i = 0; i < M; i += MR_AVX512)
             {
                 int mr = Math.Min(MR_AVX512, M - i);
-                
+
                 for (int j = 0; j < N; j += NR_AVX512)
                 {
                     int nr = Math.Min(NR_AVX512, N - j);
-                    
+
                     if (mr == MR_AVX512 && nr == NR_AVX512)
                     {
                         // Fast path: full microkernel
@@ -168,7 +167,7 @@ namespace SmallMind.Quantization.Kernels
                 }
             }
         }
-        
+
         /// <summary>
         /// AVX-512 microkernel: Fused Q4 dequant + FMA.
         /// Processes 6×32 tile (6 rows × 32 columns using 2x16-wide vectors).
@@ -180,7 +179,7 @@ namespace SmallMind.Quantization.Kernels
             int kOffset, int nOffset)
         {
             if (!Avx512F.IsSupported) return;
-            
+
             // Load accumulator registers (6 rows × 2 columns)
             Vector512<float> c00 = Avx512F.LoadVector512(C + 0 * ldC + 0);
             Vector512<float> c01 = Avx512F.LoadVector512(C + 0 * ldC + 16);
@@ -194,64 +193,64 @@ namespace SmallMind.Quantization.Kernels
             Vector512<float> c41 = Avx512F.LoadVector512(C + 4 * ldC + 16);
             Vector512<float> c50 = Avx512F.LoadVector512(C + 5 * ldC + 0);
             Vector512<float> c51 = Avx512F.LoadVector512(C + 5 * ldC + 16);
-            
+
             // Process K dimension
             for (int k = 0; k < K; k++)
             {
                 int globalK = kOffset + k;
-                
+
                 // Dequantize B row for this K (32 elements)
                 // Stack-allocate for dequantized B (avoids heap allocation)
                 float* bDequant = stackalloc float[32];
-                
+
                 for (int jj = 0; jj < 32; jj++)
                 {
                     int globalN = nOffset + jj;
                     int linearIdx = globalK * N + globalN;
                     int blockIdx = linearIdx / blockSize;
                     float scale = BScales[blockIdx];
-                    
+
                     // Unpack 4-bit nibble
                     int byteIdx = linearIdx >> 1;
                     byte packedByte = BData[byteIdx];
                     int shift = (linearIdx & 1) << 2;  // 0 or 4
                     byte nibble = (byte)((packedByte >> shift) & 0xF);
-                    
+
                     // Decode and scale
                     int quantVal = Q4Tensor.DecodeNibble(nibble);
                     bDequant[jj] = quantVal * scale;
                 }
-                
+
                 // Load dequantized B values into SIMD registers
                 Vector512<float> b0 = Avx512F.LoadVector512(bDequant + 0);
                 Vector512<float> b1 = Avx512F.LoadVector512(bDequant + 16);
-                
+
                 // Broadcast A values and FMA
                 Vector512<float> a0 = Vector512.Create(A[0 * K + k]);
                 c00 = Avx512F.FusedMultiplyAdd(a0, b0, c00);
                 c01 = Avx512F.FusedMultiplyAdd(a0, b1, c01);
-                
+
                 Vector512<float> a1 = Vector512.Create(A[1 * K + k]);
                 c10 = Avx512F.FusedMultiplyAdd(a1, b0, c10);
                 c11 = Avx512F.FusedMultiplyAdd(a1, b1, c11);
-                
+
                 Vector512<float> a2 = Vector512.Create(A[2 * K + k]);
                 c20 = Avx512F.FusedMultiplyAdd(a2, b0, c20);
                 c21 = Avx512F.FusedMultiplyAdd(a2, b1, c21);
-                
+
                 Vector512<float> a3 = Vector512.Create(A[3 * K + k]);
                 c30 = Avx512F.FusedMultiplyAdd(a3, b0, c30);
                 c31 = Avx512F.FusedMultiplyAdd(a3, b1, c31);
-                
+
                 Vector512<float> a4 = Vector512.Create(A[4 * K + k]);
                 c40 = Avx512F.FusedMultiplyAdd(a4, b0, c40);
                 c41 = Avx512F.FusedMultiplyAdd(a4, b1, c41);
-                
+
                 Vector512<float> a5 = Vector512.Create(A[5 * K + k]);
                 c50 = Avx512F.FusedMultiplyAdd(a5, b0, c50);
                 c51 = Avx512F.FusedMultiplyAdd(a5, b1, c51);
             }
-            
+
             // Store accumulators
             Avx512F.Store(C + 0 * ldC + 0, c00);
             Avx512F.Store(C + 0 * ldC + 16, c01);
@@ -266,7 +265,7 @@ namespace SmallMind.Quantization.Kernels
             Avx512F.Store(C + 5 * ldC + 0, c50);
             Avx512F.Store(C + 5 * ldC + 16, c51);
         }
-        
+
         /// <summary>
         /// AVX2-fused Q4 matmul with in-register dequantization.
         /// Processes data in cache-friendly blocks and uses FMA for accumulation.
@@ -281,9 +280,9 @@ namespace SmallMind.Quantization.Kernels
                 MultiplyVectorFused(A, B, C, M, K, N);
                 return;
             }
-            
+
             int blockSize = B.BlockSize;
-            
+
             fixed (float* pA = A, pC = C)
             fixed (byte* pBData = B.Data)
             fixed (float* pBScales = B.Scales)
@@ -292,15 +291,15 @@ namespace SmallMind.Quantization.Kernels
                 for (int mc = 0; mc < M; mc += L1_BLOCK_M)
                 {
                     int mb = Math.Min(L1_BLOCK_M, M - mc);
-                    
+
                     for (int nc = 0; nc < N; nc += L1_BLOCK_N)
                     {
                         int nb = Math.Min(L1_BLOCK_N, N - nc);
-                        
+
                         for (int kc = 0; kc < K; kc += L1_BLOCK_K)
                         {
                             int kb = Math.Min(L1_BLOCK_K, K - kc);
-                            
+
                             // Process this L1 block with microkernels
                             FusedQ4BlockAvx2(
                                 pA + mc * K + kc,
@@ -312,7 +311,7 @@ namespace SmallMind.Quantization.Kernels
                 }
             }
         }
-        
+
         /// <summary>
         /// L1-blocked fused Q4 matmul for AVX2.
         /// </summary>
@@ -327,11 +326,11 @@ namespace SmallMind.Quantization.Kernels
             for (int i = 0; i < M; i += MR)
             {
                 int mr = Math.Min(MR, M - i);
-                
+
                 for (int j = 0; j < N; j += NR)
                 {
                     int nr = Math.Min(NR, N - j);
-                    
+
                     if (mr == MR && nr == NR)
                     {
                         // Fast path: full microkernel
@@ -355,7 +354,7 @@ namespace SmallMind.Quantization.Kernels
                 }
             }
         }
-        
+
         /// <summary>
         /// AVX2 microkernel: Fused Q4 dequant + FMA.
         /// Dequantizes 4-bit weights in-register and immediately multiplies with activations.
@@ -370,7 +369,7 @@ namespace SmallMind.Quantization.Kernels
             int kOffset, int nOffset)
         {
             if (!Avx2.IsSupported || !Fma.IsSupported) return;
-            
+
             // Load accumulator registers
             Vector256<float> c00 = Avx.LoadVector256(C + 0 * ldC + 0);
             Vector256<float> c01 = Avx.LoadVector256(C + 0 * ldC + 8);
@@ -384,64 +383,64 @@ namespace SmallMind.Quantization.Kernels
             Vector256<float> c41 = Avx.LoadVector256(C + 4 * ldC + 8);
             Vector256<float> c50 = Avx.LoadVector256(C + 5 * ldC + 0);
             Vector256<float> c51 = Avx.LoadVector256(C + 5 * ldC + 8);
-            
+
             // Process K dimension
             for (int k = 0; k < K; k++)
             {
                 int globalK = kOffset + k;
-                
+
                 // Dequantize B row for this K in 16-element chunks (NR=16)
                 // Stack-allocate for dequantized B (avoids heap allocation)
                 float* bDequant = stackalloc float[NR];
-                
+
                 for (int jj = 0; jj < NR; jj++)
                 {
                     int globalN = nOffset + jj;
                     int linearIdx = globalK * N + globalN;
                     int blockIdx = linearIdx / blockSize;
                     float scale = BScales[blockIdx];
-                    
+
                     // Unpack 4-bit nibble
                     int byteIdx = linearIdx >> 1;
                     byte packedByte = BData[byteIdx];
                     int shift = (linearIdx & 1) << 2;  // 0 or 4
                     byte nibble = (byte)((packedByte >> shift) & 0xF);
-                    
+
                     // Decode and scale
                     int quantVal = Q4Tensor.DecodeNibble(nibble);
                     bDequant[jj] = quantVal * scale;
                 }
-                
+
                 // Load dequantized B values into SIMD registers
                 Vector256<float> b0 = Avx.LoadVector256(bDequant + 0);
                 Vector256<float> b1 = Avx.LoadVector256(bDequant + 8);
-                
+
                 // Broadcast A values and FMA
                 Vector256<float> a0 = Vector256.Create(A[0 * K + k]);
                 c00 = Fma.MultiplyAdd(a0, b0, c00);
                 c01 = Fma.MultiplyAdd(a0, b1, c01);
-                
+
                 Vector256<float> a1 = Vector256.Create(A[1 * K + k]);
                 c10 = Fma.MultiplyAdd(a1, b0, c10);
                 c11 = Fma.MultiplyAdd(a1, b1, c11);
-                
+
                 Vector256<float> a2 = Vector256.Create(A[2 * K + k]);
                 c20 = Fma.MultiplyAdd(a2, b0, c20);
                 c21 = Fma.MultiplyAdd(a2, b1, c21);
-                
+
                 Vector256<float> a3 = Vector256.Create(A[3 * K + k]);
                 c30 = Fma.MultiplyAdd(a3, b0, c30);
                 c31 = Fma.MultiplyAdd(a3, b1, c31);
-                
+
                 Vector256<float> a4 = Vector256.Create(A[4 * K + k]);
                 c40 = Fma.MultiplyAdd(a4, b0, c40);
                 c41 = Fma.MultiplyAdd(a4, b1, c41);
-                
+
                 Vector256<float> a5 = Vector256.Create(A[5 * K + k]);
                 c50 = Fma.MultiplyAdd(a5, b0, c50);
                 c51 = Fma.MultiplyAdd(a5, b1, c51);
             }
-            
+
             // Store accumulators
             Avx.Store(C + 0 * ldC + 0, c00);
             Avx.Store(C + 0 * ldC + 8, c01);
@@ -456,7 +455,7 @@ namespace SmallMind.Quantization.Kernels
             Avx.Store(C + 5 * ldC + 0, c50);
             Avx.Store(C + 5 * ldC + 8, c51);
         }
-        
+
         /// <summary>
         /// Vector{T}-based fused Q4 matmul for non-AVX2 platforms.
         /// </summary>
@@ -466,7 +465,7 @@ namespace SmallMind.Quantization.Kernels
             int M, int K, int N)
         {
             int blockSize = B.BlockSize;
-            
+
             fixed (float* pA = A, pC = C)
             fixed (byte* pBData = B.Data)
             fixed (float* pBScales = B.Scales)
@@ -477,21 +476,21 @@ namespace SmallMind.Quantization.Kernels
                     {
                         float aik = pA[i * K + k];
                         if (aik == 0f) continue;
-                        
+
                         float* cRow = pC + i * N;
-                        
+
                         // Dequantize and accumulate using Vector<T>
                         int j = 0;
                         int vecSize = Vector<float>.Count;
-                        
+
                         if (Vector.IsHardwareAccelerated && N >= vecSize)
                         {
                             var vAik = new Vector<float>(aik);
                             int simdEnd = N - vecSize + 1;
-                            
+
                             // Stack-allocate dequantized B chunk
                             float* bDequant = stackalloc float[vecSize];
-                            
+
                             for (; j < simdEnd; j += vecSize)
                             {
                                 // Dequantize chunk of B
@@ -500,35 +499,35 @@ namespace SmallMind.Quantization.Kernels
                                     int linearIdx = k * N + (j + jj);
                                     int blockIdx = linearIdx / blockSize;
                                     float scale = pBScales[blockIdx];
-                                    
+
                                     int byteIdx = linearIdx >> 1;
                                     byte packedByte = pBData[byteIdx];
                                     int shift = (linearIdx & 1) << 2;
                                     byte nibble = (byte)((packedByte >> shift) & 0xF);
-                                    
+
                                     int quantVal = Q4Tensor.DecodeNibble(nibble);
                                     bDequant[jj] = quantVal * scale;
                                 }
-                                
+
                                 // SIMD FMA
                                 var vB = new Vector<float>(new ReadOnlySpan<float>(bDequant, vecSize));
                                 var vC = new Vector<float>(new Span<float>(cRow + j, vecSize));
                                 (vC + vAik * vB).CopyTo(new Span<float>(cRow + j, vecSize));
                             }
                         }
-                        
+
                         // Scalar remainder
                         for (; j < N; j++)
                         {
                             int linearIdx = k * N + j;
                             int blockIdx = linearIdx / blockSize;
                             float scale = pBScales[blockIdx];
-                            
+
                             int byteIdx = linearIdx >> 1;
                             byte packedByte = pBData[byteIdx];
                             int shift = (linearIdx & 1) << 2;
                             byte nibble = (byte)((packedByte >> shift) & 0xF);
-                            
+
                             int quantVal = Q4Tensor.DecodeNibble(nibble);
                             cRow[j] += aik * quantVal * scale;
                         }
@@ -536,7 +535,7 @@ namespace SmallMind.Quantization.Kernels
                 }
             }
         }
-        
+
         /// <summary>
         /// Scalar fallback microkernel for edge cases.
         /// </summary>
@@ -553,21 +552,21 @@ namespace SmallMind.Quantization.Kernels
                 {
                     float aik = A[i * ldA + k];
                     if (aik == 0f) continue;
-                    
+
                     int globalK = kOffset + k;
-                    
+
                     for (int j = 0; j < N; j++)
                     {
                         int globalN = nOffset + j;
                         int linearIdx = globalK * ldB + globalN;
                         int blockIdx = linearIdx / blockSize;
                         float scale = BScales[blockIdx];
-                        
+
                         int byteIdx = linearIdx >> 1;
                         byte packedByte = BData[byteIdx];
                         int shift = (linearIdx & 1) << 2;
                         byte nibble = (byte)((packedByte >> shift) & 0xF);
-                        
+
                         int quantVal = Q4Tensor.DecodeNibble(nibble);
                         C[i * ldC + j] += aik * quantVal * scale;
                     }

@@ -1,8 +1,5 @@
-using System;
-using SmallMind.Quantization.Tensors;
-using SmallMind.Quantization.Kernels;
 using SmallMind.Quantization.Abstractions;
-using Xunit;
+using SmallMind.Quantization.Tensors;
 
 namespace SmallMind.Quantization.Tests
 {
@@ -40,7 +37,7 @@ namespace SmallMind.Quantization.Tests
             // Assert
             Assert.Equal(256, tensor.Rows);
             Assert.Equal(256, tensor.Cols);
-            
+
             int expectedBlocks = (256 * 256) / 256; // 256 blocks
             int expectedBytes = expectedBlocks * 144;
             Assert.Equal(expectedBytes, tensor.Data.Length);
@@ -58,23 +55,23 @@ namespace SmallMind.Quantization.Tests
         {
             // Arrange: Create a simple Q4_K block with known values
             var tensor = new Q4KTensor(rows: 1, cols: 256);
-            
+
             // Manually construct a single block:
             // d = 1.0f (fp16), dmin = 0.0f (fp16), scales = all 1s, qs = sequential 0-15 pattern
             ushort d_fp16 = FloatToHalf(1.0f);
             ushort dmin_fp16 = FloatToHalf(0.0f);
-            
+
             tensor.Data[0] = (byte)(d_fp16 & 0xFF);
             tensor.Data[1] = (byte)((d_fp16 >> 8) & 0xFF);
             tensor.Data[2] = (byte)(dmin_fp16 & 0xFF);
             tensor.Data[3] = (byte)((dmin_fp16 >> 8) & 0xFF);
-            
+
             // Set scales to encode value 1 (6-bit = 1)
             for (int i = 4; i < 16; i++)
             {
                 tensor.Data[i] = 0x04; // 6-bit value 1 in various positions
             }
-            
+
             // Set qs to simple pattern (0,1,2,3,... packed as nibbles)
             for (int i = 0; i < 128; i++)
             {
@@ -115,22 +112,22 @@ namespace SmallMind.Quantization.Tests
             // Arrange: Create small matrices for testing
             int M = 4, K = 256, N = 256;
             var random = new Random(42);
-            
+
             // Create random FP32 activations
             var activations = new float[M * K];
             for (int i = 0; i < activations.Length; i++)
                 activations[i] = (float)(random.NextDouble() * 2.0 - 1.0);
-            
+
             // Create Q4_K weights with realistic data
             var weights = new Q4KTensor(rows: K, cols: N);
             FillQ4KWithRandomData(weights, random);
-            
+
             var weightTensor = new Q4KWeightTensor(weights);
-            
+
             // Act: Fused MatMul
             var outputFused = new float[M * N];
             weightTensor.MatMul(activations, outputFused, M, K, N);
-            
+
             // Reference: Dequantize then MatMul
             var weightsF32 = weights.Dequantize();
             var outputReference = new float[M * N];
@@ -166,7 +163,7 @@ namespace SmallMind.Quantization.Tests
             // Assert
             Assert.Equal(256, tensor.Rows);
             Assert.Equal(256, tensor.Cols);
-            
+
             int expectedBlocks = (256 * 256) / 256; // 256 blocks
             int expectedBytes = expectedBlocks * 210;
             Assert.Equal(expectedBytes, tensor.Data.Length);
@@ -184,28 +181,28 @@ namespace SmallMind.Quantization.Tests
         {
             // Arrange: Create a simple Q6_K block
             var tensor = new Q6KTensor(rows: 1, cols: 256);
-            
+
             // Manually construct a single block
             ushort d_fp16 = FloatToHalf(1.0f);
-            
+
             // Fill ql (low 4 bits) with pattern
             for (int i = 0; i < 128; i++)
             {
                 tensor.Data[i] = (byte)(i % 16); // 0-15 pattern
             }
-            
+
             // Fill qh (high 2 bits) with zeros
             for (int i = 128; i < 192; i++)
             {
                 tensor.Data[i] = 0;
             }
-            
+
             // Fill scales with 1s (int8)
             for (int i = 192; i < 208; i++)
             {
                 tensor.Data[i] = 1;
             }
-            
+
             // Set d (fp16) at end
             tensor.Data[208] = (byte)(d_fp16 & 0xFF);
             tensor.Data[209] = (byte)((d_fp16 >> 8) & 0xFF);
@@ -241,20 +238,20 @@ namespace SmallMind.Quantization.Tests
             // Arrange
             int M = 4, K = 256, N = 256;
             var random = new Random(42);
-            
+
             var activations = new float[M * K];
             for (int i = 0; i < activations.Length; i++)
                 activations[i] = (float)(random.NextDouble() * 2.0 - 1.0);
-            
+
             var weights = new Q6KTensor(rows: K, cols: N);
             FillQ6KWithRandomData(weights, random);
-            
+
             var weightTensor = new Q6KWeightTensor(weights);
-            
+
             // Act
             var outputFused = new float[M * N];
             weightTensor.MatMul(activations, outputFused, M, K, N);
-            
+
             var weightsF32 = weights.Dequantize();
             var outputReference = new float[M * N];
             NaiveMatMul(activations, weightsF32, outputReference, M, K, N);
@@ -305,12 +302,12 @@ namespace SmallMind.Quantization.Tests
         private void AssertArraysClose(float[] expected, float[] actual, float tolerance)
         {
             Assert.Equal(expected.Length, actual.Length);
-            
+
             for (int i = 0; i < expected.Length; i++)
             {
                 float diff = Math.Abs(expected[i] - actual[i]);
                 float threshold = Math.Max(Math.Abs(expected[i]) * tolerance, 1e-5f);
-                
+
                 Assert.True(diff <= threshold,
                     $"Arrays differ at index {i}: expected {expected[i]}, got {actual[i]}, diff {diff}, threshold {threshold}");
             }
@@ -323,12 +320,12 @@ namespace SmallMind.Quantization.Tests
             uint sign = (bits >> 16) & 0x8000;
             uint exponent = ((bits >> 23) & 0xFF) - 112;
             uint mantissa = (bits >> 13) & 0x3FF;
-            
+
             if (exponent <= 0)
                 return (ushort)sign; // Zero or denormal
             if (exponent >= 31)
                 return (ushort)(sign | 0x7C00); // Infinity
-                
+
             return (ushort)(sign | (exponent << 10) | mantissa);
         }
 

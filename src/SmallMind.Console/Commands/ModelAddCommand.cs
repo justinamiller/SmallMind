@@ -1,7 +1,3 @@
-using System;
-using System.Threading.Tasks;
-using SmallMind.ModelRegistry;
-
 namespace SmallMind.ConsoleApp.Commands
 {
     /// <summary>
@@ -28,7 +24,7 @@ namespace SmallMind.ConsoleApp.Commands
             try
             {
                 var registry = new ModelRegistry.ModelRegistry(cacheDir);
-                
+
                 Console.WriteLine($"Adding model from: {source}");
                 Console.WriteLine($"Cache directory: {registry.CacheRoot}");
                 Console.WriteLine();
@@ -37,7 +33,7 @@ namespace SmallMind.ConsoleApp.Commands
 
                 Console.WriteLine($"Model registered successfully!");
                 Console.WriteLine($"Model ID: {registeredId}");
-                
+
                 // Show verification result
                 var verification = registry.VerifyModel(registeredId);
                 if (verification.IsValid)

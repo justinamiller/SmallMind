@@ -1,7 +1,5 @@
-using System.Threading.Tasks;
-using Xunit;
-using SmallMind.Tests.Fixtures;
 using SmallMind.Runtime;
+using SmallMind.Tests.Fixtures;
 
 namespace SmallMind.Tests.Regression
 {
@@ -21,7 +19,7 @@ namespace SmallMind.Tests.Regression
             // Arrange
             var model = _fixture.CreateModel();
             var tokenizer = _fixture.CreateTokenizer();
-            
+
             var options = new ProductionInferenceOptions
             {
                 MaxNewTokens = 10,
@@ -54,7 +52,7 @@ namespace SmallMind.Tests.Regression
             // Arrange
             var model = _fixture.CreateModel();
             var tokenizer = _fixture.CreateTokenizer();
-            
+
             var options = new ProductionInferenceOptions
             {
                 MaxNewTokens = 5,
@@ -125,7 +123,7 @@ namespace SmallMind.Tests.Regression
             // Arrange - Greedy sampling (temp ~0, always pick argmax) should be deterministic even without seed
             var model = _fixture.CreateModel();
             var tokenizer = _fixture.CreateTokenizer();
-            
+
             var options = new ProductionInferenceOptions
             {
                 MaxNewTokens = 5,

@@ -1,7 +1,5 @@
-using System;
 using System.Text;
 using System.Text.Json;
-using SmallMind.Core.Core;
 
 namespace SmallMind.Core.Core
 {
@@ -30,12 +28,12 @@ namespace SmallMind.Core.Core
             if (summary.TtftStats != null || summary.E2eLatencyStats != null)
             {
                 sb.AppendLine("Latency (ms):");
-                
+
                 if (summary.TtftStats != null)
                 {
                     sb.AppendLine($"  TTFT:  p50={summary.TtftStats.P50:F1}, p95={summary.TtftStats.P95:F1}, p99={summary.TtftStats.P99:F1}, mean={summary.TtftStats.Mean:F1}");
                 }
-                
+
                 if (summary.E2eLatencyStats != null)
                 {
                     sb.AppendLine($"  E2E:   p50={summary.E2eLatencyStats.P50:F1}, p95={summary.E2eLatencyStats.P95:F1}, p99={summary.E2eLatencyStats.P99:F1}, mean={summary.E2eLatencyStats.Mean:F1}");

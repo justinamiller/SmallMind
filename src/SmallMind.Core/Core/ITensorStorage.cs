@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Core.Core
 {
     /// <summary>

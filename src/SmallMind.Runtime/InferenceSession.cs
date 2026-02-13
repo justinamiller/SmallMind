@@ -1,10 +1,5 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 using SmallMind.Core.Rng;
@@ -29,47 +24,47 @@ namespace SmallMind.Runtime
         private readonly DeterministicRng? _deterministicRng;
         private readonly System.Random _random;
         private readonly int _blockSize;
-        
+
         // Thread-safety guard: Sessions are NOT thread-safe and must not be used concurrently
         private int _inUse = 0; // 0 = not in use, 1 = in use
-        
+
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
-        
+
         // Additional buffers for Top-P and Min-P sampling (reused per token, zero allocation)
         private int[]? _sortedIndicesBuffer;
         private float[]? _sortedProbsBuffer;
-        
+
         // Repetition penalty tracking (sparse, reusable across tokens)
         private int[]? _seenTokenIds;
         private int[]? _seenCounts;
         private int _seenTokensCount = 0;
-        
+
         // Stop sequence detection sliding window (only allocated if stop sequences configured)
         private char[]? _stopSequenceBuffer;
         private int _stopSequenceBufferPos = 0;
         private int _stopSequenceBufferSize = 0;
-        
+
         // KV-cache state for efficient decode
         private bool _kvCacheActive = false;
         private int _currentPosition = 0;
-        
+
         // Reusable decode tensor for single-token generation
         private float[] _decodeData = new float[1];
         private int[] _decodeShape = new int[] { 1, 1 };
         private Tensor? _decodeTensor;
-        
+
         // Deterministic scheduler (optional)
         private readonly DeterministicScheduler? _scheduler;
         private TokenScheduleResult? _currentSchedule;
-        
+
         private bool _disposed;
-        
+
         /// <summary>
         /// Gets the session ID (for tracking/logging).
         /// </summary>
         public string SessionId { get; }
-        
+
         /// <summary>
         /// Gets the current schedule (if schedule tracking is enabled).
         /// </summary>
@@ -79,7 +74,7 @@ namespace SmallMind.Runtime
         /// Gets the options used for this session.
         /// </summary>
         public ProductionInferenceOptions Options => _options;
-        
+
         /// <summary>
         /// Creates a new inference session.
         /// </summary>
@@ -98,11 +93,11 @@ namespace SmallMind.Runtime
             _model = model ?? throw new ArgumentNullException(nameof(model));
             _tokenizer = tokenizer ?? throw new ArgumentNullException(nameof(tokenizer));
             _blockSize = blockSize;
-            
+
             // Clone options to prevent external modifications
             _options = options?.Clone() ?? throw new ArgumentNullException(nameof(options));
             _options.Validate();
-            
+
             // Initialize RNG
             if (_options.Seed.HasValue)
             {
@@ -113,19 +108,19 @@ namespace SmallMind.Runtime
             {
                 _random = new System.Random();
             }
-            
+
             // Initialize scheduler if schedule tracking is enabled
             if (_options.EnableScheduleTracking)
             {
                 _scheduler = new DeterministicScheduler();
             }
-            
+
             SessionId = sessionId ?? Guid.NewGuid().ToString("N");
-            
+
             // Set model to eval mode
             _model.Eval();
         }
-        
+
         /// <summary>
         /// Acquires the session for use. Throws if already in use by another thread.
         /// </summary>
@@ -139,7 +134,7 @@ namespace SmallMind.Runtime
                     "Create separate sessions for concurrent requests.");
             }
         }
-        
+
         /// <summary>
         /// Releases the session after use.
         /// </summary>
@@ -147,7 +142,7 @@ namespace SmallMind.Runtime
         {
             Interlocked.Exchange(ref _inUse, 0);
         }
-        
+
         /// <summary>
         /// Generate text from a prompt (non-streaming).
         /// </summary>
@@ -164,153 +159,153 @@ namespace SmallMind.Runtime
             try
             {
                 ThrowIfDisposed();
-                
+
                 // Create timeout cancellation if configured
-                using var timeoutCts = _options.MaxTimeMs > 0 
-                    ? new CancellationTokenSource(_options.MaxTimeMs) 
+                using var timeoutCts = _options.MaxTimeMs > 0
+                    ? new CancellationTokenSource(_options.MaxTimeMs)
                 : null;
-            
-            using var linkedCts = timeoutCts != null
-                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token)
-                : null;
-            
-            var effectiveToken = linkedCts?.Token ?? cancellationToken;
-            
-            try
-            {
-                // Encode and validate input
-                var context = _tokenizer.Encode(prompt);
-                ValidateAndTruncateInput(context);
-                
-                int inputTokens = context.Count;
-                int requestId = -1;
-                
-                // Create schedule if tracking is enabled
-                if (_scheduler != null)
+
+                using var linkedCts = timeoutCts != null
+                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token)
+                    : null;
+
+                var effectiveToken = linkedCts?.Token ?? cancellationToken;
+
+                try
                 {
-                    var promptArray = context.ToArray();
-                    _currentSchedule = _scheduler.Schedule(
-                        promptArray,
-                        _options.MaxNewTokens,
-                        _options.SchedulingPolicy,
-                        _options.Seed.HasValue ? (uint)_options.Seed.Value : null);
-                }
-                
-                // Start metrics tracking
-                if (metrics != null)
-                {
-                    if (!metrics.IsEnabled)
+                    // Encode and validate input
+                    var context = _tokenizer.Encode(prompt);
+                    ValidateAndTruncateInput(context);
+
+                    int inputTokens = context.Count;
+                    int requestId = -1;
+
+                    // Create schedule if tracking is enabled
+                    if (_scheduler != null)
                     {
-                        metrics.Start();
+                        var promptArray = context.ToArray();
+                        _currentSchedule = _scheduler.Schedule(
+                            promptArray,
+                            _options.MaxNewTokens,
+                            _options.SchedulingPolicy,
+                            _options.Seed.HasValue ? (uint)_options.Seed.Value : null);
                     }
-                    requestId = metrics.RecordRequestStart();
-                    metrics.RecordInferenceStart(requestId);
-                }
-                
-                bool firstTokenRecorded = false;
-                FinishReason finishReason = FinishReason.None;
-                
-                // Generate tokens
-                for (int i = 0; i < _options.MaxNewTokens; i++)
-                {
-                    effectiveToken.ThrowIfCancellationRequested();
-                    
-                    // Check context limit
-                    if (_options.MaxContextTokens > 0 && context.Count >= _options.MaxContextTokens)
+
+                    // Start metrics tracking
+                    if (metrics != null)
                     {
-                        finishReason = FinishReason.MaxContext;
-                        break;
-                    }
-                    
-                    // Check block size limit to prevent exceeding model's positional embeddings
-                    if (context.Count >= _blockSize)
-                    {
-                        finishReason = FinishReason.MaxContext;
-                        break;
-                    }
-                    
-                    var nextToken = await GenerateNextTokenAsync(context, effectiveToken);
-                    context.Add(nextToken);
-                    
-                    // Record first token for TTFT
-                    if (metrics != null && !firstTokenRecorded)
-                    {
-                        metrics.RecordFirstToken(requestId);
-                        firstTokenRecorded = true;
-                    }
-                    
-                    // Check for stop token (EOS or configured stop tokens)
-                    if (IsStopToken(nextToken, out var stopReason))
-                    {
-                        finishReason = stopReason;
-                        break;
-                    }
-                    
-                    // Check for stop sequences (text-based)
-                    if (_options.StopSequences.Length > 0)
-                    {
-                        // Decode just the new token to check stop sequence
-                        var tokenText = _tokenizer.Decode(new List<int> { nextToken });
-                        if (CheckStopSequence(tokenText))
+                        if (!metrics.IsEnabled)
                         {
-                            finishReason = FinishReason.StopSequence;
+                            metrics.Start();
+                        }
+                        requestId = metrics.RecordRequestStart();
+                        metrics.RecordInferenceStart(requestId);
+                    }
+
+                    bool firstTokenRecorded = false;
+                    FinishReason finishReason = FinishReason.None;
+
+                    // Generate tokens
+                    for (int i = 0; i < _options.MaxNewTokens; i++)
+                    {
+                        effectiveToken.ThrowIfCancellationRequested();
+
+                        // Check context limit
+                        if (_options.MaxContextTokens > 0 && context.Count >= _options.MaxContextTokens)
+                        {
+                            finishReason = FinishReason.MaxContext;
                             break;
                         }
-                    }
-                }
-                
-                // Set finish reason if loop completed normally
-                if (finishReason == FinishReason.None)
-                {
-                    finishReason = FinishReason.MaxTokens;
-                }
-                
-                // Record completion
-                if (metrics != null)
-                {
-                    metrics.RecordRequestComplete(requestId, inputTokens, context.Count - inputTokens, success: true);
-                }
-                
-                // Decode and return (optionally remove stop sequence)
-                var result = _tokenizer.Decode(context);
-                
-                if (finishReason == FinishReason.StopSequence && _options.RemoveStopSequenceFromOutput)
-                {
-                    // Find and remove the stop sequence from the end
-                    for (int i = 0; i < _options.StopSequences.Length; i++)
-                    {
-                        if (result.EndsWith(_options.StopSequences[i]))
+
+                        // Check block size limit to prevent exceeding model's positional embeddings
+                        if (context.Count >= _blockSize)
                         {
-                            result = result.Substring(0, result.Length - _options.StopSequences[i].Length);
+                            finishReason = FinishReason.MaxContext;
                             break;
                         }
+
+                        var nextToken = await GenerateNextTokenAsync(context, effectiveToken);
+                        context.Add(nextToken);
+
+                        // Record first token for TTFT
+                        if (metrics != null && !firstTokenRecorded)
+                        {
+                            metrics.RecordFirstToken(requestId);
+                            firstTokenRecorded = true;
+                        }
+
+                        // Check for stop token (EOS or configured stop tokens)
+                        if (IsStopToken(nextToken, out var stopReason))
+                        {
+                            finishReason = stopReason;
+                            break;
+                        }
+
+                        // Check for stop sequences (text-based)
+                        if (_options.StopSequences.Length > 0)
+                        {
+                            // Decode just the new token to check stop sequence
+                            var tokenText = _tokenizer.Decode(new List<int> { nextToken });
+                            if (CheckStopSequence(tokenText))
+                            {
+                                finishReason = FinishReason.StopSequence;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Set finish reason if loop completed normally
+                    if (finishReason == FinishReason.None)
+                    {
+                        finishReason = FinishReason.MaxTokens;
+                    }
+
+                    // Record completion
+                    if (metrics != null)
+                    {
+                        metrics.RecordRequestComplete(requestId, inputTokens, context.Count - inputTokens, success: true);
+                    }
+
+                    // Decode and return (optionally remove stop sequence)
+                    var result = _tokenizer.Decode(context);
+
+                    if (finishReason == FinishReason.StopSequence && _options.RemoveStopSequenceFromOutput)
+                    {
+                        // Find and remove the stop sequence from the end
+                        for (int i = 0; i < _options.StopSequences.Length; i++)
+                        {
+                            if (result.EndsWith(_options.StopSequences[i]))
+                            {
+                                result = result.Substring(0, result.Length - _options.StopSequences[i].Length);
+                                break;
+                            }
+                        }
+                    }
+
+                    return result;
+                }
+                catch (OperationCanceledException) when (timeoutCts?.IsCancellationRequested == true)
+                {
+                    // Timeout occurred - throw timeout exception
+                    throw new InferenceTimeoutException(_options.MaxTimeMs);
+                }
+                finally
+                {
+                    // Cleanup: Disable KV-cache after generation completes
+                    if (_kvCacheActive)
+                    {
+                        _model.DisableKVCache();
+                        _kvCacheActive = false;
+                        _currentPosition = 0;
                     }
                 }
-                
-                return result;
-            }
-            catch (OperationCanceledException) when (timeoutCts?.IsCancellationRequested == true)
-            {
-                // Timeout occurred - throw timeout exception
-                throw new InferenceTimeoutException(_options.MaxTimeMs);
-            }
-            finally
-            {
-                // Cleanup: Disable KV-cache after generation completes
-                if (_kvCacheActive)
-                {
-                    _model.DisableKVCache();
-                    _kvCacheActive = false;
-                    _currentPosition = 0;
-                }
-            }
             }
             finally
             {
                 ReleaseSession();
             }
         }
-        
+
         /// <summary>
         /// Generate text as a stream of tokens.
         /// </summary>
@@ -327,174 +322,174 @@ namespace SmallMind.Runtime
             try
             {
                 ThrowIfDisposed();
-                
+
                 // Create timeout cancellation if configured
-                using var timeoutCts = _options.MaxTimeMs > 0 
-                    ? new CancellationTokenSource(_options.MaxTimeMs) 
+                using var timeoutCts = _options.MaxTimeMs > 0
+                    ? new CancellationTokenSource(_options.MaxTimeMs)
                     : null;
-                
+
                 using var linkedCts = timeoutCts != null
                     ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token)
                     : null;
-                
+
                 var effectiveToken = linkedCts?.Token ?? cancellationToken;
-                
+
                 try
-            {
-                // Encode and validate input
-                var context = _tokenizer.Encode(prompt);
-                ValidateAndTruncateInput(context);
-                
-                int inputTokens = context.Count;
-                int requestId = -1;
-                
-                // Create schedule if tracking is enabled
-                if (_scheduler != null)
                 {
-                    var promptArray = context.ToArray();
-                    _currentSchedule = _scheduler.Schedule(
-                        promptArray,
-                        _options.MaxNewTokens,
-                        _options.SchedulingPolicy,
-                        _options.Seed.HasValue ? (uint)_options.Seed.Value : null);
-                }
-                
-                // Start metrics tracking
-                if (metrics != null)
-                {
-                    if (!metrics.IsEnabled)
+                    // Encode and validate input
+                    var context = _tokenizer.Encode(prompt);
+                    ValidateAndTruncateInput(context);
+
+                    int inputTokens = context.Count;
+                    int requestId = -1;
+
+                    // Create schedule if tracking is enabled
+                    if (_scheduler != null)
                     {
-                        metrics.Start();
+                        var promptArray = context.ToArray();
+                        _currentSchedule = _scheduler.Schedule(
+                            promptArray,
+                            _options.MaxNewTokens,
+                            _options.SchedulingPolicy,
+                            _options.Seed.HasValue ? (uint)_options.Seed.Value : null);
                     }
-                    requestId = metrics.RecordRequestStart();
-                    metrics.RecordInferenceStart(requestId);
-                }
-                
-                bool firstTokenRecorded = false;
-                FinishReason finishReason = FinishReason.None;
-                
-                // Generate tokens
-                for (int i = 0; i < _options.MaxNewTokens; i++)
-                {
-                    // Check for timeout
-                    if (effectiveToken.IsCancellationRequested)
+
+                    // Start metrics tracking
+                    if (metrics != null)
                     {
-                        if (timeoutCts?.IsCancellationRequested == true)
+                        if (!metrics.IsEnabled)
                         {
-                            finishReason = FinishReason.Timeout;
-                            // Yield final token with timeout reason
-                            yield return new GeneratedToken(
-                                tokenId: -1,
-                                text: "",
-                                index: i,
-                                logProb: null,
-                                finishReason: FinishReason.Timeout
-                            );
+                            metrics.Start();
+                        }
+                        requestId = metrics.RecordRequestStart();
+                        metrics.RecordInferenceStart(requestId);
+                    }
+
+                    bool firstTokenRecorded = false;
+                    FinishReason finishReason = FinishReason.None;
+
+                    // Generate tokens
+                    for (int i = 0; i < _options.MaxNewTokens; i++)
+                    {
+                        // Check for timeout
+                        if (effectiveToken.IsCancellationRequested)
+                        {
+                            if (timeoutCts?.IsCancellationRequested == true)
+                            {
+                                finishReason = FinishReason.Timeout;
+                                // Yield final token with timeout reason
+                                yield return new GeneratedToken(
+                                    tokenId: -1,
+                                    text: "",
+                                    index: i,
+                                    logProb: null,
+                                    finishReason: FinishReason.Timeout
+                                );
+                                break;
+                            }
+                            effectiveToken.ThrowIfCancellationRequested();
+                        }
+
+                        // Check context limit
+                        if (_options.MaxContextTokens > 0 && context.Count >= _options.MaxContextTokens)
+                        {
+                            finishReason = FinishReason.MaxContext;
                             break;
                         }
-                        effectiveToken.ThrowIfCancellationRequested();
-                    }
-                    
-                    // Check context limit
-                    if (_options.MaxContextTokens > 0 && context.Count >= _options.MaxContextTokens)
-                    {
-                        finishReason = FinishReason.MaxContext;
-                        break;
-                    }
-                    
-                    var nextToken = await GenerateNextTokenAsync(context, effectiveToken);
-                    context.Add(nextToken);
-                    
-                    // Record first token for TTFT
-                    if (metrics != null && !firstTokenRecorded)
-                    {
-                        metrics.RecordFirstToken(requestId);
-                        firstTokenRecorded = true;
-                    }
-                    
-                    // Decode just this token
-                    var tokenText = _tokenizer.Decode(new List<int> { nextToken });
-                    
-                    // Check for stop token
-                    bool isStop = IsStopToken(nextToken, out var stopReason);
-                    
-                    // Check for stop sequences
-                    bool isStopSeq = false;
-                    if (_options.StopSequences.Length > 0)
-                    {
-                        isStopSeq = CheckStopSequence(tokenText);
-                        if (isStopSeq)
+
+                        var nextToken = await GenerateNextTokenAsync(context, effectiveToken);
+                        context.Add(nextToken);
+
+                        // Record first token for TTFT
+                        if (metrics != null && !firstTokenRecorded)
                         {
-                            stopReason = FinishReason.StopSequence;
+                            metrics.RecordFirstToken(requestId);
+                            firstTokenRecorded = true;
+                        }
+
+                        // Decode just this token
+                        var tokenText = _tokenizer.Decode(new List<int> { nextToken });
+
+                        // Check for stop token
+                        bool isStop = IsStopToken(nextToken, out var stopReason);
+
+                        // Check for stop sequences
+                        bool isStopSeq = false;
+                        if (_options.StopSequences.Length > 0)
+                        {
+                            isStopSeq = CheckStopSequence(tokenText);
+                            if (isStopSeq)
+                            {
+                                stopReason = FinishReason.StopSequence;
+                            }
+                        }
+
+                        // Determine finish reason for this token
+                        var tokenFinishReason = FinishReason.None;
+                        if (isStop || isStopSeq)
+                        {
+                            tokenFinishReason = stopReason;
+                            finishReason = stopReason;
+                        }
+                        else if (i == _options.MaxNewTokens - 1)
+                        {
+                            tokenFinishReason = FinishReason.MaxTokens;
+                            finishReason = FinishReason.MaxTokens;
+                        }
+
+                        yield return new GeneratedToken(
+                            tokenId: nextToken,
+                            text: tokenText,
+                            index: i,
+                            logProb: null,
+                            finishReason: tokenFinishReason
+                        );
+
+                        // Stop if we hit a stop condition
+                        if (isStop || isStopSeq)
+                        {
+                            break;
                         }
                     }
-                    
-                    // Determine finish reason for this token
-                    var tokenFinishReason = FinishReason.None;
-                    if (isStop || isStopSeq)
+
+                    // Record completion
+                    if (metrics != null)
                     {
-                        tokenFinishReason = stopReason;
-                        finishReason = stopReason;
-                    }
-                    else if (i == _options.MaxNewTokens - 1)
-                    {
-                        tokenFinishReason = FinishReason.MaxTokens;
-                        finishReason = FinishReason.MaxTokens;
-                    }
-                    
-                    yield return new GeneratedToken(
-                        tokenId: nextToken,
-                        text: tokenText,
-                        index: i,
-                        logProb: null,
-                        finishReason: tokenFinishReason
-                    );
-                    
-                    // Stop if we hit a stop condition
-                    if (isStop || isStopSeq)
-                    {
-                        break;
+                        metrics.RecordRequestComplete(requestId, inputTokens, context.Count - inputTokens, success: true);
                     }
                 }
-                
-                // Record completion
-                if (metrics != null)
+                finally
                 {
-                    metrics.RecordRequestComplete(requestId, inputTokens, context.Count - inputTokens, success: true);
+                    // Cleanup: Disable KV-cache after generation completes
+                    if (_kvCacheActive)
+                    {
+                        _model.DisableKVCache();
+                        _kvCacheActive = false;
+                        _currentPosition = 0;
+                    }
                 }
-            }
-            finally
-            {
-                // Cleanup: Disable KV-cache after generation completes
-                if (_kvCacheActive)
-                {
-                    _model.DisableKVCache();
-                    _kvCacheActive = false;
-                    _currentPosition = 0;
-                }
-            }
             }
             finally
             {
                 ReleaseSession();
             }
         }
-        
+
         private async Task<int> GenerateNextTokenAsync(List<int> context, CancellationToken cancellationToken)
         {
             // Check cancellation before compute
             cancellationToken.ThrowIfCancellationRequested();
-            
+
             Tensor logits;
-            
+
             if (!_kvCacheActive)
             {
                 // PREFILL PHASE: Process full prompt to populate KV cache
-                
+
                 // Reset and enable KV-cache
                 _model.ResetKVCache();
                 _model.EnableKVCache();
-                
+
                 // Crop context to last blockSize tokens if needed
                 List<int> contextCropped;
                 if (context.Count <= _blockSize)
@@ -511,9 +506,9 @@ namespace SmallMind.Runtime
                         contextCropped.Add(context[idx]);
                     }
                 }
-                
+
                 int promptLength = contextCropped.Count;
-                
+
                 // Build tensor from full prompt: shape (1, promptLength)
                 // Use pooled tensor to reduce allocation pressure
                 using var prefillTensor = Tensor.CreatePooled(new int[] { 1, promptLength }, requiresGrad: false);
@@ -521,10 +516,10 @@ namespace SmallMind.Runtime
                 {
                     prefillTensor.Data[j] = contextCropped[j];
                 }
-                
+
                 // Forward pass with position offset 0 (start of sequence)
                 logits = _model.Forward(prefillTensor, positionOffset: 0);
-                
+
                 // Set position for next decode step
                 _currentPosition = promptLength;
                 _kvCacheActive = true;
@@ -532,73 +527,73 @@ namespace SmallMind.Runtime
             else
             {
                 // DECODE PHASE: Single-token forward with KV cache
-                
+
                 // Get the last token from context
                 int lastToken = context[context.Count - 1];
-                
+
                 // Reuse decode tensor (zero allocation)
                 _decodeData[0] = lastToken;
                 if (_decodeTensor == null)
                 {
                     _decodeTensor = new Tensor(_decodeData, _decodeShape);
                 }
-                
+
                 // Forward pass with current position offset
                 logits = _model.Forward(_decodeTensor, positionOffset: _currentPosition);
-                
+
                 // Increment position for next token
                 _currentPosition++;
             }
-            
+
             // Get logits for last position
             int T = logits.Shape[1];  // Sequence length in output (1 for decode, promptLength for prefill)
             int vocabSize = logits.Shape[2];
-            
+
             // Reuse logits buffer instead of allocating per token
             if (_probabilityBuffer == null || _probabilityBuffer.Length != vocabSize)
             {
                 _probabilityBuffer = new float[vocabSize];
             }
-            
+
             var logitsLast = _probabilityBuffer; // Reuse buffer
             int lastPosOffset = (T - 1) * vocabSize;
             for (int v = 0; v < vocabSize; v++)
             {
                 logitsLast[v] = logits.Data[lastPosOffset + v];
             }
-            
+
             // SAMPLING PIPELINE (order matters):
-            
+
             // 1. Apply repetition/presence/frequency penalties (before temperature)
             ApplyRepetitionPenalties(logitsLast, context);
-            
+
             // 2. Apply temperature scaling (SIMD optimized)
             if (_options.Temperature != 1.0)
             {
                 ApplyTemperatureScaling(logitsLast, (float)_options.Temperature);
             }
-            
+
             // 3. Apply top-k filtering
             if (_options.TopK > 0)
             {
                 logitsLast = ApplyTopK(logitsLast, _options.TopK);
             }
-            
+
             // 4. Convert to probabilities (softmax)
             var probs = Softmax(logitsLast);
-            
+
             // 5. Apply top-p (nucleus) sampling
             if (_options.TopP < 1.0)
             {
                 ApplyTopP(probs, _options.TopP);
             }
-            
+
             // 6. Apply min-p sampling
             if (_options.MinP > 0.0)
             {
                 ApplyMinP(probs, _options.MinP);
             }
-            
+
             // 6.5. Apply output constraints (Phase 5)
             if (_options.OutputConstraint != null)
             {
@@ -606,18 +601,18 @@ namespace SmallMind.Runtime
                 // Recompute probabilities after constraint masking
                 probs = Softmax(logitsLast);
             }
-            
+
             // 7. Sample from the distribution
             return SampleFromProbs(probs);
         }
-        
+
         private void ValidateAndTruncateInput(List<int> tokens)
         {
             if (_options.MaxInputTokens <= 0)
             {
                 return; // No limit
             }
-            
+
             if (tokens.Count > _options.MaxInputTokens)
             {
                 if (_options.TruncateInput)
@@ -636,33 +631,33 @@ namespace SmallMind.Runtime
                 }
             }
         }
-        
+
         private float[] ApplyTopK(float[] logits, int k)
         {
             if (k >= logits.Length)
             {
                 return logits;
             }
-            
+
             // Rent buffer for sorting to reduce allocations
             float[]? rentedBuffer = null;
             try
             {
                 rentedBuffer = ArrayPool<float>.Shared.Rent(logits.Length);
                 Array.Copy(logits, rentedBuffer, logits.Length);
-                
+
                 // Partial sort - only need to find k-th largest
                 Array.Sort(rentedBuffer, 0, logits.Length);
                 Array.Reverse(rentedBuffer, 0, logits.Length); // Now in descending order
                 float kthValue = rentedBuffer[Math.Min(k - 1, logits.Length - 1)];
-                
+
                 // Set all values below k-th to -inf
                 var filtered = new float[logits.Length];
                 for (int i = 0; i < logits.Length; i++)
                 {
                     filtered[i] = logits[i] >= kthValue ? logits[i] : float.NegativeInfinity;
                 }
-                
+
                 return filtered;
             }
             finally
@@ -673,7 +668,7 @@ namespace SmallMind.Runtime
                 }
             }
         }
-        
+
         private float[] Softmax(float[] logits)
         {
             // Reuse probability buffer to reduce allocations
@@ -681,7 +676,7 @@ namespace SmallMind.Runtime
             {
                 _probabilityBuffer = new float[logits.Length];
             }
-            
+
             // Find max for numerical stability
             float max = float.NegativeInfinity;
             for (int i = 0; i < logits.Length; i++)
@@ -691,7 +686,7 @@ namespace SmallMind.Runtime
                     max = MathF.Max(max, logits[i]);
                 }
             }
-            
+
             // Compute exp and sum
             float sum = 0;
             for (int i = 0; i < logits.Length; i++)
@@ -706,7 +701,7 @@ namespace SmallMind.Runtime
                     _probabilityBuffer[i] = 0;
                 }
             }
-            
+
             // Normalize
             if (sum > 0)
             {
@@ -715,15 +710,15 @@ namespace SmallMind.Runtime
                     _probabilityBuffer[i] /= sum;
                 }
             }
-            
+
             return _probabilityBuffer;
         }
-        
+
         private int SampleFromProbs(float[] probs)
         {
             double target = _deterministicRng?.NextDouble() ?? _random.NextDouble();
             double cumSum = 0.0;
-            
+
             for (int i = 0; i < probs.Length; i++)
             {
                 cumSum += probs[i];
@@ -732,11 +727,11 @@ namespace SmallMind.Runtime
                     return i;
                 }
             }
-            
+
             // Fallback
             return probs.Length - 1;
         }
-        
+
         /// <summary>
         /// Apply temperature scaling to logits (SIMD optimized).
         /// Divides all logits by temperature value.
@@ -746,11 +741,11 @@ namespace SmallMind.Runtime
         {
             int vocabSize = logits.Length;
             float invTemp = 1.0f / temperature;
-            
+
             // SIMD vectorization for better performance
             int vectorSize = System.Numerics.Vector<float>.Count;
             int i = 0;
-            
+
             // Process SIMD-width chunks
             for (; i <= vocabSize - vectorSize; i += vectorSize)
             {
@@ -758,7 +753,7 @@ namespace SmallMind.Runtime
                 var scaled = vec * invTemp;
                 scaled.CopyTo(logits, i);
             }
-            
+
             // Handle remainder
             for (; i < vocabSize; i++)
             {
@@ -773,33 +768,33 @@ namespace SmallMind.Runtime
         private void ApplyRepetitionPenalties(float[] logits, List<int> context)
         {
             // Early exit if no penalties enabled
-            if (_options.RepetitionPenalty == 1.0f && 
-                _options.PresencePenalty == 0.0f && 
+            if (_options.RepetitionPenalty == 1.0f &&
+                _options.PresencePenalty == 0.0f &&
                 _options.FrequencyPenalty == 0.0f)
             {
                 return;
             }
-            
+
             // Determine window size (default to 256 if not specified, or full context if smaller)
-            int windowSize = _options.RepetitionWindow > 0 
-                ? _options.RepetitionWindow 
+            int windowSize = _options.RepetitionWindow > 0
+                ? _options.RepetitionWindow
                 : Math.Min(context.Count, 256);
             int startIdx = Math.Max(0, context.Count - windowSize);
             int actualWindow = context.Count - startIdx;
-            
+
             // Allocate sparse tracking structures on first use (reused across tokens)
             if (_seenTokenIds == null || _seenTokenIds.Length < actualWindow)
             {
                 _seenTokenIds = new int[actualWindow];
                 _seenCounts = new int[actualWindow];
             }
-            
+
             // Build frequency map using sparse arrays (no dictionary allocations)
             _seenTokensCount = 0;
             for (int i = startIdx; i < context.Count; i++)
             {
                 int tokenId = context[i];
-                
+
                 // Linear search in sparse array (fast for small windows)
                 int foundIdx = -1;
                 for (int j = 0; j < _seenTokensCount; j++)
@@ -810,7 +805,7 @@ namespace SmallMind.Runtime
                         break;
                     }
                 }
-                
+
                 if (foundIdx >= 0)
                 {
                     _seenCounts![foundIdx]++;
@@ -823,13 +818,13 @@ namespace SmallMind.Runtime
                     _seenTokensCount++;
                 }
             }
-            
+
             // Apply penalties to logits
             for (int i = 0; i < _seenTokensCount; i++)
             {
                 int tokenId = _seenTokenIds![i];
                 int count = _seenCounts![i];
-                
+
                 // Apply repetition penalty
                 if (_options.RepetitionPenalty != 1.0f)
                 {
@@ -842,13 +837,13 @@ namespace SmallMind.Runtime
                         logits[tokenId] *= _options.RepetitionPenalty;
                     }
                 }
-                
+
                 // Apply presence penalty
                 if (_options.PresencePenalty != 0.0f)
                 {
                     logits[tokenId] -= _options.PresencePenalty;
                 }
-                
+
                 // Apply frequency penalty
                 if (_options.FrequencyPenalty != 0.0f)
                 {
@@ -856,7 +851,7 @@ namespace SmallMind.Runtime
                 }
             }
         }
-        
+
         /// <summary>
         /// Apply Top-P (nucleus) sampling to probabilities.
         /// Modifies probs in-place to set pruned tokens to 0, then re-normalizes.
@@ -868,28 +863,28 @@ namespace SmallMind.Runtime
             {
                 return; // No filtering
             }
-            
+
             int vocabSize = probs.Length;
-            
+
             // Allocate index and value buffers on first use (reused across tokens)
             if (_sortedIndicesBuffer == null || _sortedIndicesBuffer.Length < vocabSize)
             {
                 _sortedIndicesBuffer = new int[vocabSize];
                 _sortedProbsBuffer = new float[vocabSize];
             }
-            
+
             // Build index array and copy probabilities
             for (int i = 0; i < vocabSize; i++)
             {
                 _sortedIndicesBuffer[i] = i;
                 _sortedProbsBuffer![i] = probs[i];
             }
-            
+
             // Sort indices by probability (descending) using Array.Sort with custom comparison
             // This is an in-place sort with minimal allocations
-            Array.Sort(_sortedProbsBuffer, _sortedIndicesBuffer, 0, vocabSize, 
+            Array.Sort(_sortedProbsBuffer, _sortedIndicesBuffer, 0, vocabSize,
                 Comparer<float>.Create((a, b) => b.CompareTo(a))); // Descending
-            
+
             // Find cutoff index where cumulative probability >= topP
             float cumProb = 0.0f;
             int cutoffIndex = vocabSize;
@@ -902,18 +897,18 @@ namespace SmallMind.Runtime
                     break;
                 }
             }
-            
+
             // Zero out tokens beyond cutoff
             for (int i = cutoffIndex; i < vocabSize; i++)
             {
                 int tokenIdx = _sortedIndicesBuffer[i];
                 probs[tokenIdx] = 0.0f;
             }
-            
+
             // Re-normalize (SIMD optimized)
             NormalizeProbabilities(probs, vocabSize);
         }
-        
+
         /// <summary>
         /// Apply Min-P sampling to probabilities.
         /// Removes tokens with probability less than minP * max_probability.
@@ -925,10 +920,10 @@ namespace SmallMind.Runtime
             {
                 return; // Disabled
             }
-            
+
             // Find max probability (SIMD optimized)
             float maxProb = FindMaxValue(probs);
-            
+
             // Apply threshold
             float threshold = maxProb * (float)minP;
             for (int i = 0; i < probs.Length; i++)
@@ -938,7 +933,7 @@ namespace SmallMind.Runtime
                     probs[i] = 0.0f;
                 }
             }
-            
+
             // Re-normalize (SIMD optimized)
             NormalizeProbabilities(probs, probs.Length);
         }
@@ -952,29 +947,29 @@ namespace SmallMind.Runtime
             int length = values.Length;
             int vectorSize = System.Numerics.Vector<float>.Count;
             int i = 0;
-            
+
             var maxVec = new System.Numerics.Vector<float>(float.NegativeInfinity);
-            
+
             // Process SIMD-width chunks
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var vec = new System.Numerics.Vector<float>(values, i);
                 maxVec = System.Numerics.Vector.Max(maxVec, vec);
             }
-            
+
             // Find max in vector
             float max = float.NegativeInfinity;
             for (int j = 0; j < vectorSize; j++)
             {
                 if (maxVec[j] > max) max = maxVec[j];
             }
-            
+
             // Handle remainder
             for (; i < length; i++)
             {
                 if (values[i] > max) max = values[i];
             }
-            
+
             return max;
         }
 
@@ -988,36 +983,36 @@ namespace SmallMind.Runtime
             float sum = 0.0f;
             int vectorSize = System.Numerics.Vector<float>.Count;
             int i = 0;
-            
+
             var sumVec = System.Numerics.Vector<float>.Zero;
-            
+
             // SIMD sum
             for (; i <= length - vectorSize; i += vectorSize)
             {
                 var vec = new System.Numerics.Vector<float>(probs, i);
                 sumVec += vec;
             }
-            
+
             // Horizontal sum of vector
             for (int j = 0; j < vectorSize; j++)
             {
                 sum += sumVec[j];
             }
-            
+
             // Handle remainder
             for (; i < length; i++)
             {
                 sum += probs[i];
             }
-            
+
             // Normalize if sum > 0
             if (sum > 0)
             {
                 float invSum = 1.0f / sum;
                 i = 0;
-                
+
                 var invSumVec = new System.Numerics.Vector<float>(invSum);
-                
+
                 // SIMD normalization
                 for (; i <= length - vectorSize; i += vectorSize)
                 {
@@ -1025,7 +1020,7 @@ namespace SmallMind.Runtime
                     var normalized = vec * invSumVec;
                     normalized.CopyTo(probs, i);
                 }
-                
+
                 // Handle remainder
                 for (; i < length; i++)
                 {
@@ -1033,7 +1028,7 @@ namespace SmallMind.Runtime
                 }
             }
         }
-        
+
         /// <summary>
         /// Apply output constraints to mask disallowed tokens (Phase 5).
         /// Modifies logits in-place by setting disallowed tokens to -infinity.
@@ -1042,10 +1037,10 @@ namespace SmallMind.Runtime
         {
             // Decode current context to get generated text so far
             string generatedSoFar = _tokenizer.Decode(context);
-            
+
             int maskedCount = 0;
             int vocabSize = logits.Length;
-            
+
             // OPTIMIZATION: Hoist type check outside the loop to enable fast-path
             // This eliminates interface dispatch overhead in the O(vocab_size) loop
             if (_tokenizer is BpeTokenizer bpeTokenizer)
@@ -1058,10 +1053,10 @@ namespace SmallMind.Runtime
                     {
                         continue;
                     }
-                    
+
                     // Decode candidate token (fast-path, no allocation)
                     string tokenText = bpeTokenizer.DecodeSingleToken(tokenId);
-                    
+
                     // Check if token is allowed by constraint
                     if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
                     {
@@ -1079,9 +1074,9 @@ namespace SmallMind.Runtime
                     {
                         continue;
                     }
-                    
+
                     string tokenText = ggufBpe.DecodeSingleToken(tokenId);
-                    
+
                     if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
                     {
                         logits[tokenId] = float.NegativeInfinity;
@@ -1098,9 +1093,9 @@ namespace SmallMind.Runtime
                     {
                         continue;
                     }
-                    
+
                     string tokenText = byteLevelBpe.DecodeSingleToken(tokenId);
-                    
+
                     if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
                     {
                         logits[tokenId] = float.NegativeInfinity;
@@ -1118,10 +1113,10 @@ namespace SmallMind.Runtime
                     {
                         continue;
                     }
-                    
+
                     // Use interface fast-path method (may allocate if not overridden)
                     string tokenText = _tokenizer.DecodeSingleToken(tokenId);
-                    
+
                     if (!_options.OutputConstraint!.IsTokenAllowed(generatedSoFar, tokenId, tokenText))
                     {
                         logits[tokenId] = float.NegativeInfinity;
@@ -1129,14 +1124,14 @@ namespace SmallMind.Runtime
                     }
                 }
             }
-            
+
             // If all tokens masked, force structural tokens (JSON recovery)
             if (AllLogitsMasked(logits))
             {
                 ForceStructuralToken(logits, generatedSoFar);
             }
         }
-        
+
         /// <summary>
         /// Check if all logits are masked.
         /// </summary>
@@ -1151,7 +1146,7 @@ namespace SmallMind.Runtime
             }
             return true;
         }
-        
+
         /// <summary>
         /// Force likely structural tokens when all options are masked.
         /// This helps JSON mode recovery when stuck.
@@ -1166,7 +1161,7 @@ namespace SmallMind.Runtime
                 var closeBracket = _tokenizer.Encode("]");
                 var quote = _tokenizer.Encode("\"");
                 var comma = _tokenizer.Encode(",");
-                
+
                 // Unmask these structural tokens
                 if (closeBrace.Count > 0)
                     logits[closeBrace[0]] = 0.0f;
@@ -1190,7 +1185,7 @@ namespace SmallMind.Runtime
                 }
             }
         }
-        
+
         /// <summary>
         /// Check if a token is a stop token (EOS or configured stop token).
         /// </summary>
@@ -1202,7 +1197,7 @@ namespace SmallMind.Runtime
                 reason = FinishReason.EndOfSequence;
                 return true;
             }
-            
+
             // Check configured stop tokens (linear scan is fine for small arrays)
             if (_options.StopTokenIds.Length > 0)
             {
@@ -1215,11 +1210,11 @@ namespace SmallMind.Runtime
                     }
                 }
             }
-            
+
             reason = FinishReason.None;
             return false;
         }
-        
+
         /// <summary>
         /// Initialize stop sequence detection buffer.
         /// Only called once if stop sequences are configured.
@@ -1230,7 +1225,7 @@ namespace SmallMind.Runtime
             {
                 return;
             }
-            
+
             // Find max stop sequence length
             int maxLen = 0;
             for (int i = 0; i < _options.StopSequences.Length; i++)
@@ -1240,13 +1235,13 @@ namespace SmallMind.Runtime
                     maxLen = _options.StopSequences[i].Length;
                 }
             }
-            
+
             // Allocate buffer with margin (2x max length to handle overlaps)
             _stopSequenceBufferSize = maxLen * 2;
             _stopSequenceBuffer = new char[_stopSequenceBufferSize];
             _stopSequenceBufferPos = 0;
         }
-        
+
         /// <summary>
         /// Add decoded text to stop sequence buffer and check for matches.
         /// Returns true if a stop sequence is found.
@@ -1257,30 +1252,30 @@ namespace SmallMind.Runtime
             {
                 return false;
             }
-            
+
             // Initialize buffer on first use
             if (_stopSequenceBuffer == null)
             {
                 InitializeStopSequenceBuffer();
             }
-            
+
             // Append decoded text to ring buffer
             for (int i = 0; i < decodedText.Length; i++)
             {
                 _stopSequenceBuffer![_stopSequenceBufferPos] = decodedText[i];
                 _stopSequenceBufferPos = (_stopSequenceBufferPos + 1) % _stopSequenceBufferSize;
             }
-            
+
             // Build current window string (only as much as we've written)
             int totalWritten = Math.Min(_stopSequenceBufferPos, _stopSequenceBufferSize);
             bool hasWrapped = (_stopSequenceBufferPos >= _stopSequenceBufferSize);
-            
+
             if (!hasWrapped && totalWritten > 0)
             {
                 // Haven't wrapped yet, simple case
                 var windowSpan = new ReadOnlySpan<char>(_stopSequenceBuffer, 0, _stopSequenceBufferPos);
                 string window = new string(windowSpan);
-                
+
                 // Check each stop sequence
                 for (int i = 0; i < _options.StopSequences.Length; i++)
                 {
@@ -1301,7 +1296,7 @@ namespace SmallMind.Runtime
                     reconstructed[i] = _stopSequenceBuffer![idx];
                 }
                 string window = new string(reconstructed);
-                
+
                 // Check each stop sequence
                 for (int i = 0; i < _options.StopSequences.Length; i++)
                 {
@@ -1311,10 +1306,10 @@ namespace SmallMind.Runtime
                     }
                 }
             }
-            
+
             return false;
         }
-        
+
         private void ThrowIfDisposed()
         {
             if (_disposed)
@@ -1322,7 +1317,7 @@ namespace SmallMind.Runtime
                 throw new ObjectDisposedException(nameof(InferenceSession));
             }
         }
-        
+
         public void Dispose()
         {
             if (!_disposed)

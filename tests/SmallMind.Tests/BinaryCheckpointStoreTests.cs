@@ -1,11 +1,4 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Xunit;
 using SmallMind.Core;
-using SmallMind.Core.Core;
-using SmallMind.Transformers;
 
 namespace SmallMind.Tests
 {
@@ -70,20 +63,20 @@ namespace SmallMind.Tests
             Assert.Equal(checkpoint.Metadata.EmbedDim, loaded.Metadata.EmbedDim);
             Assert.Equal(checkpoint.Metadata.NumHeads, loaded.Metadata.NumHeads);
             Assert.Equal(checkpoint.Metadata.NumLayers, loaded.Metadata.NumLayers);
-            
+
             Assert.Equal(checkpoint.Parameters.Count, loaded.Parameters.Count);
-            
+
             for (int i = 0; i < checkpoint.Parameters.Count; i++)
             {
                 var orig = checkpoint.Parameters[i];
                 var loadedParam = loaded.Parameters[i];
-                
+
                 Assert.Equal(orig.Shape.Length, loadedParam.Shape.Length);
                 for (int j = 0; j < orig.Shape.Length; j++)
                 {
                     Assert.Equal(orig.Shape[j], loadedParam.Shape[j]);
                 }
-                
+
                 Assert.Equal(orig.Data.Length, loadedParam.Data.Length);
                 for (int j = 0; j < orig.Data.Length; j++)
                 {
@@ -98,7 +91,7 @@ namespace SmallMind.Tests
             // Arrange
             var store = new BinaryCheckpointStore();
             var path = Path.Combine(_testDir, "invalid.smnd");
-            
+
             // Write invalid magic header
             using (var writer = new BinaryWriter(File.Create(path)))
             {
@@ -118,7 +111,7 @@ namespace SmallMind.Tests
             // Arrange
             var store = new BinaryCheckpointStore();
             var path = Path.Combine(_testDir, "newer.smnd");
-            
+
             // Write header with future version
             using (var writer = new BinaryWriter(File.Create(path)))
             {
@@ -171,7 +164,7 @@ namespace SmallMind.Tests
             // Arrange
             var binaryStore = new BinaryCheckpointStore();
             var jsonStore = new JsonCheckpointStore();
-            
+
             var binaryPath = Path.Combine(_testDir, "test.smnd");
             var jsonPath = Path.Combine(_testDir, "test.json");
 
@@ -202,7 +195,7 @@ namespace SmallMind.Tests
             var jsonSize = new FileInfo(jsonPath).Length;
 
             // Assert - Binary should be significantly smaller
-            Assert.True(binarySize < jsonSize * 0.6, 
+            Assert.True(binarySize < jsonSize * 0.6,
                 $"Binary size ({binarySize} bytes) should be < 60% of JSON size ({jsonSize} bytes)");
         }
 
@@ -237,12 +230,12 @@ namespace SmallMind.Tests
             var store = new BinaryCheckpointStore();
             var path = Path.Combine(_testDir, "precision.smnd");
 
-            var testValues = new float[] 
-            { 
-                1.23456789f, 
-                -0.00000001f, 
-                float.MaxValue, 
-                float.MinValue, 
+            var testValues = new float[]
+            {
+                1.23456789f,
+                -0.00000001f,
+                float.MaxValue,
+                float.MinValue,
                 float.Epsilon,
                 3.14159265f
             };

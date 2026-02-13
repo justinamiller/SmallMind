@@ -1,7 +1,3 @@
-using System;
-using System.Threading;
-using Xunit;
-using SmallMind.Core;
 using SmallMind.Core.Core;
 
 namespace SmallMind.Tests
@@ -81,7 +77,7 @@ namespace SmallMind.Tests
             var req1 = metrics.RecordRequestStart();
             Thread.Sleep(100);
             metrics.RecordRequestComplete(req1, inputTokens: 10, outputTokens: 100, success: true);
-            
+
             metrics.Stop();
             var summary = metrics.GetSummary();
 
@@ -106,7 +102,7 @@ namespace SmallMind.Tests
             metrics.RecordFirstToken(req1);
             Thread.Sleep(50);
             metrics.RecordRequestComplete(req1, inputTokens: 10, outputTokens: 20, success: true);
-            
+
             metrics.Stop();
             var summary = metrics.GetSummary();
 
@@ -130,7 +126,7 @@ namespace SmallMind.Tests
                 Thread.Sleep(20 * (i + 1)); // 20, 40, 60, 80, 100 ms
                 metrics.RecordRequestComplete(req, inputTokens: 10, outputTokens: 10 * (i + 1), success: true);
             }
-            
+
             metrics.Stop();
             var summary = metrics.GetSummary();
 
@@ -158,7 +154,7 @@ namespace SmallMind.Tests
 
             var req3 = metrics.RecordRequestStart();
             metrics.RecordRequestComplete(req3, inputTokens: 10, outputTokens: 150, success: true);
-            
+
             metrics.Stop();
             var summary = metrics.GetSummary();
 

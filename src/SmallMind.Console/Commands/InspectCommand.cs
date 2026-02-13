@@ -1,7 +1,3 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using SmallMind.Core.Utilities;
 using SmallMind.Quantization.IO.Smq;
 
@@ -37,7 +33,7 @@ namespace SmallMind.ConsoleApp.Commands
             {
                 using var stream = File.OpenRead(smqPath);
                 using var reader = new SmqReader(stream);
-                
+
                 reader.ReadHeader();
 
                 System.Console.WriteLine($"=== SMQ Model: {Path.GetFileName(smqPath)} ===");
@@ -76,9 +72,9 @@ namespace SmallMind.ConsoleApp.Commands
                     foreach (var name in tensorNames.OrderBy(x => x))
                     {
                         var tensor = reader.LoadTensor(name);
-                        
+
                         string type, shape, size;
-                        
+
                         if (tensor is SmallMind.Quantization.Tensors.Q8Tensor q8)
                         {
                             type = "Q8_0";
@@ -108,7 +104,7 @@ namespace SmallMind.ConsoleApp.Commands
                 {
                     System.Console.WriteLine();
                     System.Console.WriteLine($"Manifest: {Path.GetFileName(manifestPath)}");
-                    
+
                     if (verbose)
                     {
                         var manifestContent = File.ReadAllText(manifestPath);

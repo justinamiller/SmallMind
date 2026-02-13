@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 
@@ -183,7 +181,7 @@ namespace SmallMind.Tests
             var array2 = _pool.Rent(512);
             _pool.Return(array1);
             _pool.Return(array2);
-            
+
             var statsBefore = _pool.GetStats();
 
             // Act - Clear resets statistics (but can't clear ArrayPool.Shared memory)
@@ -193,7 +191,7 @@ namespace SmallMind.Tests
             // Assert - Statistics should be reset to zero
             Assert.Equal(0, statsAfter.totalRents);
             Assert.Equal(0, statsAfter.totalReturns);
-            
+
             // Note: ArrayPool.Shared memory may still contain pooled arrays
             // but we can't verify this as it manages its own internal state
         }
@@ -267,7 +265,7 @@ namespace SmallMind.Tests
             var array = _pool.Rent(veryLargeSize);
 
             // Assert - ArrayPool may return larger array for bucketing
-            Assert.True(array.Length >= veryLargeSize, 
+            Assert.True(array.Length >= veryLargeSize,
                 $"Expected array length >= {veryLargeSize}, got {array.Length}");
         }
     }

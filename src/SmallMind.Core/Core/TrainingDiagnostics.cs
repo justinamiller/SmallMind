@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using SmallMind.Abstractions.Telemetry;
@@ -13,7 +11,7 @@ namespace SmallMind.Core.Core
     internal sealed class TrainingProfiler
     {
         private readonly ConcurrentDictionary<string, OperationStats> _stats = new();
-        
+
         internal struct OperationStats
         {
             public long TotalTicks;
@@ -21,26 +19,26 @@ namespace SmallMind.Core.Core
             public long MinTicks;
             public long MaxTicks;
             public long TotalBytes;  // Memory allocated/processed
-            
+
             public double TotalMs => TotalTicks * 1000.0 / Stopwatch.Frequency;
             public double AvgMs => Count > 0 ? TotalMs / Count : 0;
             public double MinMs => MinTicks * 1000.0 / Stopwatch.Frequency;
             public double MaxMs => MaxTicks * 1000.0 / Stopwatch.Frequency;
         }
-        
+
         public ProfileScope Profile(string operation, long bytes = 0)
         {
             return new ProfileScope(this, operation, bytes);
         }
-        
+
         public void RecordOperation(string operation, long elapsedTicks, long bytes)
         {
             _stats.AddOrUpdate(operation,
-                _ => new OperationStats 
-                { 
-                    TotalTicks = elapsedTicks, 
-                    Count = 1, 
-                    MinTicks = elapsedTicks, 
+                _ => new OperationStats
+                {
+                    TotalTicks = elapsedTicks,
+                    Count = 1,
+                    MinTicks = elapsedTicks,
                     MaxTicks = elapsedTicks,
                     TotalBytes = bytes
                 },
@@ -53,14 +51,14 @@ namespace SmallMind.Core.Core
                     TotalBytes = existing.TotalBytes + bytes
                 });
         }
-        
+
         internal readonly struct ProfileScope : IDisposable
         {
             private readonly TrainingProfiler? _profiler;
             private readonly string _operation;
             private readonly long _startTicks;
             private readonly long _bytes;
-            
+
             public ProfileScope(TrainingProfiler profiler, string operation, long bytes)
             {
                 _profiler = profiler;
@@ -68,33 +66,33 @@ namespace SmallMind.Core.Core
                 _bytes = bytes;
                 _startTicks = Stopwatch.GetTimestamp();
             }
-            
+
             public void Dispose()
             {
                 if (_profiler == null) return;
-                
+
                 long elapsed = Stopwatch.GetTimestamp() - _startTicks;
                 _profiler.RecordOperation(_operation, elapsed, _bytes);
             }
         }
-        
+
         public void PrintReport(IRuntimeLogger? logger = null)
         {
             var log = logger ?? NullRuntimeLogger.Instance;
-            
+
             log.Info("\n╔══════════════════════════════════════════════════════════════════════════╗");
             log.Info("║                         TRAINING PERFORMANCE REPORT                       ║");
             log.Info("╠══════════════════════════════════════════════════════════════════════════╣");
             log.Info("║ Operation                    │ Total (ms) │ Avg (ms) │ Count  │ % Time  ║");
             log.Info("╟──────────────────────────────┼────────────┼──────────┼────────┼─────────╢");
-            
+
             // Sort by total ticks descending
             var statsList = new List<KeyValuePair<string, OperationStats>>(_stats.Count);
             foreach (var kvp in _stats)
             {
                 statsList.Add(kvp);
             }
-            
+
             // Bubble sort (simple and allocation-free for small lists)
             for (int i = 0; i < statsList.Count - 1; i++)
             {
@@ -108,13 +106,13 @@ namespace SmallMind.Core.Core
                     }
                 }
             }
-            
+
             double totalTime = 0;
             for (int i = 0; i < statsList.Count; i++)
             {
                 totalTime += statsList[i].Value.TotalMs;
             }
-            
+
             for (int i = 0; i < statsList.Count; i++)
             {
                 var op = statsList[i].Key;
@@ -122,18 +120,18 @@ namespace SmallMind.Core.Core
                 double pct = totalTime > 0 ? (stats.TotalMs / totalTime * 100) : 0;
                 log.Info($"║ {op,-28} │ {stats.TotalMs,10:F2} │ {stats.AvgMs,8:F3} │ {stats.Count,6} │ {pct,6:F1}% ║");
             }
-            
+
             log.Info("╠══════════════════════════════════════════════════════════════════════════╣");
             log.Info($"║ TOTAL                        │ {totalTime,10:F2} │          │        │ 100.0% ║");
             log.Info("╚══════════════════════════════════════════════════════════════════════════╝");
         }
-        
+
         public void Clear()
         {
             _stats.Clear();
         }
     }
-    
+
     /// <summary>
     /// Memory usage tracker for monitoring training memory consumption
     /// </summary>
@@ -142,42 +140,42 @@ namespace SmallMind.Core.Core
         private long _peakManaged;
         private long _peakWorking;
         private readonly List<(string phase, long managed, long working)> _snapshots = new();
-        
+
         public void Snapshot(string phase)
         {
             long managed = GC.GetTotalMemory(forceFullCollection: false);
             long working;
             using (var proc = Process.GetCurrentProcess())
                 working = proc.WorkingSet64;
-            
+
             _peakManaged = Math.Max(_peakManaged, managed);
             _peakWorking = Math.Max(_peakWorking, working);
-            
+
             _snapshots.Add((phase, managed, working));
         }
-        
+
         public void PrintReport(IRuntimeLogger? logger = null)
         {
             var log = logger ?? NullRuntimeLogger.Instance;
-            
+
             log.Info("\n╔══════════════════════════════════════════════════════════════╗");
             log.Info("║                    MEMORY USAGE REPORT                        ║");
             log.Info("╠══════════════════════════════════════════════════════════════╣");
             log.Info("║ Phase                    │ Managed (MB) │ Working Set (MB)   ║");
             log.Info("╟──────────────────────────┼──────────────┼────────────────────╢");
-            
+
             foreach (var (phase, managed, working) in _snapshots)
             {
                 log.Info($"║ {phase,-24} │ {managed / 1024.0 / 1024.0,12:F1} │ {working / 1024.0 / 1024.0,18:F1} ║");
             }
-            
+
             log.Info("╠══════════════════════════════════════════════════════════════╣");
             log.Info($"║ PEAK                     │ {_peakManaged / 1024.0 / 1024.0,12:F1} │ {_peakWorking / 1024.0 / 1024.0,18:F1} ║");
             log.Info("╚══════════════════════════════════════════════════════════════╝");
-            
+
             log.Info($"\nGC Collections - Gen0: {GC.CollectionCount(0)}, Gen1: {GC.CollectionCount(1)}, Gen2: {GC.CollectionCount(2)}");
         }
-        
+
         public void Clear()
         {
             _snapshots.Clear();
@@ -185,7 +183,7 @@ namespace SmallMind.Core.Core
             _peakWorking = 0;
         }
     }
-    
+
     /// <summary>
     /// Gradient diagnostics for detecting vanishing/exploding gradients
     /// </summary>
@@ -194,7 +192,7 @@ namespace SmallMind.Core.Core
         public static void CheckGradients(string name, ReadOnlySpan<float> gradients, IRuntimeLogger? logger = null, bool verbose = false)
         {
             var log = logger ?? NullRuntimeLogger.Instance;
-            
+
             float min = float.MaxValue;
             float max = float.MinValue;
             float sum = 0;
@@ -202,31 +200,31 @@ namespace SmallMind.Core.Core
             int zeroCount = 0;
             int nanCount = 0;
             int infCount = 0;
-            
+
             for (int i = 0; i < gradients.Length; i++)
             {
                 float g = gradients[i];
-                
+
                 if (float.IsNaN(g)) { nanCount++; continue; }
                 if (float.IsInfinity(g)) { infCount++; continue; }
                 if (g == 0) zeroCount++;
-                
+
                 min = Math.Min(min, g);
                 max = Math.Max(max, g);
                 sum += g;
                 sumSq += g * g;
             }
-            
+
             int validCount = gradients.Length - nanCount - infCount;
             float mean = validCount > 0 ? sum / validCount : 0;
             float variance = validCount > 0 ? (sumSq / validCount) - (mean * mean) : 0;
             float std = MathF.Sqrt(Math.Max(0, variance));
             float norm = MathF.Sqrt(sumSq);
-            
+
             // Warnings
             bool hasIssue = false;
             var sb = new StringBuilder();
-            
+
             if (nanCount > 0)
             {
                 sb.AppendLine($"  ⚠️  NaN gradients: {nanCount}");
@@ -252,7 +250,7 @@ namespace SmallMind.Core.Core
                 sb.AppendLine($"  ⚠️  >90% zero gradients ({zeroCount}/{gradients.Length})");
                 hasIssue = true;
             }
-            
+
             if (hasIssue || verbose)
             {
                 if (hasIssue)
@@ -265,26 +263,26 @@ namespace SmallMind.Core.Core
                 log.Info($"[{name}] Stats: mean={mean:E2}, std={std:E2}, min={min:E2}, max={max:E2}, norm={norm:F4}");
             }
         }
-        
+
         public static (float norm, bool hasIssue) GetGradientNorm(ReadOnlySpan<float> gradients)
         {
             float sumSq = 0;
             int nanCount = 0;
             int infCount = 0;
-            
+
             for (int i = 0; i < gradients.Length; i++)
             {
                 float g = gradients[i];
-                
+
                 if (float.IsNaN(g)) { nanCount++; continue; }
                 if (float.IsInfinity(g)) { infCount++; continue; }
-                
+
                 sumSq += g * g;
             }
-            
+
             float norm = MathF.Sqrt(sumSq);
             bool hasIssue = nanCount > 0 || infCount > 0 || norm > 100 || (norm > 0 && norm < 1e-7);
-            
+
             return (norm, hasIssue);
         }
     }

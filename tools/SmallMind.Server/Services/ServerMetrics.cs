@@ -18,7 +18,7 @@ public sealed class ServerMetrics
         _requestsTotal = _meter.CreateCounter<long>("requests_total", "requests", "Total number of requests");
         _requestDuration = _meter.CreateHistogram<double>("request_duration_ms", "ms", "Request duration in milliseconds");
         _tokensGenerated = _meter.CreateCounter<long>("tokens_generated_total", "tokens", "Total number of tokens generated");
-        
+
         _meter.CreateObservableGauge("requests_inflight", () => _requestsInflight, "requests", "Current number of inflight requests");
     }
 
@@ -37,7 +37,7 @@ public sealed class ServerMetrics
 
         _requestsTotal.Add(1, tags);
         _requestDuration.Record(durationMs, tags);
-        
+
         if (tokensGenerated > 0)
         {
             _tokensGenerated.Add(tokensGenerated, tags);

@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Transformers;
 
 namespace SmallMind.Tests.TestHelpers
@@ -31,10 +30,10 @@ namespace SmallMind.Tests.TestHelpers
                 NormEps = 1e-5,
                 UseBias = false
             };
-            
+
             return new TransformerModel(config, seed);
         }
-        
+
         /// <summary>
         /// Creates a micro model (single layer, minimal dimensions) for ultra-fast tests.
         /// Vocab=128, Context=32, Embedding=32, Layers=1, Heads=2
@@ -57,7 +56,7 @@ namespace SmallMind.Tests.TestHelpers
                 NormEps = 1e-5,
                 UseBias = false
             };
-            
+
             return new TransformerModel(config, seed);
         }
     }

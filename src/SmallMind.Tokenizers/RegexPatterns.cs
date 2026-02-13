@@ -22,7 +22,7 @@ namespace SmallMind.Tokenizers
         /// Pattern handles: 's|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+
         /// Simplified from original to remove redundant alternations.
         /// </summary>
-        [GeneratedRegex(@"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+", 
+        [GeneratedRegex(@"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+",
                         RegexOptions.Compiled | RegexOptions.CultureInvariant)]
         internal static partial Regex Gpt2PreTokenize();
     }

@@ -1,9 +1,6 @@
 using SmallMind.Core;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace SmallMind.Runtime.PretrainedModels
 {
@@ -26,32 +23,32 @@ namespace SmallMind.Runtime.PretrainedModels
         {
             var store = new BinaryCheckpointStore();
             var checkpoint = await store.LoadAsync(checkpointPath, cancellationToken);
-            
+
             // Get task and domain from metadata
             var taskType = checkpoint.Metadata.GetTaskType();
             var domainType = checkpoint.Metadata.GetDomainType();
-            
+
             // Create model from checkpoint
             var model = CheckpointExtensions.FromCheckpoint(checkpoint);
-            
+
             // Create appropriate pre-trained model wrapper
             return taskType switch
             {
                 TaskType.SentimentAnalysis => new SentimentAnalysisModel(
-                    model, 
-                    tokenizer, 
+                    model,
+                    tokenizer,
                     domainType,
                     checkpoint.Metadata.GetModelName(),
                     checkpoint.Metadata.GetModelDescription()),
-                
+
                 TaskType.TextClassification => new TextClassificationModel(
-                    model, 
+                    model,
                     tokenizer,
                     checkpoint.Metadata.GetClassificationLabels(),
                     domainType,
                     checkpoint.Metadata.GetModelName(),
                     checkpoint.Metadata.GetModelDescription()),
-                
+
                 _ => throw new NotSupportedException($"Task type {taskType} not yet implemented for loading")
             };
         }
@@ -80,9 +77,9 @@ namespace SmallMind.Runtime.PretrainedModels
         {
             var model = new TransformerModel(
                 vocabSize, blockSize, embedDim, numLayers, numHeads, dropout, seed);
-            
+
             var tokenizer = CreateDefaultTokenizer();
-            
+
             return new SentimentAnalysisModel(
                 model,
                 tokenizer,
@@ -117,9 +114,9 @@ namespace SmallMind.Runtime.PretrainedModels
         {
             var model = new TransformerModel(
                 vocabSize, blockSize, embedDim, numLayers, numHeads, dropout, seed);
-            
+
             var tokenizer = CreateDefaultTokenizer();
-            
+
             return new TextClassificationModel(
                 model,
                 tokenizer,
@@ -141,14 +138,14 @@ namespace SmallMind.Runtime.PretrainedModels
             CancellationToken cancellationToken = default)
         {
             var checkpoint = pretrainedModel.Model.ToCheckpoint();
-            
+
             // Add task and domain metadata
             checkpoint.Metadata.SetTaskType(pretrainedModel.Task);
             checkpoint.Metadata.SetDomainType(pretrainedModel.Domain);
             checkpoint.Metadata.SetModelName(pretrainedModel.Name);
             checkpoint.Metadata.SetModelDescription(pretrainedModel.Description);
             checkpoint.Metadata.SetModelVersion("1.0.0");
-            
+
             // Add task-specific metadata
             if (pretrainedModel is ITextClassificationModel classificationModel)
             {
@@ -159,7 +156,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 }
                 checkpoint.Metadata.SetClassificationLabels(labelsArray);
             }
-            
+
             var store = new BinaryCheckpointStore();
             await store.SaveAsync(checkpoint, checkpointPath, cancellationToken);
         }

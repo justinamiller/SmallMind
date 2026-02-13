@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Abstractions
 {
     /// <summary>
@@ -179,7 +177,7 @@ namespace SmallMind.Abstractions
         /// <param name="right">The second RagCitation to compare.</param>
         /// <returns>true if left and right are equal; otherwise, false.</returns>
         public static bool operator ==(RagCitation left, RagCitation right) => left.Equals(right);
-        
+
         /// <summary>
         /// Determines whether two specified RagCitation instances are not equal.
         /// </summary>

@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using Xunit;
-using SmallMind.Rag.Retrieval;
 using SmallMind.Rag.Indexing;
-using SmallMind.Rag;
+using SmallMind.Rag.Retrieval;
 
 namespace SmallMind.Tests
 {

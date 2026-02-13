@@ -1,7 +1,3 @@
-using Xunit;
-using SmallMind;
-using System;
-
 namespace SmallMind.Tests
 {
     /// <summary>

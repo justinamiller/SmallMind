@@ -1,6 +1,3 @@
-using System;
-using System.Diagnostics;
-using Xunit;
 using SmallMind.Core.Core;
 using SmallMind.Transformers;
 
@@ -128,11 +125,11 @@ namespace SmallMind.Tests
             // Assert
             Assert.Equal(new int[] { 1, 4, nEmbd }, output.Shape);
             Assert.Equal(1 * 4 * nEmbd, output.Size);
-            
+
             // Verify output contains finite values (no NaN or Inf)
             for (int i = 0; i < output.Size; i++)
             {
-                Assert.True(float.IsFinite(output.Data[i]), 
+                Assert.True(float.IsFinite(output.Data[i]),
                     $"Output at index {i} is not finite: {output.Data[i]}");
             }
         }
@@ -198,7 +195,7 @@ namespace SmallMind.Tests
             // when run with the same input multiple times in eval mode.
             // However, with zero-copy Dropout optimization (dropout=0), internal
             // tensors may be aliased, causing this specific test pattern to fail.
-            
+
             // Arrange
             int vocabSize = 30;
             int blockSize = 16;

@@ -1,17 +1,13 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 using SmallMind.Core.Utilities;
+using SmallMind.Quantization.IO.Gguf;
+using SmallMind.Runtime.Quantization;
 using SmallMind.Tokenizers;
 using SmallMind.Tokenizers.Gguf;
 using SmallMind.Transformers;
-using SmallMind.Runtime.Quantization;
-using SmallMind.Quantization.IO.Gguf;
-using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Runtime
 {
@@ -28,21 +24,21 @@ namespace SmallMind.Runtime
         private readonly int _maxConcurrentSessions;
         private readonly SemaphoreSlim _concurrencySemaphore;
         private readonly object _lock = new object();
-        
+
         // Track active sessions for diagnostics
         private readonly ConcurrentDictionary<string, InferenceSession> _activeSessions;
         private bool _disposed;
-        
+
         /// <summary>
         /// Gets the number of currently active sessions.
         /// </summary>
         public int ActiveSessionCount => _activeSessions.Count;
-        
+
         /// <summary>
         /// Gets the maximum allowed concurrent sessions.
         /// </summary>
         public int MaxConcurrentSessions => _maxConcurrentSessions;
-        
+
         /// <summary>
         /// Creates a new inference engine with bounded concurrency.
         /// </summary>
@@ -60,18 +56,18 @@ namespace SmallMind.Runtime
             _tokenizer = tokenizer ?? throw new ArgumentNullException(nameof(tokenizer));
             _blockSize = blockSize;
             _maxConcurrentSessions = maxConcurrentSessions;
-            
+
             // Create semaphore for concurrency control if limit is set
             _concurrencySemaphore = maxConcurrentSessions > 0
                 ? new SemaphoreSlim(maxConcurrentSessions, maxConcurrentSessions)
                 : new SemaphoreSlim(int.MaxValue, int.MaxValue); // Effectively unlimited
-            
+
             _activeSessions = new ConcurrentDictionary<string, InferenceSession>();
-            
+
             // Ensure model is in eval mode (thread-safe)
             _model.Eval();
         }
-        
+
         /// <summary>
         /// Creates an inference engine from a GGUF model file.
         /// Automatically imports GGUF to SMQ format if needed (cached for subsequent loads).
@@ -125,9 +121,9 @@ namespace SmallMind.Runtime
             try
             {
                 var (extractedTokenizer, diagnostics) = GgufTokenizerFactory.CreateTokenizer(
-                    metadata.Metadata, 
+                    metadata.Metadata,
                     NullRuntimeLogger.Instance);
-                    
+
                 if (extractedTokenizer != null)
                 {
                     tokenizer = extractedTokenizer;
@@ -135,7 +131,7 @@ namespace SmallMind.Runtime
                 else
                 {
                     // Fallback to default tokenizer
-                    int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size", 
+                    int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
                                     GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
                     tokenizer = CreateDefaultTokenizer(vocabSize);
                 }
@@ -153,7 +149,7 @@ namespace SmallMind.Runtime
             try
             {
                 var config = ModelConfig.FromGgufMetadata(metadata.Metadata!);
-                
+
                 model = new TransformerModel(
                     vocabSize: config.VocabSize,
                     blockSize: config.ContextLength,
@@ -190,7 +186,7 @@ namespace SmallMind.Runtime
             // WARNING: This is a fallback tokenizer for demonstration purposes only.
             // Production deployments should load tokenizer configuration from model metadata.
             // This simple character tokenizer is NOT suitable for real models.
-            
+
             var vocab = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?;:'-\n";
             if (vocab.Length < vocabSize)
             {
@@ -205,7 +201,7 @@ namespace SmallMind.Runtime
 
             return new CharTokenizer(vocab.Substring(0, Math.Min(vocabSize, vocab.Length)));
         }
-        
+
         /// <summary>
         /// Generate text from a prompt (non-streaming).
         /// Automatically manages concurrency and session lifecycle.
@@ -222,15 +218,15 @@ namespace SmallMind.Runtime
             CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
-            
+
             // Wait for available slot (respects cancellation)
             await _concurrencySemaphore.WaitAsync(cancellationToken);
-            
+
             try
             {
                 // Create session
                 using var session = CreateSession(options);
-                
+
                 // Generate
                 return await session.GenerateAsync(prompt, metrics, cancellationToken);
             }
@@ -239,7 +235,7 @@ namespace SmallMind.Runtime
                 _concurrencySemaphore.Release();
             }
         }
-        
+
         /// <summary>
         /// Generate text as a stream of tokens.
         /// Automatically manages concurrency and session lifecycle.
@@ -256,16 +252,16 @@ namespace SmallMind.Runtime
             CancellationToken cancellationToken = default)
         {
             ThrowIfDisposed();
-            
+
             // Wait for available slot (respects cancellation)
             await _concurrencySemaphore.WaitAsync(cancellationToken);
-            
+
             InferenceSession? session = null;
             try
             {
                 // Create session
                 session = CreateSession(options);
-                
+
                 // Stream tokens
                 await foreach (var token in session.GenerateStreamAsync(prompt, metrics, cancellationToken))
                 {
@@ -280,11 +276,11 @@ namespace SmallMind.Runtime
                     _activeSessions.TryRemove(session.SessionId, out _);
                     session.Dispose();
                 }
-                
+
                 _concurrencySemaphore.Release();
             }
         }
-        
+
         /// <summary>
         /// Create a managed session for manual control.
         /// Caller is responsible for disposing the session.
@@ -298,7 +294,7 @@ namespace SmallMind.Runtime
             string? sessionId = null)
         {
             ThrowIfDisposed();
-            
+
             // Check concurrency limit before creating
             if (_maxConcurrentSessions > 0 && _activeSessions.Count >= _maxConcurrentSessions)
             {
@@ -308,30 +304,30 @@ namespace SmallMind.Runtime
                     _activeSessions.Count + 1,
                     "Close existing sessions before creating new ones.");
             }
-            
+
             var session = CreateSession(options, sessionId);
             return session;
         }
-        
+
         /// <summary>
         /// Get current engine statistics.
         /// </summary>
         public EngineStatistics GetStatistics()
         {
             ThrowIfDisposed();
-            
+
             return new EngineStatistics(
                 activeSessions: _activeSessions.Count,
                 maxConcurrentSessions: _maxConcurrentSessions,
-                availableSlots: _maxConcurrentSessions > 0 
+                availableSlots: _maxConcurrentSessions > 0
                     ? Math.Max(0, _maxConcurrentSessions - _activeSessions.Count)
                     : int.MaxValue);
         }
-        
+
         private InferenceSession CreateSession(ProductionInferenceOptions options, string? sessionId = null)
         {
             var session = new InferenceSession(_model, _tokenizer, options, _blockSize, sessionId);
-            
+
             // Track session
             if (!_activeSessions.TryAdd(session.SessionId, session))
             {
@@ -339,10 +335,10 @@ namespace SmallMind.Runtime
                 session.Dispose();
                 throw new InvalidOperationException($"Session ID collision: {session.SessionId}");
             }
-            
+
             return session;
         }
-        
+
         private void ThrowIfDisposed()
         {
             if (_disposed)
@@ -350,7 +346,7 @@ namespace SmallMind.Runtime
                 throw new ObjectDisposedException(nameof(InferenceEngine));
             }
         }
-        
+
         public void Dispose()
         {
             if (!_disposed)
@@ -361,13 +357,13 @@ namespace SmallMind.Runtime
                     session?.Dispose();
                 }
                 _activeSessions.Clear();
-                
+
                 _concurrencySemaphore?.Dispose();
                 _disposed = true;
             }
         }
     }
-    
+
     /// <summary>
     /// Statistics about the inference engine state.
     /// </summary>
@@ -377,12 +373,12 @@ namespace SmallMind.Runtime
         /// Number of currently active sessions.
         /// </summary>
         public readonly int ActiveSessions;
-        
+
         /// <summary>
         /// Maximum allowed concurrent sessions (0 = unlimited).
         /// </summary>
         public readonly int MaxConcurrentSessions;
-        
+
         /// <summary>
         /// Number of available session slots.
         /// </summary>

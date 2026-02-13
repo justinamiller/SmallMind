@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Core.Core
 {
     /// <summary>
@@ -108,7 +106,7 @@ namespace SmallMind.Core.Core
             // Cosine annealing phase
             int adjustedStep = step - _warmupSteps;
             int adjustedTotal = _totalSteps - _warmupSteps;
-            
+
             if (adjustedStep >= adjustedTotal)
             {
                 return _minLr;
@@ -234,7 +232,7 @@ namespace SmallMind.Core.Core
         public float GetLearningRate(int step)
         {
             int increaseSteps = (int)(_totalSteps * _pctStart);
-            
+
             if (step < increaseSteps)
             {
                 // Increasing phase

@@ -1,9 +1,7 @@
-using System;
-using System.Diagnostics;
+using System.Numerics;
 using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
-using System.Numerics;
 
 namespace SmallMind.Benchmarks.Diagnostics
 {

@@ -1,8 +1,3 @@
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
 using SmallMind.Abstractions;
 using EngineSmallMindOptions = SmallMind.Abstractions.SmallMindOptions;
 

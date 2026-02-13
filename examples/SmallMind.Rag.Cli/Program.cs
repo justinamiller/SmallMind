@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Rag.Cli.Commands;
 
 namespace SmallMind.Rag.Cli;

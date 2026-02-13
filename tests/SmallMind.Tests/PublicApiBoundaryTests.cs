@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using Xunit;
 
 namespace SmallMind.Tests
 {
@@ -74,7 +70,7 @@ namespace SmallMind.Tests
             foreach (var type in publicTypes)
             {
                 var fullName = type.FullName ?? type.Name;
-                
+
                 // Check if type is in allowlist
                 if (allowedTypes.Contains(fullName))
                     continue;
@@ -172,7 +168,7 @@ namespace SmallMind.Tests
         private static bool IsEntryPointType(Type type)
         {
             // Check if this is a Program class with a Main method
-            return type.Name == "Program" || 
+            return type.Name == "Program" ||
                    type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
                        .Any(m => m.Name == "Main");
         }
@@ -187,7 +183,7 @@ namespace SmallMind.Tests
             // Check if a type looks like a DTO:
             // - Has properties or fields
             // - No methods (except property getters/setters, constructors, ToString, Equals, GetHashCode)
-            
+
             var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
                 .Where(m => !m.IsSpecialName) // Exclude property getters/setters
                 .Where(m => m.Name != "ToString")

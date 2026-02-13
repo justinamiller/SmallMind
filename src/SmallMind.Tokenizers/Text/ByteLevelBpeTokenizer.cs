@@ -1,8 +1,4 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -20,7 +16,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
 {
     // Base vocabulary: 256 bytes
     private const int BaseVocabSize = 256;
-    
+
     // Special token IDs (fixed positions after base vocab)
     private const int PadTokenIdValue = 256;
     private const int UnkTokenIdValue = 257;
@@ -150,7 +146,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
 
         // Convert training text to UTF-8 bytes
         byte[] utf8Bytes = Encoding.UTF8.GetBytes(trainingText);
-        
+
         // Initialize token sequence: each byte is a token
         int[] tokens = new int[utf8Bytes.Length];
         for (int i = 0; i < utf8Bytes.Length; i++)
@@ -334,17 +330,17 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
         {
             changed = false;
             int i = 0;
-            
+
             while (i < currentLength - 1)
             {
                 var pair = (tokens[i], tokens[i + 1]);
-                
+
                 // Check if this pair has a merge rule (O(1) lookup)
                 if (_mergeDict.TryGetValue(pair, out int mergedTokenId))
                 {
                     // Replace pair with merged token
                     tokens[i] = mergedTokenId;
-                    
+
                     // Shift remaining tokens left
                     for (int j = i + 1; j < currentLength - 1; j++)
                     {
@@ -352,7 +348,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
                     }
                     currentLength--;
                     changed = true;
-                    
+
                     // Don't increment i - check new pair at same position
                 }
                 else
@@ -439,7 +435,7 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
         // Use stack-allocated buffer for single token
         Span<int> tokenSpan = stackalloc int[1];
         tokenSpan[0] = tokenId;
-        
+
         byte[] buffer = ArrayPool<byte>.Shared.Rent(16); // Most tokens are small
         try
         {

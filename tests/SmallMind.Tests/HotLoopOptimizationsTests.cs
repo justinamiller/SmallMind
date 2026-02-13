@@ -1,10 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using Xunit;
 using SmallMind.Tokenizers;
-using SmallMind.Tokenizers.Text;
 
 namespace SmallMind.Tests;
 
@@ -30,7 +24,7 @@ public class HotLoopOptimizationsTests
         {
             string singleResult = tokenizer.DecodeSingleToken(tokenId);
             string listResult = tokenizer.Decode(new List<int> { tokenId });
-            
+
             Assert.Equal(listResult, singleResult);
         }
     }
@@ -55,7 +49,7 @@ public class HotLoopOptimizationsTests
         // Arrange
         var tokenizer = new ByteLevelBpeTokenizer();
         tokenizer.Train("the quick brown fox jumps over the lazy dog", 300);
-        
+
         string testText = "hello world";
         var tokens = tokenizer.Encode(testText);
 
@@ -64,7 +58,7 @@ public class HotLoopOptimizationsTests
         {
             string singleResult = tokenizer.DecodeSingleToken(tokenId);
             string listResult = tokenizer.Decode(new List<int> { tokenId });
-            
+
             Assert.Equal(listResult, singleResult);
         }
     }
@@ -85,7 +79,7 @@ public class HotLoopOptimizationsTests
         {
             string singleResult = tokenizer.DecodeSingleToken(tokenId);
             string listResult = tokenizer.Decode(new List<int> { tokenId });
-            
+
             Assert.Equal(listResult, singleResult);
         }
     }

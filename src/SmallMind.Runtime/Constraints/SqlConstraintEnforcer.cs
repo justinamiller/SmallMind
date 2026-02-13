@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Runtime.Constraints
 {
     /// <summary>
@@ -16,9 +13,9 @@ namespace SmallMind.Runtime.Constraints
             "INNER", "OUTER", "ON", "AS", "AND", "OR", "NOT", "IN", "EXISTS",
             "ORDER", "BY", "GROUP", "HAVING", "LIMIT", "OFFSET", "UNION"
         };
-        
+
         public string ConstraintDescription => "SQL syntax validation";
-        
+
         public bool IsTokenAllowed(string generatedSoFar, int candidateTokenId, string candidateTokenText)
         {
             if (string.IsNullOrEmpty(generatedSoFar))
@@ -29,9 +26,9 @@ namespace SmallMind.Runtime.Constraints
                        upper.StartsWith("UPDATE") || upper.StartsWith("DELETE") ||
                        upper.StartsWith("CREATE");
             }
-            
+
             string combined = generatedSoFar + candidateTokenText;
-            
+
             // Check parentheses balance
             int openParen = 0;
             foreach (char c in combined)
@@ -40,18 +37,18 @@ namespace SmallMind.Runtime.Constraints
                 else if (c == ')') openParen--;
                 if (openParen < 0) return false; // More closing than opening
             }
-            
+
             return true; // Simplified validation - parentheses check is primary constraint
         }
-        
+
         public bool IsComplete(string generatedSoFar)
         {
             if (string.IsNullOrWhiteSpace(generatedSoFar))
                 return false;
-            
+
             // Check if ends with semicolon (optional but common)
             generatedSoFar = generatedSoFar.TrimEnd();
-            
+
             // Check parentheses balance
             int openParen = 0;
             foreach (char c in generatedSoFar)
@@ -59,7 +56,7 @@ namespace SmallMind.Runtime.Constraints
                 if (c == '(') openParen++;
                 else if (c == ')') openParen--;
             }
-            
+
             return openParen == 0; // Balanced
         }
     }

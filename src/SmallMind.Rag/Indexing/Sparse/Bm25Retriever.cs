@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Rag.Common;
 
 namespace SmallMind.Rag.Indexing.Sparse;
@@ -54,17 +52,17 @@ internal sealed class Bm25Retriever
 
         // Tokenize query
         List<string> queryTerms = RagTokenizer.Tokenize(query);
-        
+
         if (queryTerms.Count == 0)
             return new List<RetrievedChunk>();
 
         // Collect candidate chunks (chunks that contain at least one query term)
         var candidates = new HashSet<string>();
-        
+
         for (int i = 0; i < queryTerms.Count; i++)
         {
             string term = queryTerms[i];
-            
+
             // Get all chunks containing this term directly from the index
             foreach (string chunkId in _index.GetChunkIdsForTerm(term))
             {
@@ -77,11 +75,11 @@ internal sealed class Bm25Retriever
 
         // Score all candidates
         var scoredChunks = new List<ScoredChunk>(candidates.Count);
-        
+
         foreach (string chunkId in candidates)
         {
             double score = Bm25Scorer.ComputeScore(queryTerms, chunkId, _index, _k1, _b);
-            
+
             if (score > 0.0)
             {
                 scoredChunks.Add(new ScoredChunk(chunkId, score));
@@ -104,7 +102,7 @@ internal sealed class Bm25Retriever
         for (int i = 0; i < resultCount; i++)
         {
             ScoredChunk sc = scoredChunks[i];
-            
+
             // Get chunk metadata from store
             if (!chunkStore.TryGetValue(sc.ChunkId, out Chunk? chunk))
                 continue;

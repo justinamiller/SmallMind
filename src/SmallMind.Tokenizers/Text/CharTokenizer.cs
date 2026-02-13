@@ -1,7 +1,5 @@
-using System;
 using System.Buffers;
 using System.Collections.Frozen;
-using System.Collections.Generic;
 using System.Text;
 using SmallMind.Abstractions.Telemetry;
 
@@ -19,7 +17,7 @@ namespace SmallMind.Tokenizers
         private readonly IRuntimeLogger _logger;
 
         public int VocabSize { get; }
-        
+
         public TokenizerInfo Info { get; }
 
         /// <summary>
@@ -31,19 +29,19 @@ namespace SmallMind.Tokenizers
         public CharTokenizer(string text, IRuntimeLogger? logger = null)
         {
             _logger = logger ?? NullRuntimeLogger.Instance;
-            
+
             // Build vocabulary from unique characters in the text
             var charSet = new HashSet<char>();
             for (int i = 0; i < text.Length; i++)
             {
                 charSet.Add(text[i]);
             }
-            
+
             // Convert to sorted array
             var chars = new char[charSet.Count];
             charSet.CopyTo(chars);
             Array.Sort(chars);
-            
+
             // Pre-size dictionaries with exact capacity to avoid rehashing
             var charToIdxDict = new Dictionary<char, int>(chars.Length);
             var idxToCharDict = new Dictionary<int, char>(chars.Length);
@@ -98,18 +96,18 @@ namespace SmallMind.Tokenizers
             // Decode UTF-8 to string first (CharTokenizer operates on chars)
             string text = Encoding.UTF8.GetString(utf8);
             int count = 0;
-            
+
             foreach (char ch in text)
             {
                 if (count >= tokensOut.Length)
                     break;
-                    
+
                 if (_charToIdx.TryGetValue(ch, out int idx))
                 {
                     tokensOut[count++] = idx;
                 }
             }
-            
+
             return count;
         }
 
@@ -122,10 +120,10 @@ namespace SmallMind.Tokenizers
             // For small buffers, use stack allocation
             int maxChars = tokens.Length;
             char[]? rentedArray = null;
-            Span<char> chars = maxChars <= 256 
-                ? stackalloc char[maxChars] 
+            Span<char> chars = maxChars <= 256
+                ? stackalloc char[maxChars]
                 : (rentedArray = ArrayPool<char>.Shared.Rent(maxChars)).AsSpan(0, maxChars);
-            
+
             try
             {
                 int charCount = 0;
@@ -136,7 +134,7 @@ namespace SmallMind.Tokenizers
                         chars[charCount++] = ch;
                     }
                 }
-                
+
                 int bytesWritten = Encoding.UTF8.GetBytes(chars.Slice(0, charCount), utf8Out);
                 return bytesWritten;
             }

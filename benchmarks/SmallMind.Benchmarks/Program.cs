@@ -1,9 +1,3 @@
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using SmallMind.Benchmarks.Benchmarks;
-using SmallMind.Benchmarks.Diagnostics;
 using SmallMind.Benchmarks.Reporting;
 
 namespace SmallMind.Benchmarks

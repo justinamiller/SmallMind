@@ -1,4 +1,3 @@
-using System;
 using System.Buffers;
 
 namespace SmallMind.Runtime.Cache
@@ -39,7 +38,7 @@ namespace SmallMind.Runtime.Cache
         private readonly ModelShape _modelShape;
         private readonly int _maxTokens;
         private readonly ArrayPool<float> _pool;
-        
+
         private float[][] _keyCaches;   // [layer][position * heads * headDim]
         private float[][] _valueCaches; // [layer][position * heads * headDim]
         private int _currentTokenCount;
@@ -83,7 +82,7 @@ namespace SmallMind.Runtime.Cache
             _modelShape = modelShape;
             _maxTokens = maxTokens;
             _pool = ArrayPool<float>.Shared;
-            
+
             int cacheSize = maxTokens * modelShape.Heads * modelShape.HeadDim;
             _sizeBytes = 2L * modelShape.Layers * cacheSize * sizeof(float); // K + V
 
@@ -94,7 +93,7 @@ namespace SmallMind.Runtime.Cache
             {
                 _keyCaches[i] = _pool.Rent(cacheSize);
                 _valueCaches[i] = _pool.Rent(cacheSize);
-                
+
                 // Clear rented arrays - use Span.Clear for better performance
                 _keyCaches[i].AsSpan(0, cacheSize).Clear();
                 _valueCaches[i].AsSpan(0, cacheSize).Clear();
@@ -110,7 +109,7 @@ namespace SmallMind.Runtime.Cache
         {
             if (_currentTokenCount + requiredTokens > _maxTokens)
                 return false;
-            
+
             return true;
         }
 
@@ -136,7 +135,7 @@ namespace SmallMind.Runtime.Cache
                 throw new ArgumentException($"Expected {expectedSize} elements for {numNewTokens} tokens, got K={keyData.Length}, V={valueData.Length}");
 
             int offset = _currentTokenCount * stride;
-            
+
             keyData.CopyTo(_keyCaches[layer].AsSpan(offset, expectedSize));
             valueData.CopyTo(_valueCaches[layer].AsSpan(offset, expectedSize));
         }
@@ -157,7 +156,7 @@ namespace SmallMind.Runtime.Cache
         {
             if (layer < 0 || layer >= _modelShape.Layers)
                 throw new ArgumentOutOfRangeException(nameof(layer));
-            
+
             if (startToken + tokenCount > _currentTokenCount)
                 throw new ArgumentOutOfRangeException(nameof(tokenCount));
 
@@ -175,7 +174,7 @@ namespace SmallMind.Runtime.Cache
         {
             if (layer < 0 || layer >= _modelShape.Layers)
                 throw new ArgumentOutOfRangeException(nameof(layer));
-            
+
             if (startToken + tokenCount > _currentTokenCount)
                 throw new ArgumentOutOfRangeException(nameof(tokenCount));
 
@@ -192,7 +191,7 @@ namespace SmallMind.Runtime.Cache
         public void Reset()
         {
             _currentTokenCount = 0;
-            
+
             // No need to clear the arrays, we'll just overwrite as we go
         }
 
@@ -205,16 +204,16 @@ namespace SmallMind.Runtime.Cache
         {
             if (windowSize < 0)
                 throw new ArgumentOutOfRangeException(nameof(windowSize));
-            
+
             if (windowSize >= _currentTokenCount)
                 return; // Nothing to slide
-            
+
             int tokensToKeep = Math.Min(windowSize, _currentTokenCount);
             int startPos = _currentTokenCount - tokensToKeep;
             int stride = _modelShape.Heads * _modelShape.HeadDim;
             int srcOffset = startPos * stride;
             int length = tokensToKeep * stride;
-            
+
             // Shift data to beginning of arrays
             for (int layer = 0; layer < _modelShape.Layers; layer++)
             {
@@ -222,7 +221,7 @@ namespace SmallMind.Runtime.Cache
                 Buffer.BlockCopy(_keyCaches[layer], srcOffset * sizeof(float), _keyCaches[layer], 0, length * sizeof(float));
                 Buffer.BlockCopy(_valueCaches[layer], srcOffset * sizeof(float), _valueCaches[layer], 0, length * sizeof(float));
             }
-            
+
             _currentTokenCount = tokensToKeep;
         }
 

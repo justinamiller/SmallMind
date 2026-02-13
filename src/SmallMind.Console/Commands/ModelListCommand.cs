@@ -1,7 +1,4 @@
-using System;
-using System.Threading.Tasks;
 using SmallMind.Core.Utilities;
-using SmallMind.ModelRegistry;
 
 namespace SmallMind.ConsoleApp.Commands
 {
@@ -109,10 +106,10 @@ namespace SmallMind.ConsoleApp.Commands
         {
             if (string.IsNullOrEmpty(text))
                 return string.Empty;
-            
+
             if (text.Length <= maxLength)
                 return text;
-            
+
             return text.Substring(0, maxLength - 3) + "...";
         }
     }

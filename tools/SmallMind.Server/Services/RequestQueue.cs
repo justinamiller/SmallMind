@@ -84,10 +84,10 @@ public sealed class RequestQueue : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        
+
         _concurrencySemaphore.Dispose();
         _queueSemaphore.Dispose();
-        
+
         foreach (var limiter in _clientRateLimiters.Values)
         {
             limiter.Dispose();

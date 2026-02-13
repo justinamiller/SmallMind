@@ -1,10 +1,6 @@
 using SmallMind.Abstractions.Telemetry;
-using SmallMind.Core.Exceptions;
 using SmallMind.Core.Core;
 using SmallMind.Core.Simd;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace SmallMind.Transformers
 {
@@ -14,12 +10,12 @@ namespace SmallMind.Transformers
     internal abstract class Module
     {
         public List<Tensor> Parameters { get; protected set; } = new List<Tensor>();
-        
+
         /// <summary>
         /// Whether the module is in training mode (affects gradient computation and dropout).
         /// </summary>
         protected bool IsTraining { get; private set; } = true;
-        
+
         public abstract Tensor Forward(Tensor input);
 
         public void ZeroGrad()
@@ -30,13 +26,13 @@ namespace SmallMind.Transformers
             }
         }
 
-        public virtual void Train() 
-        { 
+        public virtual void Train()
+        {
             IsTraining = true;
         }
-        
-        public virtual void Eval() 
-        { 
+
+        public virtual void Eval()
+        {
             IsTraining = false;
         }
     }
@@ -49,14 +45,14 @@ namespace SmallMind.Transformers
         public Tensor Weight { get; private set; }
         public Tensor? Bias { get; private set; }
         private Random _random;
-        
+
         // Cached transposed weight for inference (Tier-0 optimization: eliminate per-call transpose allocation)
         private Tensor? _weightTransposeCache;
 
         public Linear(int inFeatures, int outFeatures, bool useBias = true, Random? random = null)
         {
             _random = random ?? new Random(42);
-            
+
             // Weight: (outFeatures, inFeatures)
             Weight = new Tensor(new int[] { outFeatures, inFeatures }, requiresGrad: true);
             Weight.InitializeXavier(_random, inFeatures, outFeatures);
@@ -73,7 +69,7 @@ namespace SmallMind.Transformers
         {
             return Forward(input, dest: null);
         }
-        
+
         /// <summary>
         /// Forward pass with optional destination tensor to avoid allocation.
         /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
@@ -116,10 +112,10 @@ namespace SmallMind.Transformers
                 int seq = input.Shape[1];
                 int inFeatures = input.Shape[2];
                 int outFeatures = Weight.Shape[0];
-                
+
                 // Tier-0 optimization: Use ReshapeView instead of Reshape to avoid cloning
                 var reshaped = input.ReshapeView(new int[] { batch * seq, inFeatures });
-                
+
                 // Tier-0 optimization: Allow dest usage for 3D case
                 // Create intermediate buffer if dest is null, otherwise use dest reshaped as view
                 Tensor? intermediateBuffer = null;
@@ -128,28 +124,28 @@ namespace SmallMind.Transformers
                     // Use dest as backing storage via view
                     intermediateBuffer = dest.ReshapeView(new int[] { batch * seq, outFeatures });
                 }
-                
+
                 var output = Tensor.MatMul(reshaped, weightT, intermediateBuffer, requiresGrad: IsTraining);
-                
+
                 if (Bias != null)
                 {
                     output = Tensor.Add(output, Bias, output, requiresGrad: IsTraining);
                 }
-                
+
                 // Tier-0 optimization: Use ReshapeView to return final shape without cloning
                 return output.ReshapeView(new int[] { batch, seq, outFeatures });
             }
-            
+
             throw new ArgumentException($"Unsupported input shape: {string.Join(",", input.Shape)}");
         }
-        
+
         public override void Train()
         {
             base.Train();
             // Invalidate transpose cache when switching to training mode
             _weightTransposeCache = null;
         }
-        
+
         /// <summary>
         /// TIER-3 OPTIMIZATION: Precompute transpose cache at Eval() time
         /// Ensures transpose is computed once when entering inference mode,
@@ -182,10 +178,10 @@ namespace SmallMind.Transformers
             _embeddingDim = embeddingDim;
             _random = random ?? new Random(42);
             var log = logger ?? NullRuntimeLogger.Instance;
-            
+
             // Check if we need chunked storage
             long totalElements = (long)numEmbeddings * embeddingDim;
-            
+
             if (totalElements > int.MaxValue)
             {
                 // Use chunked storage for large embedding tables
@@ -199,7 +195,7 @@ namespace SmallMind.Transformers
                 Weight = new Tensor(new int[] { numEmbeddings, embeddingDim }, requiresGrad: true);
                 Weight.InitializeRandom(_random, 0.02f);
             }
-            
+
             Parameters.Add(Weight);
         }
 
@@ -207,7 +203,7 @@ namespace SmallMind.Transformers
         {
             return Forward(input, dest: null);
         }
-        
+
         /// <summary>
         /// Forward pass with optional destination tensor to avoid allocation.
         /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
@@ -216,7 +212,7 @@ namespace SmallMind.Transformers
         {
             // input: indices (batch,) or (batch, seq)
             // output: (batch, embDim) or (batch, seq, embDim)
-            
+
             if (input.Shape.Length == 1)
             {
                 return ForwardBatch(input, dest);
@@ -225,7 +221,7 @@ namespace SmallMind.Transformers
             {
                 return ForwardBatchSeq(input, dest);
             }
-            
+
             throw new ArgumentException("Embedding input must be 1D or 2D");
         }
 
@@ -233,12 +229,12 @@ namespace SmallMind.Transformers
         {
             int batch = input.Shape[0];
             var output = dest ?? new Tensor(new int[] { batch, _embeddingDim }, requiresGrad: IsTraining);
-            
+
             if (Weight.IsChunked)
             {
                 // Chunked embedding lookup
                 var weightBuffer = Weight.GetChunkedBuffer();
-                
+
                 for (int i = 0; i < batch; i++)
                 {
                     int idx = (int)input.Data[i];
@@ -246,12 +242,12 @@ namespace SmallMind.Transformers
                     {
                         long srcIndex = (long)idx * _embeddingDim;
                         int dstOffset = i * _embeddingDim;
-                        
+
                         // Copy embedding row from chunked storage
                         Weight.CopyTo(srcIndex, output.Data.AsSpan(dstOffset, _embeddingDim), _embeddingDim);
                     }
                 }
-                
+
                 // Backward: scatter gradient to embedding weights
                 if (Weight.RequiresGrad)
                 {
@@ -265,7 +261,7 @@ namespace SmallMind.Transformers
                             {
                                 long dstIndex = (long)idx * _embeddingDim;
                                 int srcOffset = i * _embeddingDim;
-                                
+
                                 // Accumulate gradients to chunked storage
                                 AccumulateGradients(output.Grad.AsSpan(srcOffset, _embeddingDim), dstIndex, gradBuffer);
                             }
@@ -287,7 +283,7 @@ namespace SmallMind.Transformers
                         }
                     }
                 }
-                
+
                 // Backward: scatter gradient to embedding weights
                 if (Weight.RequiresGrad)
                 {
@@ -307,7 +303,7 @@ namespace SmallMind.Transformers
                     });
                 }
             }
-            
+
             return output;
         }
 
@@ -316,12 +312,12 @@ namespace SmallMind.Transformers
             int batch = input.Shape[0];
             int seq = input.Shape[1];
             var output = dest ?? new Tensor(new int[] { batch, seq, _embeddingDim }, requiresGrad: IsTraining);
-            
+
             if (Weight.IsChunked)
             {
                 // Chunked embedding lookup
                 var weightBuffer = Weight.GetChunkedBuffer();
-                
+
                 // Parallelize over batch when beneficial
                 if (batch >= 4)
                 {
@@ -334,7 +330,7 @@ namespace SmallMind.Transformers
                             {
                                 long srcIndex = (long)idx * _embeddingDim;
                                 int dstOffset = (b * seq + s) * _embeddingDim;
-                                
+
                                 // Copy embedding row from chunked storage
                                 Weight.CopyTo(srcIndex, output.Data.AsSpan(dstOffset, _embeddingDim), _embeddingDim);
                             }
@@ -352,14 +348,14 @@ namespace SmallMind.Transformers
                             {
                                 long srcIndex = (long)idx * _embeddingDim;
                                 int dstOffset = (b * seq + s) * _embeddingDim;
-                                
+
                                 // Copy embedding row from chunked storage
                                 Weight.CopyTo(srcIndex, output.Data.AsSpan(dstOffset, _embeddingDim), _embeddingDim);
                             }
                         }
                     }
                 }
-                
+
                 // Backward: scatter gradient to embedding weights
                 if (Weight.RequiresGrad)
                 {
@@ -375,7 +371,7 @@ namespace SmallMind.Transformers
                                 {
                                     long dstIndex = (long)idx * _embeddingDim;
                                     int srcOffset = (b * seq + s) * _embeddingDim;
-                                    
+
                                     // Accumulate gradients to chunked storage
                                     AccumulateGradients(output.Grad.AsSpan(srcOffset, _embeddingDim), dstIndex, gradBuffer);
                                 }
@@ -399,7 +395,7 @@ namespace SmallMind.Transformers
                             {
                                 int srcOffset = idx * _embeddingDim;
                                 int dstOffset = (b * seq + s) * _embeddingDim;
-                                
+
                                 // Use Array.Copy for bulk memory transfer (much faster)
                                 Array.Copy(
                                     Weight.Data, srcOffset,
@@ -421,7 +417,7 @@ namespace SmallMind.Transformers
                             {
                                 int srcOffset = idx * _embeddingDim;
                                 int dstOffset = (b * seq + s) * _embeddingDim;
-                                
+
                                 // Use Array.Copy for bulk memory transfer (much faster)
                                 Array.Copy(
                                     Weight.Data, srcOffset,
@@ -432,7 +428,7 @@ namespace SmallMind.Transformers
                         }
                     }
                 }
-                
+
                 if (Weight.RequiresGrad)
                 {
                     output.SetBackward(() =>
@@ -446,7 +442,7 @@ namespace SmallMind.Transformers
                                 {
                                     int srcOffset = (b * seq + s) * _embeddingDim;
                                     int dstOffset = idx * _embeddingDim;
-                                    
+
                                     // Use Array.Copy for backward pass as well
                                     for (int j = 0; j < _embeddingDim; j++)
                                     {
@@ -458,7 +454,7 @@ namespace SmallMind.Transformers
                     });
                 }
             }
-            
+
             return output;
         }
 
@@ -468,24 +464,24 @@ namespace SmallMind.Transformers
         private void AccumulateGradients(ReadOnlySpan<float> gradients, long baseIndex, ChunkedBuffer gradBuffer)
         {
             var (startChunkIdx, startOffset) = gradBuffer.GetChunkOffset(baseIndex);
-            
+
             int remaining = gradients.Length;
             int srcOffset = 0;
             int chunkIdx = startChunkIdx;
             int chunkOffset = startOffset;
-            
+
             while (remaining > 0)
             {
                 var chunkSpan = gradBuffer.GetChunkSpan(chunkIdx);
                 int chunkRemaining = chunkSpan.Length - chunkOffset;
                 int toCopy = Math.Min(remaining, chunkRemaining);
-                
+
                 // Accumulate (not copy) gradients
                 for (int i = 0; i < toCopy; i++)
                 {
                     chunkSpan[chunkOffset + i] += gradients[srcOffset + i];
                 }
-                
+
                 srcOffset += toCopy;
                 remaining -= toCopy;
                 chunkIdx++;
@@ -508,10 +504,10 @@ namespace SmallMind.Transformers
         {
             _normalizedShape = normalizedShape;
             _eps = eps;
-            
+
             Gamma = Tensor.Ones(new int[] { normalizedShape }, requiresGrad: true);
             Beta = Tensor.Zeros(new int[] { normalizedShape }, requiresGrad: true);
-            
+
             Parameters.Add(Gamma);
             Parameters.Add(Beta);
         }
@@ -520,7 +516,7 @@ namespace SmallMind.Transformers
         {
             return Forward(input, dest: null);
         }
-        
+
         /// <summary>
         /// Forward pass with optional destination tensor to avoid allocation.
         /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
@@ -529,13 +525,13 @@ namespace SmallMind.Transformers
         {
             // Use fused LayerNorm operations - no intermediate allocations
             Tensor output = dest ?? new Tensor(input.Shape, requiresGrad: IsTraining);
-            
+
             if (input.Shape.Length == 2)
             {
                 int batch = input.Shape[0];
                 int features = input.Shape[1];
                 int expectedSize = batch * features;
-                
+
                 // Fused two-pass LayerNorm
                 // Use AsSpan to handle pooled tensors with oversized backing arrays
                 SmallMind.Core.Core.LayerNormOps.LayerNorm(
@@ -553,7 +549,7 @@ namespace SmallMind.Transformers
                 int seq = input.Shape[1];
                 int features = input.Shape[2];
                 int expectedSize = batch * seq * features;
-                
+
                 // Fused LayerNorm for 3D tensors
                 // Use AsSpan to handle pooled tensors with oversized backing arrays
                 SmallMind.Core.Core.LayerNormOps.LayerNorm3D(
@@ -566,7 +562,7 @@ namespace SmallMind.Transformers
                     features,
                     _eps);
             }
-            
+
             // Backward: simplified gradient pass
             // NOTE: This is a simplified implementation. A complete LayerNorm backward would
             // compute gradients with respect to mean and variance. For educational purposes,
@@ -583,14 +579,14 @@ namespace SmallMind.Transformers
                             input.Grad[i] += output.Grad[i];
                         }
                     }
-                    
+
                     // Accumulate gamma and beta gradients
                     if (input.Shape.Length == 3)
                     {
                         int batch = input.Shape[0];
                         int seq = input.Shape[1];
                         int features = input.Shape[2];
-                        
+
                         for (int b = 0; b < batch; b++)
                         {
                             for (int s = 0; s < seq; s++)
@@ -606,7 +602,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return output;
         }
     }
@@ -627,9 +623,9 @@ namespace SmallMind.Transformers
         {
             _normalizedShape = normalizedShape;
             _eps = eps;
-            
+
             Gamma = Tensor.Ones(new int[] { normalizedShape }, requiresGrad: true);
-            
+
             Parameters.Add(Gamma);
         }
 
@@ -637,7 +633,7 @@ namespace SmallMind.Transformers
         {
             return Forward(input, dest: null);
         }
-        
+
         /// <summary>
         /// Forward pass with optional destination tensor to avoid allocation.
         /// If dest is null, allocates a new tensor. If dest is provided, writes result there.
@@ -646,13 +642,13 @@ namespace SmallMind.Transformers
         {
             // Use fused RMSNorm operations - no intermediate allocations
             Tensor output = dest ?? new Tensor(input.Shape, requiresGrad: IsTraining);
-            
+
             if (input.Shape.Length == 2)
             {
                 int batch = input.Shape[0];
                 int features = input.Shape[1];
                 int expectedSize = batch * features;
-                
+
                 // Fused two-pass RMSNorm
                 // Use AsSpan to handle pooled tensors with oversized backing arrays
                 SmallMind.Core.Core.RMSNormOps.RMSNorm(
@@ -669,7 +665,7 @@ namespace SmallMind.Transformers
                 int seq = input.Shape[1];
                 int features = input.Shape[2];
                 int expectedSize = batch * seq * features;
-                
+
                 // Fused RMSNorm for 3D tensors
                 // Use AsSpan to handle pooled tensors with oversized backing arrays
                 SmallMind.Core.Core.RMSNormOps.RMSNorm3D(
@@ -681,7 +677,7 @@ namespace SmallMind.Transformers
                     features,
                     _eps);
             }
-            
+
             // Backward: simplified gradient pass
             // NOTE: This is a simplified implementation for educational purposes and initial deployment.
             // A complete RMSNorm backward would compute gradients with respect to the RMS.
@@ -698,20 +694,20 @@ namespace SmallMind.Transformers
                         int expectedSize = input.Size;
                         var inputGradSpan = input.Grad.AsSpan(0, expectedSize);
                         var outputGradSpan = output.Grad.AsSpan(0, expectedSize);
-                        
+
                         for (int i = 0; i < expectedSize; i++)
                         {
                             inputGradSpan[i] += outputGradSpan[i];
                         }
                     }
-                    
+
                     // Accumulate gamma gradients
                     if (input.Shape.Length == 3)
                     {
                         int batch = input.Shape[0];
                         int seq = input.Shape[1];
                         int features = input.Shape[2];
-                        
+
                         for (int b = 0; b < batch; b++)
                         {
                             for (int s = 0; s < seq; s++)
@@ -726,7 +722,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return output;
         }
     }
@@ -761,10 +757,10 @@ namespace SmallMind.Transformers
                 // This is safe because inference flows are read-only; training flows create new tensors.
                 return input;
             }
-            
+
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
             float scale = 1.0f / (1.0f - _p);
-            
+
             for (int i = 0; i < input.Size; i++)
             {
                 if (_random.NextDouble() > _p)
@@ -773,7 +769,7 @@ namespace SmallMind.Transformers
                 }
                 // else remains 0
             }
-            
+
             if (input.RequiresGrad)
             {
                 output.SetBackward(() =>
@@ -787,7 +783,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return output;
         }
     }
@@ -800,12 +796,12 @@ namespace SmallMind.Transformers
         public static Tensor ReLU(Tensor input)
         {
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
-            
+
             for (int i = 0; i < input.Size; i++)
             {
                 output.Data[i] = MathF.Max(0, input.Data[i]);
             }
-            
+
             if (input.RequiresGrad)
             {
                 output.SetBackward(() =>
@@ -819,7 +815,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return output;
         }
 
@@ -840,7 +836,7 @@ namespace SmallMind.Transformers
         public static Tensor SiLU(Tensor input, Tensor? dest)
         {
             var output = dest ?? new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
-            
+
             // SiLU(x) = x * sigmoid(x) = x / (1 + exp(-x))
             for (int i = 0; i < input.Size; i++)
             {
@@ -848,7 +844,7 @@ namespace SmallMind.Transformers
                 float sigmoid = 1.0f / (1.0f + MathF.Exp(-x));
                 output.Data[i] = x * sigmoid;
             }
-            
+
             if (input.RequiresGrad)
             {
                 output.SetBackward(() =>
@@ -864,7 +860,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return output;
         }
 
@@ -889,7 +885,7 @@ namespace SmallMind.Transformers
                         $"Destination tensor rank {dest.Shape.Length} " +
                         $"does not match input rank {input.Shape.Length}");
                 }
-                
+
                 for (int i = 0; i < input.Shape.Length; i++)
                 {
                     if (dest.Shape[i] != input.Shape[i])
@@ -899,7 +895,7 @@ namespace SmallMind.Transformers
                             $"does not match input shape {string.Join("x", input.Shape)}");
                     }
                 }
-                
+
                 // Validate RequiresGrad matches
                 if (dest.RequiresGrad != input.RequiresGrad)
                 {
@@ -908,13 +904,13 @@ namespace SmallMind.Transformers
                         $"does not match input RequiresGrad={input.RequiresGrad}");
                 }
             }
-            
+
             var output = dest ?? new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
-            
+
             // Use optimized fast GELU approximation from ActivationOps
             // Based on the sigmoid approximation: GELU(x) ≈ x * σ(1.702 * x)
             ActivationOps.GELU(input.Data, output.Data);
-            
+
             if (input.RequiresGrad)
             {
                 output.SetBackward(() =>
@@ -923,19 +919,19 @@ namespace SmallMind.Transformers
                     ActivationOps.GELUBackward(input.Data, output.Grad, input.Grad);
                 });
             }
-            
+
             return output;
         }
 
         public static Tensor Tanh(Tensor input)
         {
             var output = new Tensor(input.Shape, requiresGrad: input.RequiresGrad);
-            
+
             for (int i = 0; i < input.Size; i++)
             {
                 output.Data[i] = MathF.Tanh(input.Data[i]);
             }
-            
+
             if (input.RequiresGrad)
             {
                 output.SetBackward(() =>
@@ -947,7 +943,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return output;
         }
     }

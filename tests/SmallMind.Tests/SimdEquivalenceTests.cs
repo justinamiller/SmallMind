@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Simd;
 
 namespace SmallMind.Tests

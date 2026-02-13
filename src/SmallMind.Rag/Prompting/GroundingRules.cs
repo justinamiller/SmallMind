@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace SmallMind.Rag.Prompting;
@@ -92,7 +90,7 @@ internal static class GroundingRules
         for (int i = 0; i < tokens.Count; i++)
         {
             string token = tokens[i];
-            
+
             // Check if token is a stop word
             bool isStopWord = false;
             for (int j = 0; j < StopWords.Length; j++)
@@ -139,13 +137,13 @@ internal static class GroundingRules
         for (int i = 0; i < maxSuggestions; i++)
         {
             var retrieved = chunks[i];
-            
+
             if (!chunkStore.TryGetValue(retrieved.ChunkId, out var chunk))
                 continue;
 
             // Extract keywords from chunk text
             var keywords = ExtractKeywords(chunk.Text);
-            
+
             // Find a keyword we haven't used yet
             string? selectedKeyword = null;
             for (int j = 0; j < keywords.Count; j++)

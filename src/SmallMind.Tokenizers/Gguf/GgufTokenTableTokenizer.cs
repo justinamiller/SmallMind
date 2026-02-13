@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace SmallMind.Tokenizers.Gguf
@@ -12,7 +10,7 @@ namespace SmallMind.Tokenizers.Gguf
     internal sealed class GgufTokenTableTokenizer : ITokenizer
     {
         private const int MaxTokenLength = 50; // Maximum length to search for matching tokens
-        
+
         private readonly Dictionary<string, int> _vocab;
         private readonly List<string> _reverseVocab;
         private readonly SpecialTokens _specialTokens;
@@ -46,7 +44,7 @@ namespace SmallMind.Tokenizers.Gguf
                 return new List<int>();
 
             var tokens = new List<int>();
-            
+
             // Simple greedy tokenization: longest match first
             int pos = 0;
             while (pos < text.Length)
@@ -100,13 +98,13 @@ namespace SmallMind.Tokenizers.Gguf
             // Convert UTF-8 to string for simple implementation
             string text = Encoding.UTF8.GetString(utf8);
             var tokens = Encode(text);
-            
+
             int count = Math.Min(tokens.Count, tokensOut.Length);
             for (int i = 0; i < count; i++)
             {
                 tokensOut[i] = tokens[i];
             }
-            
+
             return count;
         }
 
@@ -121,14 +119,14 @@ namespace SmallMind.Tokenizers.Gguf
                 if (tokenId >= 0 && tokenId < _reverseVocab.Count)
                 {
                     string tokenStr = _reverseVocab[tokenId];
-                    
+
                     // Handle byte tokens (e.g., <0x20> for space)
                     if (GgufTokenizerHelpers.IsByteToken(tokenStr, out byte byteValue))
                     {
                         sb.Append((char)byteValue);
                         continue;
                     }
-                    
+
                     sb.Append(tokenStr);
                 }
             }
@@ -144,13 +142,13 @@ namespace SmallMind.Tokenizers.Gguf
             {
                 tokenList.Add(token);
             }
-            
+
             string text = Decode(tokenList);
             byte[] utf8Bytes = Encoding.UTF8.GetBytes(text);
-            
+
             int count = Math.Min(utf8Bytes.Length, utf8Out.Length);
             utf8Bytes.AsSpan(0, count).CopyTo(utf8Out);
-            
+
             return count;
         }
 
@@ -169,16 +167,16 @@ namespace SmallMind.Tokenizers.Gguf
             if (tokenId >= 0 && tokenId < _reverseVocab.Count)
             {
                 string tokenStr = _reverseVocab[tokenId];
-                
+
                 // Handle byte tokens
                 if (GgufTokenizerHelpers.IsByteToken(tokenStr, out byte byteValue))
                 {
                     return ((char)byteValue).ToString();
                 }
-                
+
                 return tokenStr;
             }
-            
+
             return string.Empty;
         }
     }

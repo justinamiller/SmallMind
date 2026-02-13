@@ -1,7 +1,4 @@
-using System;
-using Xunit;
 using SmallMind.Core.Core;
-using SmallMind.Core.Exceptions;
 
 namespace SmallMind.Tests
 {
@@ -136,7 +133,7 @@ namespace SmallMind.Tests
             var a = new Tensor(new[] { 1f, 2f }, new[] { 2 });
             var b = new Tensor(new[] { 3f, 4f }, new[] { 2 });
             var dest = new Tensor(new int[] { 2 });
-            
+
             // Get reference to dest
             var originalDest = dest;
 
@@ -162,7 +159,7 @@ namespace SmallMind.Tests
             Assert.NotNull(tensor.Data);
             Assert.Equal(4, tensor.Size); // Logical size
             Assert.True(tensor.Capacity >= 4); // Capacity should be >= logical size
-            
+
             // Cleanup
             ((PooledTensor)tensor).Dispose();
         }
@@ -176,7 +173,7 @@ namespace SmallMind.Tests
             // Assert
             Assert.Equal(128, tensor.Capacity); // Capacity from pool
             Assert.Equal(100, tensor.Size);     // Logical size
-            
+
             // Cleanup
             tensor.Dispose();
         }
@@ -194,7 +191,7 @@ namespace SmallMind.Tests
 
             // Assert
             Assert.Same(data1, tensor2.Data); // Should reuse the same array
-            
+
             // Cleanup
             tensor2.Dispose();
         }
@@ -224,7 +221,7 @@ namespace SmallMind.Tests
                 tensor2 = scope.Rent(new[] { 128 });
                 data1 = tensor1.Data;
                 data2 = tensor2.Data;
-                
+
                 // Tensors are valid here
                 Assert.NotNull(tensor1.Data);
                 Assert.NotNull(tensor2.Data);
@@ -237,7 +234,7 @@ namespace SmallMind.Tests
             // Assert - should reuse the same arrays
             Assert.Same(data1, newTensor1.Data);
             Assert.Same(data2, newTensor2.Data);
-            
+
             // Cleanup
             newTensor1.Dispose();
             newTensor2.Dispose();
@@ -278,7 +275,7 @@ namespace SmallMind.Tests
             // Arrange
             using var tensor1 = Tensor.CreatePooled(new[] { 2, 2 });
             using var tensor2 = Tensor.CreatePooled(new[] { 2, 2 });
-            
+
             for (int i = 0; i < 4; i++)
             {
                 tensor1.Data[i] = i + 1f;

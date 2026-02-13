@@ -1,8 +1,4 @@
-using System;
-using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using SmallMind.Quantization.Tensors;
 
@@ -48,7 +44,7 @@ namespace SmallMind.Quantization.Kernels
                 {
                     var aRow = a.Slice(i * k, k);
                     var cRow = c.Slice(i * n, n);
-                    
+
                     if (Avx2.IsSupported)
                         MultiplyVectorMatrixAvx2(aRow, b, cRow, k, n);
                     else
@@ -68,7 +64,7 @@ namespace SmallMind.Quantization.Kernels
             c.Clear();
 
             int blockSize = b.BlockSize;
-            
+
             fixed (byte* bDataPtr = b.Data)
             fixed (float* bScalesPtr = b.Scales)
             fixed (float* aPtr = a)
@@ -80,19 +76,19 @@ namespace SmallMind.Quantization.Kernels
                     if (aVal == 0f) continue;
 
                     int bRowOffset = row * n;
-                    
+
                     for (int col = 0; col < n; col++)
                     {
                         int linearIdx = bRowOffset + col;
                         int blockIdx = linearIdx / blockSize;
                         float scale = bScalesPtr[blockIdx];
-                        
+
                         // Unpack 4-bit value - branchless nibble extraction
                         int byteIdx = linearIdx >> 1;
                         byte packedByte = bDataPtr[byteIdx];
                         int shift = (linearIdx & 1) << 2;
                         byte nibble = (byte)((packedByte >> shift) & 0xF);
-                        
+
                         int quantVal = Q4Tensor.DecodeNibble(nibble);
                         cPtr[col] += aVal * quantVal * scale;
                     }
@@ -114,9 +110,9 @@ namespace SmallMind.Quantization.Kernels
             }
 
             c.Clear();
-            
+
             int blockSize = b.BlockSize;
-            
+
             fixed (byte* bDataPtr = b.Data)
             fixed (float* bScalesPtr = b.Scales)
             fixed (float* aPtr = a)
@@ -128,20 +124,20 @@ namespace SmallMind.Quantization.Kernels
                     if (aVal == 0f) continue;
 
                     int bRowOffset = row * n;
-                    
+
                     // Process columns
                     for (int col = 0; col < n; col++)
                     {
                         int linearIdx = bRowOffset + col;
                         int blockIdx = linearIdx / blockSize;
                         float scale = bScalesPtr[blockIdx];
-                        
+
                         // Unpack 4-bit value - branchless nibble extraction
                         int byteIdx = linearIdx >> 1;
                         byte packedByte = bDataPtr[byteIdx];
                         int shift = (linearIdx & 1) << 2;
                         byte nibble = (byte)((packedByte >> shift) & 0xF);
-                        
+
                         int quantVal = Q4Tensor.DecodeNibble(nibble);
                         cPtr[col] += aVal * quantVal * scale;
                     }

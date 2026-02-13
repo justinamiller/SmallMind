@@ -1,6 +1,3 @@
-using System;
-using System.Threading.Tasks;
-
 namespace SmallMind.Runtime.Execution
 {
     /// <summary>
@@ -21,9 +18,9 @@ namespace SmallMind.Runtime.Execution
         {
             if (body == null)
                 throw new ArgumentNullException(nameof(body));
-            
+
             int workSize = toExclusive - fromInclusive;
-            
+
             // Deterministic mode or options not provided - force single-threaded
             if (options == null || options.DeterministicMode || workSize < options.ParallelizationThreshold)
             {
@@ -40,7 +37,7 @@ namespace SmallMind.Runtime.Execution
                     body);
             }
         }
-        
+
         /// <summary>
         /// Executes a parallel for loop with local state.
         /// Respects DeterministicMode (forces single-threaded) and ParallelizationThreshold.
@@ -59,9 +56,9 @@ namespace SmallMind.Runtime.Execution
                 throw new ArgumentNullException(nameof(body));
             if (localFinally == null)
                 throw new ArgumentNullException(nameof(localFinally));
-            
+
             int workSize = toExclusive - fromInclusive;
-            
+
             // Deterministic mode or small work - force single-threaded
             if (options == null || options.DeterministicMode || workSize < options.ParallelizationThreshold)
             {
@@ -82,7 +79,7 @@ namespace SmallMind.Runtime.Execution
                     localFinally);
             }
         }
-        
+
         /// <summary>
         /// Determines if parallelization should be used for the given work size.
         /// </summary>
@@ -90,10 +87,10 @@ namespace SmallMind.Runtime.Execution
         {
             if (options == null)
                 return false;
-            
+
             if (options.DeterministicMode)
                 return false;
-            
+
             return workSize >= options.ParallelizationThreshold;
         }
     }

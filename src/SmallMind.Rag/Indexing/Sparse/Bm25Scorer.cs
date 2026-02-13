@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Rag.Indexing.Sparse;
 
 /// <summary>
@@ -45,17 +42,17 @@ internal static class Bm25Scorer
             throw new ArgumentNullException(nameof(index));
 
         int N = index.TotalChunks;
-        
+
         if (N == 0)
             return 0.0;
 
         int docLength = index.GetDocLength(chunkId);
-        
+
         if (docLength == 0)
             return 0.0;
 
         double avgDocLength = index.AvgDocLength;
-        
+
         if (avgDocLength <= 0.0)
             avgDocLength = 1.0;
 
@@ -65,14 +62,14 @@ internal static class Bm25Scorer
         for (int i = 0; i < queryTerms.Count; i++)
         {
             string term = queryTerms[i];
-            
+
             int df = index.GetDocumentFrequency(term);
-            
+
             if (df == 0)
                 continue;
 
             int tf = index.GetTermFrequency(term, chunkId);
-            
+
             if (tf == 0)
                 continue;
 

@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Core;
 
 namespace SmallMind.Tests
@@ -52,7 +50,7 @@ namespace SmallMind.Tests
             float mean = 1f;
             float variance = 2f / 3f;
             float std = MathF.Sqrt(variance + 1e-5f);
-            
+
             float expected0 = 2f * ((0f - mean) / std) + 1f;
             float expected1 = 2f * ((1f - mean) / std) + 1f;
             float expected2 = 2f * ((2f - mean) / std) + 1f;
@@ -114,7 +112,7 @@ namespace SmallMind.Tests
             float mean = 3f;
             float variance = 2f / 3f;
             float std = MathF.Sqrt(variance + 1e-5f);
-            
+
             float expected0 = (2f - mean) / std;
             float expected1 = (3f - mean) / std;
             float expected2 = (4f - mean) / std;
@@ -146,8 +144,8 @@ namespace SmallMind.Tests
         public void LayerNorm_MultipleBatches_NormalizesIndependently()
         {
             // Arrange
-            var input = new float[] 
-            { 
+            var input = new float[]
+            {
                 1f, 2f, 3f,  // Batch 0
                 10f, 20f, 30f  // Batch 1
             };
@@ -162,7 +160,7 @@ namespace SmallMind.Tests
             // Batch 0 mean should be ~0
             float batch0Mean = (output[0] + output[1] + output[2]) / 3f;
             Assert.Equal(0f, batch0Mean, Tolerance);
-            
+
             // Batch 1 mean should be ~0
             float batch1Mean = (output[3] + output[4] + output[5]) / 3f;
             Assert.Equal(0f, batch1Mean, Tolerance);
@@ -184,7 +182,7 @@ namespace SmallMind.Tests
             Assert.True(float.IsFinite(output[0]));
             Assert.True(float.IsFinite(output[1]));
             Assert.True(float.IsFinite(output[2]));
-            
+
             // Check mean is close to 0
             float mean = (output[0] + output[1] + output[2]) / 3f;
             Assert.Equal(0f, mean, Tolerance);
@@ -220,7 +218,7 @@ namespace SmallMind.Tests
             float mean = 5f;
             float variance = 5f;
             float std = MathF.Sqrt(variance + 1e-5f);
-            
+
             for (int i = 0; i < 4; i++)
             {
                 float expected = (input[i] - mean) / std;
@@ -244,7 +242,7 @@ namespace SmallMind.Tests
             // Assert - each batch normalized independently
             float batch0Mean = (output[0] + output[1] + output[2]) / 3f;
             float batch1Mean = (output[3] + output[4] + output[5]) / 3f;
-            
+
             Assert.Equal(0f, batch0Mean, Tolerance);
             Assert.Equal(0f, batch1Mean, Tolerance);
         }

@@ -1,7 +1,3 @@
-using System;
-using System.IO;
-using System.Net.Http;
-using System.Threading.Tasks;
 using SmallMind.Core.Utilities;
 
 namespace SmallMind.ConsoleApp.Commands
@@ -39,7 +35,7 @@ namespace SmallMind.ConsoleApp.Commands
 
                 string owner = parts[0];
                 string repo = parts[1];
-                
+
                 // If filename not provided as separate arg, check if it's in model ID
                 if (filename == null && parts.Length > 2)
                 {
@@ -84,7 +80,7 @@ namespace SmallMind.ConsoleApp.Commands
                 System.Console.WriteLine();
                 System.Console.WriteLine($"✓ Download complete!");
                 System.Console.WriteLine($"  Saved to: {outputPath}");
-                
+
                 long fileSize = new FileInfo(outputPath).Length;
                 System.Console.WriteLine($"  Size: {ByteSizeFormatter.FormatBytes(fileSize)}");
                 System.Console.WriteLine();
@@ -118,14 +114,14 @@ namespace SmallMind.ConsoleApp.Commands
         {
             using var httpClient = new HttpClient();
             httpClient.Timeout = TimeSpan.FromMinutes(30); // Long timeout for large models
-            
+
             // Add user agent (HuggingFace appreciates this)
             httpClient.DefaultRequestHeaders.Add("User-Agent", "SmallMind/1.0");
 
             // Get file size first (if available)
             using var headResponse = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, url));
             headResponse.EnsureSuccessStatusCode();
-            
+
             long? totalBytes = headResponse.Content.Headers.ContentLength;
 
             // Download with progress
@@ -156,7 +152,7 @@ namespace SmallMind.ConsoleApp.Commands
                     {
                         var elapsed = DateTime.UtcNow - startTime;
                         double mbPerSec = totalRead / 1024.0 / 1024.0 / Math.Max(1, elapsed.TotalSeconds);
-                        
+
                         System.Console.Write($"\r  Progress: {percent}% ({ByteSizeFormatter.FormatBytes(totalRead)} / {ByteSizeFormatter.FormatBytes(totalBytes.Value)}) - {mbPerSec:F2} MB/s");
                         lastPercent = percent;
                     }

@@ -1,7 +1,4 @@
-using System;
-using System.Linq;
 using SmallMind.Runtime.Scheduling;
-using Xunit;
 
 namespace SmallMind.Tests.Scheduling
 {
@@ -37,7 +34,7 @@ namespace SmallMind.Tests.Scheduling
             Assert.Equal(SchedulingPolicy.FIFO, result.Policy);
             Assert.Equal(promptTokens.Length + maxNewTokens, result.TotalTokens);
             Assert.Equal(maxNewTokens, result.GenerationOrder.Count);
-            
+
             // FIFO should be sequential: 0, 1, 2, 3, ...
             for (int i = 0; i < maxNewTokens; i++)
             {

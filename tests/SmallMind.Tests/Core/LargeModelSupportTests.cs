@@ -1,7 +1,5 @@
-using Xunit;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
-using System;
 
 namespace SmallMind.Tests.Core
 {

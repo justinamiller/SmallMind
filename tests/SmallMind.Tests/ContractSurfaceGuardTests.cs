@@ -1,10 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using Xunit;
-using SmallMind.Abstractions;
-using SmallMind.Core.Core;
 using AbstractionsEngine = SmallMind.Abstractions.ISmallMindEngine;
 
 namespace SmallMind.Tests
@@ -176,8 +170,8 @@ namespace SmallMind.Tests
             // Arrange
             var assembly = typeof(AbstractionsEngine).Assembly;
             var publicInterfaces = assembly.GetTypes()
-                .Where(t => t.IsPublic && 
-                           t.IsInterface && 
+                .Where(t => t.IsPublic &&
+                           t.IsInterface &&
                            t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .ToList();
 
@@ -203,13 +197,13 @@ namespace SmallMind.Tests
             }
 
             var allPublicExceptions = assembly.GetTypes()
-                .Where(t => t.IsPublic && 
+                .Where(t => t.IsPublic &&
                            typeof(Exception).IsAssignableFrom(t) &&
                            t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .ToList();
 
             // Debug: log all exceptions
-            var debugInfo = string.Join("\n", allPublicExceptions.Select(t => 
+            var debugInfo = string.Join("\n", allPublicExceptions.Select(t =>
                 $"{t.FullName} == base? {t == baseExceptionType}, inherits? {baseExceptionType.IsAssignableFrom(t)}"));
 
             var publicExceptions = allPublicExceptions.Where(t => t != baseExceptionType).ToList();
@@ -262,8 +256,8 @@ namespace SmallMind.Tests
             // Arrange
             var assembly = typeof(AbstractionsEngine).Assembly;
             var publicClasses = assembly.GetTypes()
-                .Where(t => t.IsPublic && 
-                           t.IsClass && 
+                .Where(t => t.IsPublic &&
+                           t.IsClass &&
                            !t.IsAbstract &&
                            t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .ToList();
@@ -285,8 +279,8 @@ namespace SmallMind.Tests
             // Arrange
             var assembly = typeof(AbstractionsEngine).Assembly;
             var publicEnums = assembly.GetTypes()
-                .Where(t => t.IsPublic && 
-                           t.IsEnum && 
+                .Where(t => t.IsPublic &&
+                           t.IsEnum &&
                            t.Namespace?.StartsWith("SmallMind.Abstractions") == true)
                 .ToList();
 
@@ -299,10 +293,10 @@ namespace SmallMind.Tests
             foreach (var enumType in publicEnums)
             {
                 var hasFlagsAttribute = enumType.GetCustomAttribute<FlagsAttribute>() != null;
-                
+
                 // Our current enums should NOT be flags
                 // If we add flags enums in the future, update this test
-                Assert.False(hasFlagsAttribute, 
+                Assert.False(hasFlagsAttribute,
                     $"Enum {enumType.Name} has [Flags] attribute unexpectedly. " +
                     "If this is intentional, update the test.");
             }
@@ -344,8 +338,8 @@ namespace SmallMind.Tests
         private static bool IsSingletonInstanceField(FieldInfo field)
         {
             // Allow public static readonly "Instance" fields (singleton pattern)
-            return field.IsStatic && 
-                   field.IsInitOnly && 
+            return field.IsStatic &&
+                   field.IsInitOnly &&
                    field.Name == "Instance";
         }
 

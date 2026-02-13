@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Abstractions;
 using SmallMind.Engine;
-using Xunit;
 
 namespace SmallMind.Tests.Chat
 {
@@ -162,13 +159,13 @@ namespace SmallMind.Tests.Chat
             {
                 new() { Role = ChatRole.System, Content = "System" },
                 new() { Role = ChatRole.User, Content = "Call weather API" },
-                new() 
-                { 
-                    Role = ChatRole.Assistant, 
-                    Content = "Calling", 
+                new()
+                {
+                    Role = ChatRole.Assistant,
+                    Content = "Calling",
                     ToolCalls = new List<ToolCall>
-                    { 
-                        new ToolCall { Id = "1", Name = "weather", ArgumentsJson = "{}" } 
+                    {
+                        new ToolCall { Id = "1", Name = "weather", ArgumentsJson = "{}" }
                     }
                 },
                 new() { Role = ChatRole.Tool, Content = "Sunny", ToolCallId = "1" },

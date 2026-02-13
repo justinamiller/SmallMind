@@ -1,11 +1,6 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using SmallMind.Core.Core;
 using SmallMind.Runtime.Batching;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
-using Xunit;
 
 namespace SmallMind.Tests.Batching
 {
@@ -56,7 +51,7 @@ namespace SmallMind.Tests.Batching
             var batchingOptions = new BatchingOptions();
 
             // Act & Assert
-            Assert.Throws<ArgumentNullException>(() => 
+            Assert.Throws<ArgumentNullException>(() =>
                 new BatchedInferenceEngine(null!, tokenizer, 8, batchingOptions));
         }
 
@@ -68,7 +63,7 @@ namespace SmallMind.Tests.Batching
             var batchingOptions = new BatchingOptions();
 
             // Act & Assert
-            Assert.Throws<ArgumentNullException>(() => 
+            Assert.Throws<ArgumentNullException>(() =>
                 new BatchedInferenceEngine(model, null!, 8, batchingOptions));
         }
 
@@ -80,7 +75,7 @@ namespace SmallMind.Tests.Batching
             var tokenizer = CreateMockTokenizer();
 
             // Act & Assert
-            Assert.Throws<ArgumentNullException>(() => 
+            Assert.Throws<ArgumentNullException>(() =>
                 new BatchedInferenceEngine(model, tokenizer, 8, null!));
         }
 

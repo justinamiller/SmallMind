@@ -1,13 +1,10 @@
-using SmallMind.Core.Exceptions;
-using SmallMind.Core.Core;
-using SmallMind.Core.Simd;
-using SmallMind.Core.Optimized;
-using System;
-using System.Collections.Generic;
 using System.Numerics;
-using System.Threading.Tasks;
-using SmallMind.Core.Validation;
 using SmallMind.Abstractions.Telemetry;
+using SmallMind.Core.Core;
+using SmallMind.Core.Exceptions;
+using SmallMind.Core.Optimized;
+using SmallMind.Core.Simd;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Transformers
 {
@@ -25,7 +22,7 @@ namespace SmallMind.Transformers
         private readonly double _dropout;
         private readonly Random _random;
         private readonly IRuntimeLogger _logger;
-        
+
         /// <summary>
         /// Whether the model is in training mode.
         /// </summary>
@@ -42,38 +39,38 @@ namespace SmallMind.Transformers
         // Final layer norm and linear head
         private readonly Module _lnFinal;  // LayerNorm or RMSNorm
         private readonly Linear _lmHead;
-        
+
         // RoPE configuration
         private readonly bool _useRope;
-        
+
         // Cached position indices to avoid recreating each forward pass
         private readonly Dictionary<int, Tensor> _positionIndicesCache;
-        
+
         // Workspace for reusing intermediate tensors during forward pass
         private readonly TensorWorkspace _workspace;
 
         public List<Tensor> Parameters { get; private set; }
-        
+
         /// <summary>
         /// Vocabulary size (number of unique tokens).
         /// </summary>
         public int VocabSize => _vocabSize;
-        
+
         /// <summary>
         /// Maximum sequence length (context window).
         /// </summary>
         public int BlockSize => _blockSize;
-        
+
         /// <summary>
         /// Embedding dimension.
         /// </summary>
         public int EmbedDim => _nEmbd;
-        
+
         /// <summary>
         /// Number of attention heads per layer.
         /// </summary>
         public int NumHeads => _nHead;
-        
+
         /// <summary>
         /// Number of transformer layers.
         /// </summary>
@@ -87,14 +84,14 @@ namespace SmallMind.Transformers
             Guard.GreaterThan(nLayer, 0);
             Guard.GreaterThan(nHead, 0);
             Guard.InRange(dropout, 0.0, 1.0);
-            
+
             if (nEmbd % nHead != 0)
             {
                 throw new ValidationException(
                     $"Embedding dimension {nEmbd} must be divisible by number of heads {nHead}",
                     nameof(nEmbd));
             }
-            
+
             _logger = logger ?? NullRuntimeLogger.Instance;
             _vocabSize = vocabSize;
             _blockSize = blockSize;
@@ -104,10 +101,10 @@ namespace SmallMind.Transformers
             _dropout = dropout;
             _random = new Random(seed);
             _useRope = false;  // GPT-2 uses learned positional embeddings
-            
+
             // Initialize position indices cache
             _positionIndicesCache = new Dictionary<int, Tensor>();
-            
+
             // Initialize tensor workspace for reusing intermediate tensors
             _workspace = new TensorWorkspace();
 
@@ -142,7 +139,7 @@ namespace SmallMind.Transformers
             _logger.Info($"TransformerModel initialized: vocab={_vocabSize}, block_size={_blockSize}, " +
                             $"n_embd={_nEmbd}, n_layer={_nLayer}, n_head={_nHead}, dropout={_dropout}");
             _logger.Info($"Total parameters: {totalParams:N0} ({Parameters.Count} tensors)");
-            
+
             // Warn if approaching billion-parameter scale
             if (totalParams > 500_000_000)
             {
@@ -159,14 +156,14 @@ namespace SmallMind.Transformers
         {
             if (config == null)
                 throw new ArgumentNullException(nameof(config));
-            
+
             Guard.GreaterThan(config.VocabSize, 0);
             Guard.GreaterThan(config.ContextLength, 0);
             Guard.GreaterThan(config.EmbeddingLength, 0);
             Guard.GreaterThan(config.BlockCount, 0);
             Guard.GreaterThan(config.HeadCount, 0);
             Guard.InRange(config.Dropout, 0.0, 1.0);
-            
+
             _logger = logger ?? NullRuntimeLogger.Instance;
             _vocabSize = config.VocabSize;
             _blockSize = config.ContextLength;
@@ -176,17 +173,17 @@ namespace SmallMind.Transformers
             _dropout = config.Dropout;
             _random = new Random(seed);
             _useRope = config.UseRope;
-            
+
             // Initialize position indices cache
             _positionIndicesCache = new Dictionary<int, Tensor>();
-            
+
             // Initialize tensor workspace for reusing intermediate tensors
             _workspace = new TensorWorkspace();
 
             // Token embeddings (always needed)
             _tokenEmbedding = new Embedding(_vocabSize, _nEmbd, _random);
             _embDropout = new Dropout((float)_dropout, _random);
-            
+
             // Position embeddings (only for non-RoPE models)
             if (!_useRope)
             {
@@ -213,7 +210,7 @@ namespace SmallMind.Transformers
             {
                 _lnFinal = new LayerNorm(_nEmbd);
             }
-            
+
             // Language model head
             _lmHead = new Linear(_nEmbd, _vocabSize, useBias: config.UseBias, _random);
 
@@ -238,7 +235,7 @@ namespace SmallMind.Transformers
             _logger.Info($"  Layers: {_nLayer}, Heads: {_nHead} (KV heads: {config.HeadCountKv})");
             _logger.Info($"  Features: RoPE={_useRope}, RMSNorm={config.UseRmsNorm}, SwiGLU={config.UseSwiGlu}");
             _logger.Info($"  Total parameters: {totalParams:N0} ({Parameters.Count} tensors)");
-            
+
             if (totalParams > 500_000_000)
             {
                 _logger.Warn($"Large model detected ({totalParams / 1_000_000}M parameters).");
@@ -259,7 +256,7 @@ namespace SmallMind.Transformers
         public Tensor Forward(Tensor idx, int positionOffset)
         {
             Guard.NotNull(idx);
-            
+
             // idx shape: (batch_size, sequence_length)
             int B = idx.Shape[0];
             int T = idx.Shape[1];
@@ -276,7 +273,7 @@ namespace SmallMind.Transformers
             var tokEmb = _tokenEmbedding.Forward(idx, tokEmbDest);
 
             Tensor x;
-            
+
             if (_useRope)
             {
                 // RoPE models: no learned positional embeddings
@@ -299,7 +296,7 @@ namespace SmallMind.Transformers
                     }
                     _positionIndicesCache[cacheKey] = posIndices;
                 }
-                
+
                 // Reuse workspace tensor for position embeddings
                 Span<int> posEmbShape = stackalloc int[2] { T, _nEmbd };
                 var posEmbDest = _workspace.GetOrCreate("posEmb", posEmbShape, _isTraining);
@@ -353,7 +350,7 @@ namespace SmallMind.Transformers
         private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, Tensor dest, int B, int T, int nEmbd)
         {
             int vectorSize = Vector<float>.Count;
-            
+
             // posEmb is (T, nEmbd), need to broadcast to (B, T, nEmbd)
             // Optimization: Pre-calculate offsets to reduce redundant calculations
             for (int b = 0; b < B; b++)
@@ -363,7 +360,7 @@ namespace SmallMind.Transformers
                     int resultOffset = (b * T + t) * nEmbd;
                     int tokEmbOffset = (b * T + t) * nEmbd;
                     int posEmbOffset = t * nEmbd;
-                    
+
                     // SIMD-accelerated addition
                     int e = 0;
                     for (; e <= nEmbd - vectorSize; e += vectorSize)
@@ -372,16 +369,16 @@ namespace SmallMind.Transformers
                         var vPos = new Vector<float>(posEmb.Data.AsSpan(posEmbOffset + e));
                         (vTok + vPos).CopyTo(dest.Data.AsSpan(resultOffset + e));
                     }
-                    
+
                     // Scalar remainder
                     for (; e < nEmbd; e++)
                     {
-                        dest.Data[resultOffset + e] = 
+                        dest.Data[resultOffset + e] =
                             tokEmb.Data[tokEmbOffset + e] + posEmb.Data[posEmbOffset + e];
                     }
                 }
             }
-            
+
             // Backward
             if (tokEmb.RequiresGrad || posEmb.RequiresGrad)
             {
@@ -415,7 +412,7 @@ namespace SmallMind.Transformers
                                     {
                                         int posIdx = t * nEmbd;
                                         int destIdx = bOffset + t * nEmbd;
-                                        
+
                                         for (int e = 0; e < nEmbd; e++)
                                         {
                                             pPosGrad[posIdx + e] += pDestGrad[destIdx + e];
@@ -427,7 +424,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return dest;
         }
 
@@ -519,12 +516,12 @@ namespace SmallMind.Transformers
         {
             long totalParams = GetTotalParameterCount();
             long bytes = totalParams * sizeof(float); // FP32 parameters
-            
+
             if (includingGradients)
             {
                 bytes += totalParams * sizeof(float); // FP32 gradients
             }
-            
+
             return bytes;
         }
 
@@ -535,16 +532,16 @@ namespace SmallMind.Transformers
         public Dictionary<string, Tensor> GetNamedParameters()
         {
             var namedParams = new Dictionary<string, Tensor>();
-            
+
             // Token embeddings
             namedParams["token_embd.weight"] = _tokenEmbedding.Parameters[0];
-            
+
             // Position embeddings (only for non-RoPE models)
             if (_positionEmbedding != null)
             {
                 namedParams["pos_embd.weight"] = _positionEmbedding.Parameters[0];
             }
-            
+
             // Transformer blocks
             for (int i = 0; i < _blocks.Count; i++)
             {
@@ -554,21 +551,21 @@ namespace SmallMind.Transformers
                     namedParams[kvp.Key] = kvp.Value;
                 }
             }
-            
+
             // Final layer norm
             var finalNormParams = GetNormNamedParameters(_lnFinal, "output_norm");
             foreach (var kvp in finalNormParams)
             {
                 namedParams[kvp.Key] = kvp.Value;
             }
-            
+
             // Output head
             namedParams["output.weight"] = _lmHead.Weight;
             if (_lmHead.Bias != null)
             {
                 namedParams["output.bias"] = _lmHead.Bias;
             }
-            
+
             return namedParams;
         }
 
@@ -576,42 +573,42 @@ namespace SmallMind.Transformers
         {
             var namedParams = new Dictionary<string, Tensor>();
             string prefix = $"blk.{layerIndex}.";
-            
+
             // Attention norm
             var attnNormParams = GetNormNamedParameters(block._ln1, $"{prefix}attn_norm");
             foreach (var kvp in attnNormParams)
             {
                 namedParams[kvp.Key] = kvp.Value;
             }
-            
+
             // Attention QKV and output projection
             var attnParams = GetAttentionNamedParameters(block._attn, prefix);
             foreach (var kvp in attnParams)
             {
                 namedParams[kvp.Key] = kvp.Value;
             }
-            
+
             // FFN norm
             var ffnNormParams = GetNormNamedParameters(block._ln2, $"{prefix}ffn_norm");
             foreach (var kvp in ffnNormParams)
             {
                 namedParams[kvp.Key] = kvp.Value;
             }
-            
+
             // MLP/FFN
             var mlpParams = GetMlpNamedParameters(block.MlpModule, prefix);
             foreach (var kvp in mlpParams)
             {
                 namedParams[kvp.Key] = kvp.Value;
             }
-            
+
             return namedParams;
         }
 
         private Dictionary<string, Tensor> GetNormNamedParameters(Module norm, string baseName)
         {
             var namedParams = new Dictionary<string, Tensor>();
-            
+
             if (norm is LayerNorm layerNorm)
             {
                 namedParams[$"{baseName}.weight"] = layerNorm.Gamma;
@@ -621,14 +618,14 @@ namespace SmallMind.Transformers
             {
                 namedParams[$"{baseName}.weight"] = rmsNorm.Gamma;
             }
-            
+
             return namedParams;
         }
 
         private Dictionary<string, Tensor> GetAttentionNamedParameters(MultiHeadAttention attn, string prefix)
         {
             var namedParams = new Dictionary<string, Tensor>();
-            
+
             // Combined QKV tensor (SmallMind uses single Linear for QKV)
             // This will be filled by merging separate Q/K/V tensors from GGUF
             namedParams[$"{prefix}attn_qkv.weight"] = attn._qkv.Weight;
@@ -636,21 +633,21 @@ namespace SmallMind.Transformers
             {
                 namedParams[$"{prefix}attn_qkv.bias"] = attn._qkv.Bias;
             }
-            
+
             // Output projection
             namedParams[$"{prefix}attn_output.weight"] = attn._proj.Weight;
             if (attn._proj.Bias != null)
             {
                 namedParams[$"{prefix}attn_output.bias"] = attn._proj.Bias;
             }
-            
+
             return namedParams;
         }
 
         private Dictionary<string, Tensor> GetMlpNamedParameters(object mlp, string prefix)
         {
             var namedParams = new Dictionary<string, Tensor>();
-            
+
             if (mlp is MLP standardMlp)
             {
                 namedParams[$"{prefix}ffn_up.weight"] = standardMlp._fc1.Weight;
@@ -658,7 +655,7 @@ namespace SmallMind.Transformers
                 {
                     namedParams[$"{prefix}ffn_up.bias"] = standardMlp._fc1.Bias;
                 }
-                
+
                 namedParams[$"{prefix}ffn_down.weight"] = standardMlp._fc2.Weight;
                 if (standardMlp._fc2.Bias != null)
                 {
@@ -672,20 +669,20 @@ namespace SmallMind.Transformers
                 {
                     namedParams[$"{prefix}ffn_gate.bias"] = gatedMlp._gateProj.Bias;
                 }
-                
+
                 namedParams[$"{prefix}ffn_up.weight"] = gatedMlp._upProj.Weight;
                 if (gatedMlp._upProj.Bias != null)
                 {
                     namedParams[$"{prefix}ffn_up.bias"] = gatedMlp._upProj.Bias;
                 }
-                
+
                 namedParams[$"{prefix}ffn_down.weight"] = gatedMlp._downProj.Weight;
                 if (gatedMlp._downProj.Bias != null)
                 {
                     namedParams[$"{prefix}ffn_down.bias"] = gatedMlp._downProj.Bias;
                 }
             }
-            
+
             return namedParams;
         }
     }
@@ -700,7 +697,7 @@ namespace SmallMind.Transformers
         internal readonly Module _ln2;
         private readonly MLP? _mlp;
         private readonly GatedMLP? _gatedMlp;
-        
+
         /// <summary>
         /// Gets the active MLP module (either MLP or GatedMLP).
         /// Returns object type because MLP and GatedMLP don't share a common base class.
@@ -708,9 +705,9 @@ namespace SmallMind.Transformers
         /// Consumers should not need to access this directly.
         /// </summary>
         internal object MlpModule => (object?)_mlp ?? _gatedMlp ?? throw new InvalidOperationException("No MLP configured");
-        
+
         private bool _isTraining = true;
-        
+
         // Workspace for reusing intermediate tensors
         private readonly TensorWorkspace _workspace;
 
@@ -727,7 +724,7 @@ namespace SmallMind.Transformers
             _ln2 = new LayerNorm(nEmbd);
             _mlp = new MLP(nEmbd, dropout, random);
             _gatedMlp = null;
-            
+
             _workspace = new TensorWorkspace();
 
             Parameters = new List<Tensor>();
@@ -745,13 +742,13 @@ namespace SmallMind.Transformers
         {
             if (config == null)
                 throw new ArgumentNullException(nameof(config));
-            
+
             int nEmbd = config.EmbeddingLength;
             int nHead = config.HeadCount;
             int nKvHead = config.HeadCountKv;
             int blockSize = config.ContextLength;
             float dropout = (float)config.Dropout;
-            
+
             // Create normalization layers based on config
             if (config.UseRmsNorm)
             {
@@ -763,18 +760,18 @@ namespace SmallMind.Transformers
                 _ln1 = new LayerNorm(nEmbd);
                 _ln2 = new LayerNorm(nEmbd);
             }
-            
+
             // Create attention layer with optional RoPE and GQA
             _attn = new MultiHeadAttention(
-                nEmbd, 
-                nHead, 
-                blockSize, 
-                dropout, 
+                nEmbd,
+                nHead,
+                blockSize,
+                dropout,
                 random,
                 nKvHead: nKvHead,
                 useRope: config.UseRope,
                 ropeTheta: (float)config.RopeFreqBase);
-            
+
             // Create MLP based on config
             if (config.UseSwiGlu)
             {
@@ -786,7 +783,7 @@ namespace SmallMind.Transformers
                 _mlp = new MLP(nEmbd, dropout, random);
                 _gatedMlp = null;
             }
-            
+
             _workspace = new TensorWorkspace();
 
             Parameters = new List<Tensor>();
@@ -803,27 +800,27 @@ namespace SmallMind.Transformers
         {
             // Pre-norm architecture with residual connections
             // x: (B, T, n_embd)
-            
+
             // Use workspace tensors for LayerNorm outputs and residual connections
             var ln1Out = _workspace.GetOrCreate("ln1Out", x.Shape, _isTraining);
             ForwardNorm(_ln1, x, ln1Out);
-            
+
             var attnOut = _attn.Forward(ln1Out);
-            
+
             // Reuse workspace for residual connection
             var residual1 = _workspace.GetOrCreate("residual1", x.Shape, _isTraining);
             x = AddTensors(x, attnOut, residual1);
-            
+
             // Second residual connection
             var ln2Out = _workspace.GetOrCreate("ln2Out", x.Shape, _isTraining);
             ForwardNorm(_ln2, x, ln2Out);
-            
+
             // MLP forward (handles both MLP and GatedMLP)
             var mlpOut = _mlp != null ? _mlp.Forward(ln2Out) : _gatedMlp!.Forward(ln2Out);
-            
+
             var residual2 = _workspace.GetOrCreate("residual2", x.Shape, _isTraining);
             x = AddTensors(x, mlpOut, residual2);
-            
+
             return x;
         }
 
@@ -852,11 +849,11 @@ namespace SmallMind.Transformers
         private Tensor AddTensors(Tensor a, Tensor b, Tensor? dest = null)
         {
             var result = dest ?? new Tensor(a.Shape, requiresGrad: _isTraining);
-            
+
             // SIMD-accelerated forward pass
             int vectorSize = Vector<float>.Count;
             int i = 0;
-            
+
             // SIMD loop
             for (; i <= a.Size - vectorSize; i += vectorSize)
             {
@@ -864,13 +861,13 @@ namespace SmallMind.Transformers
                 var vb = new Vector<float>(b.Data.AsSpan(i));
                 (va + vb).CopyTo(result.Data.AsSpan(i));
             }
-            
+
             // Scalar remainder
             for (; i < a.Size; i++)
             {
                 result.Data[i] = a.Data[i] + b.Data[i];
             }
-            
+
             if (a.RequiresGrad || b.RequiresGrad)
             {
                 result.SetBackward(() =>
@@ -902,7 +899,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return result;
         }
 
@@ -962,7 +959,7 @@ namespace SmallMind.Transformers
         private readonly bool[,] _causalMask;
         private readonly int _blockSize;
         private readonly RotaryEmbedding? _rope;  // Optional RoPE support
-        
+
         // Workspace tensors for reuse in forward pass (avoid allocations)
         // These persist across forward passes and are sized dynamically
         // They use regular Tensor (not PooledTensor) to avoid premature disposal
@@ -972,11 +969,11 @@ namespace SmallMind.Transformers
         private Tensor? _scoresWorkspace;
         private Tensor? _attnOutputWorkspace;
         private Tensor? _reshapedOutputWorkspace;  // Added for ReshapeAttentionOutput
-        
+
         // TIER-1 OPTIMIZATION: Track workspace freshness to skip clearing newly allocated arrays.
         // ConditionalWeakTable provides no-allocation tracking without preventing GC.
         private readonly System.Runtime.CompilerServices.ConditionalWeakTable<Tensor, object?> _freshWorkspaces = new();
-        
+
         // Cached shape arrays to avoid per-forward allocations
         // These are reused and updated with current batch/sequence dimensions
         private readonly int[] _qShapeCache = new int[4];      // [B, nHead, T, headSize]
@@ -985,13 +982,13 @@ namespace SmallMind.Transformers
         private readonly int[] _scoresShapeCache = new int[4]; // [B, nHead, T, fullSeqLen]
         private readonly int[] _reshapedShapeCache = new int[3]; // [B, T, nEmbd]
         private readonly int[] _cacheShapeCache = new int[4];  // [B, nKvHead, blockSize, headSize]
-        
+
         // KV-Cache support for efficient autoregressive generation
         private Tensor? _cachedKeys;    // Cached keys from previous tokens
         private Tensor? _cachedValues;  // Cached values from previous tokens
         private int _cachePosition;     // Current position in the cache
         private bool _useKVCache;       // Whether to use KV-cache (inference mode)
-        
+
         private bool _isTraining = true;
 
         public List<Tensor> Parameters { get; private set; }
@@ -1022,7 +1019,7 @@ namespace SmallMind.Transformers
             {
                 throw new ArgumentException("Embedding dimension must be divisible by number of heads");
             }
-            
+
             if (_nHead % _nKvHead != 0)
             {
                 throw new ArgumentException($"Number of query heads ({_nHead}) must be divisible by number of KV heads ({_nKvHead})");
@@ -1046,7 +1043,7 @@ namespace SmallMind.Transformers
                     _causalMask[i, j] = i >= j;
                 }
             }
-            
+
             // Initialize RoPE if requested
             if (useRope)
             {
@@ -1057,7 +1054,7 @@ namespace SmallMind.Transformers
             Parameters.AddRange(_qkv.Parameters);
             Parameters.AddRange(_proj.Parameters);
         }
-        
+
         /// <summary>
         /// Enable KV-cache for efficient autoregressive generation.
         /// Call this before inference to reuse past key/value computations.
@@ -1067,7 +1064,7 @@ namespace SmallMind.Transformers
             _useKVCache = true;
             _cachePosition = 0;
         }
-        
+
         /// <summary>
         /// Disable KV-cache and reset cache state.
         /// </summary>
@@ -1078,7 +1075,7 @@ namespace SmallMind.Transformers
             _cachedKeys = null;
             _cachedValues = null;
         }
-        
+
         /// <summary>
         /// Reset KV-cache position to start a new sequence.
         /// Keeps the cache allocated but resets the position counter.
@@ -1087,7 +1084,7 @@ namespace SmallMind.Transformers
         {
             _cachePosition = 0;
         }
-        
+
         /// <summary>
         /// Get or allocate workspace tensor for the given shape.
         /// Reuses existing workspace if shape matches, otherwise allocates new one.
@@ -1113,38 +1110,38 @@ namespace SmallMind.Transformers
                         break;
                     }
                 }
-                
+
                 if (shapeMatches)
                 {
                     // TIER-1 OPTIMIZATION: Conditionally clear workspace based on kernel requirements.
                     // - Accumulation kernels (MatMul with FMA: C += A*B) require zeroed buffers.
                     // - Store-once kernels (MatMulTransposeB: C = sum, softmax) can skip clearing.
                     // - Newly allocated arrays are already zeroed by runtime, skip redundant clear.
-                    
+
                     bool isFresh = _freshWorkspaces.TryGetValue(workspace, out _);
                     if (!isFresh && clearBeforeReuse)
                     {
                         Array.Clear(workspace.Data, 0, workspace.Data.Length);
                     }
-                    
+
                     // Mark as used (no longer fresh)
                     _freshWorkspaces.Remove(workspace);
-                    
+
                     return workspace;
                 }
             }
-            
+
             // Allocate new workspace (use regular Tensor, not PooledTensor)
             // These persist across forward passes so we don't want them returned to pool
             workspace = new Tensor(shape, requiresGrad: _isTraining);
-            
+
             // TIER-1 OPTIMIZATION: Mark newly allocated workspace as fresh.
             // The backing array is zeroed by the runtime, so no need to clear it.
             _freshWorkspaces.AddOrUpdate(workspace, null);
-            
+
             return workspace;
         }
-        
+
         /// <summary>
         /// Get or allocate workspace tensor for the given shape (span-based, zero-allocation).
         /// Reuses existing workspace if shape matches, otherwise allocates new one.
@@ -1170,35 +1167,35 @@ namespace SmallMind.Transformers
                         break;
                     }
                 }
-                
+
                 if (shapeMatches)
                 {
                     // TIER-1 OPTIMIZATION: Conditionally clear workspace based on kernel requirements.
                     // - Accumulation kernels (MatMul with FMA: C += A*B) require zeroed buffers.
                     // - Store-once kernels (MatMulTransposeB: C = sum, softmax) can skip clearing.
                     // - Newly allocated arrays are already zeroed by runtime, skip redundant clear.
-                    
+
                     bool isFresh = _freshWorkspaces.TryGetValue(workspace, out _);
                     if (!isFresh && clearBeforeReuse)
                     {
                         Array.Clear(workspace.Data, 0, workspace.Data.Length);
                     }
-                    
+
                     // Mark as used (no longer fresh)
                     _freshWorkspaces.Remove(workspace);
-                    
+
                     return workspace;
                 }
             }
-            
+
             // Allocate new workspace (must create array here, but only on shape change)
             var shapeArray = shape.ToArray();
             workspace = new Tensor(shapeArray, requiresGrad: _isTraining);
-            
+
             // TIER-1 OPTIMIZATION: Mark newly allocated workspace as fresh.
             // The backing array is zeroed by the runtime, so no need to clear it.
             _freshWorkspaces.AddOrUpdate(workspace, null);
-            
+
             return workspace;
         }
 
@@ -1212,33 +1209,33 @@ namespace SmallMind.Transformers
             var qkv = _qkv.Forward(x);
 
             // Use cached shape arrays to avoid allocations (update in place)
-            _qShapeCache[0] = B; 
-            _qShapeCache[1] = _nHead;   
-            _qShapeCache[2] = T; 
+            _qShapeCache[0] = B;
+            _qShapeCache[1] = _nHead;
+            _qShapeCache[2] = T;
             _qShapeCache[3] = _headSize;
-            
-            _kShapeCache[0] = B; 
-            _kShapeCache[1] = _nKvHead; 
-            _kShapeCache[2] = T; 
+
+            _kShapeCache[0] = B;
+            _kShapeCache[1] = _nKvHead;
+            _kShapeCache[2] = T;
             _kShapeCache[3] = _headSize;
-            
-            _vShapeCache[0] = B; 
-            _vShapeCache[1] = _nKvHead; 
-            _vShapeCache[2] = T; 
+
+            _vShapeCache[0] = B;
+            _vShapeCache[1] = _nKvHead;
+            _vShapeCache[2] = T;
             _vShapeCache[3] = _headSize;
-            
+
             // TIER-1 AUDIT: These workspaces are fully overwritten by Array.Copy (store-once).
             // clearBeforeReuse=false skips redundant zeroing for 30-50% speedup on workspace reuse.
             var q = GetOrAllocateWorkspace(ref _qWorkspace, _qShapeCache, clearBeforeReuse: false);
             var k = GetOrAllocateWorkspace(ref _kWorkspace, _kShapeCache, clearBeforeReuse: false);
             var v = GetOrAllocateWorkspace(ref _vWorkspace, _vShapeCache, clearBeforeReuse: false);
-            
+
             // Split into Q, K, V and reshape
             // Q: (B, T, nEmbd) -> (B, nHead, T, headSize)
             // K, V: (B, T, kvDim) -> (B, nKvHead, T, headSize)
             ExtractAndReshapeQInPlace(qkv, q, B, T);
             ExtractAndReshapeKVInPlace(qkv, k, v, B, T);
-            
+
             // Apply RoPE if enabled
             if (_rope != null)
             {
@@ -1255,22 +1252,22 @@ namespace SmallMind.Transformers
             // KV-Cache: Use cached keys/values if available
             Tensor kFull, vFull;
             int fullSeqLen;
-            
+
             if (_useKVCache && !_isTraining)
             {
                 // Initialize cache on first use (use nKvHead for GQA)
                 if (_cachedKeys == null)
                 {
                     // Use cached shape array to avoid allocation
-                    _cacheShapeCache[0] = B; 
-                    _cacheShapeCache[1] = _nKvHead; 
-                    _cacheShapeCache[2] = _blockSize; 
+                    _cacheShapeCache[0] = B;
+                    _cacheShapeCache[1] = _nKvHead;
+                    _cacheShapeCache[2] = _blockSize;
                     _cacheShapeCache[3] = _headSize;
                     // Clone the cache shape for tensor storage (one-time allocation)
                     _cachedKeys = new Tensor((int[])_cacheShapeCache.Clone(), requiresGrad: false);
                     _cachedValues = new Tensor((int[])_cacheShapeCache.Clone(), requiresGrad: false);
                 }
-                
+
                 // Append new K, V to cache
                 int cacheOffset = _cachePosition * _headSize;
                 for (int b = 0; b < B; b++)
@@ -1279,18 +1276,18 @@ namespace SmallMind.Transformers
                     {
                         int bhOffset = (b * _nKvHead + h) * T * _headSize;
                         int cacheIndex = (b * _nKvHead + h) * _blockSize * _headSize + cacheOffset;
-                        
+
                         // Copy new keys and values to cache
                         Array.Copy(k.Data, bhOffset, _cachedKeys.Data, cacheIndex, T * _headSize);
                         Array.Copy(v.Data, bhOffset, _cachedValues.Data, cacheIndex, T * _headSize);
                     }
                 }
-                
+
                 // Use full cache (past + current)
                 fullSeqLen = _cachePosition + T;
                 kFull = _cachedKeys;
                 vFull = _cachedValues;
-                
+
                 // Increment cache position for next forward pass
                 _cachePosition += T;
             }
@@ -1303,9 +1300,9 @@ namespace SmallMind.Transformers
             }
 
             // Use workspace for attention scores (update cached shape)
-            _scoresShapeCache[0] = B; 
-            _scoresShapeCache[1] = _nHead; 
-            _scoresShapeCache[2] = T; 
+            _scoresShapeCache[0] = B;
+            _scoresShapeCache[1] = _nHead;
+            _scoresShapeCache[2] = T;
             _scoresShapeCache[3] = fullSeqLen;
             // TIER-1 AUDIT: Scores workspace is fully overwritten by MatMulTransposeB (store-once: C = sum).
             // clearBeforeReuse=false eliminates unnecessary zeroing of potentially large (T×T) score matrices.
@@ -1320,8 +1317,8 @@ namespace SmallMind.Transformers
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
             // Use cached shape array to avoid allocation
-            _reshapedShapeCache[0] = B; 
-            _reshapedShapeCache[1] = T; 
+            _reshapedShapeCache[0] = B;
+            _reshapedShapeCache[1] = T;
             _reshapedShapeCache[2] = _nEmbd;
             // TIER-1 AUDIT: Reshaped workspace is fully overwritten by Array.Copy (store-once).
             var yReshaped = GetOrAllocateWorkspace(ref _reshapedOutputWorkspace, _reshapedShapeCache, clearBeforeReuse: false);
@@ -1339,13 +1336,13 @@ namespace SmallMind.Transformers
             // Extract Q, K, or V from concatenated QKV
             // qkv: (B, T, 3 * n_embd)
             // Extract one third and reshape to (B, nHead, T, headSize)
-            
+
             var extracted = new Tensor(new int[] { B, _nHead, T, _headSize }, requiresGrad: true);
-            
+
             // Optimized version: process by head chunks to improve cache locality
             // Each head processes contiguous memory blocks
             int embdOffset = index * _nEmbd;  // Offset for Q (0), K (_nEmbd), or V (2*_nEmbd)
-            
+
             // Parallelize over batch when B >= 4
             if (B >= 4)
             {
@@ -1353,17 +1350,17 @@ namespace SmallMind.Transformers
                 {
                     int batchInOffset = b * T * 3 * _nEmbd;
                     int batchOutOffset = b * _nHead * T * _headSize;
-                    
+
                     for (int h = 0; h < _nHead; h++)
                     {
                         int headInOffset = embdOffset + h * _headSize;
                         int headOutOffset = batchOutOffset + h * T * _headSize;
-                        
+
                         for (int t = 0; t < T; t++)
                         {
                             int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
                             int dstIdx = headOutOffset + t * _headSize;
-                            
+
                             // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
                             Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
                         }
@@ -1377,27 +1374,27 @@ namespace SmallMind.Transformers
                 {
                     int batchInOffset = b * T * 3 * _nEmbd;
                     int batchOutOffset = b * _nHead * T * _headSize;
-                    
+
                     for (int h = 0; h < _nHead; h++)
                     {
                         int headInOffset = embdOffset + h * _headSize;
                         int headOutOffset = batchOutOffset + h * T * _headSize;
-                        
+
                         for (int t = 0; t < T; t++)
                         {
                             int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
                             int dstIdx = headOutOffset + t * _headSize;
-                            
+
                             // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
                             Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
                         }
                     }
                 }
             }
-            
+
             return extracted;
         }
-        
+
         /// <summary>
         /// In-place version of ExtractAndReshapeQKV that writes to a pre-allocated tensor.
         /// Avoids allocation overhead for repeated forward passes.
@@ -1407,9 +1404,9 @@ namespace SmallMind.Transformers
             // Extract Q, K, or V from concatenated QKV into dest
             // qkv: (B, T, 3 * n_embd)
             // dest: (B, nHead, T, headSize) - pre-allocated
-            
+
             int embdOffset = index * _nEmbd;  // Offset for Q (0), K (_nEmbd), or V (2*_nEmbd)
-            
+
             // Parallelize over batch when B >= 4
             if (B >= 4)
             {
@@ -1417,17 +1414,17 @@ namespace SmallMind.Transformers
                 {
                     int batchInOffset = b * T * 3 * _nEmbd;
                     int batchOutOffset = b * _nHead * T * _headSize;
-                    
+
                     for (int h = 0; h < _nHead; h++)
                     {
                         int headInOffset = embdOffset + h * _headSize;
                         int headOutOffset = batchOutOffset + h * T * _headSize;
-                        
+
                         for (int t = 0; t < T; t++)
                         {
                             int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
                             int dstIdx = headOutOffset + t * _headSize;
-                            
+
                             Array.Copy(qkv.Data, srcIdx, dest.Data, dstIdx, _headSize);
                         }
                     }
@@ -1440,17 +1437,17 @@ namespace SmallMind.Transformers
                 {
                     int batchInOffset = b * T * 3 * _nEmbd;
                     int batchOutOffset = b * _nHead * T * _headSize;
-                    
+
                     for (int h = 0; h < _nHead; h++)
                     {
                         int headInOffset = embdOffset + h * _headSize;
                         int headOutOffset = batchOutOffset + h * T * _headSize;
-                        
+
                         for (int t = 0; t < T; t++)
                         {
                             int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
                             int dstIdx = headOutOffset + t * _headSize;
-                            
+
                             Array.Copy(qkv.Data, srcIdx, dest.Data, dstIdx, _headSize);
                         }
                     }
@@ -1467,27 +1464,27 @@ namespace SmallMind.Transformers
         {
             // Q is first nEmbd elements
             // dest Q: (B, nHead, T, headSize)
-            
+
             int qkvDim = _nEmbd + 2 * _nKvHead * _headSize;
-            
+
             if (B >= 4)
             {
                 Parallel.For(0, B, b =>
                 {
                     int batchInOffset = b * T * qkvDim;
                     int batchOutOffset = b * _nHead * T * _headSize;
-                    
+
                     // TIER-3: Restructure loops - timestep t outermost for sequential reads
                     for (int t = 0; t < T; t++)
                     {
                         int srcBase = batchInOffset + t * qkvDim;
-                        
+
                         // Copy all Q heads for this timestep
                         for (int h = 0; h < _nHead; h++)
                         {
                             int srcIdx = srcBase + h * _headSize;
                             int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
-                            
+
                             // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
                             Buffer.BlockCopy(qkv.Data, srcIdx * 4, q.Data, dstIdx * 4, _headSize * 4);
                         }
@@ -1500,18 +1497,18 @@ namespace SmallMind.Transformers
                 {
                     int batchInOffset = b * T * qkvDim;
                     int batchOutOffset = b * _nHead * T * _headSize;
-                    
+
                     // TIER-3: Restructure loops - timestep t outermost for sequential reads
                     for (int t = 0; t < T; t++)
                     {
                         int srcBase = batchInOffset + t * qkvDim;
-                        
+
                         // Copy all Q heads for this timestep
                         for (int h = 0; h < _nHead; h++)
                         {
                             int srcIdx = srcBase + h * _headSize;
                             int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
-                            
+
                             // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
                             Buffer.BlockCopy(qkv.Data, srcIdx * 4, q.Data, dstIdx * 4, _headSize * 4);
                         }
@@ -1530,29 +1527,29 @@ namespace SmallMind.Transformers
             // K starts after Q (offset = nEmbd)
             // V starts after K (offset = nEmbd + kvDim)
             // dest K, V: (B, nKvHead, T, headSize)
-            
+
             int kvDim = _nKvHead * _headSize;
             int qkvDim = _nEmbd + 2 * kvDim;
-            
+
             if (B >= 4)
             {
                 Parallel.For(0, B, b =>
                 {
                     int batchInOffset = b * T * qkvDim;
                     int batchOutOffset = b * _nKvHead * T * _headSize;
-                    
+
                     // TIER-3: Restructure loops - timestep t outermost for sequential reads
                     for (int t = 0; t < T; t++)
                     {
                         int srcBase = batchInOffset + t * qkvDim;
-                        
+
                         // Copy all K and V heads for this timestep
                         for (int h = 0; h < _nKvHead; h++)
                         {
                             int kSrcIdx = srcBase + _nEmbd + h * _headSize;
                             int vSrcIdx = srcBase + _nEmbd + kvDim + h * _headSize;
                             int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
-                            
+
                             // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
                             Buffer.BlockCopy(qkv.Data, kSrcIdx * 4, k.Data, dstIdx * 4, _headSize * 4);
                             Buffer.BlockCopy(qkv.Data, vSrcIdx * 4, v.Data, dstIdx * 4, _headSize * 4);
@@ -1566,19 +1563,19 @@ namespace SmallMind.Transformers
                 {
                     int batchInOffset = b * T * qkvDim;
                     int batchOutOffset = b * _nKvHead * T * _headSize;
-                    
+
                     // TIER-3: Restructure loops - timestep t outermost for sequential reads
                     for (int t = 0; t < T; t++)
                     {
                         int srcBase = batchInOffset + t * qkvDim;
-                        
+
                         // Copy all K and V heads for this timestep
                         for (int h = 0; h < _nKvHead; h++)
                         {
                             int kSrcIdx = srcBase + _nEmbd + h * _headSize;
                             int vSrcIdx = srcBase + _nEmbd + kvDim + h * _headSize;
                             int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
-                            
+
                             // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
                             Buffer.BlockCopy(qkv.Data, kSrcIdx * 4, k.Data, dstIdx * 4, _headSize * 4);
                             Buffer.BlockCopy(qkv.Data, vSrcIdx * 4, v.Data, dstIdx * 4, _headSize * 4);
@@ -1592,13 +1589,13 @@ namespace SmallMind.Transformers
         {
             // q, k: (B, nHead, T, headSize)
             // output: (B, nHead, T, T)
-            
+
             // Use pooled tensor to reduce allocation pressure in inference hot path
-            var scores = _isTraining 
+            var scores = _isTraining
                 ? new Tensor(new int[] { B, _nHead, T, T }, requiresGrad: true)
                 : Tensor.CreatePooled(new int[] { B, _nHead, T, T }, requiresGrad: false);
             float scale = 1.0f / MathF.Sqrt(_headSize);
-            
+
             // Parallelize over batch and head dimensions for better performance
             // Use parallel processing when B * nHead >= 4
             int totalParallelWork = B * _nHead;
@@ -1610,26 +1607,26 @@ namespace SmallMind.Transformers
                     int h = bh % _nHead;
                     int bhOffset = (b * _nHead + h) * T * _headSize;
                     int scoreOffset = (b * _nHead + h) * T * T;
-                    
+
                     for (int i = 0; i < T; i++)
                     {
                         int qOffset = bhOffset + i * _headSize;
                         int scoreRowOffset = scoreOffset + i * T;
-                        
+
                         // Only compute for valid positions (causal mask: j <= i)
                         for (int j = 0; j <= i; j++)
                         {
                             int kOffset = bhOffset + j * _headSize;
-                            
+
                             // Use SIMD-accelerated dot product from MatMulOps
                             float sum = MatMulOps.DotProduct(
                                 new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
                                 new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
                             );
-                            
+
                             scores.Data[scoreRowOffset + j] = sum * scale;
                         }
-                        
+
                         // Positions j > i are already zero (tensor initialized to zeros)
                         // Set them to NegativeInfinity for softmax to ignore
                         for (int j = i + 1; j < T; j++)
@@ -1648,26 +1645,26 @@ namespace SmallMind.Transformers
                     {
                         int bhOffset = (b * _nHead + h) * T * _headSize;
                         int scoreOffset = (b * _nHead + h) * T * T;
-                        
+
                         for (int i = 0; i < T; i++)
                         {
                             int qOffset = bhOffset + i * _headSize;
                             int scoreRowOffset = scoreOffset + i * T;
-                            
+
                             // Only compute for valid positions (causal mask: j <= i)
                             for (int j = 0; j <= i; j++)
                             {
                                 int kOffset = bhOffset + j * _headSize;
-                                
+
                                 // Use SIMD-accelerated dot product from MatMulOps
                                 float sum = MatMulOps.DotProduct(
                                     new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
                                     new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
                                 );
-                                
+
                                 scores.Data[scoreRowOffset + j] = sum * scale;
                             }
-                            
+
                             // Positions j > i are already zero (tensor initialized to zeros)
                             // Set them to NegativeInfinity for softmax to ignore
                             for (int j = i + 1; j < T; j++)
@@ -1678,7 +1675,7 @@ namespace SmallMind.Transformers
                     }
                 }
             }
-            
+
             // Apply softmax over last dimension
             return ApplySoftmax(scores, B, T);
         }
@@ -1689,7 +1686,7 @@ namespace SmallMind.Transformers
             var result = _isTraining
                 ? new Tensor(scores.Shape, requiresGrad: true)
                 : Tensor.CreatePooled(scores.Shape, requiresGrad: false);
-            
+
             // Parallelize softmax computation over batch and head dimensions
             int totalParallelWork = B * _nHead;
             if (totalParallelWork >= 4)
@@ -1698,11 +1695,11 @@ namespace SmallMind.Transformers
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
-                    
+
                     for (int i = 0; i < T; i++)
                     {
                         int offset = ((b * _nHead + h) * T + i) * T;
-                        
+
                         // Find max for numerical stability (only over valid positions: j <= i for causal mask)
                         float max = float.NegativeInfinity;
                         for (int j = 0; j <= i; j++)
@@ -1710,7 +1707,7 @@ namespace SmallMind.Transformers
                             if (scores.Data[offset + j] > max)
                                 max = scores.Data[offset + j];
                         }
-                        
+
                         // Exp and sum - branchless for valid positions
                         float sum = 0;
                         for (int j = 0; j <= i; j++)
@@ -1719,9 +1716,9 @@ namespace SmallMind.Transformers
                             result.Data[offset + j] = exp;
                             sum += exp;
                         }
-                        
+
                         // Clear masked positions (i+1 to T-1) - already zero from tensor init
-                        
+
                         // Normalize only valid positions
                         if (sum > 0)
                         {
@@ -1744,7 +1741,7 @@ namespace SmallMind.Transformers
                         for (int i = 0; i < T; i++)
                         {
                             int offset = ((b * _nHead + h) * T + i) * T;
-                            
+
                             // Find max for numerical stability (only over valid positions: j <= i for causal mask)
                             float max = float.NegativeInfinity;
                             for (int j = 0; j <= i; j++)
@@ -1752,7 +1749,7 @@ namespace SmallMind.Transformers
                                 if (scores.Data[offset + j] > max)
                                     max = scores.Data[offset + j];
                             }
-                            
+
                             // Exp and sum - branchless for valid positions
                             float sum = 0;
                             for (int j = 0; j <= i; j++)
@@ -1761,9 +1758,9 @@ namespace SmallMind.Transformers
                                 result.Data[offset + j] = exp;
                                 sum += exp;
                             }
-                            
+
                             // Clear masked positions (i+1 to T-1) - already zero from tensor init
-                            
+
                             // Normalize only valid positions
                             if (sum > 0)
                             {
@@ -1777,7 +1774,7 @@ namespace SmallMind.Transformers
                     }
                 }
             }
-            
+
             return _attnDropout.Forward(result);
         }
 
@@ -1786,12 +1783,12 @@ namespace SmallMind.Transformers
             // att: (B, nHead, T, T)
             // v: (B, nHead, T, headSize)
             // output: (B, nHead, T, headSize)
-            
+
             // Use pooled tensor for inference to reduce allocation pressure
             var output = _isTraining
                 ? new Tensor(new int[] { B, _nHead, T, _headSize }, requiresGrad: true)
                 : Tensor.CreatePooled(new int[] { B, _nHead, T, _headSize }, requiresGrad: false);
-            
+
             // Parallelize attention application over batch and head dimensions
             int totalParallelWork = B * _nHead;
             if (totalParallelWork >= 4)
@@ -1800,7 +1797,7 @@ namespace SmallMind.Transformers
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
-                    
+
                     for (int i = 0; i < T; i++)
                     {
                         for (int d = 0; d < _headSize; d++)
@@ -1843,7 +1840,7 @@ namespace SmallMind.Transformers
                     }
                 }
             }
-            
+
             return output;
         }
 
@@ -1854,31 +1851,31 @@ namespace SmallMind.Transformers
             var output = _isTraining
                 ? new Tensor(new int[] { B, T, _nEmbd }, requiresGrad: true)
                 : Tensor.CreatePooled(new int[] { B, T, _nEmbd }, requiresGrad: false);
-            
+
             // Optimized version: process by head chunks with Array.Copy
             for (int b = 0; b < B; b++)
             {
                 int batchInOffset = b * _nHead * T * _headSize;
                 int batchOutOffset = b * T * _nEmbd;
-                
+
                 for (int t = 0; t < T; t++)
                 {
                     int timeOutOffset = batchOutOffset + t * _nEmbd;
-                    
+
                     for (int h = 0; h < _nHead; h++)
                     {
                         int srcIdx = batchInOffset + h * T * _headSize + t * _headSize;
                         int dstIdx = timeOutOffset + h * _headSize;
-                        
+
                         // Copy entire head dimension at once
                         Array.Copy(y.Data, srcIdx, output.Data, dstIdx, _headSize);
                     }
                 }
             }
-            
+
             return output;
         }
-        
+
         /// <summary>
         /// In-place version of ReshapeAttentionOutput that writes to a pre-allocated tensor.
         /// Reshapes from (B, nHead, T, headSize) to (B, T, n_embd).
@@ -1886,29 +1883,29 @@ namespace SmallMind.Transformers
         private void ReshapeAttentionOutputInPlace(Tensor y, Tensor output, int B, int T)
         {
             // y: (B, nHead, T, headSize) -> output: (B, T, n_embd)
-            
+
             // Optimized version: process by head chunks with Array.Copy
             for (int b = 0; b < B; b++)
             {
                 int batchInOffset = b * _nHead * T * _headSize;
                 int batchOutOffset = b * T * _nEmbd;
-                
+
                 for (int t = 0; t < T; t++)
                 {
                     int timeOutOffset = batchOutOffset + t * _nEmbd;
-                    
+
                     for (int h = 0; h < _nHead; h++)
                     {
                         int srcIdx = batchInOffset + h * T * _headSize + t * _headSize;
                         int dstIdx = timeOutOffset + h * _headSize;
-                        
+
                         // Copy entire head dimension at once
                         Array.Copy(y.Data, srcIdx, output.Data, dstIdx, _headSize);
                     }
                 }
             }
         }
-        
+
         /// <summary>
         /// In-place version of ComputeAttentionScores that writes to a pre-allocated tensor.
         /// Computes Q * K^T / sqrt(d_k) with causal masking and softmax.
@@ -1921,10 +1918,10 @@ namespace SmallMind.Transformers
             // q: (B, nHead, T, headSize) - query for current tokens
             // k: (B, nKvHead, kSeqLen, headSize) - keys (may include cached past, GQA)
             // scores: (B, nHead, T, kSeqLen) - pre-allocated, will be modified in-place
-            
+
             float scale = 1.0f / MathF.Sqrt(_headSize);
             int headsPerKvHead = _nHead / _nKvHead;  // For GQA head mapping
-            
+
             int totalParallelWork = B * _nHead;
             if (totalParallelWork >= 4)
             {
@@ -1932,22 +1929,22 @@ namespace SmallMind.Transformers
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
-                    
+
                     // Map query head to KV head (for GQA)
                     int kvHead = h / headsPerKvHead;
-                    
+
                     int qOffset = (b * _nHead + h) * T * _headSize;
                     int kOffset = (b * _nKvHead + kvHead) * kSeqLen * _headSize;
                     int scoreOffset = (b * _nHead + h) * T * kSeqLen;
-                    
+
                     // Step 1: Batched matrix multiplication Q @ K^T
                     ReadOnlySpan<float> qMatrix = new ReadOnlySpan<float>(q.Data, qOffset, T * _headSize);
                     ReadOnlySpan<float> kMatrix = new ReadOnlySpan<float>(k.Data, kOffset, kSeqLen * _headSize);
                     Span<float> scoresMatrix = new Span<float>(scores.Data, scoreOffset, T * kSeqLen);
-                    
+
                     // Compute Q @ K^T using optimized batched MatMul
                     MatMulOps.MatMulTransposeB(qMatrix, kMatrix, scoresMatrix, T, _headSize, kSeqLen);
-                    
+
                     // Step 2: Apply fused scale+mask+softmax
                     // For KV-cache, the causal mask needs to account for cache offset
                     int cacheOffset = kSeqLen - T;
@@ -1962,36 +1959,36 @@ namespace SmallMind.Transformers
                     {
                         // Map query head to KV head (for GQA)
                         int kvHead = h / headsPerKvHead;
-                        
+
                         int qOffset = (b * _nHead + h) * T * _headSize;
                         int kOffset = (b * _nKvHead + kvHead) * kSeqLen * _headSize;
                         int scoreOffset = (b * _nHead + h) * T * kSeqLen;
-                        
+
                         // Step 1: Batched matrix multiplication Q @ K^T
                         ReadOnlySpan<float> qMatrix = new ReadOnlySpan<float>(q.Data, qOffset, T * _headSize);
                         ReadOnlySpan<float> kMatrix = new ReadOnlySpan<float>(k.Data, kOffset, kSeqLen * _headSize);
                         Span<float> scoresMatrix = new Span<float>(scores.Data, scoreOffset, T * kSeqLen);
-                        
+
                         MatMulOps.MatMulTransposeB(qMatrix, kMatrix, scoresMatrix, T, _headSize, kSeqLen);
-                        
+
                         // Step 2: Apply fused scale+mask+softmax for this (batch, head)
                         int cacheOffset = kSeqLen - T;
                         OptimizedOps.FusedScaleMaskSoftmax(scores.Data, scoreOffset, scale, scores.Data, scoreOffset, T, kSeqLen, cacheOffset);
                     }
                 }
             }
-            
+
             // Apply dropout if in training mode
             // Note: Since we're using in-place operations, we modify scores directly
             // The dropout is applied to the tensor passed in, which is the workspace
         }
-        
+
         // Overload for backward compatibility (no KV-cache)
         private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T)
         {
             ComputeAttentionScoresInPlace(q, k, scores, B, T, T);
         }
-        
+
         /// <summary>
         /// Apply softmax in-place to the scores tensor.
         /// </summary>
@@ -2004,11 +2001,11 @@ namespace SmallMind.Transformers
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
-                    
+
                     for (int i = 0; i < T; i++)
                     {
                         int offset = ((b * _nHead + h) * T + i) * T;
-                        
+
                         // Find max for numerical stability
                         float max = float.NegativeInfinity;
                         for (int j = 0; j <= i; j++)
@@ -2016,7 +2013,7 @@ namespace SmallMind.Transformers
                             if (scores.Data[offset + j] > max)
                                 max = scores.Data[offset + j];
                         }
-                        
+
                         // Exp and sum
                         float sum = 0;
                         for (int j = 0; j <= i; j++)
@@ -2025,7 +2022,7 @@ namespace SmallMind.Transformers
                             scores.Data[offset + j] = exp;
                             sum += exp;
                         }
-                        
+
                         // Normalize
                         if (sum > 0)
                         {
@@ -2035,7 +2032,7 @@ namespace SmallMind.Transformers
                                 scores.Data[offset + j] *= invSum;
                             }
                         }
-                        
+
                         // Clear masked positions
                         for (int j = i + 1; j < T; j++)
                         {
@@ -2053,14 +2050,14 @@ namespace SmallMind.Transformers
                         for (int i = 0; i < T; i++)
                         {
                             int offset = ((b * _nHead + h) * T + i) * T;
-                            
+
                             float max = float.NegativeInfinity;
                             for (int j = 0; j <= i; j++)
                             {
                                 if (scores.Data[offset + j] > max)
                                     max = scores.Data[offset + j];
                             }
-                            
+
                             float sum = 0;
                             for (int j = 0; j <= i; j++)
                             {
@@ -2068,7 +2065,7 @@ namespace SmallMind.Transformers
                                 scores.Data[offset + j] = exp;
                                 sum += exp;
                             }
-                            
+
                             if (sum > 0)
                             {
                                 float invSum = 1.0f / sum;
@@ -2077,7 +2074,7 @@ namespace SmallMind.Transformers
                                     scores.Data[offset + j] *= invSum;
                                 }
                             }
-                            
+
                             for (int j = i + 1; j < T; j++)
                             {
                                 scores.Data[offset + j] = 0;
@@ -2087,7 +2084,7 @@ namespace SmallMind.Transformers
                 }
             }
         }
-        
+
         /// <summary>
         /// In-place version of ApplyAttention that writes to a pre-allocated tensor.
         /// Computes attention_weights * V using optimized MatMul kernel.
@@ -2100,11 +2097,11 @@ namespace SmallMind.Transformers
             // att: (B, nHead, T, vSeqLen) - attention weights
             // v: (B, nKvHead, vSeqLen, headSize) - values (may include cached past, GQA)
             // output: (B, nHead, T, headSize) - pre-allocated
-            
+
             // For each batch and head, perform: output[b,h] = att[b,h] @ v[b,kvh]
             // where att[b,h] is (T × vSeqLen) and v[b,kvh] is (vSeqLen × headSize)
             // resulting in output[b,h] as (T × headSize)
-            
+
             int headsPerKvHead = _nHead / _nKvHead;  // For GQA head mapping
             int totalParallelWork = B * _nHead;
             if (totalParallelWork >= 4)
@@ -2113,15 +2110,15 @@ namespace SmallMind.Transformers
                 {
                     int b = bh / _nHead;
                     int h = bh % _nHead;
-                    
+
                     // Map query head to KV head (for GQA)
                     int kvHead = h / headsPerKvHead;
-                    
+
                     // Calculate offsets for this batch and head
                     int attOffset = (b * _nHead + h) * T * vSeqLen;
                     int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
                     int outOffset = (b * _nHead + h) * T * _headSize;
-                    
+
                     // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]
                     // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
                     SmallMind.Core.Simd.MatMulOps.MatMul(
@@ -2140,12 +2137,12 @@ namespace SmallMind.Transformers
                     {
                         // Map query head to KV head (for GQA)
                         int kvHead = h / headsPerKvHead;
-                        
+
                         // Calculate offsets for this batch and head
                         int attOffset = (b * _nHead + h) * T * vSeqLen;
                         int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
                         int outOffset = (b * _nHead + h) * T * _headSize;
-                        
+
                         // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]
                         // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
                         SmallMind.Core.Simd.MatMulOps.MatMul(
@@ -2158,7 +2155,7 @@ namespace SmallMind.Transformers
                 }
             }
         }
-        
+
         // Overload for backward compatibility (no KV-cache)
         private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T)
         {
@@ -2193,9 +2190,9 @@ namespace SmallMind.Transformers
         internal readonly Linear _fc2;
         private readonly Dropout _dropout;
         private readonly int _nEmbd;
-        
+
         private bool _isTraining = true;
-        
+
         // Workspace for reusing intermediate tensors
         private readonly TensorWorkspace _workspace;
 
@@ -2204,12 +2201,12 @@ namespace SmallMind.Transformers
         public MLP(int nEmbd, float dropout, Random random)
         {
             _nEmbd = nEmbd;
-            
+
             // Standard Transformer uses 4x expansion
             _fc1 = new Linear(nEmbd, 4 * nEmbd, random: random);
             _fc2 = new Linear(4 * nEmbd, nEmbd, random: random);
             _dropout = new Dropout(dropout, random);
-            
+
             _workspace = new TensorWorkspace();
 
             Parameters = new List<Tensor>();
@@ -2223,22 +2220,22 @@ namespace SmallMind.Transformers
             // Reuse workspace tensors for intermediate results
             int B = x.Shape[0];
             int T = x.Shape[1];
-            
+
             // Use stackalloc for shape arrays to avoid heap allocations
             Span<int> fc1Shape = stackalloc int[3] { B, T, 4 * _nEmbd };
             var fc1Out = _workspace.GetOrCreate("fc1Out", fc1Shape, _isTraining);
             _fc1.Forward(x, fc1Out);
-            
+
             // GELU activation with reused workspace tensor (avoids allocation)
             // Reuse same shape as fc1Out
             var geluOut = _workspace.GetOrCreate("geluOut", fc1Shape, _isTraining);
             Activations.GELU(fc1Out, geluOut);
-            
+
             // fc2 output: (B, T, n_embd) - reuse input shape
             Span<int> fc2Shape = stackalloc int[3] { B, T, _nEmbd };
             var fc2Out = _workspace.GetOrCreate("fc2Out", fc2Shape, _isTraining);
             _fc2.Forward(geluOut, fc2Out);
-            
+
             var dropoutOut = _dropout.Forward(fc2Out);
             return dropoutOut;
         }
@@ -2274,9 +2271,9 @@ namespace SmallMind.Transformers
         private readonly Dropout _dropout;
         private readonly int _nEmbd;
         private readonly int _hiddenDim;
-        
+
         private bool _isTraining = true;
-        
+
         // Workspace for reusing intermediate tensors
         private readonly TensorWorkspace _workspace;
 
@@ -2293,13 +2290,13 @@ namespace SmallMind.Transformers
         {
             _nEmbd = nEmbd;
             _hiddenDim = hiddenDim;
-            
+
             // Three linear projections for gated MLP
             _gateProj = new Linear(nEmbd, hiddenDim, random: random);
             _upProj = new Linear(nEmbd, hiddenDim, random: random);
             _downProj = new Linear(hiddenDim, nEmbd, random: random);
             _dropout = new Dropout(dropout, random);
-            
+
             _workspace = new TensorWorkspace();
 
             Parameters = new List<Tensor>();
@@ -2313,26 +2310,26 @@ namespace SmallMind.Transformers
             // x: (B, T, n_embd)
             int B = x.Shape[0];
             int T = x.Shape[1];
-            
+
             // Use stackalloc for shape arrays to avoid heap allocations
             Span<int> hiddenShape = stackalloc int[3] { B, T, _hiddenDim };
             Span<int> outputShape = stackalloc int[3] { B, T, _nEmbd };
-            
+
             // Gate projection: (B, T, n_embd) -> (B, T, hiddenDim)
             var gateOut = _workspace.GetOrCreate("gateOut", hiddenShape, _isTraining);
             _gateProj.Forward(x, gateOut);
-            
+
             // Up projection: (B, T, n_embd) -> (B, T, hiddenDim)
             var upOut = _workspace.GetOrCreate("upOut", hiddenShape, _isTraining);
             _upProj.Forward(x, upOut);
-            
+
             Tensor hidden;
             if (_isTraining)
             {
                 // Training: Keep separate operations for backward pass
                 var gateAct = _workspace.GetOrCreate("gateAct", hiddenShape, _isTraining);
                 Activations.SiLU(gateOut, gateAct);
-                
+
                 // Element-wise multiply: gateAct * upOut
                 hidden = _workspace.GetOrCreate("hidden", hiddenShape, _isTraining);
                 ElementwiseMultiply(gateAct, upOut, hidden);
@@ -2343,11 +2340,11 @@ namespace SmallMind.Transformers
                 hidden = _workspace.GetOrCreate("hidden", hiddenShape, _isTraining);
                 ActivationOps.FusedSiLUMul(gateOut.Data, upOut.Data, hidden.Data);
             }
-            
+
             // Down projection: (B, T, hiddenDim) -> (B, T, n_embd)
             var downOut = _workspace.GetOrCreate("downOut", outputShape, _isTraining);
             _downProj.Forward(hidden, downOut);
-            
+
             // Dropout
             var dropoutOut = _dropout.Forward(downOut);
             return dropoutOut;
@@ -2356,11 +2353,11 @@ namespace SmallMind.Transformers
         private Tensor ElementwiseMultiply(Tensor a, Tensor b, Tensor? dest = null)
         {
             var result = dest ?? new Tensor(a.Shape, requiresGrad: _isTraining);
-            
+
             // SIMD-accelerated element-wise multiplication
             int vectorSize = Vector<float>.Count;
             int i = 0;
-            
+
             // SIMD loop
             for (; i <= a.Size - vectorSize; i += vectorSize)
             {
@@ -2368,13 +2365,13 @@ namespace SmallMind.Transformers
                 var vb = new Vector<float>(b.Data.AsSpan(i));
                 (va * vb).CopyTo(result.Data.AsSpan(i));
             }
-            
+
             // Scalar remainder
             for (; i < a.Size; i++)
             {
                 result.Data[i] = a.Data[i] * b.Data[i];
             }
-            
+
             if (a.RequiresGrad || b.RequiresGrad)
             {
                 result.SetBackward(() =>
@@ -2409,7 +2406,7 @@ namespace SmallMind.Transformers
                     }
                 });
             }
-            
+
             return result;
         }
 

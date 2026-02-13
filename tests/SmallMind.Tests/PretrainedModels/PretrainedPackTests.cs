@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using Xunit;
 using SmallMind.Runtime.PretrainedModels;
 
 namespace SmallMind.Tests.PretrainedModels
@@ -12,18 +9,18 @@ namespace SmallMind.Tests.PretrainedModels
             // Navigate up from bin/Debug/net10.0 to the project root
             var currentDir = Directory.GetCurrentDirectory();
             var dirInfo = new DirectoryInfo(currentDir);
-            
+
             // Go up until we find the solution directory (contains data/ and src/)
             while (dirInfo != null && !Directory.Exists(Path.Combine(dirInfo.FullName, "data", "pretrained")))
             {
                 dirInfo = dirInfo.Parent;
             }
-            
+
             if (dirInfo == null)
             {
                 throw new DirectoryNotFoundException("Could not find project root with data/pretrained directory");
             }
-            
+
             return dirInfo.FullName;
         }
 
@@ -34,10 +31,10 @@ namespace SmallMind.Tests.PretrainedModels
         {
             // Arrange
             var registryPath = Path.Combine(TestDataPath, "registry.json");
-            
+
             // Act
             var registry = PretrainedRegistry.Load(registryPath);
-            
+
             // Assert
             Assert.NotNull(registry);
             Assert.NotEmpty(registry.Packs);
@@ -50,13 +47,13 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var registryPath = Path.Combine(TestDataPath, "registry.json");
             var registry = PretrainedRegistry.Load(registryPath);
-            
+
             // Act
             var sentimentPack = registry.FindPack("sm.pretrained.sentiment.v1");
             var classificationPack = registry.FindPack("sm.pretrained.classification.v1");
             var financePack = registry.FindPack("sm.pretrained.finance.v1");
             var itilPack = registry.FindPack("sm.pretrained.itil_v4_mastery.v1");
-            
+
             // Assert
             Assert.NotNull(sentimentPack);
             Assert.Equal("sentiment", sentimentPack.Domain);
@@ -76,10 +73,10 @@ namespace SmallMind.Tests.PretrainedModels
         {
             // Arrange
             var packPath = Path.Combine(TestDataPath, "sentiment");
-            
+
             // Act
             var pack = PretrainedPack.Load(packPath);
-            
+
             // Assert
             Assert.NotNull(pack);
             Assert.Equal("sm.pretrained.sentiment.v1", pack.Manifest.Id);
@@ -97,10 +94,10 @@ namespace SmallMind.Tests.PretrainedModels
         {
             // Arrange
             var packPath = Path.Combine(TestDataPath, "classification");
-            
+
             // Act
             var pack = PretrainedPack.Load(packPath);
-            
+
             // Assert
             Assert.NotNull(pack);
             Assert.Equal("sm.pretrained.classification.v1", pack.Manifest.Id);
@@ -119,17 +116,17 @@ namespace SmallMind.Tests.PretrainedModels
         {
             // Arrange
             var packPath = Path.Combine(TestDataPath, "finance");
-            
+
             // Act
             var pack = PretrainedPack.Load(packPath);
-            
+
             // Assert
             Assert.NotNull(pack);
             Assert.Equal("sm.pretrained.finance.v1", pack.Manifest.Id);
             Assert.True(pack.Manifest.Rag?.Enabled);
             Assert.NotEmpty(pack.RagDocumentPaths);
             Assert.Equal(5, pack.RagDocumentPaths.Count);
-            
+
             // Verify all RAG documents exist
             foreach (var docPath in pack.RagDocumentPaths)
             {
@@ -142,14 +139,14 @@ namespace SmallMind.Tests.PretrainedModels
         {
             // Arrange
             var jsonlPath = Path.Combine(TestDataPath, "sentiment", "task", "inputs.jsonl");
-            
+
             // Act
             var samples = DatasetLoader.LoadFromJsonl(jsonlPath);
-            
+
             // Assert
             Assert.NotEmpty(samples);
             Assert.Equal(30, samples.Count);
-            
+
             // Verify first sample has all fields
             var firstSample = samples[0];
             Assert.NotNull(firstSample.Id);
@@ -165,13 +162,13 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var jsonlPath = Path.Combine(TestDataPath, "sentiment", "task", "inputs.jsonl");
             var expectedLabels = new[] { "positive", "negative", "neutral" };
-            
+
             // Act
             var samples = DatasetLoader.LoadFromJsonl(jsonlPath, expectedLabels);
-            
+
             // Assert
             Assert.NotEmpty(samples);
-            
+
             // Verify all samples have valid labels
             foreach (var sample in samples)
             {
@@ -184,10 +181,10 @@ namespace SmallMind.Tests.PretrainedModels
         {
             // Arrange
             var jsonlPath = Path.Combine(TestDataPath, "sentiment", "task", "inputs.jsonl");
-            
+
             // Act
             var samples = DatasetLoader.LoadLabeledData(jsonlPath);
-            
+
             // Assert
             Assert.NotEmpty(samples);
             Assert.Equal(30, samples.Count);
@@ -198,10 +195,10 @@ namespace SmallMind.Tests.PretrainedModels
         {
             // Arrange
             var legacyPath = Path.Combine(TestDataPath, "sentiment", "sample-sentiment.txt");
-            
+
             // Act
             var samples = DatasetLoader.LoadLabeledData(legacyPath);
-            
+
             // Assert
             Assert.NotEmpty(samples);
             // Legacy files should still load
@@ -214,7 +211,7 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "sentiment");
             var pack = PretrainedPack.Load(packPath);
-            
+
             // Assert
             Assert.NotNull(pack.Manifest.Id);
             Assert.NotEmpty(pack.Manifest.Id);
@@ -232,10 +229,10 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "sentiment");
             var pack = PretrainedPack.Load(packPath);
-            
+
             // Act
             var summary = pack.GetSummary();
-            
+
             // Assert
             Assert.NotNull(summary);
             Assert.Contains(pack.Manifest.Id, summary);
@@ -248,17 +245,17 @@ namespace SmallMind.Tests.PretrainedModels
         {
             // Arrange
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
-            
+
             // Act
             var pack = PretrainedPack.Load(packPath);
-            
+
             // Assert
             Assert.NotNull(pack);
             Assert.Equal("sm.pretrained.itil_v4_mastery.v1", pack.Manifest.Id);
             Assert.Equal("itil_v4", pack.Manifest.Domain);
             Assert.Equal("knowledge-pack", pack.Manifest.Type);
             Assert.True(pack.Manifest.Rag?.Enabled);
-            
+
             // Verify RAG configuration
             Assert.NotNull(pack.Manifest.Rag);
             Assert.Equal(20, pack.Manifest.Rag.DocumentCount);
@@ -271,11 +268,11 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var pack = PretrainedPack.Load(packPath);
-            
+
             // Assert
             Assert.NotEmpty(pack.RagDocumentPaths);
             Assert.Equal(20, pack.RagDocumentPaths.Count);
-            
+
             // Verify all expected documents exist
             var expectedDocs = new[]
             {
@@ -300,7 +297,7 @@ namespace SmallMind.Tests.PretrainedModels
                 "180_common_pitfalls_anti_patterns.md",
                 "190_mappings_itil_to_ops.md"
             };
-            
+
             foreach (var expectedDoc in expectedDocs)
             {
                 var docPath = pack.RagDocumentPaths.Find(p => p.EndsWith(expectedDoc));
@@ -315,25 +312,25 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var queriesPath = Path.Combine(packPath, "task", "queries.jsonl");
-            
+
             // Act
             Assert.True(File.Exists(queriesPath), "Queries file should exist");
             var queries = DatasetLoader.LoadFromJsonl(queriesPath);
-            
+
             // Assert
             Assert.NotEmpty(queries);
             Assert.True(queries.Count >= 40, $"Expected at least 40 queries, found {queries.Count}");
-            
+
             // Verify query structure
             var firstQuery = queries[0];
             Assert.NotNull(firstQuery.Id);
             Assert.NotNull(firstQuery.Task);
             Assert.NotNull(firstQuery.Text);
-            
+
             // Verify task types
             var docqaTasks = queries.FindAll(q => q.Task == "docqa");
             var consultTasks = queries.FindAll(q => q.Task == "structured_consult");
-            
+
             Assert.NotEmpty(docqaTasks);
             Assert.NotEmpty(consultTasks);
         }
@@ -344,15 +341,15 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var expectedPath = Path.Combine(packPath, "eval", "expected.jsonl");
-            
+
             // Act & Assert
             Assert.True(File.Exists(expectedPath), "Expected evaluation file should exist");
-            
+
             // Verify file has content (expected.jsonl has different schema, not loadable via DatasetLoader)
             var lines = File.ReadAllLines(expectedPath).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
             Assert.NotEmpty(lines);
             Assert.True(lines.Count >= 40, $"Expected at least 40 evaluation entries, found {lines.Count}");
-            
+
             // Verify first line is valid JSON with expected schema
             var firstLine = lines[0];
             Assert.Contains("\"id\":", firstLine);
@@ -365,12 +362,12 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var scoringPath = Path.Combine(packPath, "eval", "scoring.md");
-            
+
             // Act & Assert
             Assert.True(File.Exists(scoringPath), "Scoring methodology should exist");
             var scoringContent = File.ReadAllText(scoringPath);
             Assert.NotEmpty(scoringContent);
-            
+
             // Verify key sections exist
             Assert.Contains("Citation", scoringContent);
             Assert.Contains("docqa", scoringContent);
@@ -384,17 +381,17 @@ namespace SmallMind.Tests.PretrainedModels
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var docqaScenarioPath = Path.Combine(packPath, "scenarios", "docqa.json");
             var consultScenarioPath = Path.Combine(packPath, "scenarios", "structured_consult.json");
-            
+
             // Act & Assert
             Assert.True(File.Exists(docqaScenarioPath), "Document Q&A scenario should exist");
             Assert.True(File.Exists(consultScenarioPath), "Structured consult scenario should exist");
-            
+
             // Verify scenarios are valid JSON
             var docqaContent = File.ReadAllText(docqaScenarioPath);
             var consultContent = File.ReadAllText(consultScenarioPath);
             Assert.NotEmpty(docqaContent);
             Assert.NotEmpty(consultContent);
-            
+
             // Verify key fields in scenarios
             Assert.Contains("scenario_id", docqaContent);
             Assert.Contains("citation", docqaContent);
@@ -408,7 +405,7 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var pack = PretrainedPack.Load(packPath);
-            
+
             // Assert
             Assert.NotNull(pack.Manifest.RecommendedSettings);
             Assert.True(pack.Manifest.RecommendedSettings.Deterministic);
@@ -421,12 +418,12 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var provenancePath = Path.Combine(packPath, "PROVENANCE.md");
-            
+
             // Act & Assert
             Assert.True(File.Exists(provenancePath), "PROVENANCE.md should exist");
             var provenanceContent = File.ReadAllText(provenancePath);
             Assert.NotEmpty(provenanceContent);
-            
+
             // Verify key content
             Assert.Contains("original work", provenanceContent, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("MIT", provenanceContent);
@@ -440,11 +437,11 @@ namespace SmallMind.Tests.PretrainedModels
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var pack = PretrainedPack.Load(packPath);
             var foundationsDoc = pack.RagDocumentPaths.Find(p => p.EndsWith("001_foundations.md"));
-            
+
             // Act
             Assert.NotNull(foundationsDoc);
             var content = File.ReadAllText(foundationsDoc);
-            
+
             // Assert - verify expected sections
             Assert.Contains("## Purpose", content);
             Assert.Contains("## Common Implementation Do", content);  // Matches "Common Implementation Do's"
@@ -459,12 +456,12 @@ namespace SmallMind.Tests.PretrainedModels
             // Arrange
             var packPath = Path.Combine(TestDataPath, "itil_v4_mastery");
             var indexMetadataPath = Path.Combine(packPath, "rag", "index", "metadata.json");
-            
+
             // Act & Assert
             Assert.True(File.Exists(indexMetadataPath), "RAG index metadata should exist");
             var metadataContent = File.ReadAllText(indexMetadataPath);
             Assert.NotEmpty(metadataContent);
-            
+
             // Verify key fields
             Assert.Contains("documents", metadataContent);
             Assert.Contains("total_documents", metadataContent);

@@ -1,12 +1,9 @@
-using System;
 using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Simd;
-using SmallMind.Quantization.Kernels;
 
 namespace SmallMind.Benchmarks
 {
@@ -42,7 +39,7 @@ namespace SmallMind.Benchmarks
         public static void Run(IRuntimeLogger? logger = null)
         {
             var log = logger ?? NullRuntimeLogger.Instance;
-            
+
             log.Info("╔═══════════════════════════════════════════════════════════════════════════╗");
             log.Info("║           SmallMind GEMM Benchmark - Phase 0 Baseline                    ║");
             log.Info("╚═══════════════════════════════════════════════════════════════════════════╝");
@@ -56,7 +53,7 @@ namespace SmallMind.Benchmarks
             foreach (var (M, K, N) in BenchmarkSizes)
             {
                 log.Info($"Benchmarking {M}×{K}×{N}...");
-                
+
                 // Force full GC collection between different sizes
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
@@ -64,7 +61,7 @@ namespace SmallMind.Benchmarks
 
                 var result = BenchmarkSize(M, K, N, log);
                 results.Add(result);
-                
+
                 log.Info($"  MatMulOps: {result.MatMulOpsGflops:F2} GFLOPS (kernel: {result.KernelUsed})");
                 log.Info($"  GemmMicro: {result.GemmMicroGflops:F2} GFLOPS");
                 log.Info($"  PackedMM:  {result.PackedMmGflops:F2} GFLOPS");
@@ -78,7 +75,7 @@ namespace SmallMind.Benchmarks
         private static BenchmarkResult BenchmarkSize(int M, int K, int N, IRuntimeLogger log)
         {
             var random = new Random(RANDOM_SEED);
-            
+
             // Initialize matrices with reproducible random values [-1.0, 1.0]
             float[] A = new float[M * K];
             float[] B = new float[K * N];
@@ -102,7 +99,7 @@ namespace SmallMind.Benchmarks
                 Array.Clear(C_matmul);
                 MatMulOps.MatMul(A, B, C_matmul, M, K, N);
             });
-            
+
             // Validate correctness
             if (!ValidateResults(C_reference, C_matmul, C_matmul.Length, K))
                 throw new InvalidOperationException("MatMulOps produced incorrect results!");
@@ -130,7 +127,7 @@ namespace SmallMind.Benchmarks
             {
                 // Pack B outside the timed region (amortized cost)
                 var packedB = PackedMatMul.CreatePackedMatrix(B.AsSpan(0, K * N), K, N);
-                
+
                 packedGflops = BenchmarkKernel("PackedMM", M, K, N, () =>
                 {
                     Array.Clear(C_packed);
@@ -144,7 +141,7 @@ namespace SmallMind.Benchmarks
                 // Validate correctness
                 if (!ValidateResults(C_reference, C_packed, C_packed.Length, K))
                     throw new InvalidOperationException("PackedMatMul produced incorrect results!");
-                    
+
                 packedB.Dispose();
             }
             catch (Exception ex)
@@ -181,7 +178,7 @@ namespace SmallMind.Benchmarks
                 long startTicks = Stopwatch.GetTimestamp();
                 kernel();
                 long endTicks = Stopwatch.GetTimestamp();
-                
+
                 double elapsedSeconds = (endTicks - startTicks) / (double)Stopwatch.Frequency;
                 times.Add(elapsedSeconds);
             }
@@ -189,7 +186,7 @@ namespace SmallMind.Benchmarks
             // Calculate GFLOPS: (2 * M * K * N) / (seconds * 1e9)
             // The factor of 2 accounts for multiply + add per output element
             double flops = 2.0 * M * K * N;
-            
+
             // Use median time for robustness
             times.Sort();
             double medianTime = times[times.Count / 2];
@@ -229,37 +226,37 @@ namespace SmallMind.Benchmarks
             // Scale tolerance with accumulation depth (K dimension)
             // For K=128: 0.5%, for K=4096: ~1.6%
             float scaledTolerance = baseTolerance * MathF.Sqrt(K / 128f);
-            
+
             int errorCount = 0;
             const int MAX_ERRORS_TO_SHOW = 5;
-            
+
             for (int i = 0; i < length; i++)
             {
                 float e = expected[i];
                 float a = actual[i];
-                
+
                 // Use absolute tolerance for values near zero
                 float absDiff = MathF.Abs(e - a);
                 if (MathF.Abs(e) < 1e-5f && MathF.Abs(a) < 1e-5f)
                 {
                     if (absDiff < 1e-4f) continue; // Both near zero, acceptable
                 }
-                
+
                 // Relative error for non-zero values
                 float denom = MathF.Max(MathF.Abs(e), 1e-6f);
                 float relError = absDiff / denom;
-                
+
                 if (relError > scaledTolerance)
                 {
                     errorCount++;
                 }
             }
-            
+
             if (errorCount > 0)
             {
                 return errorCount < (length / 1000); // Allow < 0.1% error rate
             }
-            
+
             return true;
         }
 
@@ -276,12 +273,12 @@ namespace SmallMind.Benchmarks
             log.Info("SIMD Capabilities:");
             log.Info($"  Vector<float>.Count: {System.Numerics.Vector<float>.Count}");
             log.Info($"  Vector.IsHardwareAccelerated: {System.Numerics.Vector.IsHardwareAccelerated}");
-            
-            #if NET7_0_OR_GREATER
+
+#if NET7_0_OR_GREATER
             log.Info($"  AVX2: {System.Runtime.Intrinsics.X86.Avx2.IsSupported}");
             log.Info($"  AVX-512F: {System.Runtime.Intrinsics.X86.Avx512F.IsSupported}");
             log.Info($"  FMA: {System.Runtime.Intrinsics.X86.Fma.IsSupported}");
-            #endif
+#endif
         }
 
         private static void PrintMarkdownTable(List<BenchmarkResult> results, IRuntimeLogger log)
@@ -295,7 +292,7 @@ namespace SmallMind.Benchmarks
             log.Info("");
             log.Info("| Size       | MatMulOps | GemmMicro | PackedMM | Kernel Used |");
             log.Info("|------------|-----------|-----------|----------|-------------|");
-            
+
             foreach (var r in results)
             {
                 string size = FormatSize(r.M, r.K, r.N);
@@ -326,21 +323,21 @@ namespace SmallMind.Benchmarks
                     GCMode = GCSettings.IsServerGC ? "Server" : "Workstation",
                     VectorFloatCount = System.Numerics.Vector<float>.Count,
                     VectorAccelerated = System.Numerics.Vector.IsHardwareAccelerated,
-                    #if NET7_0_OR_GREATER
+#if NET7_0_OR_GREATER
                     Avx2Supported = System.Runtime.Intrinsics.X86.Avx2.IsSupported,
                     Avx512FSupported = System.Runtime.Intrinsics.X86.Avx512F.IsSupported,
                     FmaSupported = System.Runtime.Intrinsics.X86.Fma.IsSupported,
-                    #endif
+#endif
                 },
                 Phase = "Phase0-Baseline",
                 Results = results
             };
 
-            string json = JsonSerializer.Serialize(report, new JsonSerializerOptions 
-            { 
-                WriteIndented = true 
+            string json = JsonSerializer.Serialize(report, new JsonSerializerOptions
+            {
+                WriteIndented = true
             });
-            
+
             string filename = "benchmark-results.json";
             File.WriteAllText(filename, json);
             log.Info($"Results written to {filename}");

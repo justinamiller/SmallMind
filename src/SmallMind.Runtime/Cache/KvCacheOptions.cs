@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Runtime.Cache
 {
     /// <summary>
@@ -85,10 +83,10 @@ namespace SmallMind.Runtime.Cache
         {
             if (MaxTokensPerSession <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxTokensPerSession), "Must be greater than 0");
-            
+
             if (MaxSessions <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxSessions), "Must be greater than 0");
-            
+
             if (MaxBytesTotal <= 0)
                 throw new ArgumentOutOfRangeException(nameof(MaxBytesTotal), "Must be greater than 0");
 
@@ -96,7 +94,7 @@ namespace SmallMind.Runtime.Cache
                 throw new ArgumentOutOfRangeException(nameof(MaxBytesPerSession), "Must be greater than 0");
 
             if (MaxBytesPerSession > MaxBytesTotal)
-                throw new ArgumentOutOfRangeException(nameof(MaxBytesPerSession), 
+                throw new ArgumentOutOfRangeException(nameof(MaxBytesPerSession),
                     "Cannot exceed MaxBytesTotal");
         }
 

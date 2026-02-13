@@ -1,10 +1,7 @@
-using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-using System.Threading.Tasks;
-using SmallMind.Core.Utilities;
 
 namespace SmallMind.Core.Simd
 {
@@ -73,7 +70,7 @@ namespace SmallMind.Core.Simd
                         var upper = Avx512F.ExtractVector256(maxVec512, 1);
                         var lower = Avx512F.ExtractVector256(maxVec512, 0);
                         var maxVec256 = Avx.Max(upper, lower);
-                        
+
                         // Further reduce 256→scalar using horizontal max
                         unsafe
                         {
@@ -88,7 +85,7 @@ namespace SmallMind.Core.Simd
                     }
                 }
             }
-            
+
             // Vector<T> fallback for remaining elements
             int vectorSize2 = Vector<float>.Count;
             var maxVec2 = new Vector<float>(max);
@@ -97,14 +94,14 @@ namespace SmallMind.Core.Simd
                 var v = new Vector<float>(input, offset + i);
                 maxVec2 = Vector.Max(maxVec2, v);
             }
-            
+
             // Horizontal max reduction
             for (int j = 0; j < vectorSize2; j++)
             {
                 if (maxVec2[j] > max)
                     max = maxVec2[j];
             }
-            
+
             // Scalar remainder for max
             for (; i < length; i++)
             {
@@ -116,14 +113,14 @@ namespace SmallMind.Core.Simd
             // OPTIMIZATION: Use vectorized exp approximation for better performance
             float sum = 0f;
             i = 0;
-            
+
             // Vectorized exp computation using fast approximation
             int vectorSize = Vector<float>.Count;
             if (Vector.IsHardwareAccelerated && length >= vectorSize)
             {
                 var vMax = new Vector<float>(max);
                 var vSum = Vector<float>.Zero;
-                
+
                 unsafe
                 {
                     fixed (float* pInput = input, pOutput = output)
@@ -132,25 +129,25 @@ namespace SmallMind.Core.Simd
                         {
                             var vx = Unsafe.Read<Vector<float>>(pInput + offset + i);
                             var vDiff = vx - vMax;
-                            
+
                             // Fast exp approximation: e^x ≈ (1 + x/256)^256 for |x| < 10
                             // More accurate for softmax range: use Padé approximation
                             // exp(x) ≈ (2 + x) / (2 - x) for small x, scaled
                             var vExp = FastExpVec(vDiff);
-                            
+
                             Unsafe.Write(pOutput + offset + i, vExp);
                             vSum += vExp;
                         }
                     }
                 }
-                
+
                 // Sum the vector lanes
                 for (int j = 0; j < vectorSize; j++)
                 {
                     sum += vSum[j];
                 }
             }
-            
+
             // Scalar remainder
             for (; i < length; i++)
             {
@@ -162,7 +159,7 @@ namespace SmallMind.Core.Simd
             // Step 3: Normalize by sum with SIMD
             float invSum = 1f / sum;
             i = 0;
-            
+
             unsafe
             {
                 fixed (float* pOutput = output)
@@ -179,7 +176,7 @@ namespace SmallMind.Core.Simd
                     }
                 }
             }
-            
+
             // Vector<T> fallback for normalization
             var invSumVec = new Vector<float>(invSum);
             for (; i <= length - vectorSize2; i += vectorSize2)
@@ -187,7 +184,7 @@ namespace SmallMind.Core.Simd
                 var v = new Vector<float>(output, offset + i);
                 (v * invSumVec).CopyTo(output, offset + i);
             }
-            
+
             // Scalar remainder for normalization
             for (; i < length; i++)
             {
@@ -204,21 +201,21 @@ namespace SmallMind.Core.Simd
         private static void SoftmaxRow(ReadOnlySpan<float> input, Span<float> output)
         {
             int length = input.Length;
-            
+
             // Step 1: Find max (SIMD accelerated)
             float max = FindMax(input);
 
             // Step 2: Compute exp(x - max) and sum (vectorized for better performance)
             float sum = 0f;
             int i = 0;
-            
+
             // Vectorized exp computation
             int vectorSize = Vector<float>.Count;
             if (Vector.IsHardwareAccelerated && length >= vectorSize)
             {
                 var vMax = new Vector<float>(max);
                 var vSum = Vector<float>.Zero;
-                
+
                 unsafe
                 {
                     fixed (float* pInput = input, pOutput = output)
@@ -228,20 +225,20 @@ namespace SmallMind.Core.Simd
                             var vx = Unsafe.Read<Vector<float>>(pInput + i);
                             var vDiff = vx - vMax;
                             var vExp = FastExpVec(vDiff);
-                            
+
                             Unsafe.Write(pOutput + i, vExp);
                             vSum += vExp;
                         }
                     }
                 }
-                
+
                 // Sum vector lanes
                 for (int j = 0; j < vectorSize; j++)
                 {
                     sum += vSum[j];
                 }
             }
-            
+
             // Scalar remainder
             for (; i < length; i++)
             {
@@ -283,7 +280,7 @@ namespace SmallMind.Core.Simd
                         var upper = Avx512F.ExtractVector256(maxVec512, 1);
                         var lower = Avx512F.ExtractVector256(maxVec512, 0);
                         var maxVec256 = Avx.Max(upper, lower);
-                        
+
                         // Reduce 256→scalar
                         float* temp = stackalloc float[8];
                         Avx.Store(temp, maxVec256);
@@ -300,7 +297,7 @@ namespace SmallMind.Core.Simd
             // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             var maxVec = new Vector<float>(max);
             int vectorSize = Vector<float>.Count;
-            
+
             if (i <= length - vectorSize)
             {
                 unsafe
@@ -363,7 +360,7 @@ namespace SmallMind.Core.Simd
             // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             var vScalar = new Vector<float>(scalar);
             int vectorSize = Vector<float>.Count;
-            
+
             if (i <= length - vectorSize)
             {
                 unsafe
@@ -412,7 +409,7 @@ namespace SmallMind.Core.Simd
             for (int i = 0; i < rows; i++)
             {
                 int offset = i * cols;
-                
+
                 unsafe
                 {
                     fixed (float* pInput = input, pOutput = output)
@@ -420,7 +417,7 @@ namespace SmallMind.Core.Simd
                         // Find max using SIMD-accelerated FindMax on the row slice
                         float* pInputRow = pInput + offset;
                         float* pOutputRow = pOutput + offset;
-                        
+
                         // Create span for FindMax (zero cost - just pointer + length)
                         ReadOnlySpan<float> inputRow = new ReadOnlySpan<float>(pInputRow, cols);
                         float max = FindMax(inputRow);
@@ -456,17 +453,17 @@ namespace SmallMind.Core.Simd
             var vClampMin = new Vector<float>(-88.0f); // exp(-88) ≈ 0 (underflow)
             var vClampMax = new Vector<float>(0.0f);    // max is already subtracted
             x = Vector.Max(vClampMin, Vector.Min(vClampMax, x));
-            
+
             // Padé [2/2] approximation for e^x
             // exp(x) ≈ (2 + x + x²/6) / (2 - x + x²/6) for |x| < 2
             // Good accuracy for softmax range after max subtraction
             var vTwo = new Vector<float>(2.0f);
             var vOneSixth = new Vector<float>(1.0f / 6.0f);
-            
+
             var x2 = x * x;
             var numerator = vTwo + x + x2 * vOneSixth;
             var denominator = vTwo - x + x2 * vOneSixth;
-            
+
             return numerator / denominator;
         }
     }

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Benchmarks
 {
     internal class Program
@@ -57,7 +54,7 @@ namespace SmallMind.Benchmarks
             {
                 var arg = args[i];
 
-                if (arg.Equals("--help", StringComparison.OrdinalIgnoreCase) || 
+                if (arg.Equals("--help", StringComparison.OrdinalIgnoreCase) ||
                     arg.Equals("-h", StringComparison.OrdinalIgnoreCase))
                 {
                     options.ShowHelp = true;

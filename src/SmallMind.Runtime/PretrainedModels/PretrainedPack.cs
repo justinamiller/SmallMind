@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -135,17 +132,17 @@ namespace SmallMind.Runtime.PretrainedModels
             summary += $"Domain: {Manifest.Domain}\n";
             summary += $"Type: {Manifest.Type}\n";
             summary += $"Samples: {Samples.Count}\n";
-            
+
             if (Categories.Count > 0)
             {
                 summary += $"Categories: {string.Join(", ", Categories)}\n";
             }
-            
+
             if (Manifest.Rag?.Enabled == true)
             {
                 summary += $"RAG Documents: {RagDocumentPaths.Count}\n";
             }
-            
+
             return summary;
         }
     }

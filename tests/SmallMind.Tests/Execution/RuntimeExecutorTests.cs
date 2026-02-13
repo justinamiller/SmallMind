@@ -1,12 +1,9 @@
-using System;
-using Xunit;
 using SmallMind.Runtime.Cache;
-using SmallMind.Runtime.Telemetry;
-using SmallMind.Transformers;
 using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 using ExecutionContext = SmallMind.Runtime.Execution.ExecutionContext;
-using RuntimeOptions = SmallMind.Runtime.Execution.RuntimeOptions;
 using RuntimeExecutor = SmallMind.Runtime.Execution.RuntimeExecutor;
+using RuntimeOptions = SmallMind.Runtime.Execution.RuntimeOptions;
 
 namespace SmallMind.Tests.Execution
 {
@@ -107,7 +104,7 @@ namespace SmallMind.Tests.Execution
             _executor.Prefill(promptTokens, context);
 
             // Act & Assert - Try to prefill again without reset
-            Assert.Throws<InvalidOperationException>(() => 
+            Assert.Throws<InvalidOperationException>(() =>
                 _executor.Prefill(promptTokens, context));
         }
 

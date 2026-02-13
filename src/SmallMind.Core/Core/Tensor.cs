@@ -1,7 +1,5 @@
-using System;
-using System.Threading.Tasks;
-using SmallMind.Core.Validation;
 using SmallMind.Core.Simd;
+using SmallMind.Core.Validation;
 using ElementWiseOps = SmallMind.Core.Simd.ElementWiseOps;
 
 namespace SmallMind.Core.Core
@@ -17,10 +15,10 @@ namespace SmallMind.Core.Core
         public int[] Shape { get; private set; }
         public float[]? Grad { get; set; }
         public bool RequiresGrad { get; set; }
-        
+
         protected int? _logicalSize; // For pooled tensors with oversized backing arrays
         private Action? _backward;
-        
+
         // Chunked storage support
         internal ITensorStorage? _storage; // When using chunked storage
         internal ITensorStorage? _gradStorage; // Chunked gradient storage
@@ -31,7 +29,7 @@ namespace SmallMind.Core.Core
             Guard.NotNull(data);
             Guard.NotNull(shape);
             Guard.NotNullOrEmpty(shape);
-            
+
             int expectedSize = ShapeToSize(shape);
             if (data.Length != expectedSize)
             {
@@ -39,7 +37,7 @@ namespace SmallMind.Core.Core
                     $"Data length {data.Length} does not match shape size {expectedSize}",
                     nameof(data));
             }
-            
+
             Data = data;
             Shape = (int[])shape.Clone(); // Clone to avoid external modifications
             RequiresGrad = requiresGrad;
@@ -48,7 +46,7 @@ namespace SmallMind.Core.Core
                 Grad = new float[data.Length];
             }
         }
-        
+
         /// <summary>
         /// Protected constructor for pooled tensors that may have larger backing arrays.
         /// Only the first 'size' elements of data will be used.
@@ -58,11 +56,11 @@ namespace SmallMind.Core.Core
             Guard.NotNull(data);
             Guard.NotNull(shape);
             Guard.NotNullOrEmpty(shape);
-            
+
             int expectedSize = ShapeToSize(shape);
             Guard.GreaterThanOrEqualTo(size, expectedSize);
             Guard.GreaterThanOrEqualTo(data.Length, size);
-            
+
             Data = data;
             Shape = (int[])shape.Clone(); // Clone to avoid external modifications
             _logicalSize = expectedSize; // Track logical size separately
@@ -77,7 +75,7 @@ namespace SmallMind.Core.Core
         {
             Guard.NotNull(shape);
             Guard.NotNullOrEmpty(shape);
-            
+
             Data = new float[ShapeToSize(shape)];
             Shape = (int[])shape.Clone(); // Clone to avoid external modifications
             RequiresGrad = requiresGrad;
@@ -90,9 +88,9 @@ namespace SmallMind.Core.Core
         public static int ShapeToSize(int[] shape)
         {
             Guard.NotNull(shape);
-            
+
             long size = ShapeToSizeLong(shape);
-            
+
             // Check for overflow - critical for billion-parameter models
             if (size > int.MaxValue)
             {
@@ -130,22 +128,22 @@ namespace SmallMind.Core.Core
             Guard.NotNullOrEmpty(shape);
 
             long totalElements = ShapeToSizeLong(shape);
-            
+
             var tensor = new Tensor();
             tensor.Shape = (int[])shape.Clone();
             tensor.RequiresGrad = requiresGrad;
             tensor._storage = new ChunkedStorage(totalElements, chunkSize);
-            
+
             // For compatibility, Data points to an empty array (most code won't use it for chunked tensors)
             // This prevents NullReferenceException in legacy code paths
             tensor.Data = Array.Empty<float>();
-            
+
             if (requiresGrad)
             {
                 tensor._gradStorage = new ChunkedStorage(totalElements, chunkSize);
                 tensor.Grad = Array.Empty<float>(); // For compatibility
             }
-            
+
             return tensor;
         }
 
@@ -164,13 +162,13 @@ namespace SmallMind.Core.Core
             Guard.NotNullOrEmpty(shape);
 
             long totalElements = ShapeToSizeLong(shape);
-            
+
             var tensor = new Tensor();
             tensor.Shape = (int[])shape.Clone();
             tensor.RequiresGrad = false; // Memory-mapped tensors don't support gradients
             tensor._storage = new MemoryMappedTensorStorage(filePath, totalElements, writable);
             tensor.Data = Array.Empty<float>();
-            
+
             return tensor;
         }
 
@@ -187,13 +185,13 @@ namespace SmallMind.Core.Core
             Guard.NotNullOrEmpty(shape);
 
             long totalElements = ShapeToSizeLong(shape);
-            
+
             var tensor = new Tensor();
             tensor.Shape = (int[])shape.Clone();
             tensor.RequiresGrad = false;
             tensor._storage = MemoryMappedTensorStorage.Create(filePath, totalElements);
             tensor.Data = Array.Empty<float>();
-            
+
             return tensor;
         }
 
@@ -218,7 +216,7 @@ namespace SmallMind.Core.Core
         public static long ShapeToSizeLong(int[] shape)
         {
             Guard.NotNull(shape);
-            
+
             long size = 1;
             for (int i = 0; i < shape.Length; i++)
             {
@@ -234,7 +232,7 @@ namespace SmallMind.Core.Core
         public void InitializeXavier(Random random, int fanIn, int fanOut)
         {
             float std = MathF.Sqrt(2.0f / (fanIn + fanOut));
-            
+
             if (_storage != null)
             {
                 // Chunked storage - initialize per chunk
@@ -381,7 +379,7 @@ namespace SmallMind.Core.Core
                         try
                         {
                             MatrixOps.MatMulTransposeB(result.Grad, b.Data, tempGradA, M, N, K);
-                            
+
                             // Accumulate gradients
                             for (int i = 0; i < M * K; i++)
                             {
@@ -401,7 +399,7 @@ namespace SmallMind.Core.Core
                         try
                         {
                             MatrixOps.MatMulTransposeA(a.Data, result.Grad, tempGradB, K, M, N);
-                            
+
                             // Accumulate gradients
                             for (int i = 0; i < K * N; i++)
                             {
@@ -478,7 +476,7 @@ namespace SmallMind.Core.Core
                         try
                         {
                             MatrixOps.MatMulTransposeB(result.Grad, b.Data, tempGradA, M, N, K);
-                            
+
                             for (int i = 0; i < M * K; i++)
                             {
                                 a.Grad[i] += tempGradA[i];
@@ -497,7 +495,7 @@ namespace SmallMind.Core.Core
                         try
                         {
                             MatrixOps.MatMulTransposeA(a.Data, result.Grad, tempGradB, K, M, N);
-                            
+
                             for (int i = 0; i < K * N; i++)
                             {
                                 b.Grad[i] += tempGradB[i];
@@ -530,7 +528,7 @@ namespace SmallMind.Core.Core
                 ReadOnlySpan<float> aSpan = a.Data;
                 ReadOnlySpan<float> bSpan = b.Data;
                 Span<float> resultSpan = result.Data;
-                
+
                 // Use SIMD-optimized addition from ElementWiseOps
                 ElementWiseOps.Add(aSpan, bSpan, resultSpan);
 
@@ -559,7 +557,7 @@ namespace SmallMind.Core.Core
             {
                 // Broadcasting case (simplified for common patterns)
                 BroadcastAdd(a, b, result);
-                
+
                 if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))
                 {
                     result.SetBackward(() =>
@@ -647,26 +645,26 @@ namespace SmallMind.Core.Core
         public Tensor Softmax(int dim = -1)
         {
             var result = new Tensor(Shape, RequiresGrad);
-            
+
             if (Shape.Length == 2 && dim == -1)
             {
                 int rows = Shape[0];
                 int cols = Shape[1];
-                
+
                 ReadOnlySpan<float> dataSpan = Data;
                 Span<float> resultSpan = result.Data;
-                
+
                 for (int i = 0; i < rows; i++)
                 {
                     int offset = i * cols;
-                    
+
                     // Find max for numerical stability
                     float max = float.NegativeInfinity;
                     for (int j = 0; j < cols; j++)
                     {
                         max = Math.Max(max, dataSpan[offset + j]);
                     }
-                    
+
                     // Exp and sum
                     float sum = 0;
                     for (int j = 0; j < cols; j++)
@@ -675,7 +673,7 @@ namespace SmallMind.Core.Core
                         resultSpan[offset + j] = exp;
                         sum += exp;
                     }
-                    
+
                     // Normalize
                     for (int j = 0; j < cols; j++)
                     {
@@ -683,7 +681,7 @@ namespace SmallMind.Core.Core
                     }
                 }
             }
-            
+
             // Softmax backward is complex, simplified here
             if (RequiresGrad)
             {
@@ -698,7 +696,7 @@ namespace SmallMind.Core.Core
                     }
                 });
             }
-            
+
             return result;
         }
 
@@ -718,7 +716,7 @@ namespace SmallMind.Core.Core
         {
             if (ShapeToSize(newShape) != Size)
                 throw new ArgumentException("New shape must have same total size");
-            
+
             var result = new Tensor((float[])Data.Clone(), newShape, RequiresGrad);
             if (RequiresGrad)
             {
@@ -743,15 +741,15 @@ namespace SmallMind.Core.Core
         {
             if (ShapeToSize(newShape) != Size)
                 throw new ArgumentException("New shape must have same total size");
-            
+
             // Create a view that shares the same Data array (no clone)
             var result = new Tensor(Data, newShape, RequiresGrad);
-            
+
             if (RequiresGrad)
             {
                 // For views, gradient sharing is also just a reference
                 result.Grad = Grad;
-                
+
                 result.SetBackward(() =>
                 {
                     // Gradients are already shared, so no accumulation needed
@@ -768,11 +766,11 @@ namespace SmallMind.Core.Core
         {
             if (Shape.Length != 2)
                 throw new ArgumentException("Transpose only works on 2D tensors");
-            
+
             int rows = Shape[0];
             int cols = Shape[1];
             var result = new Tensor(new int[] { cols, rows }, RequiresGrad);
-            
+
             // Use unsafe pointers for better performance (eliminates bounds checking)
             unsafe
             {
@@ -788,7 +786,7 @@ namespace SmallMind.Core.Core
                     }
                 }
             }
-            
+
             if (RequiresGrad)
             {
                 result.SetBackward(() =>
@@ -810,7 +808,7 @@ namespace SmallMind.Core.Core
                     }
                 });
             }
-            
+
             return result;
         }
 
@@ -835,10 +833,10 @@ namespace SmallMind.Core.Core
         {
             Guard.NotNull(shape);
             Guard.NotNullOrEmpty(shape);
-            
+
             int size = ShapeToSize(shape);
             var data = TensorPool.Shared.Rent(size, out int capacity);
-            
+
             float[]? grad = null;
             bool pooledGrad = false;
             if (requiresGrad)
@@ -847,18 +845,18 @@ namespace SmallMind.Core.Core
                 grad.AsSpan(0, size).Clear(); // Zero out gradient
                 pooledGrad = true;
             }
-            
+
             var tensor = new PooledTensor(data, shape, capacity, requiresGrad, pooledGrad);
             if (grad != null)
             {
                 tensor.Grad = grad;
             }
-            
+
             return tensor;
         }
 
         // In-place operations
-        
+
         /// <summary>
         /// Add another tensor to this tensor in-place. Shapes must match.
         /// </summary>
@@ -867,7 +865,7 @@ namespace SmallMind.Core.Core
             Guard.NotNull(other);
             if (!ShapesEqual(Shape, other.Shape))
                 throw new ArgumentException("Shapes must match for AddInPlace");
-            
+
             Span<float> dataSpan = Data;
             ReadOnlySpan<float> otherSpan = other.Data;
             for (int i = 0; i < Size; i++)
@@ -875,7 +873,7 @@ namespace SmallMind.Core.Core
                 dataSpan[i] += otherSpan[i];
             }
         }
-        
+
         /// <summary>
         /// Multiply this tensor by another tensor in-place. Shapes must match.
         /// </summary>
@@ -884,7 +882,7 @@ namespace SmallMind.Core.Core
             Guard.NotNull(other);
             if (!ShapesEqual(Shape, other.Shape))
                 throw new ArgumentException("Shapes must match for MulInPlace");
-            
+
             Span<float> dataSpan = Data;
             ReadOnlySpan<float> otherSpan = other.Data;
             for (int i = 0; i < Size; i++)
@@ -892,7 +890,7 @@ namespace SmallMind.Core.Core
                 dataSpan[i] *= otherSpan[i];
             }
         }
-        
+
         /// <summary>
         /// Scale this tensor by a scalar in-place.
         /// </summary>
@@ -904,7 +902,7 @@ namespace SmallMind.Core.Core
                 dataSpan[i] *= scalar;
             }
         }
-        
+
         /// <summary>
         /// Add a scaled tensor to this tensor in-place: this += scale * other
         /// </summary>
@@ -913,7 +911,7 @@ namespace SmallMind.Core.Core
             Guard.NotNull(other);
             if (!ShapesEqual(Shape, other.Shape))
                 throw new ArgumentException("Shapes must match for AddScaledInPlace");
-            
+
             Span<float> dataSpan = Data;
             ReadOnlySpan<float> otherSpan = other.Data;
             for (int i = 0; i < Size; i++)
@@ -921,7 +919,7 @@ namespace SmallMind.Core.Core
                 dataSpan[i] += scale * otherSpan[i];
             }
         }
-        
+
         /// <summary>
         /// Copy data from another tensor to this tensor.
         /// </summary>
@@ -930,12 +928,12 @@ namespace SmallMind.Core.Core
             Guard.NotNull(source);
             if (!ShapesEqual(Shape, source.Shape))
                 throw new ArgumentException("Shapes must match for CopyFrom");
-            
+
             source.Data.CopyTo(Data, 0);
         }
-        
+
         // Functional overloads with optional destination parameter
-        
+
         /// <summary>
         /// Element-wise addition with optional destination tensor.
         /// If dest is provided, result is written there (must have matching shape).
@@ -948,14 +946,14 @@ namespace SmallMind.Core.Core
                 // Validate dest shape matches
                 if (!ShapesEqual(a.Shape, dest.Shape))
                     throw new ArgumentException("Destination shape must match source shape");
-                
+
                 // Write result to dest
                 if (ShapesEqual(a.Shape, b.Shape))
                 {
                     ReadOnlySpan<float> aSpan = a.Data;
                     ReadOnlySpan<float> bSpan = b.Data;
                     Span<float> destSpan = dest.Data;
-                    
+
                     // Use SIMD-optimized addition from ElementWiseOps
                     ElementWiseOps.Add(aSpan, bSpan, destSpan);
                 }
@@ -964,13 +962,13 @@ namespace SmallMind.Core.Core
                     // Broadcasting case
                     BroadcastAdd(a, b, dest);
                 }
-                
+
                 // Setup backward if needed
                 if (requiresGrad && (a.RequiresGrad || b.RequiresGrad))
                 {
                     dest.SetBackward(() => BroadcastAddBackward(a, b, dest));
                 }
-                
+
                 return dest;
             }
             else
@@ -1060,21 +1058,21 @@ namespace SmallMind.Core.Core
         public void Dispose()
         {
             if (_disposed) return;
-            
+
             if (_storage is IDisposable disposableStorage)
             {
                 disposableStorage.Dispose();
             }
-            
+
             if (_gradStorage is IDisposable disposableGradStorage)
             {
                 disposableGradStorage.Dispose();
             }
-            
+
             _disposed = true;
         }
     }
-    
+
     /// <summary>
     /// A pooled tensor that returns its backing array to TensorPool when disposed.
     /// Use for temporary/scratch tensors only. DO NOT use for model weights.
@@ -1085,34 +1083,34 @@ namespace SmallMind.Core.Core
         private readonly int _capacity;
         private bool _disposed;
         private readonly bool _pooledGrad; // Track if gradient is also pooled
-        
+
         internal PooledTensor(float[] data, int[] shape, int capacity, bool requiresGrad = false, bool pooledGrad = false)
             : base(data, shape, capacity, requiresGrad)
         {
             _capacity = capacity;
             _pooledGrad = pooledGrad;
         }
-        
+
         public int Capacity => _capacity;
-        
+
         public new void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            
+
             TensorPool.Shared.Return(Data, clearArray: true);
-            
+
             // Return gradient to pool if it was also pooled
             if (_pooledGrad && Grad != null)
             {
                 TensorPool.Shared.Return(Grad, clearArray: true);
             }
-            
+
             // Call base dispose in case the tensor also uses memory-mapped storage
             base.Dispose();
         }
     }
-    
+
     /// <summary>
     /// Scope helper for automatically returning pooled tensors.
     /// Usage: using var scope = new TensorScope();
@@ -1121,14 +1119,14 @@ namespace SmallMind.Core.Core
     internal sealed class TensorScope : IDisposable
     {
         private readonly System.Collections.Generic.List<PooledTensor> _tensors = new();
-        
+
         public PooledTensor Rent(int[] shape, bool requiresGrad = false)
         {
             var tensor = Tensor.CreatePooled(shape, requiresGrad);
             _tensors.Add(tensor);
             return tensor;
         }
-        
+
         public void Dispose()
         {
             foreach (var tensor in _tensors)

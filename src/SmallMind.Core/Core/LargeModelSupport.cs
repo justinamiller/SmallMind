@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Core.Utilities;
 using SmallMind.Core.Validation;
 

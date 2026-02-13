@@ -1,6 +1,4 @@
-using System;
 using SmallMind.Rag.Prompting;
-using Xunit;
 
 namespace SmallMind.Tests.Rag
 {

@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Runtime.Execution
 {
     /// <summary>
@@ -14,21 +12,21 @@ namespace SmallMind.Runtime.Execution
         /// Set to 1 for single-threaded execution.
         /// </summary>
         public int MaxDegreeOfParallelism { get; set; } = Environment.ProcessorCount;
-        
+
         /// <summary>
         /// Gets or sets whether to enforce deterministic execution.
         /// When true, forces single-threaded execution and fixed scheduling for reproducibility.
         /// Default: false (allows parallelism).
         /// </summary>
         public bool DeterministicMode { get; set; } = false;
-        
+
         /// <summary>
         /// Gets or sets the minimum work size threshold for parallelization.
         /// Operations smaller than this threshold execute single-threaded to avoid overhead.
         /// Default: 1024 elements.
         /// </summary>
         public int ParallelizationThreshold { get; set; } = 1024;
-        
+
         /// <summary>
         /// Gets or sets whether KV cache is mandatory for generation.
         /// When true, generation requires KV cache (no full-context recomputation).
@@ -36,7 +34,7 @@ namespace SmallMind.Runtime.Execution
         /// Default: true (cache is mandatory).
         /// </summary>
         public bool RequireKvCache { get; set; } = true;
-        
+
         /// <summary>
         /// Gets or sets whether to enable detailed telemetry collection.
         /// When enabled, tracks prefill/decode timing, cache metrics, and allocations.
@@ -44,7 +42,7 @@ namespace SmallMind.Runtime.Execution
         /// Default: true.
         /// </summary>
         public bool EnableTelemetry { get; set; } = true;
-        
+
         /// <summary>
         /// Creates a copy of these runtime options.
         /// </summary>
@@ -59,7 +57,7 @@ namespace SmallMind.Runtime.Execution
                 EnableTelemetry = EnableTelemetry
             };
         }
-        
+
         /// <summary>
         /// Validates the runtime options and adjusts for consistency.
         /// </summary>
@@ -69,12 +67,12 @@ namespace SmallMind.Runtime.Execution
             {
                 MaxDegreeOfParallelism = 1;
             }
-            
+
             if (ParallelizationThreshold < 0)
             {
                 ParallelizationThreshold = 0;
             }
-            
+
             // Deterministic mode forces single-threaded execution
             if (DeterministicMode)
             {

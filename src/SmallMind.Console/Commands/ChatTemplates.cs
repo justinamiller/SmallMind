@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Core.Utilities;
 
 namespace SmallMind.ConsoleApp.Commands

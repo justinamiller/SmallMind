@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using Xunit;
-
 namespace SmallMind.Tests.Chat
 {
     /// <summary>

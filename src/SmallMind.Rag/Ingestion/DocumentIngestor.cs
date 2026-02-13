@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using SmallMind.Abstractions.Telemetry;
@@ -25,16 +22,16 @@ internal sealed class DocumentIngestor
     public List<DocumentRecord> IngestDirectory(string path, string includePatterns = "*.txt;*.md;*.json;*.log", IRuntimeLogger? logger = null)
     {
         logger ??= NullRuntimeLogger.Instance;
-        
+
         if (path == null)
             throw new ArgumentNullException(nameof(path));
-        
+
         if (!Directory.Exists(path))
             throw new DirectoryNotFoundException($"Directory not found: {path}");
-        
+
         var documents = new List<DocumentRecord>();
         string[] patterns = ParsePatterns(includePatterns);
-        
+
         // Collect all matching files
         var filePaths = new List<string>();
         for (int i = 0; i < patterns.Length; i++)
@@ -52,7 +49,7 @@ internal sealed class DocumentIngestor
                 logger.Warn($"Failed to enumerate files with pattern '{patterns[i]}': {ex.Message}");
             }
         }
-        
+
         // Ingest each file
         for (int i = 0; i < filePaths.Count; i++)
         {
@@ -66,7 +63,7 @@ internal sealed class DocumentIngestor
                 logger.Warn($"Failed to ingest file '{filePaths[i]}': {ex.Message}");
             }
         }
-        
+
         return documents;
     }
 
@@ -81,25 +78,25 @@ internal sealed class DocumentIngestor
     {
         if (filePath == null)
             throw new ArgumentNullException(nameof(filePath));
-        
+
         if (!File.Exists(filePath))
             throw new FileNotFoundException($"File not found: {filePath}");
-        
+
         // Read file content
         byte[] contentBytes = File.ReadAllBytes(filePath);
-        
+
         // Compute SHA256 hash
         string contentHash = ComputeSha256Hash(contentBytes);
-        
+
         // Get file metadata
         FileInfo fileInfo = new FileInfo(filePath);
         string fileName = Path.GetFileName(filePath);
         DateTime lastWriteTimeUtc = fileInfo.LastWriteTimeUtc;
         long sizeBytes = fileInfo.Length;
-        
+
         // Create stable document ID from path and hash
         string docId = ComputeDocumentId(filePath, contentHash);
-        
+
         return new DocumentRecord(
             docId: docId,
             title: fileName,
@@ -118,10 +115,10 @@ internal sealed class DocumentIngestor
     {
         if (string.IsNullOrWhiteSpace(includePatterns))
             return new[] { "*.*" };
-        
+
         string[] patterns = includePatterns.Split(';');
         var trimmedPatterns = new List<string>(patterns.Length);
-        
+
         for (int i = 0; i < patterns.Length; i++)
         {
             string trimmed = patterns[i].Trim();
@@ -130,7 +127,7 @@ internal sealed class DocumentIngestor
                 trimmedPatterns.Add(trimmed);
             }
         }
-        
+
         return trimmedPatterns.Count > 0 ? trimmedPatterns.ToArray() : new[] { "*.*" };
     }
 
@@ -141,7 +138,7 @@ internal sealed class DocumentIngestor
     {
         Span<byte> hashBytes = stackalloc byte[32]; // SHA256 produces 32 bytes
         SHA256.HashData(contentBytes, hashBytes);
-        
+
         // Convert to hex string efficiently using .NET 5+ API
         return Convert.ToHexString(hashBytes);
     }
@@ -153,14 +150,14 @@ internal sealed class DocumentIngestor
     {
         // Normalize path to use forward slashes for cross-platform consistency
         string normalizedPath = filePath.Replace('\\', '/');
-        
+
         // Combine path and hash for uniqueness
         string combined = $"{normalizedPath}|{contentHash}";
-        
+
         // Hash the combined string
         Span<byte> hashBytes = stackalloc byte[32];
         SHA256.HashData(Encoding.UTF8.GetBytes(combined), hashBytes);
-        
+
         return Convert.ToHexString(hashBytes);
     }
 }

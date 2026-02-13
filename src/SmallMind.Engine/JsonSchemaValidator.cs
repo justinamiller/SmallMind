@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -14,13 +11,13 @@ namespace SmallMind.Engine
     {
         // Static cache for compiled regex patterns to avoid repeated compilation
         // Thread-safe dictionary with lock for cache updates
-        private static readonly Dictionary<string, Regex> PatternCache = 
+        private static readonly Dictionary<string, Regex> PatternCache =
             new(StringComparer.Ordinal);
         private static readonly object PatternCacheLock = new();
-        
+
         // Timeout for schema patterns to prevent ReDoS attacks
         private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
-        
+
         /// <summary>
         /// Validates JSON against a schema.
         /// </summary>
@@ -189,7 +186,7 @@ namespace SmallMind.Engine
             {
                 var patternStr = pattern.GetString() ?? "";
                 Regex regex;
-                
+
                 // Check cache first, compile and cache if not present (with timeout protection)
                 lock (PatternCacheLock)
                 {
@@ -199,7 +196,7 @@ namespace SmallMind.Engine
                         PatternCache[patternStr] = regex;
                     }
                 }
-                
+
                 try
                 {
                     if (!regex.IsMatch(value))

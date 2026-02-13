@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
-using Xunit;
-using SmallMind.Runtime.Metrics;
 using SmallMind.Core.Core;
+using SmallMind.Runtime.Metrics;
 
 namespace SmallMind.Tests.Metrics
 {
@@ -92,7 +89,7 @@ namespace SmallMind.Tests.Metrics
             var parameters = new List<Tensor> { param1, param2 };
 
             // Act
-            var (meanNorm, maxNorm, minNorm, nanCount, infCount) = 
+            var (meanNorm, maxNorm, minNorm, nanCount, infCount) =
                 MetricsComputer.ComputeGradientStats(parameters);
 
             // Assert

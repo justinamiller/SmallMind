@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Tests
 {
     /// <summary>
@@ -21,7 +18,7 @@ namespace SmallMind.Tests
             public const string Prompt = "Hello";
             public const int MaxTokens = 20;
             public const int Seed = 42;
-            
+
             // Golden output (to be populated by running actual generation)
             // Format: [token1, token2, token3, ...]
             public static readonly int[] GoldenTokens = new[]
@@ -32,7 +29,7 @@ namespace SmallMind.Tests
                 32, 119, 111, 114, 108, 100, // " world"
                 33, 32, 84, 104, 105, 115, 32, 105, 115 // "! This is"
             };
-            
+
             public const string GoldenText = "Hello world! This is";
         }
 
@@ -43,7 +40,7 @@ namespace SmallMind.Tests
         public static class ForwardPassLogits
         {
             public static readonly int[] InputTokens = new[] { 65, 66, 67 }; // "ABC"
-            
+
             // Top 10 logits at last position (to be populated from actual run)
             // These are the raw logit values before softmax
             public static readonly float[] Top10Logits = new[]
@@ -51,19 +48,19 @@ namespace SmallMind.Tests
                 -2.3456f, -2.4567f, -2.5678f, -2.6789f, -2.7890f,
                 -2.8901f, -2.9012f, -3.0123f, -3.1234f, -3.2345f
             };
-            
+
             // Indices of top 10 logits (which tokens they correspond to)
             public static readonly int[] Top10Indices = new[]
             {
                 68, 69, 70, 71, 72, 73, 74, 75, 76, 77 // D-M
             };
-            
+
             // Statistics for validation
             public const float ExpectedMean = -2.7f;      // Approximate mean of logits
             public const float ExpectedVariance = 0.8f;    // Approximate variance
             public const float ExpectedMin = -8.5f;        // Approximate min
             public const float ExpectedMax = -1.5f;        // Approximate max
-            
+
             // Tolerance for floating point comparisons
             public const float Tolerance = 0.1f;
         }
@@ -76,7 +73,7 @@ namespace SmallMind.Tests
             public const string Prompt = "Test";
             public const int MaxTokens = 10;
             public const int Seed = 42;
-            
+
             // Expected: same tokens regardless of KV cache enabled/disabled
             public static readonly int[] ExpectedTokens = new[]
             {
@@ -93,15 +90,15 @@ namespace SmallMind.Tests
             // Q4_0: 4-bit quantization (no min)
             public const float Q4_0_MaxError = 0.05f;
             public const float Q4_0_MeanError = 0.02f;
-            
+
             // Q8_0: 8-bit quantization (higher precision)
             public const float Q8_0_MaxError = 0.01f;
             public const float Q8_0_MeanError = 0.005f;
-            
+
             // Q4_1: 4-bit with min (to be added in WS3)
             public const float Q4_1_MaxError = 0.04f;
             public const float Q4_1_MeanError = 0.015f;
-            
+
             // Q5_0: 5-bit quantization (to be added in WS3)
             public const float Q5_0_MaxError = 0.03f;
             public const float Q5_0_MeanError = 0.01f;
@@ -115,7 +112,7 @@ namespace SmallMind.Tests
             // Acceptable difference between fused Q4 matmul and dequant-then-matmul
             public const float Q4_FusedMaxDiff = 0.001f;
             public const float Q4_FusedMeanDiff = 0.0005f;
-            
+
             // Acceptable difference for Q8
             public const float Q8_FusedMaxDiff = 0.0005f;
             public const float Q8_FusedMeanDiff = 0.0001f;
@@ -129,7 +126,7 @@ namespace SmallMind.Tests
             public const string Prompt = "Count: 1, 2, 3";
             public static readonly string[] StopSeqs = new[] { ",", "\n" };
             public const int MaxTokens = 50;
-            
+
             // Should stop at first comma (after "Count: 1")
             public const int ExpectedMaxGeneratedTokens = 10; // Should be less than MaxTokens
         }

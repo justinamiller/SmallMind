@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Core;
 using SmallMind.Transformers;
 
@@ -22,7 +20,7 @@ namespace SmallMind.Tests
             // Arrange
             var dropout = new Dropout(0.5f, new Random(42));
             dropout.Eval(); // Set to evaluation mode
-            
+
             var input = new Tensor(new int[] { 2, 3 }, requiresGrad: false);
             for (int i = 0; i < input.Size; i++)
             {
@@ -44,7 +42,7 @@ namespace SmallMind.Tests
             // Arrange
             var dropout = new Dropout(0.5f, new Random(42));
             dropout.Eval();
-            
+
             var input = new Tensor(new int[] { 4, 8 }, requiresGrad: false);
             for (int i = 0; i < input.Size; i++)
             {
@@ -68,7 +66,7 @@ namespace SmallMind.Tests
             // Arrange - p=0 means no dropout
             var dropout = new Dropout(0.0f, new Random(42));
             dropout.Train(); // Even in training mode, p=0 should passthrough
-            
+
             var input = new Tensor(new int[] { 3, 5 }, requiresGrad: true);
             for (int i = 0; i < input.Size; i++)
             {
@@ -90,7 +88,7 @@ namespace SmallMind.Tests
             // Arrange
             var dropout = new Dropout(0.5f, new Random(42));
             dropout.Train(); // Training mode
-            
+
             var input = new Tensor(new int[] { 2, 3 }, requiresGrad: true);
             for (int i = 0; i < input.Size; i++)
             {
@@ -112,7 +110,7 @@ namespace SmallMind.Tests
             // Arrange
             var dropout = new Dropout(0.3f, new Random(42));
             dropout.Eval();
-            
+
             var input = new Tensor(new int[] { 4, 4 }, requiresGrad: false);
 
             // Act - Call multiple times
@@ -145,7 +143,7 @@ namespace SmallMind.Tests
 
             var input1 = new Tensor(new int[] { 1, 8, 64 }, requiresGrad: false);
             var input2 = new Tensor(new int[] { 1, 8, 64 }, requiresGrad: false);
-            
+
             // Initialize with different values
             for (int i = 0; i < input1.Size; i++)
             {
@@ -155,7 +153,7 @@ namespace SmallMind.Tests
 
             // Act - First forward pass allocates workspaces
             var output1 = attention.Forward(input1);
-            
+
             // Second forward pass reuses workspaces
             var output2 = attention.Forward(input2);
 
@@ -169,8 +167,8 @@ namespace SmallMind.Tests
                     break;
                 }
             }
-            
-            Assert.True(hasDifference, 
+
+            Assert.True(hasDifference,
                 "Different inputs should produce different outputs (workspace clearing correctness)");
         }
 
@@ -193,7 +191,7 @@ namespace SmallMind.Tests
             {
                 input1.Data[i] = (float)Math.Tanh(i * 0.05);
             }
-            
+
             var input2 = new Tensor(new int[] { 1, 4, 32 }, requiresGrad: false);
             for (int i = 0; i < input2.Size; i++)
             {
@@ -238,17 +236,17 @@ namespace SmallMind.Tests
 
             // Act - Warm up (allocates workspaces)
             var warmup = model.Forward(input);
-            
+
             // Force GC to stabilize memory before measurement
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            
+
             // Measure allocations for second call (should reuse workspaces)
             long beforeBytes = GC.GetTotalAllocatedBytes(precise: true);
             var output = model.Forward(input);
             long afterBytes = GC.GetTotalAllocatedBytes(precise: true);
-            
+
             long allocated = afterBytes - beforeBytes;
 
             // Assert - Should have minimal allocations after warmup

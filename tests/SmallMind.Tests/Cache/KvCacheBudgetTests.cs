@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Abstractions;
 using SmallMind.Runtime.Cache;
-using Xunit;
 
 namespace SmallMind.Tests.Cache
 {
@@ -116,7 +113,7 @@ namespace SmallMind.Tests.Cache
             // Assert
             Assert.NotNull(entry3);
             Assert.NotEmpty(telemetry.EvictionEvents);
-            
+
             // Verify session-1 was evicted
             var evictedSession = telemetry.EvictionEvents[0].sessionId;
             Assert.Equal("session-1", evictedSession);
@@ -243,12 +240,12 @@ namespace SmallMind.Tests.Cache
 
             var entry1 = store.GetOrCreate(session1, modelShape, maxTokens: 128);
             var entry2 = store.GetOrCreate(session2, modelShape, maxTokens: 128);
-            
+
             var statsAtPeak = store.GetStats();
             long peakBytes = statsAtPeak.CurrentBytes;
 
             store.Remove(session1);
-            
+
             var statsFinal = store.GetStats();
 
             // Assert
@@ -272,7 +269,7 @@ namespace SmallMind.Tests.Cache
 
             // Assert
             Assert.Equal(original.MaxBytesPerSession, clone.MaxBytesPerSession);
-            
+
             // Modify clone shouldn't affect original
             clone.MaxBytesPerSession = 100 * 1024 * 1024;
             Assert.NotEqual(original.MaxBytesPerSession, clone.MaxBytesPerSession);

@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -106,21 +105,21 @@ namespace SmallMind.Quantization.Tensors
                     for (int i = 0; i < SUB_BLOCK_SIZE; i++)
                     {
                         int valueIdx = subBlock * SUB_BLOCK_SIZE + i;
-                        
+
                         // Reconstruct 6-bit value from low 4 bits (ql) and high 2 bits (qh)
                         // ql packs 2 values per byte: even values in low nibble, odd in high nibble
                         int qlIdx = valueIdx / 2;
                         byte qlByte = ql[qlIdx];
                         byte low4 = (valueIdx % 2 == 0) ? (byte)(qlByte & 0xF) : (byte)((qlByte >> 4) & 0xF);
-                        
+
                         // Extract high 2 bits from qh (4 values per byte)
                         int qhIdx = valueIdx / 4;
                         int qhShift = (valueIdx % 4) * 2;
                         byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
-                        
+
                         // Combine to form 6-bit value (range 0-63)
                         int q = low4 | (high2 << 4);
-                        
+
                         // Dequantize: center around 0 with -32 bias
                         dst[subBlockDstOffset + i] = sc * (q - 32);
                     }

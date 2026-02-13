@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace SmallMind.Tokenizers.Gguf
@@ -34,7 +32,7 @@ namespace SmallMind.Tokenizers.Gguf
             {
                 _mergeRanks[_merges[i]] = i;
             }
-            
+
             // Pre-compute byte tokens to avoid allocations in hot path
             _byteTokenCache = new string[256];
             for (int b = 0; b < 256; b++)
@@ -64,7 +62,7 @@ namespace SmallMind.Tokenizers.Gguf
             // Convert text to byte tokens first
             var bytes = Encoding.UTF8.GetBytes(text);
             var tokens = new List<string>();
-            
+
             foreach (byte b in bytes)
             {
                 // Use pre-computed byte token string (no allocation)
@@ -89,7 +87,7 @@ namespace SmallMind.Tokenizers.Gguf
 
                 var (left, right, rank) = bestPair.Value;
                 string merged = left + right;
-                
+
                 // Only merge if the result is in vocabulary
                 if (!_vocab.ContainsKey(merged))
                     break;
@@ -160,13 +158,13 @@ namespace SmallMind.Tokenizers.Gguf
             // Convert UTF-8 to string for simple implementation
             string text = Encoding.UTF8.GetString(utf8);
             var tokens = Encode(text);
-            
+
             int count = Math.Min(tokens.Count, tokensOut.Length);
             for (int i = 0; i < count; i++)
             {
                 tokensOut[i] = tokens[i];
             }
-            
+
             return count;
         }
 
@@ -181,14 +179,14 @@ namespace SmallMind.Tokenizers.Gguf
                 if (tokenId >= 0 && tokenId < _reverseVocab.Count)
                 {
                     string tokenStr = _reverseVocab[tokenId];
-                    
+
                     // Handle byte tokens (e.g., <0x20> for space)
                     if (GgufTokenizerHelpers.IsByteToken(tokenStr, out byte byteValue))
                     {
                         sb.Append((char)byteValue);
                         continue;
                     }
-                    
+
                     sb.Append(tokenStr);
                 }
             }
@@ -204,13 +202,13 @@ namespace SmallMind.Tokenizers.Gguf
             {
                 tokenList.Add(token);
             }
-            
+
             string text = Decode(tokenList);
             byte[] utf8Bytes = Encoding.UTF8.GetBytes(text);
-            
+
             int count = Math.Min(utf8Bytes.Length, utf8Out.Length);
             utf8Bytes.AsSpan(0, count).CopyTo(utf8Out);
-            
+
             return count;
         }
 
@@ -229,16 +227,16 @@ namespace SmallMind.Tokenizers.Gguf
             if (tokenId >= 0 && tokenId < _reverseVocab.Count)
             {
                 string tokenStr = _reverseVocab[tokenId];
-                
+
                 // Handle byte tokens
                 if (GgufTokenizerHelpers.IsByteToken(tokenStr, out byte byteValue))
                 {
                     return ((char)byteValue).ToString();
                 }
-                
+
                 return tokenStr;
             }
-            
+
             return string.Empty;
         }
     }

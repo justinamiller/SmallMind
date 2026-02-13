@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Transformers;
 
 namespace SmallMind.Tests
@@ -36,7 +34,7 @@ namespace SmallMind.Tests
         {
             // Arrange
             var rope = new RotaryEmbedding(maxSeqLen: 512, headDim: 4, theta: 10000f);
-            
+
             // Create simple test data: Q and K with known values
             // Shape: (batch=1, heads=1, seqLen=1, headDim=4)
             var q = new float[] { 1f, 0f, 1f, 0f };  // Two pairs: (1,0) and (1,0)
@@ -51,7 +49,7 @@ namespace SmallMind.Tests
             // At position 0: angle_0 = 0 * 1 = 0, angle_1 = 0 * 0.01 = 0
             // So cos = 1, sin = 0 for all pairs at position 0
             // Rotation: (x0, x1) -> (x0*1 - x1*0, x0*0 + x1*1) = (x0, x1) (identity)
-            
+
             Assert.Equal(1f, q[0], Tolerance); // Should remain unchanged
             Assert.Equal(0f, q[1], Tolerance);
             Assert.Equal(0f, k[0], Tolerance);
@@ -63,12 +61,12 @@ namespace SmallMind.Tests
         {
             // Arrange
             var rope = new RotaryEmbedding(maxSeqLen: 512, headDim: 4, theta: 10000f);
-            
+
             // Create test data with 2 sequence positions
             // Shape: (batch=1, heads=1, seqLen=2, headDim=4)
             var q = new float[8]; // 1*1*2*4
             var k = new float[8];
-            
+
             // Initialize with simple pattern
             for (int i = 0; i < 8; i++)
             {
@@ -91,13 +89,13 @@ namespace SmallMind.Tests
         {
             // Arrange
             var rope = new RotaryEmbedding(maxSeqLen: 512, headDim: 4);
-            
+
             // Test GQA scenario: 4 query heads, 2 KV heads
             // Q: (batch=1, nHeads=4, seqLen=1, headDim=4) = 16 elements
             // K: (batch=1, nKvHeads=2, seqLen=1, headDim=4) = 8 elements
             var q = new float[16];
             var k = new float[8];
-            
+
             // Initialize with pattern
             for (int i = 0; i < 16; i++) q[i] = (float)i;
             for (int i = 0; i < 8; i++) k[i] = (float)i;
@@ -116,7 +114,7 @@ namespace SmallMind.Tests
         {
             // Arrange
             var rope = new RotaryEmbedding(maxSeqLen: 512, headDim: 4);
-            
+
             // Test with 2 batches
             // Q: (batch=2, nHeads=1, seqLen=1, headDim=4) = 8 elements
             var q = new float[] { 1f, 0f, 1f, 0f, 2f, 0f, 2f, 0f };
@@ -141,7 +139,7 @@ namespace SmallMind.Tests
         {
             // Arrange
             var rope = new RotaryEmbedding(maxSeqLen: 512, headDim: 4);
-            
+
             // Test incremental decoding with position offset
             var q = new float[4] { 1f, 0f, 1f, 0f };
             var k = new float[4] { 0f, 1f, 0f, 1f };
@@ -175,10 +173,10 @@ namespace SmallMind.Tests
             // Arrange - create two RoPE instances with same parameters
             var rope1 = new RotaryEmbedding(maxSeqLen: 128, headDim: 8, theta: 10000f);
             var rope2 = new RotaryEmbedding(maxSeqLen: 128, headDim: 8, theta: 10000f);
-            
+
             var q1 = new float[8] { 1f, 2f, 3f, 4f, 5f, 6f, 7f, 8f };
             var k1 = new float[8] { 8f, 7f, 6f, 5f, 4f, 3f, 2f, 1f };
-            
+
             var q2 = (float[])q1.Clone();
             var k2 = (float[])k1.Clone();
 

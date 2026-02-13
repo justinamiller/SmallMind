@@ -1,8 +1,5 @@
-using System;
-using Xunit;
-using SmallMind.Tokenizers;
-using SmallMind.Transformers;
 using SmallMind.Runtime;
+using SmallMind.Tokenizers;
 
 namespace SmallMind.Tests
 {
@@ -32,7 +29,7 @@ namespace SmallMind.Tests
         {
             // Arrange
             string assetsPath = System.IO.Path.Combine("assets", "tokenizers", "default");
-            
+
             // Skip if assets don't exist
             if (!System.IO.Directory.Exists(assetsPath))
             {
@@ -89,7 +86,7 @@ namespace SmallMind.Tests
         {
             // Arrange
             string assetsPath = System.IO.Path.Combine("assets", "tokenizers", "default");
-            
+
             // Skip if assets don't exist
             if (!System.IO.Directory.Exists(assetsPath))
             {
@@ -104,7 +101,7 @@ namespace SmallMind.Tests
             var bpeTokens = bpeTokenizer.Encode(SampleText);
 
             // Assert - BPE should use fewer tokens
-            Assert.True(bpeTokens.Count < charTokens.Count, 
+            Assert.True(bpeTokens.Count < charTokens.Count,
                 $"BPE should compress better: BPE={bpeTokens.Count}, Char={charTokens.Count}");
         }
 
@@ -122,11 +119,11 @@ namespace SmallMind.Tests
             Assert.NotNull(autoTokenizer);
 
             // Test BPE mode with fallback
-            var bpeOptions = new TokenizerOptions 
-            { 
+            var bpeOptions = new TokenizerOptions
+            {
                 Mode = TokenizerMode.Bpe,
                 TokenizerName = "default",
-                Strict = false 
+                Strict = false
             };
             var bpeTokenizer = TokenizerFactory.Create(bpeOptions, SampleText);
             Assert.NotNull(bpeTokenizer);

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
-
 namespace SmallMind.Rag.Indexing.Sparse;
 
 /// <summary>
@@ -34,17 +30,17 @@ internal static class RagTokenizer
     public static List<string> Tokenize(ReadOnlySpan<char> text)
     {
         var tokens = new List<string>();
-        
+
         if (text.Length == 0)
             return tokens;
 
         int length = text.Length;
         int tokenStart = -1;
-        
+
         for (int i = 0; i < length; i++)
         {
             char c = text[i];
-            
+
             if (char.IsLetterOrDigit(c))
             {
                 if (tokenStart == -1)
@@ -84,8 +80,8 @@ internal static class RagTokenizer
     private static void AddLowercaseToken(ReadOnlySpan<char> tokenSpan, List<string> tokens)
     {
         // Use stack allocation for small tokens, heap for large
-        Span<char> lower = tokenSpan.Length <= 128 
-            ? stackalloc char[tokenSpan.Length] 
+        Span<char> lower = tokenSpan.Length <= 128
+            ? stackalloc char[tokenSpan.Length]
             : new char[tokenSpan.Length];
 
         for (int i = 0; i < tokenSpan.Length; i++)

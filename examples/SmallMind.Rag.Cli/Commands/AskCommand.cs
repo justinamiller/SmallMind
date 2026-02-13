@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using SmallMind.Rag.Indexing;
 using SmallMind.Rag.Indexing.Sparse;
 
@@ -66,7 +62,7 @@ internal static class AskCommand
             for (int i = 0; i < results.Count; i++)
             {
                 var result = results[i];
-                
+
                 // Get the full chunk from the store
                 if (!chunkStore.TryGetValue(result.ChunkId, out var chunk))
                 {
@@ -111,7 +107,7 @@ internal static class AskCommand
             for (int i = 0; i < results.Count; i++)
             {
                 var result = results[i];
-                
+
                 if (!chunkStore.TryGetValue(result.ChunkId, out var chunk))
                     continue;
 

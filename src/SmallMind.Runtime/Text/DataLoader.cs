@@ -1,12 +1,7 @@
-using SmallMind.Abstractions.Telemetry;
-using SmallMind.Core.Core;
-using SmallMind.Transformers;
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Runtime
 {
@@ -36,7 +31,7 @@ namespace SmallMind.Runtime
 
             // Pre-size list based on estimated average line count
             var sentences = new List<string>(capacity: 1024);
-            
+
             using (var reader = new StreamReader(filePath, Encoding.UTF8))
             {
                 string? line;
@@ -48,7 +43,7 @@ namespace SmallMind.Runtime
                     }
                 }
             }
-            
+
             logger.Info($"Loaded {sentences.Count} sentences from {filePath}");
             return string.Join(separator, sentences);
         }
@@ -71,7 +66,7 @@ namespace SmallMind.Runtime
 
             var jsonText = File.ReadAllText(filePath);
             var doc = JsonDocument.Parse(jsonText);
-            
+
             if (!doc.RootElement.TryGetProperty("sentences", out var sentencesElement))
             {
                 throw new InvalidDataException("JSON file must contain a 'sentences' array");
@@ -80,7 +75,7 @@ namespace SmallMind.Runtime
             // Pre-size based on array length if available
             int arrayLength = sentencesElement.GetArrayLength();
             var sentences = new List<string>(capacity: arrayLength);
-            
+
             foreach (var element in sentencesElement.EnumerateArray())
             {
                 var sentence = element.GetString();
@@ -114,7 +109,7 @@ namespace SmallMind.Runtime
             var doc = XDocument.Load(filePath);
             // Pre-size list with estimated capacity
             var sentences = new List<string>(capacity: 512);
-            
+
             foreach (var element in doc.Descendants(elementName))
             {
                 var value = element.Value;
@@ -140,7 +135,7 @@ namespace SmallMind.Runtime
         /// <param name="delimiter">CSV delimiter (default: comma)</param>
         /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Concatenated text from the specified column</returns>
-        public static string FromCsvFile(string filePath, int columnIndex = 0, bool hasHeader = true, 
+        public static string FromCsvFile(string filePath, int columnIndex = 0, bool hasHeader = true,
             string separator = "\n", char delimiter = ',', IRuntimeLogger? logger = null)
         {
             logger ??= NullRuntimeLogger.Instance;
@@ -163,7 +158,7 @@ namespace SmallMind.Runtime
                         skipHeader = false;
                         continue;
                     }
-                    
+
                     var fields = ParseCsvLine(line, delimiter);
                     if (fields.Count > columnIndex)
                     {
@@ -264,7 +259,7 @@ namespace SmallMind.Runtime
             }
 
             delimiters ??= new[] { ".", "!", "?" };
-            
+
             // Validate that all delimiters are single characters for optimized parsing
             var delimiterChars = new HashSet<char>();
             for (int i = 0; i < delimiters.Length; i++)
@@ -275,15 +270,15 @@ namespace SmallMind.Runtime
                 }
                 delimiterChars.Add(delimiters[i][0]);
             }
-            
+
             // Pre-size list based on estimated sentence count (rough heuristic: 1 sentence per 80 chars)
             int estimatedSentences = Math.Max(16, text.Length / 80);
             var sentences = new List<string>(capacity: estimatedSentences);
-            
+
             // Manual parsing to avoid string.Split allocation
             int sentenceStart = 0;
             ReadOnlySpan<char> textSpan = text.AsSpan();
-            
+
             for (int i = 0; i < textSpan.Length; i++)
             {
                 if (delimiterChars.Contains(textSpan[i]))
@@ -300,7 +295,7 @@ namespace SmallMind.Runtime
                     sentenceStart = i + 1;
                 }
             }
-            
+
             // Add remaining text
             if (sentenceStart < text.Length)
             {

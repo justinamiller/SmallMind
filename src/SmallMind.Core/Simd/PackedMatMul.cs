@@ -1,8 +1,6 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-using System.Threading.Tasks;
 
 namespace SmallMind.Core.Simd
 {
@@ -24,14 +22,14 @@ namespace SmallMind.Core.Simd
         private const int MC = 256;  // M-dimension blocking for L2 cache
         private const int KC = 512;  // K-dimension blocking for L1/L2
         private const int NC = 4096; // N-dimension blocking for L3 cache
-        
+
         // Microkernel tile sizes
         private const int MR = 6;   // M-register blocking
         private const int NR = 16;  // N-register blocking (AVX2: 2x8, AVX-512: 1x16)
-        
+
         // Thread tiling threshold
         private const int PARALLEL_THRESHOLD_M = 256;
-        
+
         /// <summary>
         /// Packed B-matrix storage optimized for cache-blocked GEMM.
         /// Layout: [NC panels] -> [KC blocks] -> [NR columns] -> [KC rows]
@@ -44,12 +42,12 @@ namespace SmallMind.Core.Simd
             private readonly int _cols;
             internal readonly int _paddedCols;  // Made internal for access
             private bool _disposed;
-            
+
             public int Rows => _rows;
             public int Cols => _cols;
             public ReadOnlySpan<float> Data => _data;
             public int PaddedCols => _paddedCols;  // Public accessor
-            
+
             internal PackedMatrix(int rows, int cols)
             {
                 _rows = rows;
@@ -60,7 +58,7 @@ namespace SmallMind.Core.Simd
                 int numPanels = (_paddedCols + NR - 1) / NR;
                 _data = new float[numPanels * rows * NR];
             }
-            
+
             /// <summary>
             /// Packs source matrix B into panel-major layout for optimal cache utilization.
             /// Layout: For each NR-wide column panel, store all K rows contiguously.
@@ -72,28 +70,28 @@ namespace SmallMind.Core.Simd
             {
                 if (sourceRows != _rows || sourceCols != _cols)
                     throw new ArgumentException($"Source dims {sourceRows}×{sourceCols} != packed dims {_rows}×{_cols}");
-                
+
                 int numPanels = (_paddedCols + NR - 1) / NR;
-                
+
                 // Pack into panel-major layout: each panel contains K rows × NR cols
                 for (int panelIdx = 0; panelIdx < numPanels; panelIdx++)
                 {
                     int jStart = panelIdx * NR;
                     int jEnd = Math.Min(jStart + NR, _cols);
                     int panelWidth = jEnd - jStart;
-                    
+
                     // For each row in this panel
                     for (int k = 0; k < _rows; k++)
                     {
                         int destBase = panelIdx * _rows * NR + k * NR;
                         int srcBase = k * sourceCols + jStart;
-                        
+
                         // Copy panel-width elements
                         for (int jj = 0; jj < panelWidth; jj++)
                         {
                             _data[destBase + jj] = source[srcBase + jj];
                         }
-                        
+
                         // Zero-pad remainder
                         for (int jj = panelWidth; jj < NR; jj++)
                         {
@@ -102,7 +100,7 @@ namespace SmallMind.Core.Simd
                     }
                 }
             }
-            
+
             public void Dispose()
             {
                 if (_disposed) return;
@@ -110,7 +108,7 @@ namespace SmallMind.Core.Simd
                 _disposed = true;
             }
         }
-        
+
         /// <summary>
         /// Creates a packed B-matrix ready for cache-blocked GEMM.
         /// Pack once, reuse many times for batch inference.
@@ -121,7 +119,7 @@ namespace SmallMind.Core.Simd
             packed.Pack(B, rows, cols);
             return packed;
         }
-        
+
         /// <summary>
         /// Matrix multiply with packed B: C[M×N] = A[M×K] × B_packed[K×N]
         /// Uses cache-blocked algorithm with static thread tiling.
@@ -137,10 +135,10 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException($"A length {A.Length} < {M * K}");
             if (C.Length < M * N)
                 throw new ArgumentException($"C length {C.Length} < {M * N}");
-            
+
             // Zero output
             Array.Clear(C);
-            
+
             // Dispatch based on size
             if (M >= PARALLEL_THRESHOLD_M)
             {
@@ -151,7 +149,7 @@ namespace SmallMind.Core.Simd
                 MultiplySerial(A.AsSpan(), B.Data, C.AsSpan(), M, K, N, B._paddedCols);
             }
         }
-        
+
         /// <summary>
         /// Matrix multiply with packed B (Span overload): C[M×N] = A[M×K] × B_packed[K×N]
         /// Uses cache-blocked algorithm (serial only for Span version).
@@ -167,14 +165,14 @@ namespace SmallMind.Core.Simd
                 throw new ArgumentException($"A length {A.Length} < {M * K}");
             if (C.Length < M * N)
                 throw new ArgumentException($"C length {C.Length} < {M * N}");
-            
+
             // Zero output
             C.Clear();
-            
+
             // Use serial path (Span can't be captured in Parallel.For)
             MultiplySerial(A, B.Data, C, M, K, N, B._paddedCols);
         }
-        
+
         /// <summary>
         /// Serial cache-blocked GEMM for small-to-medium matrices.
         /// </summary>
@@ -189,24 +187,24 @@ namespace SmallMind.Core.Simd
                 for (int nc = 0; nc < N; nc += NC)
                 {
                     int nb = Math.Min(NC, N - nc);
-                    
+
                     // L2 cache blocking (KC)
                     for (int kc = 0; kc < K; kc += KC)
                     {
                         int kb = Math.Min(KC, K - kc);
-                        
+
                         // L1 cache blocking (MC)
                         for (int mc = 0; mc < M; mc += MC)
                         {
                             int mb = Math.Min(MC, M - mc);
-                            
+
                             // Microkernel loop
                             // For panel-major layout with KC blocking:
                             // - Pass panelStride = K (full matrix K dimension) for correct panel offset calculation
                             // - Bpacked points to the start of row kc in panel 0
                             // - Microkernel will calculate offsets for other panels using panelStride
                             float* packedBlockStart = pB + kc * NR;
-                            
+
                             GemmMicrokernel(
                                 pA + mc * K + kc,
                                 packedBlockStart,
@@ -217,7 +215,7 @@ namespace SmallMind.Core.Simd
                 }
             }
         }
-        
+
         /// <summary>
         /// Parallel cache-blocked GEMM for large matrices.
         /// Uses static thread tiling to avoid Parallel.For overhead.
@@ -229,23 +227,23 @@ namespace SmallMind.Core.Simd
         {
             int numThreads = Environment.ProcessorCount;
             int chunkSize = (M + numThreads - 1) / numThreads;
-            
+
             Parallel.For(0, numThreads, threadId =>
             {
                 int mcStart = threadId * chunkSize;
                 if (mcStart >= M) return;
-                
+
                 int mcEnd = Math.Min(mcStart + chunkSize, M);
-                
+
                 // Work with spans (thread-safe, no pinning needed in lambda)
                 var spanA = A.AsSpan();
                 var spanB = Bpacked.AsSpan();
                 var spanC = C.AsSpan();
-                
+
                 ProcessChunk(spanA, spanB, spanC, mcStart, mcEnd, M, K, N, ldB);
             });
         }
-        
+
         /// <summary>
         /// Process a chunk of the matrix multiply (helper for parallel execution).
         /// </summary>
@@ -260,24 +258,24 @@ namespace SmallMind.Core.Simd
                 for (int nc = 0; nc < N; nc += NC)
                 {
                     int nb = Math.Min(NC, N - nc);
-                    
+
                     // L2 cache blocking (KC)
                     for (int kc = 0; kc < K; kc += KC)
                     {
                         int kb = Math.Min(KC, K - kc);
-                        
+
                         // This thread's M-range
                         for (int mc = mcStart; mc < mcEnd; mc += MC)
                         {
                             int mb = Math.Min(MC, mcEnd - mc);
-                            
+
                             // Microkernel loop
                             // For panel-major layout with KC blocking:
                             // - Pass panelStride = K (full matrix K dimension) for correct panel offset calculation
                             // - Bpacked points to the start of row kc in panel 0
                             // - Microkernel will calculate offsets for other panels using panelStride
                             float* packedBlockStart = pB + kc * NR;
-                            
+
                             GemmMicrokernel(
                                 pA + mc * K + kc,
                                 packedBlockStart,
@@ -288,7 +286,7 @@ namespace SmallMind.Core.Simd
                 }
             }
         }
-        
+
         /// <summary>
         /// Cache-blocked microkernel dispatcher.
         /// Processes MR×NR tiles with optimal SIMD kernels.
@@ -314,7 +312,7 @@ namespace SmallMind.Core.Simd
                 GemmMicrokernelScalar(A, Bpacked, C, M, K, N, ldA, ldC);
             }
         }
-        
+
         /// <summary>
         /// AVX-512 microkernel: 6×32 tile (MR=6, NR=32 using 2x16 vectors).
         /// </summary>
@@ -329,17 +327,17 @@ namespace SmallMind.Core.Simd
                 GemmMicrokernelAvx2(A, Bpacked, C, M, K, N, ldA, panelStride, ldC);
                 return;
             }
-            
+
             const int NR_AVX512 = 32;
-            
+
             for (int i = 0; i < M; i += MR)
             {
                 int mr = Math.Min(MR, M - i);
-                
+
                 for (int j = 0; j < N; j += NR_AVX512)
                 {
                     int nr = Math.Min(NR_AVX512, N - j);
-                    
+
                     if (mr == MR && nr == NR_AVX512)
                     {
                         // Full tile fast path
@@ -347,7 +345,7 @@ namespace SmallMind.Core.Simd
                         int panelIdx = j / NR_AVX512;
                         // Use panelStride (full K) for panel offset, not K (which is kb in blocked case)
                         float* panelBase = Bpacked + panelIdx * panelStride * NR_AVX512;
-                        
+
                         GemmKernelAvx512_6x32(
                             A + i * ldA,
                             panelBase,
@@ -360,14 +358,14 @@ namespace SmallMind.Core.Simd
                         int panelIdx = j / NR_AVX512;
                         float* panelBase = Bpacked + panelIdx * panelStride * NR_AVX512;
                         int jInPanel = j % NR_AVX512;
-                        
+
                         GemmKernelScalar(A + i * ldA, panelBase + jInPanel, C + i * ldC + j,
                                         mr, K, nr, ldA, NR_AVX512, ldC);
                     }
                 }
             }
         }
-        
+
         /// <summary>
         /// AVX2 microkernel: 6×16 tile (MR=6, NR=16 using 2x8 vectors).
         /// </summary>
@@ -382,15 +380,15 @@ namespace SmallMind.Core.Simd
                 GemmMicrokernelScalar(A, Bpacked, C, M, K, N, ldA, ldC);
                 return;
             }
-            
+
             for (int i = 0; i < M; i += MR)
             {
                 int mr = Math.Min(MR, M - i);
-                
+
                 for (int j = 0; j < N; j += NR)
                 {
                     int nr = Math.Min(NR, N - j);
-                    
+
                     if (mr == MR && nr == NR)
                     {
                         // Full tile fast path
@@ -398,7 +396,7 @@ namespace SmallMind.Core.Simd
                         int panelIdx = j / NR;
                         // Use panelStride (full K) for panel offset, not K (which is kb in blocked case)
                         float* panelBase = Bpacked + panelIdx * panelStride * NR;
-                        
+
                         GemmKernelAvx2_6x16(
                             A + i * ldA,
                             panelBase,
@@ -411,14 +409,14 @@ namespace SmallMind.Core.Simd
                         int panelIdx = j / NR;
                         float* panelBase = Bpacked + panelIdx * panelStride * NR;
                         int jInPanel = j % NR;
-                        
+
                         GemmKernelScalar(A + i * ldA, panelBase + jInPanel, C + i * ldC + j,
                                         mr, K, nr, ldA, NR, ldC);
                     }
                 }
             }
         }
-        
+
         /// <summary>
         /// Scalar microkernel for edge cases (fallback for non-SIMD or partial tiles).
         /// </summary>
@@ -443,8 +441,8 @@ namespace SmallMind.Core.Simd
                 }
             }
         }
-        
-        
+
+
         /// <summary>
         /// AVX-512 kernel: 6×32 tile with FMA.
         /// Processes 6 rows × 32 columns using register blocking.
@@ -456,7 +454,7 @@ namespace SmallMind.Core.Simd
             int K, int ldA, int ldC)
         {
             const int NR = 32;
-            
+
             // Load accumulators (6 rows × 2 AVX-512 vectors)
             Vector512<float> c00 = Avx512F.LoadVector512(C + 0 * ldC + 0);
             Vector512<float> c01 = Avx512F.LoadVector512(C + 0 * ldC + 16);
@@ -470,40 +468,40 @@ namespace SmallMind.Core.Simd
             Vector512<float> c41 = Avx512F.LoadVector512(C + 4 * ldC + 16);
             Vector512<float> c50 = Avx512F.LoadVector512(C + 5 * ldC + 0);
             Vector512<float> c51 = Avx512F.LoadVector512(C + 5 * ldC + 16);
-            
+
             // K-dimension loop - panel-major access
             for (int k = 0; k < K; k++)
             {
                 // Load B (32 elements from panel-major layout)
                 Vector512<float> b0 = Avx512F.LoadVector512(Bpacked + k * NR + 0);
                 Vector512<float> b1 = Avx512F.LoadVector512(Bpacked + k * NR + 16);
-                
+
                 // Broadcast A and FMA
                 Vector512<float> a0 = Vector512.Create(A[0 * ldA + k]);
                 c00 = Avx512F.FusedMultiplyAdd(a0, b0, c00);
                 c01 = Avx512F.FusedMultiplyAdd(a0, b1, c01);
-                
+
                 Vector512<float> a1 = Vector512.Create(A[1 * ldA + k]);
                 c10 = Avx512F.FusedMultiplyAdd(a1, b0, c10);
                 c11 = Avx512F.FusedMultiplyAdd(a1, b1, c11);
-                
+
                 Vector512<float> a2 = Vector512.Create(A[2 * ldA + k]);
                 c20 = Avx512F.FusedMultiplyAdd(a2, b0, c20);
                 c21 = Avx512F.FusedMultiplyAdd(a2, b1, c21);
-                
+
                 Vector512<float> a3 = Vector512.Create(A[3 * ldA + k]);
                 c30 = Avx512F.FusedMultiplyAdd(a3, b0, c30);
                 c31 = Avx512F.FusedMultiplyAdd(a3, b1, c31);
-                
+
                 Vector512<float> a4 = Vector512.Create(A[4 * ldA + k]);
                 c40 = Avx512F.FusedMultiplyAdd(a4, b0, c40);
                 c41 = Avx512F.FusedMultiplyAdd(a4, b1, c41);
-                
+
                 Vector512<float> a5 = Vector512.Create(A[5 * ldA + k]);
                 c50 = Avx512F.FusedMultiplyAdd(a5, b0, c50);
                 c51 = Avx512F.FusedMultiplyAdd(a5, b1, c51);
             }
-            
+
             // Store results
             Avx512F.Store(C + 0 * ldC + 0, c00);
             Avx512F.Store(C + 0 * ldC + 16, c01);
@@ -518,7 +516,7 @@ namespace SmallMind.Core.Simd
             Avx512F.Store(C + 5 * ldC + 0, c50);
             Avx512F.Store(C + 5 * ldC + 16, c51);
         }
-        
+
         /// <summary>
         /// AVX2 kernel: 6×16 tile with FMA.
         /// Processes 6 rows × 16 columns using register blocking.
@@ -530,7 +528,7 @@ namespace SmallMind.Core.Simd
             int K, int ldA, int ldC)
         {
             const int NR = 16;
-            
+
             // Load accumulators (6 rows × 2 AVX2 vectors)
             Vector256<float> c00 = Avx.LoadVector256(C + 0 * ldC + 0);
             Vector256<float> c01 = Avx.LoadVector256(C + 0 * ldC + 8);
@@ -544,40 +542,40 @@ namespace SmallMind.Core.Simd
             Vector256<float> c41 = Avx.LoadVector256(C + 4 * ldC + 8);
             Vector256<float> c50 = Avx.LoadVector256(C + 5 * ldC + 0);
             Vector256<float> c51 = Avx.LoadVector256(C + 5 * ldC + 8);
-            
+
             // K-dimension loop - panel-major access
             for (int k = 0; k < K; k++)
             {
                 // Load B (16 elements from panel-major layout)
                 Vector256<float> b0 = Avx.LoadVector256(Bpacked + k * NR + 0);
                 Vector256<float> b1 = Avx.LoadVector256(Bpacked + k * NR + 8);
-                
+
                 // Broadcast A and FMA
                 Vector256<float> a0 = Vector256.Create(A[0 * ldA + k]);
                 c00 = Fma.MultiplyAdd(a0, b0, c00);
                 c01 = Fma.MultiplyAdd(a0, b1, c01);
-                
+
                 Vector256<float> a1 = Vector256.Create(A[1 * ldA + k]);
                 c10 = Fma.MultiplyAdd(a1, b0, c10);
                 c11 = Fma.MultiplyAdd(a1, b1, c11);
-                
+
                 Vector256<float> a2 = Vector256.Create(A[2 * ldA + k]);
                 c20 = Fma.MultiplyAdd(a2, b0, c20);
                 c21 = Fma.MultiplyAdd(a2, b1, c21);
-                
+
                 Vector256<float> a3 = Vector256.Create(A[3 * ldA + k]);
                 c30 = Fma.MultiplyAdd(a3, b0, c30);
                 c31 = Fma.MultiplyAdd(a3, b1, c31);
-                
+
                 Vector256<float> a4 = Vector256.Create(A[4 * ldA + k]);
                 c40 = Fma.MultiplyAdd(a4, b0, c40);
                 c41 = Fma.MultiplyAdd(a4, b1, c41);
-                
+
                 Vector256<float> a5 = Vector256.Create(A[5 * ldA + k]);
                 c50 = Fma.MultiplyAdd(a5, b0, c50);
                 c51 = Fma.MultiplyAdd(a5, b1, c51);
             }
-            
+
             // Store results
             Avx.Store(C + 0 * ldC + 0, c00);
             Avx.Store(C + 0 * ldC + 8, c01);
@@ -592,7 +590,7 @@ namespace SmallMind.Core.Simd
             Avx.Store(C + 5 * ldC + 0, c50);
             Avx.Store(C + 5 * ldC + 8, c51);
         }
-        
+
         /// <summary>
         /// Scalar kernel for edge cases.
         /// Bpacked uses panel-major layout with stride ldB (typically NR).

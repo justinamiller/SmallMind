@@ -1,4 +1,3 @@
-using Xunit;
 using SmallMind.Tokenizers.Gguf;
 
 namespace SmallMind.Tests
@@ -130,10 +129,10 @@ namespace SmallMind.Tests
             // Assert
             Assert.Equal(expectedLength, tokenStr.Length);
             Assert.Equal(GgufTokenizerHelpers.ByteTokenLength, tokenStr.Length);
-            
+
             // Act
             bool result = GgufTokenizerHelpers.IsByteToken(tokenStr, out _);
-            
+
             // Assert
             Assert.True(result);
         }

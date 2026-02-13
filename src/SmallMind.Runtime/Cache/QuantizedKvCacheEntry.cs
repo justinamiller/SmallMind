@@ -1,4 +1,3 @@
-using System;
 using System.Buffers;
 
 namespace SmallMind.Runtime.Cache
@@ -15,19 +14,19 @@ namespace SmallMind.Runtime.Cache
         private readonly QuantizationType _quantization;
         private readonly ArrayPool<byte> _bytePool;
         private readonly ArrayPool<Half> _halfPool;
-        
+
         private object[] _keyCaches;   // byte[] or Half[] depending on quantization
         private object[] _valueCaches;
         private float[][] _scales;       // For INT8 only
         private float[][] _offsets;      // For INT8 only
         private int _currentTokenCount;
         private bool _disposed;
-        
+
         public SessionId SessionId => _sessionId;
         public ModelShape ModelShape => _modelShape;
         public int CurrentTokenCount => _currentTokenCount;
         public int MaxTokens => _maxTokens;
-        
+
         public QuantizedKvCacheEntry(
             SessionId sessionId,
             ModelShape modelShape,
@@ -40,17 +39,17 @@ namespace SmallMind.Runtime.Cache
             _quantization = quantization;
             _bytePool = ArrayPool<byte>.Shared;
             _halfPool = ArrayPool<Half>.Shared;
-            
+
             int cacheSize = maxTokens * modelShape.Heads * modelShape.HeadDim;
-            
+
             _keyCaches = new object[modelShape.Layers];
             _valueCaches = new object[modelShape.Layers];
-            
+
             if (quantization == QuantizationType.INT8)
             {
                 _scales = new float[modelShape.Layers][];
                 _offsets = new float[modelShape.Layers][];
-                
+
                 for (int i = 0; i < modelShape.Layers; i++)
                 {
                     _keyCaches[i] = _bytePool.Rent(cacheSize);
@@ -68,7 +67,7 @@ namespace SmallMind.Runtime.Cache
                 }
             }
         }
-        
+
         /// <summary>
         /// Appends K/V data with automatic quantization.
         /// </summary>
@@ -78,11 +77,11 @@ namespace SmallMind.Runtime.Cache
             {
                 var keyCache = (byte[])_keyCaches[layer];
                 var valueCache = (byte[])_valueCaches[layer];
-                
+
                 // Store separate scale/offset for keys and values
                 QuantizationHelpers.QuantizeToInt8(keyData, keyCache.AsSpan(0, keyData.Length),
                     out _scales[layer][0], out _offsets[layer][0]);
-                    
+
                 // Store value scale/offset for proper dequantization
                 QuantizationHelpers.QuantizeToInt8(valueData, valueCache.AsSpan(0, valueData.Length),
                     out _scales[layer][1], out _offsets[layer][1]);
@@ -91,21 +90,21 @@ namespace SmallMind.Runtime.Cache
             {
                 var keyCache = (Half[])_keyCaches[layer];
                 var valueCache = (Half[])_valueCaches[layer];
-                
+
                 for (int i = 0; i < keyData.Length; i++)
                 {
                     keyCache[i] = QuantizationHelpers.FloatToHalf(keyData[i]);
                     valueCache[i] = QuantizationHelpers.FloatToHalf(valueData[i]);
                 }
             }
-            
+
             _currentTokenCount += numNewTokens;
         }
-        
+
         public void Dispose()
         {
             if (_disposed) return;
-            
+
             // Return pooled arrays
             for (int i = 0; i < _modelShape.Layers; i++)
             {
@@ -120,7 +119,7 @@ namespace SmallMind.Runtime.Cache
                     if (_valueCaches[i] is Half[] vh) _halfPool.Return(vh);
                 }
             }
-            
+
             _disposed = true;
         }
     }

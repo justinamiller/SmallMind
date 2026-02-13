@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Simd;
 
 namespace SmallMind.Tests
@@ -83,7 +81,7 @@ namespace SmallMind.Tests
                 float sigmoid = 1f / (1f + MathF.Exp(-x));
                 float silu = x * sigmoid;
                 float expected = silu * other[i];
-                
+
                 Assert.True(Math.Abs(result[i] - expected) < Tolerance,
                     $"Value mismatch at index {i}: Expected={expected}, Actual={result[i]}");
             }

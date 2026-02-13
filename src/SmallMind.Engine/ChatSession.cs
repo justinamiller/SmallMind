@@ -1,11 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using SmallMind.Abstractions;
 using SmallMind.Rag;
 using SmallMind.Rag.Pipeline;
@@ -25,19 +20,19 @@ namespace SmallMind.Engine
     {
         /// <summary>Maximum context tokens (model.BlockSize).</summary>
         public readonly int MaxContextTokens;
-        
+
         /// <summary>Current history tokens (from tokenizer).</summary>
         public readonly int CurrentHistoryTokens;
-        
+
         /// <summary>Reserved tokens for generation (maxNewTokens).</summary>
         public readonly int ReservedForGeneration;
-        
+
         /// <summary>Available tokens for prompt (MaxContext - CurrentHistory - Reserved).</summary>
         public readonly int AvailableTokens;
-        
+
         /// <summary>Number of conversation turns.</summary>
         public readonly int TurnCount;
-        
+
         /// <summary>True if overflow would trigger truncation.</summary>
         public readonly bool WouldTruncate;
 
@@ -75,14 +70,14 @@ namespace SmallMind.Engine
         private int[]? _lastPromptTokenIds; // Last tokenized prompt for delta calculation
         private bool _lastTurnWasTruncated; // Track if last turn required truncation
         private bool _disposed;
-        
+
         // Thread-safety guard: Sessions are NOT thread-safe and must not be used concurrently
         private int _inUse = 0; // 0 = not in use, 1 = in use
-        
+
         // Persistent InferenceSession for KV cache reuse (Phase 2.1)
         private InferenceSession? _persistentInferenceSession;
         private int _persistentSessionPosition = 0;
-        
+
         // Diagnostic counters
         private int _truncatedTurns;
         private int _kvCacheHits;
@@ -198,243 +193,243 @@ namespace SmallMind.Engine
                 if (message == null)
                 {
                     throw new ArgumentNullException(nameof(message));
-            }
-
-            _totalInferenceTimer.Start();
-
-            // Add user message to history
-            _conversationHistory.Add(message);
-
-            // RAG integration
-            List<Citation>? citations = null;
-            string prompt;
-            List<string>? warnings = null;
-
-            if (_options.EnableRag && _ragPipeline != null && message.Role == ChatRole.User)
-            {
-                // Retrieve relevant chunks
-                var topK = _options.RagOptions?.TopK ?? 5;
-                var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
-
-                // Build RAG prompt
-                var chunkStore = new Dictionary<string, Chunk>();
-                foreach (var chunk in chunks)
-                {
-                    if (!chunkStore.ContainsKey(chunk.ChunkId))
-                    {
-                        chunkStore[chunk.ChunkId] = new Chunk
-                        {
-                            ChunkId = chunk.ChunkId,
-                            DocId = chunk.DocId,
-                            Text = chunk.Excerpt,
-                            SourceUri = chunk.DocId,
-                            Title = chunk.DocId
-                        };
-                    }
                 }
 
-                var composer = new PromptComposer(new RagRetrievalOptions { TopK = topK });
-                var ragPrompt = composer.ComposePrompt(message.Content, chunks, chunkStore);
+                _totalInferenceTimer.Start();
 
-                // Build conversation context with RAG prompt
-                var tempHistory = new List<ChatMessage>(_conversationHistory);
-                tempHistory[tempHistory.Count - 1] = new ChatMessage
-                {
-                    Role = ChatRole.User,
-                    Content = ragPrompt
-                };
-                prompt = BuildPromptFromMessages(tempHistory);
+                // Add user message to history
+                _conversationHistory.Add(message);
 
-                // Extract citations (avoid LINQ for better performance)
-                if (_options.RagOptions?.IncludeCitations ?? true)
+                // RAG integration
+                List<Citation>? citations = null;
+                string prompt;
+                List<string>? warnings = null;
+
+                if (_options.EnableRag && _ragPipeline != null && message.Role == ChatRole.User)
                 {
-                    citations = new List<Citation>(chunks.Count);
-                    for (int i = 0; i < chunks.Count; i++)
+                    // Retrieve relevant chunks
+                    var topK = _options.RagOptions?.TopK ?? 5;
+                    var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
+
+                    // Build RAG prompt
+                    var chunkStore = new Dictionary<string, Chunk>();
+                    foreach (var chunk in chunks)
                     {
-                        var c = chunks[i];
-                        citations.Add(new Citation
+                        if (!chunkStore.ContainsKey(chunk.ChunkId))
                         {
-                            Source = c.DocId,
-                            Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
-                            Snippet = c.Excerpt,
-                            RelevanceScore = c.Score
-                        });
+                            chunkStore[chunk.ChunkId] = new Chunk
+                            {
+                                ChunkId = chunk.ChunkId,
+                                DocId = chunk.DocId,
+                                Text = chunk.Excerpt,
+                                SourceUri = chunk.DocId,
+                                Title = chunk.DocId
+                            };
+                        }
                     }
-                }
-            }
-            else
-            {
-                // Apply overflow strategy and build conversation prompt
-                prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
-            }
 
-            // Tokenize current prompt
-            var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
+                    var composer = new PromptComposer(new RagRetrievalOptions { TopK = topK });
+                    var ragPrompt = composer.ComposePrompt(message.Content, chunks, chunkStore);
 
-            // Calculate KV cache delta and determine prefill strategy
-            SessionId sessionId = new SessionId(_sessionId);
-            KvCacheEntry? kvCache = null;
-            int startPosition = 0;
-            int maxTokens = _options.MaxKvCacheTokens ?? _modelHandle.Model.BlockSize;
-
-            if (_options.EnableKvCache)
-            {
-                // Get or create KV cache entry
-                kvCache = _kvCacheStore.GetOrCreate(sessionId, _modelShape, maxTokens);
-
-                // Calculate longest common prefix (LCP) with last prompt
-                if (_lastPromptTokenIds != null && kvCache.CurrentTokenCount > 0)
-                {
-                    int lcp = CalculateLongestCommonPrefix(_lastPromptTokenIds, promptTokenIds);
-
-                    // If LCP matches cached count, we can use incremental prefill
-                    if (lcp == _cachedTokenCount && lcp == kvCache.CurrentTokenCount)
+                    // Build conversation context with RAG prompt
+                    var tempHistory = new List<ChatMessage>(_conversationHistory);
+                    tempHistory[tempHistory.Count - 1] = new ChatMessage
                     {
-                        startPosition = lcp;
-                        _kvCacheHits++;
-                        _totalTokensFromCache += lcp;
-                    }
-                    else
+                        Role = ChatRole.User,
+                        Content = ragPrompt
+                    };
+                    prompt = BuildPromptFromMessages(tempHistory);
+
+                    // Extract citations (avoid LINQ for better performance)
+                    if (_options.RagOptions?.IncludeCitations ?? true)
                     {
-                        // Cache mismatch or evicted - reset and do full prefill
-                        kvCache.Reset();
-                        startPosition = 0;
-                        _cachedTokenCount = 0;
-                        _kvCacheMisses++;
-                        
-                        // Invalidate persistent session (Phase 2.1)
-                        if (_persistentInferenceSession != null)
+                        citations = new List<Citation>(chunks.Count);
+                        for (int i = 0; i < chunks.Count; i++)
                         {
-                            _persistentInferenceSession.Dispose();
-                            _persistentInferenceSession = null;
-                            _persistentSessionPosition = 0;
+                            var c = chunks[i];
+                            citations.Add(new Citation
+                            {
+                                Source = c.DocId,
+                                Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
+                                Snippet = c.Excerpt,
+                                RelevanceScore = c.Score
+                            });
                         }
                     }
                 }
                 else
                 {
-                    _kvCacheMisses++;
+                    // Apply overflow strategy and build conversation prompt
+                    prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
                 }
-            }
 
-            // OOM protection: estimate memory for KV cache (maxTokens * embedDim * 4 bytes per float)
-            long estimatedMemoryBytes = (long)options.MaxNewTokens * _modelHandle.Model.EmbedDim * 4;
-            var gcInfo = GC.GetGCMemoryInfo();
-            if (gcInfo.TotalAvailableMemoryBytes > 0)
-            {
-                double usageRatio = (double)estimatedMemoryBytes / gcInfo.TotalAvailableMemoryBytes;
-                if (usageRatio > 0.9)
+                // Tokenize current prompt
+                var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
+
+                // Calculate KV cache delta and determine prefill strategy
+                SessionId sessionId = new SessionId(_sessionId);
+                KvCacheEntry? kvCache = null;
+                int startPosition = 0;
+                int maxTokens = _options.MaxKvCacheTokens ?? _modelHandle.Model.BlockSize;
+
+                if (_options.EnableKvCache)
                 {
-                    throw new Abstractions.InsufficientMemoryException(estimatedMemoryBytes, gcInfo.TotalAvailableMemoryBytes);
+                    // Get or create KV cache entry
+                    kvCache = _kvCacheStore.GetOrCreate(sessionId, _modelShape, maxTokens);
+
+                    // Calculate longest common prefix (LCP) with last prompt
+                    if (_lastPromptTokenIds != null && kvCache.CurrentTokenCount > 0)
+                    {
+                        int lcp = CalculateLongestCommonPrefix(_lastPromptTokenIds, promptTokenIds);
+
+                        // If LCP matches cached count, we can use incremental prefill
+                        if (lcp == _cachedTokenCount && lcp == kvCache.CurrentTokenCount)
+                        {
+                            startPosition = lcp;
+                            _kvCacheHits++;
+                            _totalTokensFromCache += lcp;
+                        }
+                        else
+                        {
+                            // Cache mismatch or evicted - reset and do full prefill
+                            kvCache.Reset();
+                            startPosition = 0;
+                            _cachedTokenCount = 0;
+                            _kvCacheMisses++;
+
+                            // Invalidate persistent session (Phase 2.1)
+                            if (_persistentInferenceSession != null)
+                            {
+                                _persistentInferenceSession.Dispose();
+                                _persistentInferenceSession = null;
+                                _persistentSessionPosition = 0;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        _kvCacheMisses++;
+                    }
                 }
-            }
 
-            // Timeout support
-            CancellationTokenSource? timeoutCts = null;
-            CancellationToken effectiveToken = cancellationToken;
-            if (options.TimeoutMs > 0)
-            {
-                timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(options.TimeoutMs);
-                effectiveToken = timeoutCts.Token;
-            }
-
-            // Generate response
-            InferenceSession session;
-
-            if (_persistentInferenceSession == null)
-            {
-                // First turn: create new session
-                session = _modelHandle.CreateInferenceSession(options, _engineOptions);
-                _persistentInferenceSession = session;
-                _persistentSessionPosition = 0;
-            }
-            else
-            {
-                // Subsequent turns: reuse existing session
-                session = _persistentInferenceSession;
-            }
-            
-            try
-            {
-                string response;
-                if (startPosition > 0 && kvCache != null)
+                // OOM protection: estimate memory for KV cache (maxTokens * embedDim * 4 bytes per float)
+                long estimatedMemoryBytes = (long)options.MaxNewTokens * _modelHandle.Model.EmbedDim * 4;
+                var gcInfo = GC.GetGCMemoryInfo();
+                if (gcInfo.TotalAvailableMemoryBytes > 0)
                 {
-                    // Incremental prefill: only process new tokens
-                    var deltaTokenIds = new int[promptTokenIds.Length - startPosition];
-                    Array.Copy(promptTokenIds, startPosition, deltaTokenIds, 0, deltaTokenIds.Length);
-                    var deltaPrompt = _tokenizer.Decode(new List<int>(deltaTokenIds));
+                    double usageRatio = (double)estimatedMemoryBytes / gcInfo.TotalAvailableMemoryBytes;
+                    if (usageRatio > 0.9)
+                    {
+                        throw new Abstractions.InsufficientMemoryException(estimatedMemoryBytes, gcInfo.TotalAvailableMemoryBytes);
+                    }
+                }
 
-                    response = await session.GenerateAsync(
-                        prompt: deltaPrompt,
-                        metrics: null,
-                        cancellationToken: effectiveToken);
+                // Timeout support
+                CancellationTokenSource? timeoutCts = null;
+                CancellationToken effectiveToken = cancellationToken;
+                if (options.TimeoutMs > 0)
+                {
+                    timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    timeoutCts.CancelAfter(options.TimeoutMs);
+                    effectiveToken = timeoutCts.Token;
+                }
+
+                // Generate response
+                InferenceSession session;
+
+                if (_persistentInferenceSession == null)
+                {
+                    // First turn: create new session
+                    session = _modelHandle.CreateInferenceSession(options, _engineOptions);
+                    _persistentInferenceSession = session;
+                    _persistentSessionPosition = 0;
                 }
                 else
                 {
-                    // Full prefill
-                    response = await session.GenerateAsync(
-                        prompt: prompt,
-                        metrics: null,
-                        cancellationToken: effectiveToken);
+                    // Subsequent turns: reuse existing session
+                    session = _persistentInferenceSession;
                 }
 
-                // Degenerate output detection
-                var (cleanedResponse, stopReason) = DetectAndCleanDegenerateOutput(response, options);
-                if (stopReason != "completed")
+                try
                 {
-                    _degenerateOutputRecoveries++;
-                    response = cleanedResponse;
+                    string response;
+                    if (startPosition > 0 && kvCache != null)
+                    {
+                        // Incremental prefill: only process new tokens
+                        var deltaTokenIds = new int[promptTokenIds.Length - startPosition];
+                        Array.Copy(promptTokenIds, startPosition, deltaTokenIds, 0, deltaTokenIds.Length);
+                        var deltaPrompt = _tokenizer.Decode(new List<int>(deltaTokenIds));
+
+                        response = await session.GenerateAsync(
+                            prompt: deltaPrompt,
+                            metrics: null,
+                            cancellationToken: effectiveToken);
+                    }
+                    else
+                    {
+                        // Full prefill
+                        response = await session.GenerateAsync(
+                            prompt: prompt,
+                            metrics: null,
+                            cancellationToken: effectiveToken);
+                    }
+
+                    // Degenerate output detection
+                    var (cleanedResponse, stopReason) = DetectAndCleanDegenerateOutput(response, options);
+                    if (stopReason != "completed")
+                    {
+                        _degenerateOutputRecoveries++;
+                        response = cleanedResponse;
+                    }
+
+                    // Add assistant response to history
+                    _conversationHistory.Add(new ChatMessage
+                    {
+                        Role = ChatRole.Assistant,
+                        Content = response
+                    });
+
+                    _turnCount++;
+                    _totalTokensGenerated += options.MaxNewTokens; // Approximate
+                    _totalInferenceTimer.Stop();
+
+                    // Update cache tracking
+                    if (_options.EnableKvCache && kvCache != null)
+                    {
+                        _lastPromptTokenIds = promptTokenIds;
+                        _cachedTokenCount = promptTokenIds.Length;
+                        _kvCacheStore.Touch(sessionId);
+                    }
+
+                    return new GenerationResult
+                    {
+                        Text = response,
+                        GeneratedTokens = options.MaxNewTokens, // Approximate
+                        StoppedByBudget = false,
+                        StopReason = stopReason,
+                        Citations = citations,
+                        Warnings = warnings
+                    };
                 }
-
-                // Add assistant response to history
-                _conversationHistory.Add(new ChatMessage
+                catch (OperationCanceledException) when (options.TimeoutMs > 0)
                 {
-                    Role = ChatRole.Assistant,
-                    Content = response
-                });
-
-                _turnCount++;
-                _totalTokensGenerated += options.MaxNewTokens; // Approximate
-                _totalInferenceTimer.Stop();
-
-                // Update cache tracking
-                if (_options.EnableKvCache && kvCache != null)
-                {
-                    _lastPromptTokenIds = promptTokenIds;
-                    _cachedTokenCount = promptTokenIds.Length;
-                    _kvCacheStore.Touch(sessionId);
+                    _totalInferenceTimer.Stop();
+                    // Timeout - return partial result if available
+                    return new GenerationResult
+                    {
+                        Text = string.Empty,
+                        GeneratedTokens = 0,
+                        StoppedByBudget = true,
+                        StopReason = "timeout",
+                        Citations = citations,
+                        Warnings = warnings
+                    };
                 }
-
-                return new GenerationResult
+                finally
                 {
-                    Text = response,
-                    GeneratedTokens = options.MaxNewTokens, // Approximate
-                    StoppedByBudget = false,
-                    StopReason = stopReason,
-                    Citations = citations,
-                    Warnings = warnings
-                };
-            }
-            catch (OperationCanceledException) when (options.TimeoutMs > 0)
-            {
-                _totalInferenceTimer.Stop();
-                // Timeout - return partial result if available
-                return new GenerationResult
-                {
-                    Text = string.Empty,
-                    GeneratedTokens = 0,
-                    StoppedByBudget = true,
-                    StopReason = "timeout",
-                    Citations = citations,
-                    Warnings = warnings
-                };
-            }
-            finally
-            {
-                timeoutCts?.Dispose();
-                // Don't dispose persistent session - it will be reused across turns
-            }
+                    timeoutCts?.Dispose();
+                    // Don't dispose persistent session - it will be reused across turns
+                }
             }
             finally
             {
@@ -469,206 +464,206 @@ namespace SmallMind.Engine
 
                 if (_options.EnableRag && _ragPipeline != null && message.Role == ChatRole.User)
                 {
-                // Retrieve relevant chunks
-                var topK = _options.RagOptions?.TopK ?? 5;
-                var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
+                    // Retrieve relevant chunks
+                    var topK = _options.RagOptions?.TopK ?? 5;
+                    var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
 
-                // Build RAG prompt
-                var chunkStore = new Dictionary<string, Chunk>();
-                foreach (var chunk in chunks)
-                {
-                    if (!chunkStore.ContainsKey(chunk.ChunkId))
+                    // Build RAG prompt
+                    var chunkStore = new Dictionary<string, Chunk>();
+                    foreach (var chunk in chunks)
                     {
-                        chunkStore[chunk.ChunkId] = new Chunk
+                        if (!chunkStore.ContainsKey(chunk.ChunkId))
                         {
-                            ChunkId = chunk.ChunkId,
-                            DocId = chunk.DocId,
-                            Text = chunk.Excerpt,
-                            SourceUri = chunk.DocId,
-                            Title = chunk.DocId
-                        };
+                            chunkStore[chunk.ChunkId] = new Chunk
+                            {
+                                ChunkId = chunk.ChunkId,
+                                DocId = chunk.DocId,
+                                Text = chunk.Excerpt,
+                                SourceUri = chunk.DocId,
+                                Title = chunk.DocId
+                            };
+                        }
                     }
-                }
 
-                var composer = new PromptComposer(new RagRetrievalOptions { TopK = topK });
-                var ragPrompt = composer.ComposePrompt(message.Content, chunks, chunkStore);
+                    var composer = new PromptComposer(new RagRetrievalOptions { TopK = topK });
+                    var ragPrompt = composer.ComposePrompt(message.Content, chunks, chunkStore);
 
-                // Build conversation context with RAG prompt
-                var tempHistory = new List<ChatMessage>(_conversationHistory);
-                tempHistory[tempHistory.Count - 1] = new ChatMessage
-                {
-                    Role = ChatRole.User,
-                    Content = ragPrompt
-                };
-                prompt = BuildPromptFromMessages(tempHistory);
-
-                // Extract citations (avoid LINQ for better performance)
-                if (_options.RagOptions?.IncludeCitations ?? true)
-                {
-                    citations = new List<Citation>(chunks.Count);
-                    for (int i = 0; i < chunks.Count; i++)
+                    // Build conversation context with RAG prompt
+                    var tempHistory = new List<ChatMessage>(_conversationHistory);
+                    tempHistory[tempHistory.Count - 1] = new ChatMessage
                     {
-                        var c = chunks[i];
-                        citations.Add(new Citation
+                        Role = ChatRole.User,
+                        Content = ragPrompt
+                    };
+                    prompt = BuildPromptFromMessages(tempHistory);
+
+                    // Extract citations (avoid LINQ for better performance)
+                    if (_options.RagOptions?.IncludeCitations ?? true)
+                    {
+                        citations = new List<Citation>(chunks.Count);
+                        for (int i = 0; i < chunks.Count; i++)
                         {
-                            Source = c.DocId,
-                            Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
-                            Snippet = c.Excerpt,
-                            RelevanceScore = c.Score
-                        });
-                    }
-                }
-            }
-            else
-            {
-                // Apply overflow strategy and build conversation prompt
-                prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
-            }
-
-            // Tokenize current prompt
-            var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
-
-            // Calculate KV cache delta and determine prefill strategy
-            SessionId sessionId = new SessionId(_sessionId);
-            KvCacheEntry? kvCache = null;
-            int startPosition = 0;
-            int maxTokens = _options.MaxKvCacheTokens ?? _modelHandle.Model.BlockSize;
-
-            if (_options.EnableKvCache)
-            {
-                // Get or create KV cache entry
-                kvCache = _kvCacheStore.GetOrCreate(sessionId, _modelShape, maxTokens);
-
-                // Calculate longest common prefix (LCP) with last prompt
-                if (_lastPromptTokenIds != null && kvCache.CurrentTokenCount > 0)
-                {
-                    int lcp = CalculateLongestCommonPrefix(_lastPromptTokenIds, promptTokenIds);
-
-                    // If LCP matches cached count, we can use incremental prefill
-                    if (lcp == _cachedTokenCount && lcp == kvCache.CurrentTokenCount)
-                    {
-                        startPosition = lcp;
-                    }
-                    else
-                    {
-                        // Cache mismatch or evicted - reset and do full prefill
-                        kvCache.Reset();
-                        startPosition = 0;
-                        _cachedTokenCount = 0;
-                        
-                        // Invalidate persistent session (Phase 2.1)
-                        if (_persistentInferenceSession != null)
-                        {
-                            _persistentInferenceSession.Dispose();
-                            _persistentInferenceSession = null;
-                            _persistentSessionPosition = 0;
+                            var c = chunks[i];
+                            citations.Add(new Citation
+                            {
+                                Source = c.DocId,
+                                Title = null, // RetrievedChunk doesn't include title metadata; would need pipeline API enhancement
+                                Snippet = c.Excerpt,
+                                RelevanceScore = c.Score
+                            });
                         }
                     }
                 }
-            }
-
-            // Generate streaming response
-            var session = _modelHandle.CreateInferenceSession(options, _engineOptions);
-            try
-            {
-                var responseBuilder = new StringBuilder();
-                int tokenCount = 0;
-
-                // Emit started event (with warnings if truncation occurred)
-                // Note: Using error field for informational warnings about truncation
-                yield return new TokenEvent(
-                    kind: TokenEventKind.Started,
-                    text: ReadOnlyMemory<char>.Empty,
-                    tokenId: -1,
-                    generatedTokens: 0,
-                    isFinal: false,
-                    error: warnings != null ? string.Join("; ", warnings) : null);
-
-                bool isLast = false;
-                IAsyncEnumerable<GeneratedToken> tokenStream;
-
-                if (startPosition > 0 && kvCache != null)
-                {
-                    // Incremental prefill: only process new tokens
-                    var deltaTokenIds = new int[promptTokenIds.Length - startPosition];
-                    Array.Copy(promptTokenIds, startPosition, deltaTokenIds, 0, deltaTokenIds.Length);
-                    var deltaPrompt = _tokenizer.Decode(new List<int>(deltaTokenIds));
-
-                    tokenStream = session.GenerateStreamAsync(
-                        prompt: deltaPrompt,
-                        metrics: null,
-                        cancellationToken: cancellationToken);
-                }
                 else
                 {
-                    // Full prefill
-                    tokenStream = session.GenerateStreamAsync(
-                        prompt: prompt,
-                        metrics: null,
-                        cancellationToken: cancellationToken);
+                    // Apply overflow strategy and build conversation prompt
+                    prompt = ApplyOverflowStrategyAndBuildPrompt(options.MaxNewTokens, ref warnings);
                 }
 
-                await foreach (var token in tokenStream)
+                // Tokenize current prompt
+                var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
+
+                // Calculate KV cache delta and determine prefill strategy
+                SessionId sessionId = new SessionId(_sessionId);
+                KvCacheEntry? kvCache = null;
+                int startPosition = 0;
+                int maxTokens = _options.MaxKvCacheTokens ?? _modelHandle.Model.BlockSize;
+
+                if (_options.EnableKvCache)
                 {
-                    tokenCount++;
-                    responseBuilder.Append(token.Text);
-                    isLast = (tokenCount >= options.MaxNewTokens);
+                    // Get or create KV cache entry
+                    kvCache = _kvCacheStore.GetOrCreate(sessionId, _modelShape, maxTokens);
 
-                    yield return new TokenEvent(
-                        kind: TokenEventKind.Token,
-                        text: token.Text.AsMemory(),
-                        tokenId: token.TokenId,
-                        generatedTokens: tokenCount,
-                        isFinal: isLast);
-
-                    if (isLast)
+                    // Calculate longest common prefix (LCP) with last prompt
+                    if (_lastPromptTokenIds != null && kvCache.CurrentTokenCount > 0)
                     {
-                        break;
+                        int lcp = CalculateLongestCommonPrefix(_lastPromptTokenIds, promptTokenIds);
+
+                        // If LCP matches cached count, we can use incremental prefill
+                        if (lcp == _cachedTokenCount && lcp == kvCache.CurrentTokenCount)
+                        {
+                            startPosition = lcp;
+                        }
+                        else
+                        {
+                            // Cache mismatch or evicted - reset and do full prefill
+                            kvCache.Reset();
+                            startPosition = 0;
+                            _cachedTokenCount = 0;
+
+                            // Invalidate persistent session (Phase 2.1)
+                            if (_persistentInferenceSession != null)
+                            {
+                                _persistentInferenceSession.Dispose();
+                                _persistentInferenceSession = null;
+                                _persistentSessionPosition = 0;
+                            }
+                        }
                     }
                 }
 
-                // Add complete response to history
-                var response = responseBuilder.ToString();
-                _conversationHistory.Add(new ChatMessage
+                // Generate streaming response
+                var session = _modelHandle.CreateInferenceSession(options, _engineOptions);
+                try
                 {
-                    Role = ChatRole.Assistant,
-                    Content = response
-                });
+                    var responseBuilder = new StringBuilder();
+                    int tokenCount = 0;
 
-                _turnCount++;
-                _totalTokensGenerated += tokenCount;
-                _totalInferenceTimer.Stop();
+                    // Emit started event (with warnings if truncation occurred)
+                    // Note: Using error field for informational warnings about truncation
+                    yield return new TokenEvent(
+                        kind: TokenEventKind.Started,
+                        text: ReadOnlyMemory<char>.Empty,
+                        tokenId: -1,
+                        generatedTokens: 0,
+                        isFinal: false,
+                        error: warnings != null ? string.Join("; ", warnings) : null);
 
-                // Update cache tracking
-                if (_options.EnableKvCache && kvCache != null)
-                {
-                    _lastPromptTokenIds = promptTokenIds;
-                    _cachedTokenCount = promptTokenIds.Length;
-                    _kvCacheStore.Touch(sessionId);
+                    bool isLast = false;
+                    IAsyncEnumerable<GeneratedToken> tokenStream;
+
+                    if (startPosition > 0 && kvCache != null)
+                    {
+                        // Incremental prefill: only process new tokens
+                        var deltaTokenIds = new int[promptTokenIds.Length - startPosition];
+                        Array.Copy(promptTokenIds, startPosition, deltaTokenIds, 0, deltaTokenIds.Length);
+                        var deltaPrompt = _tokenizer.Decode(new List<int>(deltaTokenIds));
+
+                        tokenStream = session.GenerateStreamAsync(
+                            prompt: deltaPrompt,
+                            metrics: null,
+                            cancellationToken: cancellationToken);
+                    }
+                    else
+                    {
+                        // Full prefill
+                        tokenStream = session.GenerateStreamAsync(
+                            prompt: prompt,
+                            metrics: null,
+                            cancellationToken: cancellationToken);
+                    }
+
+                    await foreach (var token in tokenStream)
+                    {
+                        tokenCount++;
+                        responseBuilder.Append(token.Text);
+                        isLast = (tokenCount >= options.MaxNewTokens);
+
+                        yield return new TokenEvent(
+                            kind: TokenEventKind.Token,
+                            text: token.Text.AsMemory(),
+                            tokenId: token.TokenId,
+                            generatedTokens: tokenCount,
+                            isFinal: isLast);
+
+                        if (isLast)
+                        {
+                            break;
+                        }
+                    }
+
+                    // Add complete response to history
+                    var response = responseBuilder.ToString();
+                    _conversationHistory.Add(new ChatMessage
+                    {
+                        Role = ChatRole.Assistant,
+                        Content = response
+                    });
+
+                    _turnCount++;
+                    _totalTokensGenerated += tokenCount;
+                    _totalInferenceTimer.Stop();
+
+                    // Update cache tracking
+                    if (_options.EnableKvCache && kvCache != null)
+                    {
+                        _lastPromptTokenIds = promptTokenIds;
+                        _cachedTokenCount = promptTokenIds.Length;
+                        _kvCacheStore.Touch(sessionId);
+                    }
+
+                    // Emit completed event with citations if RAG was used
+                    // NOTE: Using the error field to pass citation metadata for backward compatibility
+                    // with existing TokenEvent struct. In future, consider adding dedicated Metadata field.
+                    string? citationMetadata = null;
+                    if (citations != null && citations.Count > 0)
+                    {
+                        // Simplified: just include source count
+                        citationMetadata = $"Citations: {citations.Count} sources";
+                    }
+
+                    yield return new TokenEvent(
+                        kind: TokenEventKind.Completed,
+                        text: ReadOnlyMemory<char>.Empty,
+                        tokenId: -1,
+                        generatedTokens: tokenCount,
+                        isFinal: true,
+                        error: citationMetadata);
                 }
-
-                // Emit completed event with citations if RAG was used
-                // NOTE: Using the error field to pass citation metadata for backward compatibility
-                // with existing TokenEvent struct. In future, consider adding dedicated Metadata field.
-                string? citationMetadata = null;
-                if (citations != null && citations.Count > 0)
+                finally
                 {
-                    // Simplified: just include source count
-                    citationMetadata = $"Citations: {citations.Count} sources";
+                    session.Dispose();
                 }
-
-                yield return new TokenEvent(
-                    kind: TokenEventKind.Completed,
-                    text: ReadOnlyMemory<char>.Empty,
-                    tokenId: -1,
-                    generatedTokens: tokenCount,
-                    isFinal: true,
-                    error: citationMetadata);
-            }
-            finally
-            {
-                session.Dispose();
-            }
             }
             finally
             {
@@ -855,7 +850,7 @@ namespace SmallMind.Engine
                     _kvCacheStore.Remove(sessionId);
                     _cachedTokenCount = 0;
                     _lastPromptTokenIds = null;
-                    
+
                     // Invalidate persistent session (Phase 2.1)
                     if (_persistentInferenceSession != null)
                     {
@@ -971,7 +966,7 @@ namespace SmallMind.Engine
                     _kvCacheStore.Remove(sessionId);
                     _cachedTokenCount = 0;
                     _lastPromptTokenIds = null;
-                    
+
                     // Invalidate persistent session (Phase 2.1)
                     if (_persistentInferenceSession != null)
                     {
@@ -1062,7 +1057,7 @@ namespace SmallMind.Engine
                     _kvCacheStore.Remove(sessionId);
                     _cachedTokenCount = 0;
                     _lastPromptTokenIds = null;
-                    
+
                     // Invalidate persistent session (Phase 2.1)
                     if (_persistentInferenceSession != null)
                     {
@@ -1513,7 +1508,7 @@ namespace SmallMind.Engine
                 throw new ArgumentException("Request must contain at least one message", nameof(request));
 
             telemetry ??= IChatTelemetry.Default;
-            
+
             var sw = Stopwatch.StartNew();
             telemetry.OnRequestStart(_sessionId, request.Messages.Count);
 
@@ -1524,39 +1519,39 @@ namespace SmallMind.Engine
                 var tokenCounter = new TokenizerAdapter(_tokenizer);
                 int originalTokens = CountTokensInMessages(messages, tokenCounter);
                 int maxTokens = request.Options?.MaxContextTokens ?? _modelHandle.Model.BlockSize;
-                
+
                 messages = request.ContextPolicy.Apply(messages, maxTokens, tokenCounter);
-                
+
                 int finalTokens = CountTokensInMessages(messages, tokenCounter);
                 telemetry.OnContextPolicyApplied(
-                    _sessionId, 
-                    request.ContextPolicy.GetType().Name, 
-                    originalTokens, 
+                    _sessionId,
+                    request.ContextPolicy.GetType().Name,
+                    originalTokens,
                     finalTokens);
             }
 
             // Convert Level 3 messages to legacy format for existing logic
             var legacyMessages = ConvertToLegacyMessages(messages);
-            
+
             // Build prompt from messages
             var prompt = BuildPromptFromMessages(legacyMessages);
-            
+
             // Convert options
             var options = request.Options ?? new PublicGenerationOptions();
-            
+
             // Use existing generation logic
             var promptTokenIds = _tokenizer.Encode(prompt).ToArray();
-            
+
             // Get KV cache if enabled
             SessionId sessionId = new SessionId(_sessionId);
             KvCacheEntry? kvCache = null;
             int startPosition = 0;
-            
+
             if (_options.EnableKvCache)
             {
                 int maxTokens = _options.MaxKvCacheTokens ?? _modelHandle.Model.BlockSize;
                 kvCache = _kvCacheStore.GetOrCreate(sessionId, _modelShape, maxTokens);
-                
+
                 bool cacheHit = false;
                 if (_lastPromptTokenIds != null && kvCache.CurrentTokenCount > 0)
                 {
@@ -1577,7 +1572,7 @@ namespace SmallMind.Engine
                 {
                     _kvCacheMisses++;
                 }
-                
+
                 telemetry.OnKvCacheAccess(_sessionId, cacheHit, startPosition);
             }
 
@@ -1589,7 +1584,7 @@ namespace SmallMind.Engine
 
             double? ttftMs = null;
             int completionTokens = 0;
-            
+
             try
             {
                 // Generate response
@@ -1603,7 +1598,7 @@ namespace SmallMind.Engine
 
                 // Clean degenerate output
                 var (cleanedResponse, stopReason) = DetectAndCleanDegenerateOutput(responseText, options);
-                
+
                 // Estimate completion tokens
                 completionTokens = _tokenizer.Encode(cleanedResponse).Count;
 

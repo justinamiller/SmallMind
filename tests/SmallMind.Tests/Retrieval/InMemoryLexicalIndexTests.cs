@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using Xunit;
 // SmallMind.Retrieval namespace does not exist - test disabled
 // using SmallMind.Retrieval;
 

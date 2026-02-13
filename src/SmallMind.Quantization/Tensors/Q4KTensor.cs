@@ -1,8 +1,5 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 
 namespace SmallMind.Quantization.Tensors
 {
@@ -92,7 +89,7 @@ namespace SmallMind.Quantization.Tensors
 
                 // Read scales (12 bytes encoding 6-bit scales and mins for 8 sub-blocks)
                 ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 4, 12);
-                
+
                 // Read quantized values (128 bytes, 2 values per byte)
                 ReadOnlySpan<byte> qs = src.Slice(srcOffset + 16, 128);
 
@@ -102,12 +99,12 @@ namespace SmallMind.Quantization.Tensors
                 // Total: 8*(6+6) = 96 bits = 12 bytes
                 Span<byte> scales = stackalloc byte[SUB_BLOCK_COUNT];
                 Span<byte> mins = stackalloc byte[SUB_BLOCK_COUNT];
-                
+
                 // Unpack the 12 bytes into 8 6-bit scales and 8 6-bit mins
                 // The packing is: scale0(6) scale1(6) scale2(6) scale3(6) scale4(6) scale5(6) scale6(6) scale7(6)
                 //                  min0(6)   min1(6)   min2(6)   min3(6)   min4(6)   min5(6)   min6(6)   min7(6)
                 // Arranged as bytes where each group of 3 bytes holds 4 6-bit values
-                
+
                 // Extract scales (first 6 bytes)
                 scales[0] = (byte)((scalesBytes[0]) & 0x3F);
                 scales[1] = (byte)((scalesBytes[0] >> 6) | ((scalesBytes[1] & 0x0F) << 2));
@@ -117,7 +114,7 @@ namespace SmallMind.Quantization.Tensors
                 scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
                 scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
                 scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
-                
+
                 // Extract mins (last 6 bytes)
                 mins[0] = (byte)((scalesBytes[6]) & 0x3F);
                 mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));

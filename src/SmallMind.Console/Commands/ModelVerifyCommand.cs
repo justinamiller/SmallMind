@@ -1,7 +1,3 @@
-using System;
-using System.Threading.Tasks;
-using SmallMind.ModelRegistry;
-
 namespace SmallMind.ConsoleApp.Commands
 {
     /// <summary>
@@ -26,7 +22,7 @@ namespace SmallMind.ConsoleApp.Commands
             try
             {
                 var registry = new ModelRegistry.ModelRegistry(cacheDir);
-                
+
                 Console.WriteLine($"Verifying model: {modelId}");
                 Console.WriteLine($"Cache directory: {registry.CacheRoot}");
                 Console.WriteLine();

@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 
 namespace SmallMind.Core.Simd
@@ -25,13 +24,13 @@ namespace SmallMind.Core.Simd
                 BestInstructionSet = SimdCapabilities.BestInstructionSet,
                 VectorWidthBits = SimdCapabilities.VectorWidthBits,
                 FloatsPerVector = SimdCapabilities.FloatsPerVector,
-                
+
                 // CPU capabilities
                 IsAvx512Supported = SimdCapabilities.IsAvx512Supported,
                 IsAvx2Supported = SimdCapabilities.IsAvx2Supported,
                 IsFmaSupported = SimdCapabilities.IsFmaSupported,
                 IsNeonSupported = SimdCapabilities.IsNeonSupported,
-                
+
                 // Kernel selections (will be filled by specific kernel init)
                 MatMulKernel = DetermineMatMulKernel(),
                 SoftmaxKernel = DetermineSoftmaxKernel(),

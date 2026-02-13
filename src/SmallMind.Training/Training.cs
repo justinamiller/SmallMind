@@ -1,21 +1,14 @@
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core;
 using SmallMind.Core.Exceptions;
-using SmallMind.Transformers;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using SmallMind.Tokenizers;
 using SmallMind.Runtime.Metrics;
-using SmallMind.Abstractions.Telemetry;
-
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
+using AdamW = SmallMind.Core.Core.AdamW;
+using CheckpointStrategy = SmallMind.Core.Core.CheckpointStrategy;
+using Guard = SmallMind.Core.Validation.Guard;
 // Use aliases to avoid ambiguity
 using Tensor = SmallMind.Core.Core.Tensor;
-using Guard = SmallMind.Core.Validation.Guard;
-using CheckpointStrategy = SmallMind.Core.Core.CheckpointStrategy;
-using AdamW = SmallMind.Core.Core.AdamW;
 
 namespace SmallMind.Training
 {
@@ -54,7 +47,7 @@ namespace SmallMind.Training
         /// </summary>
         public TrainingMetrics Metrics { get; } = new TrainingMetrics();
 
-        public Training(TransformerModel model, ITokenizer tokenizer, string trainingText, 
+        public Training(TransformerModel model, ITokenizer tokenizer, string trainingText,
                        int blockSize, int batchSize, int seed, ICheckpointStore? checkpointStore = null,
                        IRuntimeLogger? logger = null)
         {
@@ -63,7 +56,7 @@ namespace SmallMind.Training
             Guard.NotNullOrEmpty(trainingText);
             Guard.GreaterThan(blockSize, 0);
             Guard.GreaterThan(batchSize, 0);
-            
+
             _model = model;
             _tokenizer = tokenizer;
             _blockSize = blockSize;
@@ -143,8 +136,8 @@ namespace SmallMind.Training
         /// <exception cref="Exceptions.ValidationException">Thrown when parameters are invalid.</exception>
         /// <exception cref="Exceptions.TrainingException">Thrown when training fails.</exception>
         /// <exception cref="OperationCanceledException">Thrown when training is cancelled.</exception>
-        public void TrainEnhanced(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir, 
-                                  bool showPerf = false, int gradAccumSteps = 1, int warmupSteps = 100, 
+        public void TrainEnhanced(int steps, double learningRate, int logEvery, int saveEvery, string checkpointDir,
+                                  bool showPerf = false, int gradAccumSteps = 1, int warmupSteps = 100,
                                   int valEvery = 500, int valBatches = 10, float minLr = 0.0f,
                                   CancellationToken cancellationToken = default)
         {
@@ -155,7 +148,7 @@ namespace SmallMind.Training
             Guard.NotNullOrWhiteSpace(checkpointDir);
             Guard.GreaterThan(gradAccumSteps, 0);
             Guard.GreaterThanOrEqualTo(warmupSteps, 0);
-            
+
             // Create checkpoint directory if it doesn't exist
             if (!Directory.Exists(checkpointDir))
             {
@@ -225,12 +218,12 @@ namespace SmallMind.Training
 
                 // Average the loss
                 float avgLoss = accumulatedLoss / gradAccumSteps;
-                
+
                 // Record training loss
                 Metrics.RecordTrainingLoss(avgLoss);
 
                 // Check gradient health (before scaling for accumulation)
-                var (meanNorm, maxNorm, minNorm, nanCount, infCount) = 
+                var (meanNorm, maxNorm, minNorm, nanCount, infCount) =
                     MetricsComputer.ComputeGradientStats(_model.Parameters);
                 Metrics.RecordGradientStats(meanNorm, maxNorm, minNorm, nanCount, infCount);
 
@@ -260,7 +253,7 @@ namespace SmallMind.Training
                 totalTokens += tokensThisStep;
 
                 // Logging
-                LogTrainingProgress(step, steps, avgLoss, currentLr, logEvery, showPerf, 
+                LogTrainingProgress(step, steps, avgLoss, currentLr, logEvery, showPerf,
                                   stepStopwatch, totalStopwatch, tokensThisStep);
 
                 // Validation
@@ -279,8 +272,8 @@ namespace SmallMind.Training
         /// <summary>
         /// Logs training progress for the current step.
         /// </summary>
-        private void LogTrainingProgress(int step, int totalSteps, float loss, float learningRate, 
-                                        int logEvery, bool showPerf, System.Diagnostics.Stopwatch stepStopwatch, 
+        private void LogTrainingProgress(int step, int totalSteps, float loss, float learningRate,
+                                        int logEvery, bool showPerf, System.Diagnostics.Stopwatch stepStopwatch,
                                         System.Diagnostics.Stopwatch totalStopwatch, int tokensThisStep)
         {
             if ((step + 1) % logEvery == 0 || step == 0)
@@ -312,10 +305,10 @@ namespace SmallMind.Training
                 float valLoss = EvaluateValidationLoss(valBatches);
                 float perplexity = MetricsComputer.ComputePerplexity(valLoss);
                 float? accuracy = Metrics.GetCurrentTokenAccuracy();
-                
-                _logger.Info($"Validation - Loss: {valLoss:F4}, Perplexity: {perplexity:F2}" + 
+
+                _logger.Info($"Validation - Loss: {valLoss:F4}, Perplexity: {perplexity:F2}" +
                     (accuracy.HasValue ? $", Accuracy: {accuracy.Value * 100:F2}%" : ""));
-                
+
                 // Save best model
                 if (valLoss < bestValLoss)
                 {
@@ -325,7 +318,7 @@ namespace SmallMind.Training
                     _logger.Info($"New best validation loss! Saved to {bestCheckpointPath}");
                 }
             }
-            
+
             return bestValLoss;
         }
 
@@ -345,8 +338,8 @@ namespace SmallMind.Training
         /// <summary>
         /// Logs final training statistics and saves the final checkpoint.
         /// </summary>
-        private void LogFinalStatistics(string checkpointDir, bool showPerf, 
-                                       System.Diagnostics.Stopwatch totalStopwatch, 
+        private void LogFinalStatistics(string checkpointDir, bool showPerf,
+                                       System.Diagnostics.Stopwatch totalStopwatch,
                                        long totalTokens, float bestValLoss)
         {
             // Save final checkpoint
@@ -375,17 +368,17 @@ namespace SmallMind.Training
         private float EvaluateValidationLoss(int numBatches, bool computeAccuracy = true)
         {
             _model.Eval();
-            
+
             float totalLoss = 0.0f;
             float totalAccuracy = 0.0f;
-            
+
             for (int i = 0; i < numBatches; i++)
             {
                 var (x, y) = GetBatch();
                 var logits = _model.Forward(x);
                 var loss = ComputeCrossEntropyLoss(logits, y);
                 totalLoss += loss.Data[0];
-                
+
                 // Optionally compute token accuracy
                 if (computeAccuracy)
                 {
@@ -393,18 +386,18 @@ namespace SmallMind.Training
                     totalAccuracy += accuracy;
                 }
             }
-            
+
             float avgLoss = totalLoss / numBatches;
-            
+
             // Record validation metrics
             Metrics.RecordValidationLoss(avgLoss);
-            
+
             if (computeAccuracy)
             {
                 float avgAccuracy = totalAccuracy / numBatches;
                 Metrics.RecordTokenAccuracy(avgAccuracy);
             }
-            
+
             _model.Train();
             return avgLoss;
         }
@@ -524,7 +517,7 @@ namespace SmallMind.Training
         {
             // logits: (B, T, vocab_size)
             // targets: (B, T) with class indices
-            
+
             int B = logits.Shape[0];
             int T = logits.Shape[1];
             int V = logits.Shape[2];
@@ -619,7 +612,7 @@ namespace SmallMind.Training
         public void SaveCheckpoint(string path)
         {
             var checkpoint = _model.ToCheckpoint();
-            
+
             // Auto-detect format based on file extension (symmetric with LoadCheckpoint)
             if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             {

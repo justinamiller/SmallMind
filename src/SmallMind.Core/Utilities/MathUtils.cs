@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 
 namespace SmallMind.Core.Utilities
@@ -23,7 +22,7 @@ namespace SmallMind.Core.Utilities
             // Branchless clamp to safe range - faster than Math.Clamp in hot paths
             // Clamp to [-87.3, 88.7]: ln(float.MaxValue) bounds
             x = MathF.Max(-87.3f, MathF.Min(x, 88.7f));
-            
+
             // Padé approximation: exp(x) ≈ (1 + x/2 + x²/12) / (1 - x/2 + x²/12)
             // More accurate than Taylor series for negative x
             float x2 = x * x;

@@ -9,32 +9,32 @@ namespace SmallMind.Runtime
         /// Generation is not yet complete (used during streaming).
         /// </summary>
         None = 0,
-        
+
         /// <summary>
         /// Maximum number of new tokens was reached.
         /// </summary>
         MaxTokens = 1,
-        
+
         /// <summary>
         /// End-of-sequence token was generated.
         /// </summary>
         EndOfSequence = 2,
-        
+
         /// <summary>
         /// A configured stop token ID was generated.
         /// </summary>
         StopToken = 3,
-        
+
         /// <summary>
         /// A configured stop sequence (text pattern) was detected.
         /// </summary>
         StopSequence = 4,
-        
+
         /// <summary>
         /// Maximum time limit was exceeded.
         /// </summary>
         Timeout = 5,
-        
+
         /// <summary>
         /// Maximum context length was reached.
         /// </summary>
@@ -92,7 +92,7 @@ namespace SmallMind.Runtime
 
         public override string ToString()
         {
-            return LogProb.HasValue 
+            return LogProb.HasValue
                 ? $"Token[{Index}]={TokenId} \"{Text}\" (logprob={LogProb.Value:F4})"
                 : $"Token[{Index}]={TokenId} \"{Text}\"";
         }

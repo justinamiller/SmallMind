@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Quantization.Tensors;
 
 namespace SmallMind.Quantization.IO.Smq

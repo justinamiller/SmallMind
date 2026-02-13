@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Runtime.Execution
 {
     /// <summary>
@@ -17,7 +15,7 @@ namespace SmallMind.Runtime.Execution
         /// <param name="context">Execution context (cache will be populated)</param>
         /// <returns>Prefill result with logits and cache handle</returns>
         PrefillResult Prefill(ReadOnlySpan<int> promptTokens, ExecutionContext context);
-        
+
         /// <summary>
         /// Decode phase: Processes a single token to generate the next token.
         /// Uses KV cache from context to avoid recomputing previous tokens.

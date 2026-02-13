@@ -1,9 +1,8 @@
-using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 
 namespace SmallMind.Core.Simd
 {
@@ -65,7 +64,7 @@ namespace SmallMind.Core.Simd
             // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             var zero = Vector<float>.Zero;
             int vectorSize = Vector<float>.Count;
-            
+
             if (i <= length - vectorSize)
             {
                 unsafe
@@ -114,10 +113,10 @@ namespace SmallMind.Core.Simd
                         {
                             var vInput = Avx512F.LoadVector512(pInput + i);
                             var vOutputGrad = Avx512F.LoadVector512(pOutputGrad + i);
-                            
+
                             // Mask: input > 0
                             var mask = Avx512F.CompareGreaterThan(vInput, zero512);
-                            
+
                             // Apply mask: outputGrad where input > 0, else 0
                             // Use bitwise AND to apply mask
                             var result = Avx512F.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
@@ -138,10 +137,10 @@ namespace SmallMind.Core.Simd
                         {
                             var vInput = AdvSimd.LoadVector128(pInput + i);
                             var vOutputGrad = AdvSimd.LoadVector128(pOutputGrad + i);
-                            
+
                             // Mask: input > 0
                             var mask = AdvSimd.CompareGreaterThan(vInput, zero128);
-                            
+
                             // Apply mask: outputGrad where input > 0, else 0
                             var result = AdvSimd.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
                             AdvSimd.Store(pInputGrad + i, result);
@@ -154,7 +153,7 @@ namespace SmallMind.Core.Simd
             // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             var zero = Vector<float>.Zero;
             int vectorSize = Vector<float>.Count;
-            
+
             if (i <= length - vectorSize)
             {
                 unsafe
@@ -165,10 +164,10 @@ namespace SmallMind.Core.Simd
                         {
                             var vInput = Unsafe.Read<Vector<float>>(pInput + i);
                             var vOutputGrad = Unsafe.Read<Vector<float>>(pOutputGrad + i);
-                            
+
                             // Mask: input > 0
                             var mask = Vector.GreaterThan(vInput, zero);
-                            
+
                             // Apply mask: outputGrad where input > 0, else 0
                             var result = Vector.ConditionalSelect(mask, vOutputGrad, zero);
                             Unsafe.Write(pInputGrad + i, result);
@@ -396,7 +395,7 @@ namespace SmallMind.Core.Simd
                         {
                             var v = Avx512F.LoadVector512(pInput + i);
                             var mask = Avx512F.CompareGreaterThan(v, zero512);
-                            
+
                             // input > 0 ? input : alpha * input
                             var scaled = Avx512F.Multiply(v, vAlpha512);
                             var result = Avx512F.BlendVariable(scaled, v, mask.AsSingle());
@@ -414,7 +413,7 @@ namespace SmallMind.Core.Simd
             {
                 var v = new Vector<float>(input.Slice(i));
                 var mask = Vector.GreaterThan(v, zero);
-                
+
                 // input > 0 ? input : alpha * input
                 var result = Vector.ConditionalSelect(mask, v, v * vAlpha);
                 result.CopyTo(output.Slice(i));

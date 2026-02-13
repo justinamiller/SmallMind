@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
 
 namespace SmallMind.Core.Core
 {
@@ -120,7 +117,7 @@ namespace SmallMind.Core.Core
             lock (_lock)
             {
                 _currentConcurrency--;
-                
+
                 if (requestId < _requests.Count)
                 {
                     var request = _requests[requestId];
@@ -145,7 +142,7 @@ namespace SmallMind.Core.Core
                 // Pre-size based on total requests (most will be completed)
                 var completedRequests = new List<RequestMetrics>(capacity: _requests.Count);
                 var failedRequests = new List<RequestMetrics>(capacity: Math.Max(8, _requests.Count / 10));
-                
+
                 for (int i = 0; i < _requests.Count; i++)
                 {
                     var r = _requests[i];

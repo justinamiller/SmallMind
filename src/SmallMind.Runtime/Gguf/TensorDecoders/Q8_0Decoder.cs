@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using SmallMind.Quantization.IO.Gguf;
 
 namespace SmallMind.Runtime.Gguf.TensorDecoders
@@ -41,7 +39,7 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
                     for (int j = 0; j < GgufBlockSize; j++)
                     {
                         sbyte quantized = br.ReadSByte();
-                        
+
                         // Only use the first 'elementsInBlock' values
                         if (j < elementsInBlock)
                         {

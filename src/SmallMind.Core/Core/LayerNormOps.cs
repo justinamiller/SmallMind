@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -36,7 +35,7 @@ namespace SmallMind.Core.Core
         {
             Validation.Guard.GreaterThan(batch, 0);
             Validation.Guard.GreaterThan(features, 0);
-            
+
             int expectedSize = batch * features;
             if (input.Length != expectedSize)
                 throw new Exceptions.ValidationException($"Input length {input.Length} must equal batch * features ({expectedSize})", nameof(input));
@@ -46,23 +45,23 @@ namespace SmallMind.Core.Core
                 throw new Exceptions.ValidationException($"Gamma length {gamma.Length} must equal features ({features})", nameof(gamma));
             if (beta.Length != features)
                 throw new Exceptions.ValidationException($"Beta length {beta.Length} must equal features ({features})", nameof(beta));
-            
+
             for (int b = 0; b < batch; b++)
             {
                 int offset = b * features;
-                
+
                 // Pass 1: Compute mean and variance
                 // For large feature dimensions (>=128), use SIMD two-pass for better performance
                 // For smaller dimensions, use Welford's online algorithm for numerical stability
                 float mean;
                 float invStd;
-                
+
                 if (System.Numerics.Vector.IsHardwareAccelerated && features >= 128)
                 {
                     // SIMD two-pass: faster for large feature dimensions
                     // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                     int vecSize = System.Numerics.Vector<float>.Count;
-                    
+
                     unsafe
                     {
                         fixed (float* pInput = input)
@@ -71,48 +70,48 @@ namespace SmallMind.Core.Core
                             var vSum = System.Numerics.Vector<float>.Zero;
                             float* pRow = pInput + offset;
                             int f1 = 0;
-                            
+
                             for (; f1 <= features - vecSize; f1 += vecSize)
                             {
                                 var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f1);
                                 vSum += v;
                             }
-                            
+
                             // Horizontal sum reduction
                             float sum = 0f;
                             for (int vi = 0; vi < vecSize; vi++)
                                 sum += vSum[vi];
-                            
+
                             // Add scalar remainder
                             for (; f1 < features; f1++)
                                 sum += pRow[f1];
-                            
+
                             mean = sum / features;
-                            
+
                             // Pass 1b: Compute variance with SIMD
                             var vMean = new System.Numerics.Vector<float>(mean);
                             var vSqSum = System.Numerics.Vector<float>.Zero;
                             int f2 = 0;
-                            
+
                             for (; f2 <= features - vecSize; f2 += vecSize)
                             {
                                 var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f2);
                                 var vDiff = v - vMean;
                                 vSqSum += vDiff * vDiff;
                             }
-                            
+
                             // Horizontal sum reduction
                             float sqSum = 0f;
                             for (int vi = 0; vi < vecSize; vi++)
                                 sqSum += vSqSum[vi];
-                            
+
                             // Add scalar remainder
                             for (; f2 < features; f2++)
                             {
                                 float diff = pRow[f2] - mean;
                                 sqSum += diff * diff;
                             }
-                            
+
                             float variance = sqSum / features;
                             invStd = 1f / MathF.Sqrt(variance + eps);
                         }
@@ -123,7 +122,7 @@ namespace SmallMind.Core.Core
                     // Welford's online algorithm for small dimensions (better numerical stability)
                     mean = 0f;
                     float m2 = 0f;
-                    
+
                     for (int i = 0; i < features; i++)
                     {
                         float val = input[offset + i];
@@ -132,20 +131,20 @@ namespace SmallMind.Core.Core
                         float delta2 = val - mean;
                         m2 += delta * delta2;
                     }
-                    
+
                     float variance = m2 / features;
                     invStd = 1f / MathF.Sqrt(variance + eps);
                 }
-                
+
                 // Pass 2: Normalize and apply affine transformation (SIMD optimized)
                 int f = 0;
-                
+
                 // AVX-512 path (16 floats)
                 if (Avx512F.IsSupported && features >= 16)
                 {
                     var vMean512 = Vector512.Create(mean);
                     var vInvStd512 = Vector512.Create(invStd);
-                    
+
                     unsafe
                     {
                         fixed (float* pInput = input, pGamma = gamma, pBeta = beta, pOutput = output)
@@ -155,7 +154,7 @@ namespace SmallMind.Core.Core
                                 var vInput = Avx512F.LoadVector512(pInput + offset + f);
                                 var vGamma = Avx512F.LoadVector512(pGamma + f);
                                 var vBeta = Avx512F.LoadVector512(pBeta + f);
-                                
+
                                 var vNormalized = Avx512F.Multiply(Avx512F.Subtract(vInput, vMean512), vInvStd512);
                                 var vResult = Avx512F.FusedMultiplyAdd(vGamma, vNormalized, vBeta);
                                 Avx512F.Store(pOutput + offset + f, vResult);
@@ -163,13 +162,13 @@ namespace SmallMind.Core.Core
                         }
                     }
                 }
-                
+
                 // AVX2 with FMA path (8 floats) - faster than Vector<T> on most CPUs
                 if (Avx2.IsSupported && Fma.IsSupported && features >= 8)
                 {
                     var vMean256 = Vector256.Create(mean);
                     var vInvStd256 = Vector256.Create(invStd);
-                    
+
                     unsafe
                     {
                         fixed (float* pInput = input, pGamma = gamma, pBeta = beta, pOutput = output)
@@ -179,10 +178,10 @@ namespace SmallMind.Core.Core
                                 var vInput = Avx.LoadVector256(pInput + offset + f);
                                 var vGamma = Avx.LoadVector256(pGamma + f);
                                 var vBeta = Avx.LoadVector256(pBeta + f);
-                                
+
                                 // Normalize: (input - mean) * invStd using FMA
                                 var vNormalized = Avx.Multiply(Avx.Subtract(vInput, vMean256), vInvStd256);
-                                
+
                                 // Affine: gamma * normalized + beta (FMA: a*b+c)
                                 var vResult = Fma.MultiplyAdd(vGamma, vNormalized, vBeta);
                                 Avx.Store(pOutput + offset + f, vResult);
@@ -190,7 +189,7 @@ namespace SmallMind.Core.Core
                         }
                     }
                 }
-                
+
                 // Vector<T> fallback
                 // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                 int vectorSize = System.Numerics.Vector<float>.Count;
@@ -198,14 +197,14 @@ namespace SmallMind.Core.Core
                 {
                     var vMean = new System.Numerics.Vector<float>(mean);
                     var vInvStd = new System.Numerics.Vector<float>(invStd);
-                    
+
                     unsafe
                     {
                         fixed (float* pInput = input, pGamma = gamma, pBeta = beta, pOutput = output)
                         {
                             float* pInRow = pInput + offset;
                             float* pOutRow = pOutput + offset;
-                            
+
                             // SIMD loop for normalization and affine transform
                             for (; f <= features - vectorSize; f += vectorSize)
                             {
@@ -213,19 +212,19 @@ namespace SmallMind.Core.Core
                                 var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f);
                                 var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f);
                                 var vBeta = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pBeta + f);
-                                
+
                                 // Normalize: (input - mean) * invStd
                                 var vNormalized = (vInput - vMean) * vInvStd;
-                                
+
                                 // Affine: gamma * normalized + beta
                                 var vResult = vGamma * vNormalized + vBeta;
-                                
+
                                 System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f, vResult);
                             }
                         }
                     }
                 }
-                
+
                 // Scalar remainder
                 for (; f < features; f++)
                 {
@@ -234,7 +233,7 @@ namespace SmallMind.Core.Core
                 }
             }
         }
-        
+
         /// <summary>
         /// Fused LayerNorm for 3D tensors (batch, sequence, features).
         /// </summary>
@@ -251,11 +250,11 @@ namespace SmallMind.Core.Core
             Validation.Guard.GreaterThan(batch, 0);
             Validation.Guard.GreaterThan(sequence, 0);
             Validation.Guard.GreaterThan(features, 0);
-            
+
             int totalBatch = batch * sequence;
             LayerNorm(input, gamma, beta, output, totalBatch, features, eps);
         }
-        
+
         /// <summary>
         /// Fused LayerNorm with residual connection: output = LayerNorm(input + residual).
         /// High-ROI fusion that combines residual add + normalization.
@@ -272,7 +271,7 @@ namespace SmallMind.Core.Core
         {
             Validation.Guard.GreaterThan(batch, 0);
             Validation.Guard.GreaterThan(features, 0);
-            
+
             int expectedSize = batch * features;
             if (input.Length != expectedSize)
                 throw new Exceptions.ValidationException($"Input length {input.Length} must equal batch * features ({expectedSize})", nameof(input));
@@ -284,11 +283,11 @@ namespace SmallMind.Core.Core
                 throw new Exceptions.ValidationException($"Gamma length {gamma.Length} must equal features ({features})", nameof(gamma));
             if (beta.Length != features)
                 throw new Exceptions.ValidationException($"Beta length {beta.Length} must equal features ({features})", nameof(beta));
-            
+
             for (int b = 0; b < batch; b++)
             {
                 int offset = b * features;
-                
+
                 // Pass 1: Compute mean and variance of (input + residual)
                 float mean;
                 float invStd;
@@ -306,7 +305,7 @@ namespace SmallMind.Core.Core
                         {
                             float* pIn = pInput + offset;
                             float* pRes = pResidual + offset;
-                            
+
                             for (; f1 <= features - vectorSize; f1 += vectorSize)
                             {
                                 var vIn = Unsafe.Read<System.Numerics.Vector<float>>(pIn + f1);
@@ -330,7 +329,7 @@ namespace SmallMind.Core.Core
                         {
                             float* pIn = pInput + offset;
                             float* pRes = pResidual + offset;
-                            
+
                             for (; f2 <= features - vectorSize; f2 += vectorSize)
                             {
                                 var vIn = Unsafe.Read<System.Numerics.Vector<float>>(pIn + f2);
@@ -366,7 +365,7 @@ namespace SmallMind.Core.Core
                     float variance = m2 / features;
                     invStd = 1f / MathF.Sqrt(variance + eps);
                 }
-                
+
                 // Pass 2: Normalize (input + residual) and apply affine transformation
                 int f = 0;
 
@@ -375,7 +374,7 @@ namespace SmallMind.Core.Core
                 {
                     var vMean256 = Vector256.Create(mean);
                     var vInvStd256 = Vector256.Create(invStd);
-                    
+
                     unsafe
                     {
                         fixed (float* pInput = input, pResidual = residual, pGamma = gamma, pBeta = beta, pOutput = output)
@@ -386,11 +385,11 @@ namespace SmallMind.Core.Core
                                 var vResidual = Avx.LoadVector256(pResidual + offset + f);
                                 var vGamma = Avx.LoadVector256(pGamma + f);
                                 var vBeta = Avx.LoadVector256(pBeta + f);
-                                
+
                                 // Fused: gamma * ((input + residual - mean) * invStd) + beta
                                 var vCombined = Avx.Add(vInput, vResidual);
                                 var vNormalized = Avx.Multiply(Avx.Subtract(vCombined, vMean256), vInvStd256);
-                                
+
                                 // FMA: gamma * normalized + beta
                                 var vResult = Fma.MultiplyAdd(vGamma, vNormalized, vBeta);
                                 Avx.Store(pOutput + offset + f, vResult);
@@ -437,7 +436,7 @@ namespace SmallMind.Core.Core
                 }
             }
         }
-        
+
         /// <summary>
         /// In-place LayerNorm: normalizes tensor in-place.
         /// </summary>

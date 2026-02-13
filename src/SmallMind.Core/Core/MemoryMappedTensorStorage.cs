@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.IO.MemoryMappedFiles;
 using SmallMind.Core.Validation;
 
@@ -61,7 +59,7 @@ namespace SmallMind.Core.Core
 
             long fileSize = length * sizeof(float);
             var fileInfo = new FileInfo(filePath);
-            
+
             if (fileInfo.Length < fileSize)
             {
                 throw new Exceptions.ValidationException(
@@ -147,14 +145,14 @@ namespace SmallMind.Core.Core
         {
             Guard.InRange(sourceIndex, 0L, _length - 1, nameof(sourceIndex));
             Guard.GreaterThan(length, 0, nameof(length));
-            
+
             if (sourceIndex + length > _length)
             {
                 throw new Exceptions.ValidationException(
                     $"Copy range exceeds storage length",
                     nameof(length));
             }
-            
+
             if (destination.Length < length)
             {
                 throw new Exceptions.ValidationException(
@@ -165,7 +163,7 @@ namespace SmallMind.Core.Core
             ThrowIfDisposed();
 
             long byteOffset = sourceIndex * sizeof(float);
-            
+
             // Read floats one by one from memory-mapped file
             for (int i = 0; i < length; i++)
             {
@@ -180,7 +178,7 @@ namespace SmallMind.Core.Core
         public void CopyFrom(ReadOnlySpan<float> source, long destinationIndex)
         {
             Guard.InRange(destinationIndex, 0L, _length - 1, nameof(destinationIndex));
-            
+
             if (destinationIndex + source.Length > _length)
             {
                 throw new Exceptions.ValidationException(
@@ -191,7 +189,7 @@ namespace SmallMind.Core.Core
             ThrowIfDisposed();
 
             long byteOffset = destinationIndex * sizeof(float);
-            
+
             // Write floats one by one to memory-mapped file
             for (int i = 0; i < source.Length; i++)
             {

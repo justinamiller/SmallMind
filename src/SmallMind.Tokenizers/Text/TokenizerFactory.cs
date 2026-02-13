@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Tokenizers
@@ -117,7 +115,7 @@ namespace SmallMind.Tokenizers
             // 1. Check explicit TokenizerPath
             if (!string.IsNullOrEmpty(options.TokenizerPath))
             {
-                if (Directory.Exists(options.TokenizerPath) && 
+                if (Directory.Exists(options.TokenizerPath) &&
                     HasTokenizerAssets(options.TokenizerPath))
                 {
                     return options.TokenizerPath;
@@ -133,9 +131,9 @@ namespace SmallMind.Tokenizers
 
             // 3. Check <AppContext.BaseDirectory>/assets/tokenizers/<name>/
             string appBaseAssetsPath = Path.Combine(
-                AppContext.BaseDirectory, 
-                "assets", 
-                "tokenizers", 
+                AppContext.BaseDirectory,
+                "assets",
+                "tokenizers",
                 options.TokenizerName);
             if (Directory.Exists(appBaseAssetsPath) && HasTokenizerAssets(appBaseAssetsPath))
             {
@@ -218,7 +216,7 @@ namespace SmallMind.Tokenizers
             }
 
             // Add other tokenizer type detection here as needed
-            
+
             throw new NotSupportedException(
                 $"Unable to auto-detect tokenizer type from file: {path}\n" +
                 "The file format is not recognized.");

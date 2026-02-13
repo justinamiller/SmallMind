@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Tests.TestHelpers
 {
     /// <summary>
@@ -21,12 +18,12 @@ namespace SmallMind.Tests.TestHelpers
             public const string Prompt = "Hello";
             public const int Seed = 42;
             public const int MaxTokens = 20;
-            
+
             // To be populated after establishing baseline
             public static readonly int[] ExpectedTokens = Array.Empty<int>();
             public static readonly string ExpectedOutput = "";
         }
-        
+
         /// <summary>
         /// Golden logits for forward pass with MicroModel
         /// Input: [65, 66, 67] (ABC in ASCII)
@@ -35,15 +32,15 @@ namespace SmallMind.Tests.TestHelpers
         public static class MicroModelForwardPass
         {
             public static readonly int[] InputTokens = new[] { 65, 66, 67 };
-            
+
             // To be populated after establishing baseline
             // These are the first 10 logit values from the forward pass
             public static readonly float[] ExpectedFirstLogits = Array.Empty<float>();
-            
+
             // Tolerance for floating point comparison
             public const float LogitTolerance = 1e-4f;
         }
-        
+
         /// <summary>
         /// Expected behavior for tokenizer round-trip tests
         /// </summary>

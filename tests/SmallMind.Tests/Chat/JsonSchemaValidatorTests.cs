@@ -1,5 +1,4 @@
 using SmallMind.Engine;
-using Xunit;
 
 namespace SmallMind.Tests.Chat
 {

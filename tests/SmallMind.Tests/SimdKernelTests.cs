@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Simd;
 
 namespace SmallMind.Tests
@@ -27,7 +25,7 @@ namespace SmallMind.Tests
             // Assert
             for (int i = 0; i < expected.Length; i++)
             {
-                Assert.True(Math.Abs(result[i] - expected[i]) < Tolerance, 
+                Assert.True(Math.Abs(result[i] - expected[i]) < Tolerance,
                     $"Mismatch at index {i}: expected {expected[i]}, got {result[i]}");
             }
         }
@@ -169,10 +167,10 @@ namespace SmallMind.Tests
         [Fact]
         public void Softmax2D_MultipleRows_ProducesCorrectResults()
         {
-            float[] input = new float[] 
-            { 
-                1.0f, 2.0f, 3.0f, 
-                4.0f, 5.0f, 6.0f 
+            float[] input = new float[]
+            {
+                1.0f, 2.0f, 3.0f,
+                4.0f, 5.0f, 6.0f
             };
             float[] output = new float[6];
 
@@ -237,7 +235,7 @@ namespace SmallMind.Tests
         {
             float[] a = new float[] { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f };
             float[] b = new float[] { 2.0f, 3.0f, 4.0f, 5.0f, 6.0f };
-            float expected = 1*2 + 2*3 + 3*4 + 4*5 + 5*6; // = 70
+            float expected = 1 * 2 + 2 * 3 + 3 * 4 + 4 * 5 + 5 * 6; // = 70
 
             float result = MatMulOps.DotProduct(a, b);
 
@@ -250,7 +248,7 @@ namespace SmallMind.Tests
         {
             float[] a = new float[] { 1.0f, 2.0f, 3.0f };
             float[] b = new float[] { 4.0f, 5.0f, 6.0f };
-            float expected = 1*4 + 2*5 + 3*6; // = 32
+            float expected = 1 * 4 + 2 * 5 + 3 * 6; // = 32
 
             float result = MatMulOps.DotProduct(a, b);
 

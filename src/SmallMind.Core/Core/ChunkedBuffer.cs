@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Core.Validation;
 
 namespace SmallMind.Core.Core
@@ -55,7 +54,7 @@ namespace SmallMind.Core.Core
         {
             Guard.GreaterThan(totalLength, 0L, nameof(totalLength));
             Guard.GreaterThan(chunkSize, 0, nameof(chunkSize));
-            
+
             if (chunkSize > int.MaxValue)
             {
                 throw new Exceptions.ValidationException(
@@ -68,7 +67,7 @@ namespace SmallMind.Core.Core
 
             // Calculate number of chunks needed
             long numChunks = (totalLength + chunkSize - 1) / chunkSize;
-            
+
             if (numChunks > int.MaxValue)
             {
                 throw new Exceptions.ValidationException(
@@ -130,10 +129,10 @@ namespace SmallMind.Core.Core
         public (int chunkIndex, int offset) GetChunkOffset(long index)
         {
             Guard.InRange(index, 0L, _totalLength - 1, nameof(index));
-            
+
             int chunkIndex = (int)(index / _chunkSize);
             int offset = (int)(index % _chunkSize);
-            
+
             return (chunkIndex, offset);
         }
 
@@ -172,14 +171,14 @@ namespace SmallMind.Core.Core
         {
             Guard.InRange(sourceIndex, 0L, _totalLength - 1, nameof(sourceIndex));
             Guard.GreaterThan(length, 0, nameof(length));
-            
+
             if (sourceIndex + length > _totalLength)
             {
                 throw new Exceptions.ValidationException(
                     $"Copy range [{sourceIndex}, {sourceIndex + length}) exceeds buffer length {_totalLength}",
                     nameof(length));
             }
-            
+
             if (destination.Length < length)
             {
                 throw new Exceptions.ValidationException(
@@ -217,7 +216,7 @@ namespace SmallMind.Core.Core
         public void CopyFrom(ReadOnlySpan<float> source, long destinationIndex)
         {
             Guard.InRange(destinationIndex, 0L, _totalLength - 1, nameof(destinationIndex));
-            
+
             if (destinationIndex + source.Length > _totalLength)
             {
                 throw new Exceptions.ValidationException(
@@ -277,13 +276,13 @@ namespace SmallMind.Core.Core
         {
             // Each float is 4 bytes, plus array overhead
             long dataBytes = _totalLength * 4L;
-            
+
             // Array overhead: approximately 24 bytes per array object on 64-bit
             long arrayOverhead = _chunks.Length * 24L;
-            
+
             // Pointer array for chunks
             long chunkPointerArray = _chunks.Length * 8L + 24L;
-            
+
             return dataBytes + arrayOverhead + chunkPointerArray;
         }
     }

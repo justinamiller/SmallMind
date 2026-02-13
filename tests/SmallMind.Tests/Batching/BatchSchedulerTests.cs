@@ -1,14 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using SmallMind.Core.Exceptions;
 using SmallMind.Runtime.Batching;
 using SmallMind.Runtime.Cache;
 using SmallMind.Runtime.Telemetry;
-using Xunit;
 
 namespace SmallMind.Tests.Batching
 {
@@ -116,7 +108,7 @@ namespace SmallMind.Tests.Batching
 
             // Wait for batch to be formed
             var batch = await Task.WhenAny(batchReceived.Task, Task.Delay(2000));
-            
+
             // Assert - batch should contain all 3 requests or at least some requests
             Assert.True(batchReceived.Task.IsCompleted);
             var receivedBatch = await batchReceived.Task;
@@ -157,7 +149,7 @@ namespace SmallMind.Tests.Batching
 
             // Wait for batch to be formed by timeout
             var batch = await Task.WhenAny(batchReceived.Task, Task.Delay(2000));
-            
+
             // Assert
             Assert.True(batchReceived.Task.IsCompleted);
             var receivedBatch = await batchReceived.Task;
@@ -218,7 +210,7 @@ namespace SmallMind.Tests.Batching
             // Assert - batch should contain non-cancelled requests
             Assert.True(batchReceived.Task.IsCompleted);
             var receivedBatch = await batchReceived.Task;
-            
+
             // At least one non-cancelled request should be in the batch
             Assert.True(receivedBatch.Count >= 1);
             var nonCancelled = receivedBatch.FindAll(r => !r.IsCancelled);
@@ -290,7 +282,7 @@ namespace SmallMind.Tests.Batching
                 new Runtime.ProductionInferenceOptions());
 
             Assert.Throws<ObjectDisposedException>(() => scheduler.EnqueueRequest(request));
-            
+
             request.Dispose();
         }
 

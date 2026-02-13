@@ -1,8 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
 using SmallMind.Runtime;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
@@ -24,7 +19,7 @@ namespace SmallMind.Tests
             string vocab = "abcdefghijklmnopqrstuvwxyz .!";
             int vocabSize = vocab.Length;
             _tokenizer = new CharTokenizer(vocab);
-            
+
             _model = new TransformerModel(
                 vocabSize, BlockSize, 32, 2, 2, 0.0, 42);
             _model.Eval(); // Set to evaluation mode
@@ -106,12 +101,12 @@ namespace SmallMind.Tests
 
             // Assert
             Assert.NotNull(result);
-            
+
             // Count generated tokens (excluding prompt)
             var promptTokens = _tokenizer.Encode("test");
             var allTokens = _tokenizer.Encode(result);
             int generatedTokens = allTokens.Count - promptTokens.Count;
-            
+
             // Should not exceed MaxNewTokens
             Assert.True(generatedTokens <= options.MaxNewTokens);
         }
@@ -147,12 +142,12 @@ namespace SmallMind.Tests
             // 1. If timeout fires: InferenceTimeoutException is thrown (not OperationCanceledException)
             // 2. If generation completes: No unexpected exceptions are thrown
             // 3. Neither case throws ArgumentException from hitting block size limit
-            
+
             // Arrange
             // Use a long prompt that fills most of the block size to minimize generation time
             // This increases the likelihood of timeout firing on slower hardware
             string longPrompt = new string('a', BlockSize - 5);
-            
+
             var options = new ProductionInferenceOptions
             {
                 MaxNewTokens = 1000,

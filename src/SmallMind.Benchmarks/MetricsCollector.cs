@@ -1,7 +1,4 @@
-using System;
 using System.Diagnostics;
-using System.Runtime;
-using System.Runtime.InteropServices;
 
 namespace SmallMind.Benchmarks
 {
@@ -31,7 +28,7 @@ namespace SmallMind.Benchmarks
             _gen0Start = GC.CollectionCount(0);
             _gen1Start = GC.CollectionCount(1);
             _gen2Start = GC.CollectionCount(2);
-            
+
             using var process = Process.GetCurrentProcess();
             _workingSetStart = process.WorkingSet64;
             _workingSetPeak = _workingSetStart;

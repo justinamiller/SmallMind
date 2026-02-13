@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using SmallMind.Abstractions;
 using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Core;
@@ -312,8 +309,8 @@ internal static class ModelValidator
             // Embedding: vocab_size * embed_dim
             // Each layer: ~4 * embed_dim^2 (attention + FFN)
             // LM head: vocab_size * embed_dim
-            totalParams = (long)vocabSize * embedDim + 
-                         (long)numLayers * 4 * embedDim * embedDim + 
+            totalParams = (long)vocabSize * embedDim +
+                         (long)numLayers * 4 * embedDim * embedDim +
                          (long)vocabSize * embedDim;
         }
 
@@ -344,7 +341,7 @@ internal static class ModelValidator
                     }
                 }
             }
-            
+
             return Convert.ToInt32(value);
         }
         return defaultValue;

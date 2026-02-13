@@ -1,8 +1,6 @@
 using SmallMind.Core.Core;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
-using System;
-using System.Collections.Generic;
 
 namespace SmallMind.Runtime.PretrainedModels
 {
@@ -45,12 +43,12 @@ namespace SmallMind.Runtime.PretrainedModels
         {
             _model = model ?? throw new ArgumentNullException(nameof(model));
             _tokenizer = tokenizer ?? throw new ArgumentNullException(nameof(tokenizer));
-            
+
             if (labels == null || labels.Length == 0)
             {
                 throw new ArgumentException("At least one label must be provided", nameof(labels));
             }
-            
+
             _labels = new List<string>(labels);
             _domain = domain;
             _name = name ?? $"TextClassification-{domain}";
@@ -63,7 +61,7 @@ namespace SmallMind.Runtime.PretrainedModels
         public string Classify(string text)
         {
             var probs = ClassifyWithProbabilities(text);
-            
+
             // Find label with highest probability
             string? bestLabel = null;
             float maxProb = float.NegativeInfinity;
@@ -75,7 +73,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     bestLabel = kvp.Key;
                 }
             }
-            
+
             return bestLabel ?? _labels[0];
         }
 
@@ -104,7 +102,7 @@ namespace SmallMind.Runtime.PretrainedModels
             {
                 tokens[i] = tokensList[i];
             }
-            
+
             // Truncate to model's block size
             if (tokens.Length > _model.BlockSize)
             {
@@ -121,7 +119,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 inputData[i] = tokens[i];
             }
             var inputTensor = new Tensor(inputData, new[] { 1, seqLen });
-            
+
             // Forward pass through model
             var logits = _model.Forward(inputTensor);
 
@@ -141,10 +139,10 @@ namespace SmallMind.Runtime.PretrainedModels
         {
             var vocabSize = _model.VocabSize;
             var finalLogits = new float[vocabSize];
-            
+
             int startIdx = (seqLen - 1) * vocabSize;
             Array.Copy(logits.Data, startIdx, finalLogits, 0, vocabSize);
-            
+
             return finalLogits;
         }
 
@@ -159,7 +157,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     max = logits[i];
                 }
             }
-            
+
             // Compute exp and sum
             float[] exp = new float[logits.Length];
             float sum = 0f;
@@ -168,14 +166,14 @@ namespace SmallMind.Runtime.PretrainedModels
                 exp[i] = MathF.Exp(logits[i] - max);
                 sum += exp[i];
             }
-            
+
             // Normalize
             float invSum = 1f / sum;
             for (int i = 0; i < exp.Length; i++)
             {
                 exp[i] *= invSum;
             }
-            
+
             return exp;
         }
 
@@ -184,22 +182,22 @@ namespace SmallMind.Runtime.PretrainedModels
             // Aggregate probabilities for each label
             // This is a simplified heuristic - real models would have specific output heads
             var labelProbs = new Dictionary<string, float>();
-            
+
             // Divide probability space among labels
             int tokensPerLabel = Math.Max(1, probs.Length / _labels.Count);
-            
+
             for (int i = 0; i < _labels.Count; i++)
             {
                 int startIdx = i * tokensPerLabel;
                 int endIdx = (i == _labels.Count - 1) ? probs.Length : (i + 1) * tokensPerLabel;
-                
+
                 // Sum probabilities in this segment
                 float labelProb = 0f;
                 for (int j = startIdx; j < endIdx && j < probs.Length; j++)
                 {
                     labelProb += probs[j];
                 }
-                
+
                 labelProbs[_labels[i]] = labelProb;
             }
 
@@ -209,7 +207,7 @@ namespace SmallMind.Runtime.PretrainedModels
             {
                 total += kvp.Value;
             }
-            
+
             if (total > 0)
             {
                 var normalized = new Dictionary<string, float>(labelProbs.Count);

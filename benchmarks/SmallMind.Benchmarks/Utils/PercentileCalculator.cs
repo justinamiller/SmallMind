@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Benchmarks.Utils
 {
     /// <summary>
@@ -45,7 +42,7 @@ namespace SmallMind.Benchmarks.Utils
         public static Dictionary<string, double> CalculatePercentiles(List<double> sortedData, params double[] percentiles)
         {
             var results = new Dictionary<string, double>();
-            
+
             foreach (var p in percentiles)
             {
                 results[$"p{p}"] = Percentile(sortedData, p);

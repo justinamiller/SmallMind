@@ -1,10 +1,6 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using SmallMind.Transformers;
-using SmallMind.Quantization.IO.Smq;
-using SmallMind.Quantization.Abstractions;
 using SmallMind.Core;
+using SmallMind.Quantization.IO.Smq;
+using SmallMind.Transformers;
 
 namespace SmallMind.Runtime.Quantization
 {
@@ -56,7 +52,7 @@ namespace SmallMind.Runtime.Quantization
 
             using var stream = File.OpenRead(smqPath);
             using var reader = new SmqReader(stream);
-            
+
             reader.ReadHeader();
             var metadata = reader.GetMetadata();
             var tensorNames = reader.GetTensorNames();

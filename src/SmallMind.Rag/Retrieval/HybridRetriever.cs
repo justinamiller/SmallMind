@@ -21,9 +21,9 @@ internal sealed class HybridRetriever
     /// <param name="sparseWeight">Weight for BM25 scores (default 0.5).</param>
     /// <param name="denseWeight">Weight for dense scores (default 0.5).</param>
     public HybridRetriever(
-        Bm25Retriever bm25, 
-        DenseRetriever dense, 
-        float sparseWeight = 0.5f, 
+        Bm25Retriever bm25,
+        DenseRetriever dense,
+        float sparseWeight = 0.5f,
         float denseWeight = 0.5f)
     {
         _bm25 = bm25 ?? throw new ArgumentNullException(nameof(bm25));
@@ -49,9 +49,9 @@ internal sealed class HybridRetriever
     /// <param name="candidateK">Number of candidates to retrieve from each method (default 20).</param>
     /// <returns>List of retrieved chunks sorted by combined relevance.</returns>
     public List<RetrievedChunk> Retrieve(
-        string query, 
-        int topK, 
-        Dictionary<string, Chunk> chunkStore, 
+        string query,
+        int topK,
+        Dictionary<string, Chunk> chunkStore,
         int candidateK = 20)
     {
         if (string.IsNullOrEmpty(query))
@@ -80,7 +80,7 @@ internal sealed class HybridRetriever
             var result = bm25Results[i];
             string chunkId = result.ChunkId;
 
-            if (chunkStore.TryGetValue(chunkId, out var chunk) && 
+            if (chunkStore.TryGetValue(chunkId, out var chunk) &&
                 normalizedBm25.TryGetValue(chunkId, out float normScore))
             {
                 float combinedScore = _sparseWeight * normScore;
