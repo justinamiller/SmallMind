@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.IO.MemoryMappedFiles;
 using SmallMind.Core.Validation;
 
@@ -292,7 +290,6 @@ namespace SmallMind.Core.Core
         private readonly long _cacheCapacityPerLayer;
         private readonly bool _useMemoryMapping;
         private bool _disposed;
-        private readonly string? _cacheDirectory;
 
         /// <summary>
         /// Creates a multi-layer KV cache.
@@ -326,7 +323,6 @@ namespace SmallMind.Core.Core
             _numLayers = numLayers;
             _cacheCapacityPerLayer = (long)maxSeqLen * numHeads * headDim;
             _useMemoryMapping = useMemoryMapping;
-            _cacheDirectory = cacheDirectory;
 
             _keyCaches = new KVCache[numLayers];
             _valueCaches = new KVCache[numLayers];

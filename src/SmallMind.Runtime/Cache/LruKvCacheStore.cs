@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
 using SmallMind.Abstractions;
 
 namespace SmallMind.Runtime.Cache
@@ -30,11 +27,11 @@ namespace SmallMind.Runtime.Cache
         private readonly Dictionary<SessionId, LruNode> _cache;
         private readonly ReaderWriterLockSlim _lock;
         private readonly IChatTelemetry? _telemetry;
-        
+
         // LRU list (head = most recent, tail = least recent)
         private LruNode? _head;
         private LruNode? _tail;
-        
+
         // Statistics
         private long _currentBytes;
         private long _peakBytes;
@@ -49,7 +46,7 @@ namespace SmallMind.Runtime.Cache
             _options = options?.Clone() ?? throw new ArgumentNullException(nameof(options));
             _options.Validate();
             _telemetry = telemetry;
-            
+
             _cache = new Dictionary<SessionId, LruNode>();
             _lock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
         }
@@ -63,7 +60,7 @@ namespace SmallMind.Runtime.Cache
                 {
                     Interlocked.Increment(ref _hits);
                     Interlocked.Add(ref _reusedTokens, node.Entry.CurrentTokenCount);
-                    
+
                     // Move to head (most recently used)
                     _lock.EnterWriteLock();
                     try
@@ -74,7 +71,7 @@ namespace SmallMind.Runtime.Cache
                     {
                         _lock.ExitWriteLock();
                     }
-                    
+
                     entry = node.Entry;
                     return true;
                 }
@@ -103,10 +100,10 @@ namespace SmallMind.Runtime.Cache
                             $"Session {sessionId} exists with different model shape. " +
                             $"Expected {modelShape}, got {node.Entry.ModelShape}");
                     }
-                    
+
                     Interlocked.Increment(ref _hits);
                     Interlocked.Add(ref _reusedTokens, node.Entry.CurrentTokenCount);
-                    
+
                     _lock.EnterWriteLock();
                     try
                     {
@@ -116,7 +113,7 @@ namespace SmallMind.Runtime.Cache
                     {
                         _lock.ExitWriteLock();
                     }
-                    
+
                     return node.Entry;
                 }
 
@@ -125,36 +122,36 @@ namespace SmallMind.Runtime.Cache
                 try
                 {
                     Interlocked.Increment(ref _misses);
-                    
+
                     var entry = new KvCacheEntry(sessionId, modelShape, maxTokens);
-                    
+
                     // Check per-session budget
                     if (entry.SizeBytes > _options.MaxBytesPerSession)
                     {
                         // Emit telemetry event
                         _telemetry?.OnKvCacheBudgetExceeded(
-                            sessionId.ToString(), 
-                            entry.SizeBytes, 
+                            sessionId.ToString(),
+                            entry.SizeBytes,
                             _options.MaxBytesPerSession);
-                        
+
                         entry.Dispose();
                         throw new InvalidOperationException(
                             $"Session cache size {entry.SizeBytes / 1024 / 1024}MB exceeds " +
                             $"per-session budget {_options.MaxBytesPerSession / 1024 / 1024}MB");
                     }
-                    
+
                     var newNode = new LruNode(sessionId, entry);
-                    
+
                     // Evict if necessary before adding
                     EvictIfNecessary(entry.SizeBytes);
-                    
+
                     _cache[sessionId] = newNode;
                     AddToHead(newNode);
-                    
+
                     _currentBytes += entry.SizeBytes;
                     if (_currentBytes > _peakBytes)
                         _peakBytes = _currentBytes;
-                    
+
                     return entry;
                 }
                 finally
@@ -201,7 +198,7 @@ namespace SmallMind.Runtime.Cache
                 {
                     RemoveNode(node);
                     _cache.Remove(sessionId);
-                    
+
                     _currentBytes -= node.Entry.SizeBytes;
                     node.Entry.Dispose();
                 }
@@ -221,7 +218,7 @@ namespace SmallMind.Runtime.Cache
                 {
                     node.Entry.Dispose();
                 }
-                
+
                 _cache.Clear();
                 _head = null;
                 _tail = null;
@@ -274,7 +271,7 @@ namespace SmallMind.Runtime.Cache
 
             if (_head != null)
                 _head.Prev = node;
-            
+
             _head = node;
 
             if (_tail == null)
@@ -326,18 +323,18 @@ namespace SmallMind.Runtime.Cache
             var lruNode = _tail;
             RemoveNode(lruNode);
             _cache.Remove(lruNode.SessionId);
-            
+
             long freedBytes = lruNode.Entry.SizeBytes;
             _currentBytes -= freedBytes;
-            
+
             // Emit telemetry event
             _telemetry?.OnKvCacheEviction(
-                lruNode.SessionId.ToString(), 
-                "LRU eviction", 
+                lruNode.SessionId.ToString(),
+                "LRU eviction",
                 freedBytes);
-            
+
             lruNode.Entry.Dispose();
-            
+
             Interlocked.Increment(ref _evictions);
         }
     }

@@ -1,8 +1,5 @@
-using System;
 using System.Buffers;
 using System.Collections.Frozen;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 
 namespace SmallMind.Tokenizers
@@ -59,7 +56,7 @@ namespace SmallMind.Tokenizers
 
                 _pieces.Add((token, score, id));
                 idToTokenDict[id] = token;
-                
+
                 // Add to trie for fast prefix matching
                 AddToTrie(token, id, score);
             }
@@ -83,7 +80,7 @@ namespace SmallMind.Tokenizers
 
             // Setup Info
             int bosId = -1, eosId = -1, padId = -1;
-            
+
             if (specialTokens != null)
             {
                 for (int i = 0; i < _pieces.Count; i++)
@@ -134,11 +131,11 @@ namespace SmallMind.Tokenizers
                 return new List<int>();
 
             int n = text.Length;
-            
+
             // Viterbi: dp[i] = (best score to position i, best last token id)
             var dp = new (float score, int lastTokenId, int prevPos)[n + 1];
             dp[0] = (0f, -1, -1);
-            
+
             for (int i = 1; i <= n; i++)
             {
                 dp[i] = (float.NegativeInfinity, -1, -1);
@@ -157,9 +154,9 @@ namespace SmallMind.Tokenizers
                     char c = text[j];
                     if (!node.Children.TryGetValue(c, out TrieNode? child))
                         break;
-                    
+
                     node = child;
-                    
+
                     if (node.IsEndOfToken)
                     {
                         float newScore = dp[i].score + node.Score;
@@ -180,7 +177,7 @@ namespace SmallMind.Tokenizers
             // Backtrack to get tokens
             var result = new List<int>(text.Length / 3);
             int pos = n;
-            
+
             while (pos > 0)
             {
                 if (dp[pos].lastTokenId != -1)
@@ -201,7 +198,7 @@ namespace SmallMind.Tokenizers
         {
             string text = Encoding.UTF8.GetString(utf8);
             List<int> tokens = Encode(text);
-            
+
             int count = Math.Min(tokens.Count, tokensOut.Length);
             for (int i = 0; i < count; i++)
             {
@@ -216,7 +213,7 @@ namespace SmallMind.Tokenizers
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
         {
             var sb = new StringBuilder();
-            
+
             foreach (int tokenId in tokens)
             {
                 if (_idToToken.TryGetValue(tokenId, out string? token))

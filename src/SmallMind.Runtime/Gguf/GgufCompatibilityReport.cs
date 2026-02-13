@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using SmallMind.Quantization.IO.Gguf;
 
@@ -94,14 +91,14 @@ namespace SmallMind.Runtime.Gguf
                         sb.AppendLine($"     ... and {tensorNames.Count - 5} more");
                     }
                 }
-                
+
                 sb.AppendLine();
                 sb.AppendLine("Supported Tensor Types:");
                 foreach (var (type, count) in SupportedTensorsByType.OrderByDescending(kv => kv.Value))
                 {
                     sb.AppendLine($"  ✅ {type}: {count} tensor(s)");
                 }
-                
+
                 sb.AppendLine();
                 sb.AppendLine("To fix:");
                 sb.AppendLine("1. Re-quantize the model to supported formats (Q4_0, Q8_0, Q4_K, Q5_K, Q6_K, Q8_K)");
@@ -138,8 +135,8 @@ namespace SmallMind.Runtime.Gguf
             {
                 TotalTensors = modelInfo.Tensors.Count,
                 FormatVersion = modelInfo.Version,
-                Architecture = modelInfo.Metadata.TryGetValue("general.architecture", out var arch) 
-                    ? arch?.ToString() 
+                Architecture = modelInfo.Metadata.TryGetValue("general.architecture", out var arch)
+                    ? arch?.ToString()
                     : null
             };
 
@@ -151,7 +148,7 @@ namespace SmallMind.Runtime.Gguf
             foreach (var tensor in modelInfo.Tensors)
             {
                 string typeStr = tensor.Type.ToString();
-                
+
                 if (isSupportedFunc(tensor.Type))
                 {
                     supportedCount++;

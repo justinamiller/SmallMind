@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using Xunit;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 
@@ -45,7 +42,7 @@ namespace SmallMind.Tests.Core
             Assert.True(tensor.IsMemoryMapped);
             Assert.False(tensor.IsChunked);
             Assert.Equal(1_000_000L, tensor.TotalElements);
-            
+
             // Check file size
             var fileInfo = new FileInfo(filePath);
             Assert.Equal(1_000_000L * sizeof(float), fileInfo.Length);
@@ -57,7 +54,7 @@ namespace SmallMind.Tests.Core
             // Arrange
             string filePath = Path.Combine(_testDirectory, "existing_tensor.bin");
             int[] shape = new int[] { 100, 100 };
-            
+
             // Create and populate a file
             using (var createTensor = Tensor.CreateMemoryMappedFile(filePath, shape))
             {
@@ -74,7 +71,7 @@ namespace SmallMind.Tests.Core
             Assert.True(tensor.IsMemoryMapped);
             var loadedData = new float[100];
             tensor.CopyTo(0, loadedData, 100);
-            
+
             for (int i = 0; i < 100; i++)
                 Assert.Equal(i * 0.5f, loadedData[i], Tolerance);
         }
@@ -85,9 +82,9 @@ namespace SmallMind.Tests.Core
             // Arrange
             string filePath = Path.Combine(_testDirectory, "read_test.bin");
             int[] shape = new int[] { 1000, 100 };
-            
+
             using var tensor = Tensor.CreateMemoryMappedFile(filePath, shape);
-            
+
             // Write some test data
             var writeData = new float[100];
             for (int i = 0; i < 100; i++)
@@ -109,9 +106,9 @@ namespace SmallMind.Tests.Core
             // Arrange
             string filePath = Path.Combine(_testDirectory, "write_test.bin");
             int[] shape = new int[] { 1000, 100 };
-            
+
             using var tensor = Tensor.CreateMemoryMappedFile(filePath, shape);
-            
+
             var testData = new float[50];
             for (int i = 0; i < 50; i++)
                 testData[i] = i * 2.5f;
@@ -122,7 +119,7 @@ namespace SmallMind.Tests.Core
             // Assert - Read it back
             var readData = new float[50];
             tensor.CopyTo(1000, readData, 50);
-            
+
             for (int i = 0; i < 50; i++)
                 Assert.Equal(i * 2.5f, readData[i], Tolerance);
         }
@@ -133,24 +130,24 @@ namespace SmallMind.Tests.Core
             // Arrange - Test with size > int.MaxValue would be too slow, so test large but reasonable size
             string filePath = Path.Combine(_testDirectory, "large_tensor.bin");
             int[] shape = new int[] { 10000, 10000 }; // 100M elements = 400MB
-            
+
             // Act
             using var tensor = Tensor.CreateMemoryMappedFile(filePath, shape);
 
             // Assert
             Assert.Equal(100_000_000L, tensor.TotalElements);
             Assert.True(File.Exists(filePath));
-            
+
             // Test reading/writing at various offsets
             var testData = new float[100];
             for (int i = 0; i < 100; i++)
                 testData[i] = i * 0.1f;
-            
+
             tensor.CopyFrom(testData, 50_000_000); // Middle of tensor
-            
+
             var readData = new float[100];
             tensor.CopyTo(50_000_000, readData, 100);
-            
+
             for (int i = 0; i < 100; i++)
                 Assert.Equal(i * 0.1f, readData[i], Tolerance);
         }
@@ -173,7 +170,7 @@ namespace SmallMind.Tests.Core
             // Arrange
             string filePath = Path.Combine(_testDirectory, "toString_test.bin");
             int[] shape = new int[] { 100, 100 };
-            
+
             using var tensor = Tensor.CreateMemoryMappedFile(filePath, shape);
 
             // Act

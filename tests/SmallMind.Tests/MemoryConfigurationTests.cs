@@ -1,6 +1,4 @@
-using Xunit;
 using SmallMind.Core.Core;
-using System;
 
 namespace SmallMind.Tests
 {
@@ -10,7 +8,7 @@ namespace SmallMind.Tests
         public void Constructor_AutoDetect_CreatesConfiguration()
         {
             var config = new MemoryConfiguration();
-            
+
             Assert.True(config.SystemMemoryBytes > 0);
             Assert.True(config.SystemMemoryGB > 0);
             Assert.True(config.MaxContextTokens >= MemoryConfiguration.MIN_SAFE_TOKENS);
@@ -20,7 +18,7 @@ namespace SmallMind.Tests
         public void Constructor_With16GB_SetsCorrectTokens()
         {
             var config = new MemoryConfiguration(memoryGB: 16);
-            
+
             Assert.Equal(MemoryConfiguration.DEFAULT_MAX_TOKENS_16GB, config.MaxContextTokens);
             Assert.Equal(16.0 * 1024 * 1024 * 1024, config.SystemMemoryBytes, tolerance: 1.0);
         }
@@ -29,7 +27,7 @@ namespace SmallMind.Tests
         public void Constructor_With32GB_SetsCorrectTokens()
         {
             var config = new MemoryConfiguration(memoryGB: 32);
-            
+
             Assert.Equal(MemoryConfiguration.DEFAULT_MAX_TOKENS_32GB, config.MaxContextTokens);
         }
 
@@ -37,7 +35,7 @@ namespace SmallMind.Tests
         public void Constructor_With64GB_SetsCorrectTokens()
         {
             var config = new MemoryConfiguration(memoryGB: 64);
-            
+
             Assert.Equal(MemoryConfiguration.DEFAULT_MAX_TOKENS_64GB, config.MaxContextTokens);
         }
 
@@ -45,7 +43,7 @@ namespace SmallMind.Tests
         public void Constructor_With128GB_SetsCorrectTokens()
         {
             var config = new MemoryConfiguration(memoryGB: 128);
-            
+
             Assert.Equal(MemoryConfiguration.DEFAULT_MAX_TOKENS_128GB, config.MaxContextTokens);
         }
 
@@ -53,7 +51,7 @@ namespace SmallMind.Tests
         public void Constructor_WithLowMemory_ScalesAppropriately()
         {
             var config = new MemoryConfiguration(memoryGB: 8);
-            
+
             // 8GB should give about 8 * 2048 = 16384 tokens
             Assert.True(config.MaxContextTokens >= MemoryConfiguration.MIN_SAFE_TOKENS);
             Assert.True(config.MaxContextTokens < MemoryConfiguration.DEFAULT_MAX_TOKENS_16GB);
@@ -68,7 +66,7 @@ namespace SmallMind.Tests
                 enableMemoryMapping: false,
                 checkpointInterval: 2,
                 customMaxTokens: 16384);
-            
+
             Assert.Equal(16384, config.MaxContextTokens);
         }
 
@@ -78,7 +76,7 @@ namespace SmallMind.Tests
             var config = new MemoryConfiguration(
                 enableGradientCheckpointing: true,
                 checkpointInterval: 4);
-            
+
             Assert.True(config.EnableGradientCheckpointing);
             Assert.Equal(4, config.CheckpointInterval);
         }
@@ -88,7 +86,7 @@ namespace SmallMind.Tests
         {
             var config = new MemoryConfiguration(
                 enableMixedPrecision: true);
-            
+
             Assert.True(config.EnableMixedPrecision);
         }
 
@@ -97,27 +95,27 @@ namespace SmallMind.Tests
         {
             var config = new MemoryConfiguration(
                 enableMemoryMapping: true);
-            
+
             Assert.True(config.EnableMemoryMapping);
         }
 
         [Fact]
         public void Constructor_InvalidCheckpointInterval_ThrowsException()
         {
-            Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => 
+            Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() =>
                 new MemoryConfiguration(checkpointInterval: 0));
-            
-            Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => 
+
+            Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() =>
                 new MemoryConfiguration(checkpointInterval: -1));
         }
 
         [Fact]
         public void Constructor_InvalidMemory_ThrowsException()
         {
-            Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => 
+            Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() =>
                 new MemoryConfiguration(memoryGB: 0));
-            
-            Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => 
+
+            Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() =>
                 new MemoryConfiguration(memoryGB: -1));
         }
 
@@ -125,7 +123,7 @@ namespace SmallMind.Tests
         public void SlidingWindow_ConfiguredAutomatically()
         {
             var config = new MemoryConfiguration(customMaxTokens: 32768);
-            
+
             // Window size should be 1/8 of max tokens
             Assert.Equal(4096, config.SlidingWindowSize);
             // Stride should be 50% of window (50% overlap)
@@ -136,7 +134,7 @@ namespace SmallMind.Tests
         public void SlidingWindow_MinimumSize()
         {
             var config = new MemoryConfiguration(customMaxTokens: 4096);
-            
+
             // Should use minimum of 2048 even if 1/8 would be less
             Assert.True(config.SlidingWindowSize >= 2048);
         }
@@ -145,9 +143,9 @@ namespace SmallMind.Tests
         public void SetMaxContextTokens_UpdatesValue()
         {
             var config = new MemoryConfiguration();
-            
+
             config.SetMaxContextTokens(65536);
-            
+
             Assert.Equal(65536, config.MaxContextTokens);
         }
 
@@ -155,7 +153,7 @@ namespace SmallMind.Tests
         public void SetMaxContextTokens_InvalidValue_ThrowsException()
         {
             var config = new MemoryConfiguration();
-            
+
             Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => config.SetMaxContextTokens(0));
             Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => config.SetMaxContextTokens(-100));
         }
@@ -164,7 +162,7 @@ namespace SmallMind.Tests
         public void EstimateMemoryUsage_ReturnsPositiveValue()
         {
             var config = new MemoryConfiguration(memoryGB: 16);
-            
+
             long memoryUsage = config.EstimateMemoryUsage(
                 vocabSize: 50000,
                 embeddingDim: 512,
@@ -172,7 +170,7 @@ namespace SmallMind.Tests
                 numHeads: 8,
                 batchSize: 2,
                 seqLength: 1024);
-            
+
             Assert.True(memoryUsage > 0);
         }
 
@@ -183,11 +181,11 @@ namespace SmallMind.Tests
                 memoryGB: 16,
                 enableGradientCheckpointing: true,
                 checkpointInterval: 2);
-            
+
             var configWithoutCheckpointing = new MemoryConfiguration(
                 memoryGB: 16,
                 enableGradientCheckpointing: false);
-            
+
             long withCheckpointing = configWithCheckpointing.EstimateMemoryUsage(
                 vocabSize: 50000,
                 embeddingDim: 512,
@@ -195,7 +193,7 @@ namespace SmallMind.Tests
                 numHeads: 8,
                 batchSize: 2,
                 seqLength: 1024);
-            
+
             long withoutCheckpointing = configWithoutCheckpointing.EstimateMemoryUsage(
                 vocabSize: 50000,
                 embeddingDim: 512,
@@ -203,7 +201,7 @@ namespace SmallMind.Tests
                 numHeads: 8,
                 batchSize: 2,
                 seqLength: 1024);
-            
+
             // Checkpointing should use less memory
             Assert.True(withCheckpointing < withoutCheckpointing);
         }
@@ -214,11 +212,11 @@ namespace SmallMind.Tests
             var configFP16 = new MemoryConfiguration(
                 memoryGB: 16,
                 enableMixedPrecision: true);
-            
+
             var configFP32 = new MemoryConfiguration(
                 memoryGB: 16,
                 enableMixedPrecision: false);
-            
+
             long fp16Memory = configFP16.EstimateMemoryUsage(
                 vocabSize: 50000,
                 embeddingDim: 512,
@@ -226,7 +224,7 @@ namespace SmallMind.Tests
                 numHeads: 8,
                 batchSize: 2,
                 seqLength: 1024);
-            
+
             long fp32Memory = configFP32.EstimateMemoryUsage(
                 vocabSize: 50000,
                 embeddingDim: 512,
@@ -234,7 +232,7 @@ namespace SmallMind.Tests
                 numHeads: 8,
                 batchSize: 2,
                 seqLength: 1024);
-            
+
             // FP16 should use less memory (about 50% for weights)
             Assert.True(fp16Memory < fp32Memory);
         }
@@ -245,11 +243,11 @@ namespace SmallMind.Tests
             var configWithMapping = new MemoryConfiguration(
                 memoryGB: 16,
                 enableMemoryMapping: true);
-            
+
             var configWithoutMapping = new MemoryConfiguration(
                 memoryGB: 16,
                 enableMemoryMapping: false);
-            
+
             long withMapping = configWithMapping.EstimateMemoryUsage(
                 vocabSize: 50000,
                 embeddingDim: 512,
@@ -257,7 +255,7 @@ namespace SmallMind.Tests
                 numHeads: 8,
                 batchSize: 2,
                 seqLength: 2048);
-            
+
             long withoutMapping = configWithoutMapping.EstimateMemoryUsage(
                 vocabSize: 50000,
                 embeddingDim: 512,
@@ -265,7 +263,7 @@ namespace SmallMind.Tests
                 numHeads: 8,
                 batchSize: 2,
                 seqLength: 2048);
-            
+
             // Memory mapping should use less memory (KV cache offloaded to disk)
             Assert.True(withMapping < withoutMapping);
         }
@@ -274,7 +272,7 @@ namespace SmallMind.Tests
         public void CanFitInMemory_SmallModel_ReturnsTrue()
         {
             var config = new MemoryConfiguration(memoryGB: 16);
-            
+
             bool canFit = config.CanFitInMemory(
                 vocabSize: 10000,
                 embeddingDim: 256,
@@ -282,7 +280,7 @@ namespace SmallMind.Tests
                 numHeads: 4,
                 batchSize: 1,
                 seqLength: 512);
-            
+
             Assert.True(canFit);
         }
 
@@ -290,7 +288,7 @@ namespace SmallMind.Tests
         public void CanFitInMemory_LargeModel_ReturnsFalse()
         {
             var config = new MemoryConfiguration(memoryGB: 1); // Very low memory
-            
+
             bool canFit = config.CanFitInMemory(
                 vocabSize: 100000,
                 embeddingDim: 2048,
@@ -298,7 +296,7 @@ namespace SmallMind.Tests
                 numHeads: 16,
                 batchSize: 8,
                 seqLength: 4096);
-            
+
             Assert.False(canFit);
         }
 
@@ -311,9 +309,9 @@ namespace SmallMind.Tests
                 enableMixedPrecision: true,
                 enableMemoryMapping: true,
                 checkpointInterval: 2);
-            
+
             string summary = config.GetSummary();
-            
+
             Assert.Contains("16", summary);
             Assert.Contains("Enabled", summary);
             Assert.Contains("FP16/FP32", summary);
@@ -324,12 +322,12 @@ namespace SmallMind.Tests
         {
             // Use 64GB RAM with extensive optimizations for 32k tokens
             var config = new MemoryConfiguration(
-                memoryGB: 64, 
+                memoryGB: 64,
                 enableGradientCheckpointing: true,
                 enableMixedPrecision: true,
                 enableMemoryMapping: true,
                 checkpointInterval: 4); // More aggressive checkpointing
-            
+
             // Small model configuration for 32k tokens
             bool canFit = config.CanFitInMemory(
                 vocabSize: 30000, // Smaller vocab
@@ -338,7 +336,7 @@ namespace SmallMind.Tests
                 numHeads: 4,
                 batchSize: 1,
                 seqLength: 32768);
-            
+
             // Should fit with all optimizations enabled
             Assert.True(canFit, "32k tokens with optimizations should fit in 64GB");
         }

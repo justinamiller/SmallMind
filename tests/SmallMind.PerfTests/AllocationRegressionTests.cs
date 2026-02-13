@@ -1,6 +1,3 @@
-using System;
-using System.Threading.Tasks;
-using Xunit;
 using SmallMind.Runtime;
 using SmallMind.Tests.Fixtures;
 using SmallMind.Tests.Utilities;
@@ -55,7 +52,7 @@ namespace SmallMind.PerfTests
 
             // Measure allocations during actual workload
             using var tracker = new AllocationTracker();
-            
+
             for (int i = 0; i < 3; i++)
             {
                 using var session = new InferenceSession(model, tokenizer, options, TinyModelFixture.MaxSeqLen);
@@ -73,7 +70,7 @@ namespace SmallMind.PerfTests
             // NOTE: This is a regression guard, not an absolute target.
             // Future optimizations should reduce this toward the ideal of ~0.
             const double maxKBPerToken = 50.0;
-            
+
             if (kbPerToken > maxKBPerToken)
             {
                 if (TestHelpers.AllocationDiagnosticsEnabled())
@@ -127,7 +124,7 @@ namespace SmallMind.PerfTests
 
             // Measure
             using var tracker = new AllocationTracker();
-            
+
             for (int i = 0; i < 5; i++)
             {
                 using var session = new InferenceSession(model, tokenizer, options, TinyModelFixture.MaxSeqLen);

@@ -1,4 +1,3 @@
-using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
@@ -151,7 +150,7 @@ namespace SmallMind.Core.Simd
         public static void PrintCapabilities(IRuntimeLogger? logger = null)
         {
             var log = logger ?? NullRuntimeLogger.Instance;
-            
+
             log.Info("=== SmallMind SIMD Capabilities ===");
             log.Info($"Platform: {PlatformType}");
             log.Info($"Best Instruction Set: {BestInstructionSet}");

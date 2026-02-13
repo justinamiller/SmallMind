@@ -1,7 +1,6 @@
-using SmallMind.Quantization.Tensors;
-using SmallMind.Quantization.Kernels;
 using SmallMind.Core.Simd;
-using Xunit;
+using SmallMind.Quantization.Kernels;
+using SmallMind.Quantization.Tensors;
 
 namespace SmallMind.Quantization.Tests
 {

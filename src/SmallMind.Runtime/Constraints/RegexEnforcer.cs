@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 
@@ -12,12 +11,12 @@ namespace SmallMind.Runtime.Constraints
     {
         private readonly Regex _pattern;
         private readonly string _patternString;
-        
+
         // Static cache to reuse compiled regex instances across constraint instances
         // Thread-safe for concurrent access during inference
-        private static readonly ConcurrentDictionary<string, Regex> PatternCache = 
+        private static readonly ConcurrentDictionary<string, Regex> PatternCache =
             new(StringComparer.Ordinal);
-        
+
         // Timeout for user-provided regex patterns to prevent ReDoS attacks
         private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
@@ -32,7 +31,7 @@ namespace SmallMind.Runtime.Constraints
 
             _patternString = pattern;
             // Reuse compiled regex from cache or create new one with timeout protection
-            _pattern = PatternCache.GetOrAdd(pattern, 
+            _pattern = PatternCache.GetOrAdd(pattern,
                 p => new Regex(p, RegexOptions.Compiled, RegexTimeout));
         }
 
@@ -49,7 +48,7 @@ namespace SmallMind.Runtime.Constraints
             // This is a simplified check - we allow it if it's either:
             // 1. Already a match (could continue)
             // 2. Could be a prefix of a match (partial match possible)
-            
+
             // For simplicity, we're permissive here - full validation happens in IsComplete
             // A more sophisticated implementation would use a DFA/NFA for prefix matching
             return true;

@@ -1,11 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using System.Text.Json;
 using SmallMind.Abstractions.Telemetry;
-using SmallMind.Rag.Retrieval;
 using SmallMind.Core.Validation;
+using SmallMind.Rag.Retrieval;
 
 namespace SmallMind.Rag.Indexing
 {
@@ -39,7 +36,7 @@ namespace SmallMind.Rag.Indexing
     internal class VectorIndex : IDisposable
     {
         private const string DEFAULT_INDEX_FILENAME = "vectors.jsonl";
-        
+
         private readonly string _indexDirectory;
         private readonly string _indexFilePath;
         private readonly List<VectorEntry> _entries;
@@ -61,7 +58,7 @@ namespace SmallMind.Rag.Indexing
             Guard.NotNull(embeddingProvider);
             Guard.NotNullOrWhiteSpace(indexDirectory);
             Guard.NotNullOrWhiteSpace(indexFileName);
-            
+
             _embeddingProvider = embeddingProvider;
             _indexDirectory = indexDirectory;
             _indexFilePath = Path.Combine(_indexDirectory, indexFileName);
@@ -87,10 +84,10 @@ namespace SmallMind.Rag.Indexing
         {
             Guard.NotDisposed(_disposed, nameof(VectorIndex));
             Guard.NotNullOrEmpty(text);
-            
+
             var vector = _embeddingProvider.Embed(text);
             var id = (_nextId++).ToString();
-            
+
             var entry = new VectorEntry
             {
                 Id = id,
@@ -114,8 +111,8 @@ namespace SmallMind.Rag.Indexing
             for (int i = 0; i < texts.Count; i++)
             {
                 var id = (_nextId++).ToString();
-                var metadata = (metadataList != null && i < metadataList.Count) 
-                    ? metadataList[i] 
+                var metadata = (metadataList != null && i < metadataList.Count)
+                    ? metadataList[i]
                     : new Dictionary<string, string>();
 
                 var entry = new VectorEntry
@@ -146,7 +143,7 @@ namespace SmallMind.Rag.Indexing
             Guard.NotDisposed(_disposed, nameof(VectorIndex));
             Guard.NotNullOrEmpty(queryText);
             Guard.GreaterThan(k, 0);
-            
+
             if (_entries.Count == 0)
             {
                 return new List<SearchResult>();
@@ -170,7 +167,7 @@ namespace SmallMind.Rag.Indexing
             Guard.NotDisposed(_disposed, nameof(VectorIndex));
             Guard.NotNull(queryVector);
             Guard.GreaterThan(k, 0);
-            
+
             if (_entries.Count == 0)
             {
                 return new List<SearchResult>();
@@ -179,18 +176,18 @@ namespace SmallMind.Rag.Indexing
             // Pre-allocate results list
             int numResults = Math.Min(k, _entries.Count);
             var results = new List<SearchResult>(numResults);
-            
+
             // For small k, use a min-heap approach (top-k selection)
             // For large k (>= half the entries), just do full sort
             if (k < _entries.Count / 2)
             {
                 // Top-K selection using partial sort
                 var topK = new List<(int index, float score)>(k);
-                
+
                 for (int i = 0; i < _entries.Count; i++)
                 {
                     float similarity = CosineSimilarity(queryVector, _entries[i].Vector);
-                    
+
                     if (topK.Count < k)
                     {
                         // Still building up to k items
@@ -205,7 +202,7 @@ namespace SmallMind.Rag.Indexing
                     {
                         // Replace minimum and re-sort (binary insertion would be better but this is simpler)
                         topK[0] = (i, similarity);
-                        
+
                         // Bubble the new item to its correct position
                         int pos = 0;
                         while (pos < k - 1 && topK[pos].score > topK[pos + 1].score)
@@ -217,13 +214,13 @@ namespace SmallMind.Rag.Indexing
                         }
                     }
                 }
-                
+
                 // Convert to results (reverse order for descending scores)
                 for (int i = topK.Count - 1; i >= 0; i--)
                 {
                     int entryIndex = topK[i].index;
                     var entry = _entries[entryIndex];
-                    
+
                     results.Add(new SearchResult
                     {
                         Id = entry.Id,
@@ -237,7 +234,7 @@ namespace SmallMind.Rag.Indexing
             {
                 // For large k, full sort is more efficient
                 var scores = new List<(int index, float score)>(_entries.Count);
-                
+
                 for (int i = 0; i < _entries.Count; i++)
                 {
                     float similarity = CosineSimilarity(queryVector, _entries[i].Vector);
@@ -252,7 +249,7 @@ namespace SmallMind.Rag.Indexing
                 {
                     int entryIndex = scores[i].index;
                     var entry = _entries[entryIndex];
-                    
+
                     results.Add(new SearchResult
                     {
                         Id = entry.Id,
@@ -302,9 +299,9 @@ namespace SmallMind.Rag.Indexing
         public void Save(IRuntimeLogger? logger = null)
         {
             logger ??= NullRuntimeLogger.Instance;
-            
+
             using var writer = new StreamWriter(_indexFilePath, false, Encoding.UTF8);
-            
+
             for (int i = 0; i < _entries.Count; i++)
             {
                 var entry = _entries[i];
@@ -322,7 +319,7 @@ namespace SmallMind.Rag.Indexing
         public void Load(IRuntimeLogger? logger = null)
         {
             logger ??= NullRuntimeLogger.Instance;
-            
+
             if (!File.Exists(_indexFilePath))
             {
                 logger.Warn($"Index file not found: {_indexFilePath}");
@@ -334,7 +331,7 @@ namespace SmallMind.Rag.Indexing
 
             using var reader = new StreamReader(_indexFilePath, Encoding.UTF8);
             string? line;
-            
+
             while ((line = reader.ReadLine()) != null)
             {
                 if (string.IsNullOrWhiteSpace(line))
@@ -348,7 +345,7 @@ namespace SmallMind.Rag.Indexing
                     if (entry != null)
                     {
                         _entries.Add(entry);
-                        
+
                         // Update next ID
                         if (int.TryParse(entry.Id, out int id))
                         {
@@ -374,9 +371,9 @@ namespace SmallMind.Rag.Indexing
         public void Rebuild(List<string> documents, List<Dictionary<string, string>>? metadataList = null, IRuntimeLogger? logger = null)
         {
             logger ??= NullRuntimeLogger.Instance;
-            
+
             logger.Info("Rebuilding index...");
-            
+
             _entries.Clear();
             _nextId = 0;
 
@@ -410,7 +407,7 @@ namespace SmallMind.Rag.Indexing
         public VectorEntry? GetById(string id)
         {
             Guard.NotDisposed(_disposed, nameof(VectorIndex));
-            
+
             for (int i = 0; i < _entries.Count; i++)
             {
                 if (_entries[i].Id == id)
@@ -420,14 +417,14 @@ namespace SmallMind.Rag.Indexing
             }
             return null;
         }
-        
+
         /// <summary>
         /// Disposes the vector index, clearing all entries.
         /// </summary>
         public void Dispose()
         {
             if (_disposed) return;
-            
+
             _entries.Clear();
             _disposed = true;
         }

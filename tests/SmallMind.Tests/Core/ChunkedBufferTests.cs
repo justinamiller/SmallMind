@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 
@@ -222,13 +220,13 @@ namespace SmallMind.Tests.Core
         {
             // Arrange
             var buffer = new ChunkedBuffer(1000, 100);
-            
+
             // Act
             var span = buffer.GetChunkSpan(0);
-            
+
             // Assert
             Assert.Equal(100, span.Length);
-            
+
             // Modify through span
             span[0] = 42.0f;
             Assert.Equal(42.0f, buffer.Get(0), Tolerance);
@@ -257,30 +255,30 @@ namespace SmallMind.Tests.Core
             // Validate that ChunkedBuffer can handle sizes > int.MaxValue
             // We can't actually allocate 8+ GB in CI, so we test the constructor logic
             // by verifying it calculates chunk counts correctly for large values
-            
+
             long totalLength = (long)int.MaxValue + 1000L;
             int chunkSize = 100_000_000; // 100M elements per chunk
-            
+
             // Calculate expected chunk count
             long expectedChunks = (totalLength + chunkSize - 1) / chunkSize;
-            
+
             // Verify our test data is valid (would need 22 chunks)
             Assert.True(totalLength > int.MaxValue);
             Assert.Equal(22L, expectedChunks);
-            
+
             // Note: We skip actual allocation to avoid OutOfMemoryException in CI
             // The constructor logic is tested with smaller sizes in other tests
             // This test validates that values > int.MaxValue are accepted conceptually
-            
+
             // If we had unlimited memory, we would do:
             // var buffer = new ChunkedBuffer(totalLength, chunkSize);
             // Assert.Equal(totalLength, buffer.Length);
             // Assert.Equal((int)expectedChunks, buffer.ChunkCount);
-            
+
             // Instead, verify the math with a smaller actual allocation
             long smallLength = 1_000_000L; // 1M elements = 4MB
             int smallChunkSize = 100_000; // 100K elements per chunk
-            
+
             var smallBuffer = new ChunkedBuffer(smallLength, smallChunkSize);
             Assert.Equal(smallLength, smallBuffer.Length);
             Assert.Equal(10, smallBuffer.ChunkCount); // 1M / 100K = 10 chunks

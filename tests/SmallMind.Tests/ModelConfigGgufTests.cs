@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using Xunit;
 using SmallMind.Transformers;
 
 namespace SmallMind.Tests;
@@ -25,10 +22,10 @@ public class ModelConfigGgufTests
             ["llama.feed_forward_length"] = 2048,
             ["tokenizer.ggml.tokens"] = new object[] { "a", "b", "c", "d", "e" } // 5 tokens
         };
-        
+
         // Act
         var config = ModelConfig.FromGgufMetadata(metadata);
-        
+
         // Assert
         Assert.Equal(5, config.VocabSize); // Should infer from tokenizer.ggml.tokens
     }
@@ -49,10 +46,10 @@ public class ModelConfigGgufTests
             ["llama.feed_forward_length"] = 2048,
             ["tokenizer.ggml.tokens"] = new object[] { "a", "b", "c" } // 3 tokens (should be ignored)
         };
-        
+
         // Act
         var config = ModelConfig.FromGgufMetadata(metadata);
-        
+
         // Assert
         Assert.Equal(32000, config.VocabSize); // Should use llama.vocab_size, not tokenizer count
     }
@@ -72,10 +69,10 @@ public class ModelConfigGgufTests
             ["llama.feed_forward_length"] = 2048,
             ["tokenizer.ggml.tokens"] = new string[] { "a", "b", "c", "d" } // 4 tokens
         };
-        
+
         // Act
         var config = ModelConfig.FromGgufMetadata(metadata);
-        
+
         // Assert
         Assert.Equal(4, config.VocabSize);
     }
@@ -96,10 +93,10 @@ public class ModelConfigGgufTests
             ["llama.feed_forward_length"] = 1536,
             ["llama.rope.freq_base"] = 100000.0  // SmolLM2 value
         };
-        
+
         // Act
         var config = ModelConfig.FromGgufMetadata(metadata);
-        
+
         // Assert
         Assert.Equal(100000.0, config.RopeFreqBase);
     }
@@ -119,10 +116,10 @@ public class ModelConfigGgufTests
             ["llama.attention.head_count_kv"] = 8,
             ["llama.feed_forward_length"] = 2048
         };
-        
+
         // Act
         var config = ModelConfig.FromGgufMetadata(metadata);
-        
+
         // Assert
         Assert.Equal(10000.0, config.RopeFreqBase); // Default value
     }

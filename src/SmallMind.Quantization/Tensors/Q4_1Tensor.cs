@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 
 namespace SmallMind.Quantization.Tensors
@@ -131,7 +130,7 @@ namespace SmallMind.Quantization.Tensors
                     float normalized = (source[i] - minVal) * invScale;
                     // Clamp to [0, 15] and round
                     int clamped = (int)MathF.Round(Math.Clamp(normalized, 0f, 15f));
-                    
+
                     // Pack two 4-bit values per byte
                     // Low nibble = even index, high nibble = odd index
                     int byteIdx = i / 2;
@@ -182,12 +181,12 @@ namespace SmallMind.Quantization.Tensors
                 {
                     int byteIdx = i / 2;
                     byte packedByte = Data[byteIdx];
-                    
+
                     // Extract nibble (low or high)
-                    byte nibble = (i % 2 == 0) 
+                    byte nibble = (i % 2 == 0)
                         ? (byte)(packedByte & 0xF)       // Low nibble
                         : (byte)((packedByte >> 4) & 0xF); // High nibble
-                    
+
                     int quantized = DecodeNibble(nibble);
                     // Q4_1 formula: value = q * scale + min
                     result[i] = quantized * scale + min;

@@ -1,8 +1,5 @@
-using System;
 using System.Buffers;
 using System.Collections.Frozen;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 
 namespace SmallMind.Tokenizers
@@ -30,7 +27,7 @@ namespace SmallMind.Tokenizers
         /// <param name="maxInputCharsPerWord">Maximum characters per word (default: 200)</param>
         /// <param name="specialTokens">Optional special tokens configuration</param>
         public WordPieceTokenizer(
-            string vocabPath, 
+            string vocabPath,
             string unkToken = "[UNK]",
             int maxInputCharsPerWord = 200,
             SpecialTokensConfig? specialTokens = null)
@@ -89,7 +86,7 @@ namespace SmallMind.Tokenizers
                 return new List<int>();
 
             var result = new List<int>(text.Length / 4);
-            
+
             // Split on whitespace
             string[] words = text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -104,13 +101,13 @@ namespace SmallMind.Tokenizers
                 // Greedy longest-match-first
                 bool isBad = false;
                 int start = 0;
-                
+
                 // Pre-allocate buffers outside loop to avoid potential stack overflow
                 // Initialize prefix buffer once (never changes)
                 Span<char> prefixBuffer = stackalloc char[2];
                 prefixBuffer[0] = '#';
                 prefixBuffer[1] = '#';
-                
+
                 // Max word length buffer for prefix concatenation (reasonable upper bound)
                 const int MaxTokenLength = 256;
                 Span<char> workBuffer = stackalloc char[MaxTokenLength];
@@ -124,7 +121,7 @@ namespace SmallMind.Tokenizers
                     while (start < end)
                     {
                         ReadOnlySpan<char> substr = word.AsSpan(start, end - start);
-                        
+
                         // For continuation tokens (not first token), try with ## prefix
                         if (start > 0)
                         {
@@ -135,7 +132,7 @@ namespace SmallMind.Tokenizers
                                 Span<char> withPrefix = workBuffer.Slice(0, totalLen);
                                 prefixBuffer.CopyTo(withPrefix);
                                 substr.CopyTo(withPrefix.Slice(2));
-                                
+
                                 string substrWithPrefix = new string(withPrefix);
                                 if (_vocab.TryGetValue(substrWithPrefix, out int tokenId))
                                 {
@@ -164,7 +161,7 @@ namespace SmallMind.Tokenizers
                                 break;
                             }
                         }
-                        
+
                         end--;
                     }
 
@@ -194,7 +191,7 @@ namespace SmallMind.Tokenizers
         {
             string text = Encoding.UTF8.GetString(utf8);
             List<int> tokens = Encode(text);
-            
+
             int count = Math.Min(tokens.Count, tokensOut.Length);
             for (int i = 0; i < count; i++)
             {
@@ -212,7 +209,7 @@ namespace SmallMind.Tokenizers
                 return 0;
 
             var sb = new StringBuilder();
-            
+
             foreach (int tokenId in tokens)
             {
                 if (_inverseVocab.TryGetValue(tokenId, out string? token))
@@ -246,7 +243,7 @@ namespace SmallMind.Tokenizers
                 return string.Empty;
 
             var sb = new StringBuilder();
-            
+
             foreach (int tokenId in tokens)
             {
                 if (_inverseVocab.TryGetValue(tokenId, out string? token))

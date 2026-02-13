@@ -1,11 +1,5 @@
-using System;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using SmallMind.Runtime;
-using SmallMind.Tokenizers;
-using SmallMind.Transformers;
 
 namespace SmallMind.ConsoleApp.Commands
 {
@@ -69,9 +63,9 @@ namespace SmallMind.ConsoleApp.Commands
                 // Load model from GGUF
                 var loadStopwatch = Stopwatch.StartNew();
                 System.Console.WriteLine("Loading GGUF model...");
-                
+
                 var (model, tokenizer, config) = GgufModelLoader.LoadFromGguf(ggufPath, seed);
-                
+
                 loadStopwatch.Stop();
                 System.Console.WriteLine($"✓ Model loaded in {loadStopwatch.ElapsedMilliseconds}ms");
                 System.Console.WriteLine();
@@ -97,9 +91,9 @@ namespace SmallMind.ConsoleApp.Commands
                 var genStopwatch = Stopwatch.StartNew();
                 System.Console.WriteLine("Generating...");
                 System.Console.WriteLine("─".PadRight(60, '─'));
-                
+
                 string output = await session.GenerateAsync(prompt);
-                
+
                 genStopwatch.Stop();
                 System.Console.WriteLine(output);
                 System.Console.WriteLine("─".PadRight(60, '─'));
@@ -108,7 +102,7 @@ namespace SmallMind.ConsoleApp.Commands
                 // Calculate tokens/sec
                 int outputTokens = tokenizer.Encode(output).Count - tokenizer.Encode(prompt).Count;
                 double tokensPerSec = outputTokens / (genStopwatch.ElapsedMilliseconds / 1000.0);
-                
+
                 System.Console.WriteLine($"Generation time: {genStopwatch.ElapsedMilliseconds}ms");
                 System.Console.WriteLine($"Tokens generated: {outputTokens}");
                 System.Console.WriteLine($"Speed: {tokensPerSec:F2} tok/s");
@@ -116,7 +110,7 @@ namespace SmallMind.ConsoleApp.Commands
 
                 // Coherence check
                 bool isCoherent = ValidateCoherence(output, prompt);
-                
+
                 if (isCoherent)
                 {
                     System.Console.WriteLine("✓ PASS - Output is coherent English");
@@ -173,7 +167,7 @@ namespace SmallMind.ConsoleApp.Commands
         private bool ValidateCoherence(string output, string prompt)
         {
             // Extract generated portion (after prompt)
-            string generated = output.Length > prompt.Length 
+            string generated = output.Length > prompt.Length
                 ? output.Substring(prompt.Length).TrimStart()
                 : output;
 

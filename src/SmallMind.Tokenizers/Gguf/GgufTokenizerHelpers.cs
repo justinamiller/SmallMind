@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Tokenizers.Gguf
 {
     /// <summary>
@@ -23,17 +21,17 @@ namespace SmallMind.Tokenizers.Gguf
         internal static bool IsByteToken(string tokenStr, out byte byteValue)
         {
             // Check if token is in byte format: <0xXX> where XX is hex
-            if (tokenStr.Length == ByteTokenLength && 
-                tokenStr.StartsWith("<0x") && 
+            if (tokenStr.Length == ByteTokenLength &&
+                tokenStr.StartsWith("<0x") &&
                 tokenStr.EndsWith(">"))
             {
                 return byte.TryParse(
-                    tokenStr.Substring(3, 2), 
-                    System.Globalization.NumberStyles.HexNumber, 
-                    null, 
+                    tokenStr.Substring(3, 2),
+                    System.Globalization.NumberStyles.HexNumber,
+                    null,
                     out byteValue);
             }
-            
+
             byteValue = 0;
             return false;
         }

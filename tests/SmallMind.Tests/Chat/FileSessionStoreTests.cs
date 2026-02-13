@@ -1,9 +1,5 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using SmallMind.Abstractions;
 using SmallMind.Engine;
-using Xunit;
 
 namespace SmallMind.Tests.Chat
 {

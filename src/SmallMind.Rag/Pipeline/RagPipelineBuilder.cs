@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Rag.Security;
 using SmallMind.Rag.Telemetry;
 

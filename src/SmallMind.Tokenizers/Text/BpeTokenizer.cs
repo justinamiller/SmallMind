@@ -1,9 +1,4 @@
-using System;
-using System.Buffers;
 using System.Collections.Frozen;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -22,21 +17,21 @@ namespace SmallMind.Tokenizers
         private readonly List<(string, string)> _merges;
         private readonly FrozenDictionary<(string, string), int> _mergeRanks;
         private readonly IRuntimeLogger _logger;
-        
+
         // Pre-tokenization regex: uses GeneratedRegex for optimal performance
         // Pattern matches sequences of letters, digits, or individual punctuation/whitespace
         // Removed static readonly field - now using centralized RegexPatterns.BpePreTokenize()
-        
+
         private const string UnknownToken = "[UNK]";
         private const string EndOfTextToken = "[EOT]";
-        
+
         // Reusable buffers to reduce allocations during encoding
         private List<string>? _tokensBuffer;
         private List<string>? _mergeOutputBuffer;
-        
+
         // Cache for single-character strings (ASCII range)
         private static readonly string[] _charStringCache = new string[128];
-        
+
         static BpeTokenizer()
         {
             // Pre-populate char string cache for ASCII characters
@@ -47,7 +42,7 @@ namespace SmallMind.Tokenizers
         }
 
         public int VocabSize => _vocab.Count;
-        
+
         public TokenizerInfo Info { get; }
 
         /// <summary>
@@ -58,7 +53,7 @@ namespace SmallMind.Tokenizers
         public BpeTokenizer(string assetsPath, IRuntimeLogger? logger = null)
         {
             _logger = logger ?? NullRuntimeLogger.Instance;
-            
+
             if (string.IsNullOrWhiteSpace(assetsPath))
             {
                 throw new TokenizationException("Assets path cannot be null or empty.");
@@ -105,7 +100,7 @@ namespace SmallMind.Tokenizers
                 // Load merges
                 _merges = new List<(string, string)>();
                 var mergeDict = new Dictionary<(string, string), int>();
-                
+
                 string[] mergeLines = File.ReadAllLines(mergesPath);
                 int rank = 0;
                 foreach (string line in mergeLines)
@@ -137,7 +132,7 @@ namespace SmallMind.Tokenizers
 
                 int eosId = _vocab.TryGetValue(EndOfTextToken, out int id) ? id : -1;
                 int unkId = _vocab.TryGetValue(UnknownToken, out int id2) ? id2 : -1;
-                
+
                 Info = new TokenizerInfo(
                     name: "BpeTokenizer",
                     vocabSize: _vocab.Count,
@@ -168,7 +163,7 @@ namespace SmallMind.Tokenizers
         /// <param name="unkTokenId">UNK token ID (or -1 if not present)</param>
         /// <param name="logger">Optional logger</param>
         public BpeTokenizer(
-            Dictionary<string, int> vocab, 
+            Dictionary<string, int> vocab,
             List<(string, string)> merges,
             int bosTokenId = -1,
             int eosTokenId = -1,
@@ -176,7 +171,7 @@ namespace SmallMind.Tokenizers
             IRuntimeLogger? logger = null)
         {
             _logger = logger ?? NullRuntimeLogger.Instance;
-            
+
             if (vocab == null || vocab.Count == 0)
                 throw new ArgumentException("Vocabulary cannot be null or empty", nameof(vocab));
             if (merges == null)
@@ -227,11 +222,11 @@ namespace SmallMind.Tokenizers
 
             // Pre-tokenize: split into words and punctuation using GeneratedRegex
             var matches = RegexPatterns.BpePreTokenize().Matches(text);
-            
+
             foreach (Match match in matches)
             {
                 string word = match.Value;
-                
+
                 // Reuse tokens buffer to reduce allocations
                 if (_tokensBuffer == null)
                 {
@@ -245,7 +240,7 @@ namespace SmallMind.Tokenizers
                     {
                         _tokensBuffer.Capacity = word.Length;
                     }
-                    
+
                     if (_mergeOutputBuffer == null)
                     {
                         _mergeOutputBuffer = new List<string>(word.Length);
@@ -255,7 +250,7 @@ namespace SmallMind.Tokenizers
                         _mergeOutputBuffer.Capacity = word.Length;
                     }
                 }
-                
+
                 // Convert word to character tokens - use cached strings for ASCII
                 foreach (char c in word)
                 {
@@ -275,7 +270,7 @@ namespace SmallMind.Tokenizers
                 // We alternate between _tokensBuffer and _mergeOutputBuffer to avoid allocations
                 List<string> currentTokens = _tokensBuffer;
                 List<string> nextTokens = _mergeOutputBuffer;
-                
+
                 while (currentTokens.Count > 1)
                 {
                     // Find the pair with the lowest merge rank
@@ -303,7 +298,7 @@ namespace SmallMind.Tokenizers
                     // Apply the merge using forward scan (O(N) instead of O(N²))
                     nextTokens.Clear();
                     string merged = bestPair.Value.Item1 + bestPair.Value.Item2;
-                    
+
                     for (int i = 0; i < currentTokens.Count; i++)
                     {
                         if (i == bestIndex)
@@ -316,11 +311,11 @@ namespace SmallMind.Tokenizers
                             nextTokens.Add(currentTokens[i]);
                         }
                     }
-                    
+
                     // Swap buffers for next iteration
                     (currentTokens, nextTokens) = (nextTokens, currentTokens);
                 }
-                
+
                 // Ensure final result is in _tokensBuffer for conversion below
                 if (currentTokens != _tokensBuffer)
                 {
@@ -362,7 +357,7 @@ namespace SmallMind.Tokenizers
             // Decode UTF-8 to string first, then use existing logic
             string text = Encoding.UTF8.GetString(utf8);
             List<int> tokens = Encode(text);
-            
+
             int count = Math.Min(tokens.Count, tokensOut.Length);
             for (int i = 0; i < count; i++)
             {
@@ -382,7 +377,7 @@ namespace SmallMind.Tokenizers
             {
                 tokenList.Add(token);
             }
-            
+
             string text = Decode(tokenList);
             int bytesWritten = Encoding.UTF8.GetBytes(text.AsSpan(), utf8Out);
             return bytesWritten;

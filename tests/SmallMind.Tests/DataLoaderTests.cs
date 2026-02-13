@@ -1,8 +1,3 @@
-using System;
-using System.IO;
-using Xunit;
-using SmallMind.Tokenizers;
-using SmallMind.Transformers;
 using SmallMind.Runtime;
 
 namespace SmallMind.Tests
@@ -14,7 +9,7 @@ namespace SmallMind.Tests
     public class DataLoaderTests
     {
         private readonly string _sampleDataDir;
-        private readonly string _expectedText = 
+        private readonly string _expectedText =
             "The quick brown fox jumps over the lazy dog.\n" +
             "A journey of a thousand miles begins with a single step.\n" +
             "To be or not to be, that is the question.\n" +

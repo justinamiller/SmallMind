@@ -1,11 +1,11 @@
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using SmallMind;
 using SmallMind.Server;
 using SmallMind.Server.Models;
 using SmallMind.Server.Services;
-using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,41 +13,41 @@ var serverOptions = new ServerOptions();
 builder.Configuration.GetSection("ServerOptions").Bind(serverOptions);
 
 builder.Services.AddSingleton(serverOptions);
-builder.Services.AddSingleton<RequestQueue>(sp => 
+builder.Services.AddSingleton<RequestQueue>(sp =>
     new RequestQueue(serverOptions.MaxConcurrentRequests, serverOptions.MaxQueueDepth));
 builder.Services.AddSingleton<ServerMetrics>();
 builder.Services.AddSingleton<RequestValidator>();
 builder.Services.AddSingleton<ISmallMindEngine>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
-    
+
     string? modelPath = serverOptions.ModelPath;
-    
+
     if (string.IsNullOrEmpty(modelPath) && !string.IsNullOrEmpty(serverOptions.ModelId))
     {
         var registry = new SmallMind.ModelRegistry.ModelRegistry(serverOptions.CacheDir);
         modelPath = registry.GetModelFilePath(serverOptions.ModelId);
-        
+
         if (modelPath == null)
         {
             throw new InvalidOperationException($"Model '{serverOptions.ModelId}' not found in registry");
         }
-        
+
         logger.LogInformation("Loaded model '{ModelId}' from registry: {ModelPath}", serverOptions.ModelId, modelPath);
     }
-    
+
     if (string.IsNullOrEmpty(modelPath))
     {
         throw new InvalidOperationException("Either ModelPath or ModelId must be specified");
     }
-    
+
     if (!File.Exists(modelPath))
     {
         throw new FileNotFoundException($"Model file not found: {modelPath}");
     }
-    
+
     logger.LogInformation("Loading model from: {ModelPath}", modelPath);
-    
+
     var engineOptions = new SmallMindOptions
     {
         ModelPath = modelPath,
@@ -55,10 +55,10 @@ builder.Services.AddSingleton<ISmallMindEngine>(sp =>
         EnableKvCache = true,
         RequestTimeoutMs = serverOptions.RequestTimeoutMs
     };
-    
+
     var engine = SmallMindFactory.Create(engineOptions);
     logger.LogInformation("SmallMind engine initialized successfully");
-    
+
     return engine;
 });
 
@@ -129,20 +129,20 @@ app.MapPost("/v1/chat/completions", async (
     using var activity = metrics.StartActivity("chat.completions");
     var sw = Stopwatch.StartNew();
     metrics.IncrementInflight();
-    
+
     try
     {
         // Build prompt first to estimate tokens
         var prompt = PromptBuilder.BuildPrompt(request.Messages);
         int estimatedPromptTokens = validator.EstimatePromptTokens(prompt);
-        
+
         // Validate request limits
         var validationResult = validator.ValidateRequest(
             request.MaxTokens,
             estimatedPromptTokens,
             request.Temperature,
             request.TopP);
-        
+
         if (!validationResult.IsValid)
         {
             return Results.Json(new ErrorResponse
@@ -156,9 +156,9 @@ app.MapPost("/v1/chat/completions", async (
                 }
             }, statusCode: 400);
         }
-        
+
         using var slot = await queue.EnqueueAsync(clientId: null, timeout: null, cancellationToken);
-        
+
         if (!slot.Success)
         {
             return Results.Json(new ErrorResponse
@@ -171,9 +171,9 @@ app.MapPost("/v1/chat/completions", async (
                 }
             }, statusCode: 429);
         }
-        
+
         var stopSequences = request.GetStopSequences();
-        
+
         var genOptions = new TextGenerationOptions
         {
             Temperature = request.Temperature ?? opts.DefaultTemperature,
@@ -184,30 +184,30 @@ app.MapPost("/v1/chat/completions", async (
                 opts.MaxCompletionTokens),
             StopSequences = stopSequences.Length > 0 ? stopSequences : Array.Empty<string>()
         };
-        
+
         using var session = engine.CreateTextGenerationSession(genOptions);
-        
+
         var genRequest = new TextGenerationRequest
         {
             Prompt = prompt.AsMemory(),
             Seed = request.Seed.HasValue ? (int)request.Seed.Value : null
         };
-        
+
         // Create timeout for entire request
         using var requestTimeoutCts = new CancellationTokenSource(opts.RequestTimeoutMs);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken, 
+            cancellationToken,
             requestTimeoutCts.Token);
-        
+
         if (request.Stream)
         {
-            return await StreamChatCompletionAsync(session, genRequest, GetModelName(opts), 
+            return await StreamChatCompletionAsync(session, genRequest, GetModelName(opts),
                 metrics, sw, linkedCts.Token);
         }
         else
         {
             var result = await Task.Run(() => session.Generate(genRequest, linkedCts.Token), linkedCts.Token);
-            
+
             var response = new ChatCompletionResponse
             {
                 Id = $"chatcmpl-{Guid.NewGuid():N}",
@@ -233,7 +233,7 @@ app.MapPost("/v1/chat/completions", async (
                     TotalTokens = result.Usage.TotalTokens
                 }
             };
-            
+
             metrics.RecordRequest("chat.completions", sw.Elapsed.TotalMilliseconds, result.Usage.CompletionTokens, true);
             return Results.Ok(response);
         }
@@ -241,7 +241,7 @@ app.MapPost("/v1/chat/completions", async (
     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
     {
         metrics.RecordRequest("chat.completions", sw.Elapsed.TotalMilliseconds, 0, false);
-        
+
         return Results.Json(new ErrorResponse
         {
             Error = new ErrorDetail
@@ -255,7 +255,7 @@ app.MapPost("/v1/chat/completions", async (
     catch (OperationCanceledException)
     {
         metrics.RecordRequest("chat.completions", sw.Elapsed.TotalMilliseconds, 0, false);
-        
+
         return Results.Json(new ErrorResponse
         {
             Error = new ErrorDetail
@@ -269,7 +269,7 @@ app.MapPost("/v1/chat/completions", async (
     catch (Exception ex)
     {
         metrics.RecordRequest("chat.completions", sw.Elapsed.TotalMilliseconds, 0, false);
-        
+
         return Results.Json(new ErrorResponse
         {
             Error = new ErrorDetail
@@ -296,11 +296,11 @@ app.MapPost("/v1/completions", async (
     using var activity = metrics.StartActivity("completions");
     var sw = Stopwatch.StartNew();
     metrics.IncrementInflight();
-    
+
     try
     {
         using var slot = await queue.EnqueueAsync(clientId: null, timeout: null, cancellationToken);
-        
+
         if (!slot.Success)
         {
             return Results.Json(new ErrorResponse
@@ -313,9 +313,9 @@ app.MapPost("/v1/completions", async (
                 }
             }, statusCode: 429);
         }
-        
+
         var stopSequences = request.GetStopSequences();
-        
+
         var genOptions = new TextGenerationOptions
         {
             Temperature = request.Temperature ?? opts.DefaultTemperature,
@@ -324,17 +324,17 @@ app.MapPost("/v1/completions", async (
             MaxOutputTokens = request.MaxTokens ?? opts.DefaultMaxTokens,
             StopSequences = stopSequences.Length > 0 ? stopSequences : Array.Empty<string>()
         };
-        
+
         using var session = engine.CreateTextGenerationSession(genOptions);
-        
+
         var genRequest = new TextGenerationRequest
         {
             Prompt = request.Prompt.AsMemory(),
             Seed = request.Seed.HasValue ? (int)request.Seed.Value : null
         };
-        
+
         var result = await Task.Run(() => session.Generate(genRequest, cancellationToken), cancellationToken);
-        
+
         var response = new CompletionResponse
         {
             Id = $"cmpl-{Guid.NewGuid():N}",
@@ -356,14 +356,14 @@ app.MapPost("/v1/completions", async (
                 TotalTokens = result.Usage.TotalTokens
             }
         };
-        
+
         metrics.RecordRequest("completions", sw.Elapsed.TotalMilliseconds, result.Usage.CompletionTokens, true);
         return Results.Ok(response);
     }
     catch (Exception ex)
     {
         metrics.RecordRequest("completions", sw.Elapsed.TotalMilliseconds, 0, false);
-        
+
         return Results.Json(new ErrorResponse
         {
             Error = new ErrorDetail
@@ -390,7 +390,7 @@ app.MapPost("/v1/embeddings", async (
     using var activity = metrics.StartActivity("embeddings");
     var sw = Stopwatch.StartNew();
     metrics.IncrementInflight();
-    
+
     try
     {
         var caps = engine.GetCapabilities();
@@ -405,9 +405,9 @@ app.MapPost("/v1/embeddings", async (
                 }
             }, statusCode: 400);
         }
-        
+
         using var slot = await queue.EnqueueAsync(clientId: null, timeout: null, cancellationToken);
-        
+
         if (!slot.Success)
         {
             return Results.Json(new ErrorResponse
@@ -420,32 +420,32 @@ app.MapPost("/v1/embeddings", async (
                 }
             }, statusCode: 429);
         }
-        
+
         var inputs = request.GetInputs();
         var embeddings = new List<EmbeddingData>();
         int totalTokens = 0;
-        
+
         var embOptions = new EmbeddingOptions { Normalize = true };
         using var session = engine.CreateEmbeddingSession(embOptions);
-        
+
         for (int i = 0; i < inputs.Length; i++)
         {
             var embRequest = new SmallMind.EmbeddingRequest
             {
                 Input = inputs[i].AsMemory()
             };
-            
+
             var result = await Task.Run(() => session.Embed(embRequest, cancellationToken), cancellationToken);
-            
+
             embeddings.Add(new EmbeddingData
             {
                 Index = i,
                 Embedding = result.Vector
             });
-            
+
             totalTokens += result.Usage.TotalTokens;
         }
-        
+
         var response = new EmbeddingResponse
         {
             Data = embeddings,
@@ -457,14 +457,14 @@ app.MapPost("/v1/embeddings", async (
                 TotalTokens = totalTokens
             }
         };
-        
+
         metrics.RecordRequest("embeddings", sw.Elapsed.TotalMilliseconds, 0, true);
         return Results.Ok(response);
     }
     catch (Exception ex)
     {
         metrics.RecordRequest("embeddings", sw.Elapsed.TotalMilliseconds, 0, false);
-        
+
         return Results.Json(new ErrorResponse
         {
             Error = new ErrorDetail
@@ -492,17 +492,17 @@ static async Task<IResult> StreamChatCompletionAsync(
 {
     var responseId = $"chatcmpl-{Guid.NewGuid():N}";
     var created = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-    
+
     return Results.Stream(async (stream) =>
     {
         var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true);
         writer.AutoFlush = true;
-        
+
         try
         {
             bool firstChunk = true;
             int tokensGenerated = 0;
-            
+
             await foreach (var token in session.GenerateStreaming(request, cancellationToken))
             {
                 if (firstChunk)
@@ -525,13 +525,13 @@ static async Task<IResult> StreamChatCompletionAsync(
                             }
                         }
                     };
-                    
+
                     await writer.WriteAsync("data: ");
                     await writer.WriteAsync(JsonSerializer.Serialize(firstChunkData));
                     await writer.WriteAsync("\n\n");
                     firstChunk = false;
                 }
-                
+
                 if (!token.IsSpecial)
                 {
                     var chunk = new ChatCompletionChunk
@@ -551,15 +551,15 @@ static async Task<IResult> StreamChatCompletionAsync(
                             }
                         }
                     };
-                    
+
                     await writer.WriteAsync("data: ");
                     await writer.WriteAsync(JsonSerializer.Serialize(chunk));
                     await writer.WriteAsync("\n\n");
                 }
-                
+
                 tokensGenerated++;
             }
-            
+
             var finalChunk = new ChatCompletionChunk
             {
                 Id = responseId,
@@ -575,12 +575,12 @@ static async Task<IResult> StreamChatCompletionAsync(
                     }
                 }
             };
-            
+
             await writer.WriteAsync("data: ");
             await writer.WriteAsync(JsonSerializer.Serialize(finalChunk));
             await writer.WriteAsync("\n\n");
             await writer.WriteAsync("data: [DONE]\n\n");
-            
+
             metrics.RecordRequest("chat.completions.stream", sw.Elapsed.TotalMilliseconds, tokensGenerated, true);
         }
         catch (Exception)

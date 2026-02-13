@@ -1,10 +1,8 @@
-using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
-using System.Threading.Tasks;
+using System.Runtime.Intrinsics.X86;
 
 namespace SmallMind.Core.Simd
 {
@@ -26,7 +24,7 @@ namespace SmallMind.Core.Simd
         private const int PARALLEL_THRESHOLD = 128;
         private const int TILE_SIZE = 64; // Cache tile size for blocking (optimized for L1 cache)
         private const int VEC512_SIZE = 16; // AVX-512 vector width (16 floats)
-        
+
         /// <summary>
         /// Kernel selection telemetry for diagnostics.
         /// Records which kernel was used for the last MatMul call.
@@ -40,7 +38,7 @@ namespace SmallMind.Core.Simd
             NeonTiled,
             VectorUnsafe
         }
-        
+
         /// <summary>
         /// Gets the kernel used for the last MatMul operation on this thread.
         /// Useful for benchmarking and diagnostics.
@@ -48,7 +46,7 @@ namespace SmallMind.Core.Simd
         /// </summary>
         [ThreadStatic]
         private static MatMulKernel _lastKernelUsed = MatMulKernel.Unknown;
-        
+
         internal static MatMulKernel LastKernelUsed
         {
             get => _lastKernelUsed;
@@ -238,7 +236,7 @@ namespace SmallMind.Core.Simd
         {
             // Parallelize over row tiles for large matrices to maintain thread utilization
             int numRowTiles = (M + TILE_SIZE - 1) / TILE_SIZE;
-            
+
             if (numRowTiles >= 4) // Use parallelization when we have enough tiles to distribute
             {
                 Parallel.For(0, numRowTiles, i0Tile =>
@@ -249,28 +247,28 @@ namespace SmallMind.Core.Simd
                         {
                             int i0 = i0Tile * TILE_SIZE;
                             int iMax = Math.Min(i0 + TILE_SIZE, M);
-                            
+
                             for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                             {
                                 int kMax = Math.Min(k0 + TILE_SIZE, K);
-                                
+
                                 for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                                 {
                                     int jMax = Math.Min(j0 + TILE_SIZE, N);
-                                    
+
                                     // Process this tile
                                     for (int i = i0; i < iMax; i++)
                                     {
                                         int aRowStart = i * K;
                                         int cRowStart = i * N;
-                                        
+
                                         for (int k = k0; k < kMax; k++)
                                         {
                                             Vector512<float> vA = Vector512.Create(pA[aRowStart + k]);
                                             int bRowStart = k * N;
-                                            
+
                                             int j = j0;
-                                            
+
                                             // Unrolled SIMD loop (2x unroll, 32 floats per iteration)
                                             for (; j <= jMax - (vecSize * 2); j += vecSize * 2)
                                             {
@@ -278,13 +276,13 @@ namespace SmallMind.Core.Simd
                                                 Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
                                                 vC0 = Avx512F.FusedMultiplyAdd(vA, vB0, vC0);
                                                 Avx512F.Store(pC + cRowStart + j, vC0);
-                                                
+
                                                 Vector512<float> vB1 = Avx512F.LoadVector512(pB + bRowStart + j + vecSize);
                                                 Vector512<float> vC1 = Avx512F.LoadVector512(pC + cRowStart + j + vecSize);
                                                 vC1 = Avx512F.FusedMultiplyAdd(vA, vB1, vC1);
                                                 Avx512F.Store(pC + cRowStart + j + vecSize, vC1);
                                             }
-                                            
+
                                             // SIMD remainder (16 floats)
                                             for (; j <= jMax - vecSize; j += vecSize)
                                             {
@@ -293,7 +291,7 @@ namespace SmallMind.Core.Simd
                                                 vC = Avx512F.FusedMultiplyAdd(vA, vB, vC);
                                                 Avx512F.Store(pC + cRowStart + j, vC);
                                             }
-                                            
+
                                             // Scalar remainder within tile
                                             float aVal = pA[aRowStart + k];
                                             for (; j < jMax; j++)
@@ -318,28 +316,28 @@ namespace SmallMind.Core.Simd
                         for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
                         {
                             int iMax = Math.Min(i0 + TILE_SIZE, M);
-                            
+
                             for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                             {
                                 int kMax = Math.Min(k0 + TILE_SIZE, K);
-                                
+
                                 for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                                 {
                                     int jMax = Math.Min(j0 + TILE_SIZE, N);
-                                    
+
                                     // Process this tile
                                     for (int i = i0; i < iMax; i++)
                                     {
                                         int aRowStart = i * K;
                                         int cRowStart = i * N;
-                                        
+
                                         for (int k = k0; k < kMax; k++)
                                         {
                                             Vector512<float> vA = Vector512.Create(pA[aRowStart + k]);
                                             int bRowStart = k * N;
-                                            
+
                                             int j = j0;
-                                            
+
                                             // Unrolled SIMD loop (2x unroll, 32 floats per iteration)
                                             for (; j <= jMax - (vecSize * 2); j += vecSize * 2)
                                             {
@@ -347,13 +345,13 @@ namespace SmallMind.Core.Simd
                                                 Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
                                                 vC0 = Avx512F.FusedMultiplyAdd(vA, vB0, vC0);
                                                 Avx512F.Store(pC + cRowStart + j, vC0);
-                                                
+
                                                 Vector512<float> vB1 = Avx512F.LoadVector512(pB + bRowStart + j + vecSize);
                                                 Vector512<float> vC1 = Avx512F.LoadVector512(pC + cRowStart + j + vecSize);
                                                 vC1 = Avx512F.FusedMultiplyAdd(vA, vB1, vC1);
                                                 Avx512F.Store(pC + cRowStart + j + vecSize, vC1);
                                             }
-                                            
+
                                             // SIMD remainder (16 floats)
                                             for (; j <= jMax - vecSize; j += vecSize)
                                             {
@@ -362,7 +360,7 @@ namespace SmallMind.Core.Simd
                                                 vC = Avx512F.FusedMultiplyAdd(vA, vB, vC);
                                                 Avx512F.Store(pC + cRowStart + j, vC);
                                             }
-                                            
+
                                             // Scalar remainder within tile
                                             float aVal = pA[aRowStart + k];
                                             for (; j < jMax; j++)
@@ -390,7 +388,7 @@ namespace SmallMind.Core.Simd
         {
             // Parallelize over row tiles for large matrices to maintain thread utilization
             int numRowTiles = (M + TILE_SIZE - 1) / TILE_SIZE;
-            
+
             if (numRowTiles >= 4) // Use parallelization when we have enough tiles to distribute
             {
                 Parallel.For(0, numRowTiles, i0Tile =>
@@ -401,28 +399,28 @@ namespace SmallMind.Core.Simd
                         {
                             int i0 = i0Tile * TILE_SIZE;
                             int iMax = Math.Min(i0 + TILE_SIZE, M);
-                            
+
                             for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                             {
                                 int kMax = Math.Min(k0 + TILE_SIZE, K);
-                                
+
                                 for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                                 {
                                     int jMax = Math.Min(j0 + TILE_SIZE, N);
-                                    
+
                                     // Process this tile
                                     for (int i = i0; i < iMax; i++)
                                     {
                                         int aRowStart = i * K;
                                         int cRowStart = i * N;
-                                        
+
                                         for (int k = k0; k < kMax; k++)
                                         {
                                             Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
                                             int bRowStart = k * N;
-                                            
+
                                             int j = j0;
-                                            
+
                                             // SIMD loop within tile
                                             for (; j <= jMax - vecSize; j += vecSize)
                                             {
@@ -431,7 +429,7 @@ namespace SmallMind.Core.Simd
                                                 vC = Fma.MultiplyAdd(vA, vB, vC);
                                                 Avx.Store(pC + cRowStart + j, vC);
                                             }
-                                            
+
                                             // Scalar remainder within tile
                                             float aVal = pA[aRowStart + k];
                                             for (; j < jMax; j++)
@@ -456,28 +454,28 @@ namespace SmallMind.Core.Simd
                         for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
                         {
                             int iMax = Math.Min(i0 + TILE_SIZE, M);
-                            
+
                             for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                             {
                                 int kMax = Math.Min(k0 + TILE_SIZE, K);
-                                
+
                                 for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                                 {
                                     int jMax = Math.Min(j0 + TILE_SIZE, N);
-                                    
+
                                     // Process this tile
                                     for (int i = i0; i < iMax; i++)
                                     {
                                         int aRowStart = i * K;
                                         int cRowStart = i * N;
-                                        
+
                                         for (int k = k0; k < kMax; k++)
                                         {
                                             Vector256<float> vA = Vector256.Create(pA[aRowStart + k]);
                                             int bRowStart = k * N;
-                                            
+
                                             int j = j0;
-                                            
+
                                             // SIMD loop within tile
                                             for (; j <= jMax - vecSize; j += vecSize)
                                             {
@@ -486,7 +484,7 @@ namespace SmallMind.Core.Simd
                                                 vC = Fma.MultiplyAdd(vA, vB, vC);
                                                 Avx.Store(pC + cRowStart + j, vC);
                                             }
-                                            
+
                                             // Scalar remainder within tile
                                             float aVal = pA[aRowStart + k];
                                             for (; j < jMax; j++)
@@ -533,7 +531,7 @@ namespace SmallMind.Core.Simd
                         Vector512<float> vC0 = Avx512F.LoadVector512(pC + cRowStart + j);
                         vC0 = Avx512F.FusedMultiplyAdd(vA, vB0, vC0);
                         Avx512F.Store(pC + cRowStart + j, vC0);
-                        
+
                         Vector512<float> vB1 = Avx512F.LoadVector512(pB + bRowStart + j + vecSize);
                         Vector512<float> vC1 = Avx512F.LoadVector512(pC + cRowStart + j + vecSize);
                         vC1 = Avx512F.FusedMultiplyAdd(vA, vB1, vC1);
@@ -625,7 +623,6 @@ namespace SmallMind.Core.Simd
             int M, int K, int N)
         {
             const int vecSize = 8; // AVX processes 8 floats
-            const int TILING_THRESHOLD = 192; // Consistency with AVX2 and Vector implementations
 
             // For AVX (without FMA), keep it simple - just choose parallel vs sequential
             // No tiling implementation available for AVX-only path
@@ -702,16 +699,16 @@ namespace SmallMind.Core.Simd
         {
             int vectorSize = Vector<float>.Count;
             const int TILING_THRESHOLD = 192; // Use tiling for matrices >= 192×192 (36,864 elements)
-            
+
             // Adaptive strategy:
             // - Small matrices (<192×192): Direct SIMD, minimal overhead
             // - Medium matrices (192-511): Tiling for cache efficiency
             // - Large matrices (512+): Tiling + parallelization for max performance
-            
+
             int totalElements = M * N;
             bool shouldTile = (M >= TILING_THRESHOLD || N >= TILING_THRESHOLD || K >= TILING_THRESHOLD)
                              && totalElements >= (TILING_THRESHOLD * TILING_THRESHOLD);
-            
+
             if (shouldTile)
             {
                 // Use tiled implementation for better cache utilization
@@ -745,7 +742,7 @@ namespace SmallMind.Core.Simd
         {
             // Parallelize over row tiles for large matrices
             int numRowTiles = (M + TILE_SIZE - 1) / TILE_SIZE;
-            
+
             if (numRowTiles >= 4) // Use parallelization when we have enough tiles to distribute
             {
                 Parallel.For(0, numRowTiles, i0Tile =>
@@ -753,32 +750,32 @@ namespace SmallMind.Core.Simd
                     ReadOnlySpan<float> ASpanLocal = A;
                     ReadOnlySpan<float> BSpanLocal = B;
                     Span<float> CSpanLocal = C;
-                    
+
                     int i0 = i0Tile * TILE_SIZE;
                     int iMax = Math.Min(i0 + TILE_SIZE, M);
-                    
+
                     for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                     {
                         int kMax = Math.Min(k0 + TILE_SIZE, K);
-                        
+
                         for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                         {
                             int jMax = Math.Min(j0 + TILE_SIZE, N);
-                            
+
                             // Process this tile
                             for (int i = i0; i < iMax; i++)
                             {
                                 int aRowStart = i * K;
                                 int cRowStart = i * N;
-                                
+
                                 for (int k = k0; k < kMax; k++)
                                 {
                                     float aVal = ASpanLocal[aRowStart + k];
                                     var vA = new Vector<float>(aVal);
                                     int bRowStart = k * N;
-                                    
+
                                     int j = j0;
-                                    
+
                                     // SIMD loop within tile - optimized to eliminate Span.Slice()
                                     unsafe
                                     {
@@ -786,7 +783,7 @@ namespace SmallMind.Core.Simd
                                         {
                                             float* pBRow = pB + bRowStart;
                                             float* pCRow = pC + cRowStart;
-                                            
+
                                             for (; j <= jMax - vectorSize; j += vectorSize)
                                             {
                                                 var vB = Unsafe.Read<Vector<float>>(pBRow + j);
@@ -795,7 +792,7 @@ namespace SmallMind.Core.Simd
                                             }
                                         }
                                     }
-                                    
+
                                     // Scalar remainder within tile
                                     for (; j < jMax; j++)
                                     {
@@ -813,33 +810,33 @@ namespace SmallMind.Core.Simd
                 ReadOnlySpan<float> ASpan = A;
                 ReadOnlySpan<float> BSpan = B;
                 Span<float> CSpan = C;
-                
+
                 for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
                 {
                     int iMax = Math.Min(i0 + TILE_SIZE, M);
-                    
+
                     for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                     {
                         int kMax = Math.Min(k0 + TILE_SIZE, K);
-                        
+
                         for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                         {
                             int jMax = Math.Min(j0 + TILE_SIZE, N);
-                            
+
                             // Process this tile
                             for (int i = i0; i < iMax; i++)
                             {
                                 int aRowStart = i * K;
                                 int cRowStart = i * N;
-                                
+
                                 for (int k = k0; k < kMax; k++)
                                 {
                                     float aVal = ASpan[aRowStart + k];
                                     var vA = new Vector<float>(aVal);
                                     int bRowStart = k * N;
-                                    
+
                                     int j = j0;
-                                    
+
                                     // SIMD loop within tile - optimized to eliminate Span.Slice()
                                     unsafe
                                     {
@@ -847,7 +844,7 @@ namespace SmallMind.Core.Simd
                                         {
                                             float* pBRow = pB + bRowStart;
                                             float* pCRow = pC + cRowStart;
-                                            
+
                                             for (; j <= jMax - vectorSize; j += vectorSize)
                                             {
                                                 var vB = Unsafe.Read<Vector<float>>(pBRow + j);
@@ -856,7 +853,7 @@ namespace SmallMind.Core.Simd
                                             }
                                         }
                                     }
-                                    
+
                                     // Scalar remainder within tile
                                     for (; j < jMax; j++)
                                     {
@@ -897,7 +894,7 @@ namespace SmallMind.Core.Simd
                     {
                         float* pBRow = pB + bRowStart;
                         float* pCRow = pC + cRowStart;
-                        
+
                         for (; j <= N - vectorSize; j += vectorSize)
                         {
                             var vB = Unsafe.Read<Vector<float>>(pBRow + j);
@@ -934,9 +931,7 @@ namespace SmallMind.Core.Simd
             float* pA, float* pB, float* pC,
             int M, int K, int N)
         {
-            const int vecSize = VEC512_SIZE;
             const int TILE_M = 4;  // Process 4 rows of C at a time
-            const int TILE_N = 64; // Process 64 cols of C at a time (4 vectors)
 
             if (M >= PARALLEL_THRESHOLD)
             {
@@ -967,7 +962,7 @@ namespace SmallMind.Core.Simd
             {
                 int aRowStart = i * K;
                 int cRowStart = i * N;
-                
+
                 // Process output row in tiles
                 int j = 0;
                 for (; j <= N - (vecSize * 4); j += vecSize * 4)
@@ -1038,9 +1033,7 @@ namespace SmallMind.Core.Simd
             float* pA, float* pB, float* pC,
             int M, int K, int N)
         {
-            const int vecSize = 8;
             const int TILE_M = 4;  // Process 4 rows of C at a time
-            const int TILE_N = 32; // Process 32 cols of C at a time (4 vectors)
 
             if (M >= PARALLEL_THRESHOLD)
             {
@@ -1070,7 +1063,7 @@ namespace SmallMind.Core.Simd
             {
                 int aRowStart = i * K;
                 int cRowStart = i * N;
-                
+
                 // Process output row in tiles of 8 vectors (64 floats) for maximum ILP
                 int j = 0;
                 for (; j <= N - (vecSize * 8); j += vecSize * 8)
@@ -1093,7 +1086,7 @@ namespace SmallMind.Core.Simd
                         int bRowStart1 = (k + 1) * N;
                         int bRowStart2 = (k + 2) * N;
                         int bRowStart3 = (k + 3) * N;
-                        
+
                         // Iteration 0
                         Vector256<float> vA0 = Vector256.Create(pA[aRowStart + k]);
                         acc0 = Fma.MultiplyAdd(vA0, Avx.LoadVector256(pB + bRowStart0 + j), acc0);
@@ -1104,7 +1097,7 @@ namespace SmallMind.Core.Simd
                         acc5 = Fma.MultiplyAdd(vA0, Avx.LoadVector256(pB + bRowStart0 + j + vecSize * 5), acc5);
                         acc6 = Fma.MultiplyAdd(vA0, Avx.LoadVector256(pB + bRowStart0 + j + vecSize * 6), acc6);
                         acc7 = Fma.MultiplyAdd(vA0, Avx.LoadVector256(pB + bRowStart0 + j + vecSize * 7), acc7);
-                        
+
                         // Iteration 1
                         Vector256<float> vA1 = Vector256.Create(pA[aRowStart + k + 1]);
                         acc0 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j), acc0);
@@ -1115,7 +1108,7 @@ namespace SmallMind.Core.Simd
                         acc5 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 5), acc5);
                         acc6 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 6), acc6);
                         acc7 = Fma.MultiplyAdd(vA1, Avx.LoadVector256(pB + bRowStart1 + j + vecSize * 7), acc7);
-                        
+
                         // Iteration 2
                         Vector256<float> vA2 = Vector256.Create(pA[aRowStart + k + 2]);
                         acc0 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j), acc0);
@@ -1126,7 +1119,7 @@ namespace SmallMind.Core.Simd
                         acc5 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 5), acc5);
                         acc6 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 6), acc6);
                         acc7 = Fma.MultiplyAdd(vA2, Avx.LoadVector256(pB + bRowStart2 + j + vecSize * 7), acc7);
-                        
+
                         // Iteration 3
                         Vector256<float> vA3 = Vector256.Create(pA[aRowStart + k + 3]);
                         acc0 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j), acc0);
@@ -1138,7 +1131,7 @@ namespace SmallMind.Core.Simd
                         acc6 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 6), acc6);
                         acc7 = Fma.MultiplyAdd(vA3, Avx.LoadVector256(pB + bRowStart3 + j + vecSize * 7), acc7);
                     }
-                    
+
                     // Handle remaining K iterations (0-3)
                     for (; k < K; k++)
                     {
@@ -1170,19 +1163,19 @@ namespace SmallMind.Core.Simd
                 {
                     Vector256<float> acc = Vector256<float>.Zero;
                     int k = 0;
-                    
+
                     // 2x unrolling for K loop
                     for (; k <= K - 2; k += 2)
                     {
                         Vector256<float> vA0 = Vector256.Create(pA[aRowStart + k]);
                         Vector256<float> vB0 = Avx.LoadVector256(pB + k * N + j);
                         acc = Fma.MultiplyAdd(vA0, vB0, acc);
-                        
+
                         Vector256<float> vA1 = Vector256.Create(pA[aRowStart + k + 1]);
                         Vector256<float> vB1 = Avx.LoadVector256(pB + (k + 1) * N + j);
                         acc = Fma.MultiplyAdd(vA1, vB1, acc);
                     }
-                    
+
                     // Handle remaining K
                     for (; k < K; k++)
                     {
@@ -1369,12 +1362,12 @@ namespace SmallMind.Core.Simd
             // For attention: A is Q (T × headSize), B is K (T × headSize)
             // We compute C = Q @ K^T (T × T)
             // This is more cache-friendly than transposing K first
-            
+
             // TIER-2 OPTIMIZATION: Reintroduce parallelization with unsafe pointer-based approach
             // Parallelize when profitable: M >= 64 AND K >= 64 AND have multiple processors
             // For long sequences (T > 256), internal row-parallelism provides significant speedup
             bool shouldParallelize = M >= 64 && K >= 64 && Environment.ProcessorCount > 1;
-            
+
             unsafe
             {
                 fixed (float* pA = A, pB = B, pC = C)
@@ -1383,14 +1376,14 @@ namespace SmallMind.Core.Simd
                     {
                         // Use chunked parallelization to reduce Parallel.For overhead
                         int rangeSize = Math.Max(4, M / (Environment.ProcessorCount * 2));
-                        
+
                         // Copy pointers to local variables to capture in closure
                         float* localPA = pA;
                         float* localPB = pB;
                         float* localPC = pC;
                         int localK = K;
                         int localN = N;
-                        
+
                         Parallel.ForEach(
                             System.Collections.Concurrent.Partitioner.Create(0, M, rangeSize),
                             range =>
@@ -1420,7 +1413,7 @@ namespace SmallMind.Core.Simd
         {
             int aRowStart = i * K;
             int cRowStart = i * N;
-            
+
             // TIER-2 OPTIMIZATION: Add AVX-512 dispatch
             // Dispatch order: AVX-512 → AVX2+FMA → Scalar
             if (Avx512F.IsSupported && K >= 16)
@@ -1443,13 +1436,13 @@ namespace SmallMind.Core.Simd
             int aRowStart, int cRowStart, int K, int N)
         {
             const int vecSize = 8;
-            
+
             // TIER-2 OPTIMIZATION: 4-way register blocking
             // Compute 4 dot products simultaneously to reduce horizontal sum overhead
             const int BLOCK_SIZE = 4;
-            
+
             int j = 0;
-            
+
             // Process 4 columns at a time (register blocking)
             for (; j <= N - BLOCK_SIZE; j += BLOCK_SIZE)
             {
@@ -1457,15 +1450,15 @@ namespace SmallMind.Core.Simd
                 int bRowStart1 = (j + 1) * K;
                 int bRowStart2 = (j + 2) * K;
                 int bRowStart3 = (j + 3) * K;
-                
+
                 // Four accumulators for 4 simultaneous dot products
                 Vector256<float> acc0 = Vector256<float>.Zero;
                 Vector256<float> acc1 = Vector256<float>.Zero;
                 Vector256<float> acc2 = Vector256<float>.Zero;
                 Vector256<float> acc3 = Vector256<float>.Zero;
-                
+
                 int k = 0;
-                
+
                 // TIER-5 OPTIMIZATION: 2x loop unrolling in K dimension
                 // Process 16 floats per iteration (2 * vecSize) to reduce loop overhead
                 // and improve instruction-level parallelism
@@ -1473,53 +1466,53 @@ namespace SmallMind.Core.Simd
                 {
                     // First unrolled iteration (k + 0)
                     Vector256<float> vA0 = Avx.LoadVector256(pA + aRowStart + k);
-                    
+
                     Vector256<float> vB0_0 = Avx.LoadVector256(pB + bRowStart0 + k);
                     Vector256<float> vB0_1 = Avx.LoadVector256(pB + bRowStart1 + k);
                     Vector256<float> vB0_2 = Avx.LoadVector256(pB + bRowStart2 + k);
                     Vector256<float> vB0_3 = Avx.LoadVector256(pB + bRowStart3 + k);
-                    
+
                     acc0 = Fma.MultiplyAdd(vA0, vB0_0, acc0);
                     acc1 = Fma.MultiplyAdd(vA0, vB0_1, acc1);
                     acc2 = Fma.MultiplyAdd(vA0, vB0_2, acc2);
                     acc3 = Fma.MultiplyAdd(vA0, vB0_3, acc3);
-                    
+
                     // Second unrolled iteration (k + vecSize)
                     Vector256<float> vA1 = Avx.LoadVector256(pA + aRowStart + k + vecSize);
-                    
+
                     Vector256<float> vB1_0 = Avx.LoadVector256(pB + bRowStart0 + k + vecSize);
                     Vector256<float> vB1_1 = Avx.LoadVector256(pB + bRowStart1 + k + vecSize);
                     Vector256<float> vB1_2 = Avx.LoadVector256(pB + bRowStart2 + k + vecSize);
                     Vector256<float> vB1_3 = Avx.LoadVector256(pB + bRowStart3 + k + vecSize);
-                    
+
                     acc0 = Fma.MultiplyAdd(vA1, vB1_0, acc0);
                     acc1 = Fma.MultiplyAdd(vA1, vB1_1, acc1);
                     acc2 = Fma.MultiplyAdd(vA1, vB1_2, acc2);
                     acc3 = Fma.MultiplyAdd(vA1, vB1_3, acc3);
                 }
-                
+
                 // Handle remaining vecSize chunk (if K % 16 >= 8)
                 for (; k <= K - vecSize; k += vecSize)
                 {
                     Vector256<float> vA = Avx.LoadVector256(pA + aRowStart + k);
-                    
+
                     Vector256<float> vB0 = Avx.LoadVector256(pB + bRowStart0 + k);
                     Vector256<float> vB1 = Avx.LoadVector256(pB + bRowStart1 + k);
                     Vector256<float> vB2 = Avx.LoadVector256(pB + bRowStart2 + k);
                     Vector256<float> vB3 = Avx.LoadVector256(pB + bRowStart3 + k);
-                    
+
                     acc0 = Fma.MultiplyAdd(vA, vB0, acc0);
                     acc1 = Fma.MultiplyAdd(vA, vB1, acc1);
                     acc2 = Fma.MultiplyAdd(vA, vB2, acc2);
                     acc3 = Fma.MultiplyAdd(vA, vB3, acc3);
                 }
-                
+
                 // Horizontal sum for all 4 accumulators
                 float sum0 = HorizontalSumAvx2(acc0);
                 float sum1 = HorizontalSumAvx2(acc1);
                 float sum2 = HorizontalSumAvx2(acc2);
                 float sum3 = HorizontalSumAvx2(acc3);
-                
+
                 // Scalar remainder for all 4 columns
                 for (; k < K; k++)
                 {
@@ -1529,52 +1522,52 @@ namespace SmallMind.Core.Simd
                     sum2 += aVal * pB[bRowStart2 + k];
                     sum3 += aVal * pB[bRowStart3 + k];
                 }
-                
+
                 // Store results
                 pC[cRowStart + j + 0] = sum0;
                 pC[cRowStart + j + 1] = sum1;
                 pC[cRowStart + j + 2] = sum2;
                 pC[cRowStart + j + 3] = sum3;
             }
-            
+
             // Tail: process remaining columns one at a time
             for (; j < N; j++)
             {
                 int bRowStart = j * K;
-                
+
                 Vector256<float> acc = Vector256<float>.Zero;
                 int k = 0;
-                
+
                 // TIER-5 OPTIMIZATION: 2x loop unrolling for tail columns as well
                 for (; k <= K - (vecSize * 2); k += vecSize * 2)
                 {
                     Vector256<float> vA0 = Avx.LoadVector256(pA + aRowStart + k);
                     Vector256<float> vB0 = Avx.LoadVector256(pB + bRowStart + k);
                     acc = Fma.MultiplyAdd(vA0, vB0, acc);
-                    
+
                     Vector256<float> vA1 = Avx.LoadVector256(pA + aRowStart + k + vecSize);
                     Vector256<float> vB1 = Avx.LoadVector256(pB + bRowStart + k + vecSize);
                     acc = Fma.MultiplyAdd(vA1, vB1, acc);
                 }
-                
+
                 for (; k <= K - vecSize; k += vecSize)
                 {
                     Vector256<float> vA = Avx.LoadVector256(pA + aRowStart + k);
                     Vector256<float> vB = Avx.LoadVector256(pB + bRowStart + k);
                     acc = Fma.MultiplyAdd(vA, vB, acc);
                 }
-                
+
                 float sum = HorizontalSumAvx2(acc);
-                
+
                 for (; k < K; k++)
                 {
                     sum += pA[aRowStart + k] * pB[bRowStart + k];
                 }
-                
+
                 pC[cRowStart + j] = sum;
             }
         }
-        
+
         /// <summary>
         /// Fast horizontal sum for Vector256 using AVX
         /// </summary>
@@ -1600,23 +1593,23 @@ namespace SmallMind.Core.Simd
             int aRowStart, int cRowStart, int K, int N)
         {
             const int vecSize = 16; // AVX-512 processes 16 floats per vector
-            
+
             // Tile j loop for better cache reuse
             const int TILE_J = 64;
-            
+
             for (int j0 = 0; j0 < N; j0 += TILE_J)
             {
                 int jMax = Math.Min(j0 + TILE_J, N);
-                
+
                 // Process tile of output elements
                 for (int j = j0; j < jMax; j++)
                 {
                     int bRowStart = j * K;
-                    
+
                     // Compute dot product using AVX-512
                     Vector512<float> acc = Vector512<float>.Zero;
                     int k = 0;
-                    
+
                     // Main SIMD loop
                     for (; k <= K - vecSize; k += vecSize)
                     {
@@ -1624,13 +1617,13 @@ namespace SmallMind.Core.Simd
                         Vector512<float> vB = Avx512F.LoadVector512(pB + bRowStart + k);
                         acc = Avx512F.FusedMultiplyAdd(vA, vB, acc);
                     }
-                    
+
                     // Horizontal sum using AVX-512
                     // Reduce 512-bit vector to scalar
                     Vector256<float> lo256 = acc.GetLower();
                     Vector256<float> hi256 = acc.GetUpper();
                     Vector256<float> sum256 = Avx.Add(lo256, hi256);
-                    
+
                     // Continue reduction with AVX
                     Vector128<float> lo128 = sum256.GetLower();
                     Vector128<float> hi128 = sum256.GetUpper();
@@ -1638,13 +1631,13 @@ namespace SmallMind.Core.Simd
                     Vector128<float> sum64 = Sse.Add(sum128, Sse.Shuffle(sum128, sum128, 0b_11_10_11_10));
                     Vector128<float> sum32 = Sse.Add(sum64, Sse.Shuffle(sum64, sum64, 0b_01_01_01_01));
                     float sum = sum32.ToScalar();
-                    
+
                     // Scalar remainder
                     for (; k < K; k++)
                     {
                         sum += pA[aRowStart + k] * pB[bRowStart + k];
                     }
-                    
+
                     pC[cRowStart + j] = sum;
                 }
             }
@@ -1656,15 +1649,15 @@ namespace SmallMind.Core.Simd
             int aRowStart, int cRowStart, int K, int N)
         {
             int vectorSize = Vector<float>.Count;
-            
+
             for (int j = 0; j < N; j++)
             {
                 int bRowStart = j * K;
-                
+
                 // Compute dot product using Vector<T>
                 Vector<float> acc = Vector<float>.Zero;
                 int k = 0;
-                
+
                 // SIMD loop
                 for (; k <= K - vectorSize; k += vectorSize)
                 {
@@ -1672,20 +1665,20 @@ namespace SmallMind.Core.Simd
                     var vB = System.Runtime.CompilerServices.Unsafe.Read<Vector<float>>(pB + bRowStart + k);
                     acc += vA * vB;
                 }
-                
+
                 // Horizontal sum
                 float sum = 0f;
                 for (int v = 0; v < vectorSize; v++)
                 {
                     sum += acc[v];
                 }
-                
+
                 // Scalar remainder
                 for (; k < K; k++)
                 {
                     sum += pA[aRowStart + k] * pB[bRowStart + k];
                 }
-                
+
                 pC[cRowStart + j] = sum;
             }
         }
@@ -1701,7 +1694,7 @@ namespace SmallMind.Core.Simd
         {
             const int vecSize = 4; // NEON processes 4 floats per vector
             int numRowTiles = (M + TILE_SIZE - 1) / TILE_SIZE;
-            
+
             // Parallelize over row tiles when beneficial
             if (numRowTiles >= 2)
             {
@@ -1728,23 +1721,23 @@ namespace SmallMind.Core.Simd
                 for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                 {
                     int kMax = Math.Min(k0 + TILE_SIZE, K);
-                    
+
                     for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                     {
                         int jMax = Math.Min(j0 + TILE_SIZE, N);
-                        
+
                         // Process this tile
                         for (int i = i0; i < iMax; i++)
                         {
                             int aRow = i * K;
                             int cRow = i * N;
-                            
+
                             for (int k = k0; k < kMax; k++)
                             {
                                 var vA = AdvSimd.DuplicateToVector128(pA[aRow + k]);
                                 int bRow = k * N;
                                 int j = j0;
-                                
+
                                 // NEON SIMD loop (4 floats at a time)
                                 for (; j <= jMax - vecSize; j += vecSize)
                                 {
@@ -1754,7 +1747,7 @@ namespace SmallMind.Core.Simd
                                     vC = AdvSimd.FusedMultiplyAdd(vC, vB, vA);
                                     AdvSimd.Store(pC + cRow + j, vC);
                                 }
-                                
+
                                 // Scalar remainder
                                 float aVal = pA[aRow + k];
                                 for (; j < jMax; j++)
@@ -1816,7 +1809,7 @@ namespace SmallMind.Core.Simd
                             sumVec = AdvSimd.FusedMultiplyAdd(sumVec, va, vb);
                         }
                         // Horizontal sum: manual extraction and add
-                        sum = sumVec.GetElement(0) + sumVec.GetElement(1) + 
+                        sum = sumVec.GetElement(0) + sumVec.GetElement(1) +
                               sumVec.GetElement(2) + sumVec.GetElement(3);
                     }
                 }

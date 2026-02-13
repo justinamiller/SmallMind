@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using SmallMind.Quantization.IO.Gguf;
 
 namespace SmallMind.Runtime.Gguf.TensorDecoders
@@ -49,8 +47,8 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
                         byte packedByte = blockBuffer[byteIdx];
 
                         // Extract nibble (low nibble for even indices, high nibble for odd)
-                        byte nibble = (localIdx % 2 == 0) 
-                            ? (byte)(packedByte & 0xF) 
+                        byte nibble = (localIdx % 2 == 0)
+                            ? (byte)(packedByte & 0xF)
                             : (byte)((packedByte >> 4) & 0xF);
 
                         int quantized = DecodeNibble(nibble);

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 using SmallMind.Quantization.IO.Smq;
 using SmallMind.Quantization.Tensors;
@@ -100,9 +96,9 @@ namespace SmallMind.Quantization.IO.Gguf
         /// </summary>
         private bool IsSupportedType(GgufTensorType type)
         {
-            return type == GgufTensorType.F32 
-                || type == GgufTensorType.F16 
-                || type == GgufTensorType.Q8_0 
+            return type == GgufTensorType.F32
+                || type == GgufTensorType.F16
+                || type == GgufTensorType.Q8_0
                 || type == GgufTensorType.Q4_0
                 || type == GgufTensorType.Q4_1
                 || type == GgufTensorType.Q5_0
@@ -153,7 +149,7 @@ namespace SmallMind.Quantization.IO.Gguf
             // Direct conversion using Buffer.BlockCopy
             var floatData = new float[totalElements];
             Buffer.BlockCopy(rawData, 0, floatData, 0, rawData.Length);
-            
+
             return Fp32Tensor.FromUlongDimensions(floatData, dimensions);
         }
 
@@ -176,7 +172,7 @@ namespace SmallMind.Quantization.IO.Gguf
                     $"F16 tensor size mismatch: expected {totalElements * sizeof(ushort)} bytes, got {rawData.Length} bytes");
 
             var floatData = new float[totalElements];
-            
+
             using (var ms = new MemoryStream(rawData))
             using (var br = new BinaryReader(ms))
             {
@@ -186,7 +182,7 @@ namespace SmallMind.Quantization.IO.Gguf
                     floatData[i] = HalfToFloat(halfBits);
                 }
             }
-            
+
             return Fp32Tensor.FromUlongDimensions(floatData, dimensions);
         }
 
@@ -203,7 +199,7 @@ namespace SmallMind.Quantization.IO.Gguf
             {
                 totalElements *= (int)dim;
             }
-            
+
             // For SMQ, we need to provide rows and cols
             // If 1D, treat as 1 x N; if 2D, use as is; if higher-D, flatten
             int rows, cols;
@@ -282,7 +278,7 @@ namespace SmallMind.Quantization.IO.Gguf
             {
                 totalElements *= (int)dim;
             }
-            
+
             // For SMQ, we need to provide rows and cols
             // If 1D, treat as 1 x N; if 2D, use as is; if higher-D, flatten
             int rows, cols;
@@ -323,11 +319,11 @@ namespace SmallMind.Quantization.IO.Gguf
                     // Read 16 bytes (32 x 4-bit values packed)
                     int blockStart = blockIdx * GgufBlockSize;
                     int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
-                    
+
                     for (int i = blockStart; i < blockEnd; i += 2)
                     {
                         byte packedByte = br.ReadByte();
-                        
+
                         // GGUF packs low nibble first, then high nibble
                         int byteIdx = i / 2;
                         ggufData[byteIdx] = packedByte;
@@ -338,7 +334,7 @@ namespace SmallMind.Quantization.IO.Gguf
             // Re-quantize: dequantize with GGUF blocks, then quantize with SMQ blocks
             // GGUF block size (32) differs from SMQ default (64), so we must re-quantize
             var floatData = new float[totalElements];
-            
+
             for (int blockIdx = 0; blockIdx < ggufNumBlocks; blockIdx++)
             {
                 int blockStart = blockIdx * GgufBlockSize;
@@ -349,12 +345,12 @@ namespace SmallMind.Quantization.IO.Gguf
                 {
                     int byteIdx = i / 2;
                     byte packedByte = ggufData[byteIdx];
-                    
+
                     // Extract nibble
-                    byte nibble = (i % 2 == 0) 
-                        ? (byte)(packedByte & 0xF) 
+                    byte nibble = (i % 2 == 0)
+                        ? (byte)(packedByte & 0xF)
                         : (byte)((packedByte >> 4) & 0xF);
-                    
+
                     int quantized = Q4Tensor.DecodeNibble(nibble);
                     floatData[i] = quantized * scale;
                 }
@@ -376,7 +372,7 @@ namespace SmallMind.Quantization.IO.Gguf
             {
                 totalElements *= (int)dim;
             }
-            
+
             // For tensor, we need rows and cols
             int rows, cols;
             if (dimensions.Length == 1)
@@ -420,11 +416,11 @@ namespace SmallMind.Quantization.IO.Gguf
                     // Read 16 bytes (32 x 4-bit unsigned values packed)
                     int blockStart = blockIdx * GgufBlockSize;
                     int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
-                    
+
                     for (int i = blockStart; i < blockEnd; i += 2)
                     {
                         byte packedByte = br.ReadByte();
-                        
+
                         // GGUF packs low nibble first, then high nibble
                         int byteIdx = i / 2;
                         data[byteIdx] = packedByte;
@@ -449,7 +445,7 @@ namespace SmallMind.Quantization.IO.Gguf
             {
                 totalElements *= (int)dim;
             }
-            
+
             // For tensor, we need rows and cols
             int rows, cols;
             if (dimensions.Length == 1)
@@ -496,11 +492,11 @@ namespace SmallMind.Quantization.IO.Gguf
                     // Read 16 bytes (32 x 4-bit low nibbles packed)
                     int blockStart = blockIdx * GgufBlockSize;
                     int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
-                    
+
                     for (int i = blockStart; i < blockEnd; i += 2)
                     {
                         byte packedByte = br.ReadByte();
-                        
+
                         // GGUF packs low nibble first, then high nibble
                         int byteIdx = i / 2;
                         dataLow[byteIdx] = packedByte;
@@ -529,7 +525,7 @@ namespace SmallMind.Quantization.IO.Gguf
             {
                 totalElements *= (int)dim;
             }
-            
+
             // For tensor, we need rows and cols
             int rows, cols;
             if (dimensions.Length == 1)
@@ -552,23 +548,23 @@ namespace SmallMind.Quantization.IO.Gguf
             // Q4_K uses block size 256
             const int Q4K_BLOCK_SIZE = 256;
             const int Q4K_BYTES_PER_BLOCK = 144;
-            
+
             if (totalElements % Q4K_BLOCK_SIZE != 0)
                 throw new InvalidDataException(
                     $"Q4_K tensor size {totalElements} is not divisible by block size {Q4K_BLOCK_SIZE}");
-            
+
             int numBlocks = totalElements / Q4K_BLOCK_SIZE;
-            
+
             // Validate raw data size
             int expectedSize = numBlocks * Q4K_BYTES_PER_BLOCK;
             if (rawData.Length != expectedSize)
                 throw new InvalidDataException(
                     $"Q4_K tensor data size mismatch: expected {expectedSize} bytes, got {rawData.Length} bytes");
-            
+
             // Create Q4KTensor and copy the raw data directly (GGUF format matches our internal format)
             var tensor = new Q4KTensor(rows, cols);
             Buffer.BlockCopy(rawData, 0, tensor.Data, 0, rawData.Length);
-            
+
             return tensor;
         }
 
@@ -589,7 +585,7 @@ namespace SmallMind.Quantization.IO.Gguf
             {
                 totalElements *= (int)dim;
             }
-            
+
             // For tensor, we need rows and cols
             int rows, cols;
             if (dimensions.Length == 1)
@@ -612,23 +608,23 @@ namespace SmallMind.Quantization.IO.Gguf
             // Q6_K uses block size 256
             const int Q6K_BLOCK_SIZE = 256;
             const int Q6K_BYTES_PER_BLOCK = 210;
-            
+
             if (totalElements % Q6K_BLOCK_SIZE != 0)
                 throw new InvalidDataException(
                     $"Q6_K tensor size {totalElements} is not divisible by block size {Q6K_BLOCK_SIZE}");
-            
+
             int numBlocks = totalElements / Q6K_BLOCK_SIZE;
-            
+
             // Validate raw data size
             int expectedSize = numBlocks * Q6K_BYTES_PER_BLOCK;
             if (rawData.Length != expectedSize)
                 throw new InvalidDataException(
                     $"Q6_K tensor data size mismatch: expected {expectedSize} bytes, got {rawData.Length} bytes");
-            
+
             // Create Q6KTensor and copy the raw data directly (GGUF format matches our internal format)
             var tensor = new Q6KTensor(rows, cols);
             Buffer.BlockCopy(rawData, 0, tensor.Data, 0, rawData.Length);
-            
+
             return tensor;
         }
 

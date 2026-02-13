@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using SmallMind.Abstractions.Telemetry;
 using SmallMind.Rag.Indexing.Sparse;
 using SmallMind.Rag.Ingestion;
@@ -50,7 +47,7 @@ internal sealed class IncrementalIndexer
     public void RebuildIndex(List<DocumentRecord> docs, Dictionary<string, string> docContents, IRuntimeLogger? logger = null)
     {
         logger ??= NullRuntimeLogger.Instance;
-        
+
         if (docs == null)
             throw new ArgumentNullException(nameof(docs));
         if (docContents == null)
@@ -97,18 +94,18 @@ internal sealed class IncrementalIndexer
     public void UpdateIndex(List<DocumentRecord> newDocs, Dictionary<string, string> docContents, IRuntimeLogger? logger = null)
     {
         logger ??= NullRuntimeLogger.Instance;
-        
+
         if (newDocs == null)
             throw new ArgumentNullException(nameof(newDocs));
         if (docContents == null)
             throw new ArgumentNullException(nameof(docContents));
 
-        (InvertedIndex index, Dictionary<string, Chunk> chunks, IndexManifest manifest) = 
+        (InvertedIndex index, Dictionary<string, Chunk> chunks, IndexManifest manifest) =
             IndexSerializer.LoadIndex(_indexDir);
 
         if (manifest.ChunkingOptions != null)
         {
-            bool optionsChanged = 
+            bool optionsChanged =
                 manifest.ChunkingOptions.MaxChunkSize != _options.Chunking.MaxChunkSize ||
                 manifest.ChunkingOptions.OverlapSize != _options.Chunking.OverlapSize ||
                 manifest.ChunkingOptions.MinChunkSize != _options.Chunking.MinChunkSize;

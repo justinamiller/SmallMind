@@ -1,5 +1,3 @@
-using System;
-using System.Threading;
 using SmallMind.Abstractions;
 
 namespace SmallMind
@@ -32,7 +30,7 @@ namespace SmallMind
             {
                 // Use Task.Run to avoid SynchronizationContext deadlocks in ASP.NET/UI contexts
                 // Since generation is CPU-bound, this is safe and prevents deadlocks
-                return Task.Run(async () => 
+                return Task.Run(async () =>
                     await _session.SendAsync(request, _telemetry, cancellationToken)
                         .ConfigureAwait(false)
                 ).GetAwaiter().GetResult();
@@ -52,7 +50,7 @@ namespace SmallMind
                 throw new ArgumentException("System message cannot be empty", nameof(content));
 
             // Use Task.Run to avoid SynchronizationContext deadlocks
-            Task.Run(async () => 
+            Task.Run(async () =>
                 await _session.AddSystemAsync(content).ConfigureAwait(false)
             ).GetAwaiter().GetResult();
         }

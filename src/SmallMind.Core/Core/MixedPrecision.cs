@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 
 namespace SmallMind.Core.Core
@@ -17,13 +16,13 @@ namespace SmallMind.Core.Core
         {
             if (source.Length != dest.Length)
                 throw new ArgumentException("Source and destination lengths must match");
-            
+
             for (int i = 0; i < source.Length; i++)
             {
                 dest[i] = (Half)source[i];
             }
         }
-        
+
         /// <summary>
         /// Convert float16 (Half) buffer to float32
         /// </summary>
@@ -32,13 +31,13 @@ namespace SmallMind.Core.Core
         {
             if (source.Length != dest.Length)
                 throw new ArgumentException("Source and destination lengths must match");
-            
+
             for (int i = 0; i < source.Length; i++)
             {
                 dest[i] = (float)source[i];
             }
         }
-        
+
         /// <summary>
         /// Check if gradients have overflow (infinity or NaN)
         /// </summary>
@@ -55,7 +54,7 @@ namespace SmallMind.Core.Core
             return false;
         }
     }
-    
+
     /// <summary>
     /// Mixed precision trainer that maintains FP32 master weights
     /// and uses FP16 for forward/backward passes.
@@ -65,35 +64,35 @@ namespace SmallMind.Core.Core
         private readonly AdamW _optimizer;
         private readonly float[][] _masterWeights;
         private readonly Half[][] _fp16Weights;
-        
+
         // Dynamic loss scaling
         private float _lossScale;
         private const float SCALE_FACTOR = 2f;
         private const int SCALE_WINDOW = 1000;
         private int _stepsSinceScale;
         private int _overflowCount;
-        
+
         public float LossScale => _lossScale;
         public int OverflowCount => _overflowCount;
-        
+
         public MixedPrecisionTrainer(AdamW optimizer, System.Collections.Generic.List<Tensor> parameters, float initialLossScale = 65536f)
         {
             _optimizer = optimizer;
             _lossScale = initialLossScale;
             _stepsSinceScale = 0;
             _overflowCount = 0;
-            
+
             // Allocate master weights (FP32) and FP16 copies
             _masterWeights = new float[parameters.Count][];
             _fp16Weights = new Half[parameters.Count][];
-            
+
             for (int i = 0; i < parameters.Count; i++)
             {
                 _masterWeights[i] = (float[])parameters[i].Data.Clone();
                 _fp16Weights[i] = new Half[parameters[i].Size];
             }
         }
-        
+
         /// <summary>
         /// Convert master weights to FP16 for forward pass
         /// </summary>
@@ -105,7 +104,7 @@ namespace SmallMind.Core.Core
                 MixedPrecision.HalfToFloat(_fp16Weights[i], parameters[i].Data);
             }
         }
-        
+
         /// <summary>
         /// Check gradients for overflow and update loss scale
         /// Returns true if gradients are valid, false if overflow detected
@@ -114,15 +113,15 @@ namespace SmallMind.Core.Core
         {
             bool hasOverflow = false;
             int paramCount = parameters.Count;
-            
+
             // Check for overflow and unscale using indexed for-loop
             for (int i = 0; i < paramCount; i++)
             {
                 if (parameters[i].Grad == null) continue;
-                
+
                 var grad = parameters[i].Grad;
                 int gradLength = grad.Length;
-                
+
                 // Unscale gradients with unsafe pointers for better performance
                 unsafe
                 {
@@ -132,7 +131,7 @@ namespace SmallMind.Core.Core
                         for (int j = 0; j < gradLength; j++)
                         {
                             pGrad[j] *= invScale;
-                            
+
                             if (float.IsInfinity(pGrad[j]) || float.IsNaN(pGrad[j]))
                             {
                                 hasOverflow = true;
@@ -141,25 +140,25 @@ namespace SmallMind.Core.Core
                         }
                     }
                 }
-                
+
                 if (hasOverflow) break;
             }
-            
+
             if (hasOverflow)
             {
                 _overflowCount++;
                 _lossScale /= SCALE_FACTOR;
                 _stepsSinceScale = 0;
-                
+
                 // Zero out gradients using indexed for-loop instead of foreach
                 for (int i = 0; i < paramCount; i++)
                 {
                     parameters[i].ZeroGrad();
                 }
-                
+
                 return false;
             }
-            
+
             // No overflow - try to increase scale after window
             _stepsSinceScale++;
             if (_stepsSinceScale >= SCALE_WINDOW)
@@ -167,10 +166,10 @@ namespace SmallMind.Core.Core
                 _lossScale = Math.Min(_lossScale * SCALE_FACTOR, 65536f); // Cap at initial scale
                 _stepsSinceScale = 0;
             }
-            
+
             return true;
         }
-        
+
         /// <summary>
         /// Update master weights from FP32 gradients
         /// </summary>

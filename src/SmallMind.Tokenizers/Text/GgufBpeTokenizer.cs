@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -17,11 +14,11 @@ namespace SmallMind.Tokenizers.Text
         private readonly Dictionary<int, string> _inverseVocab;
         private readonly Dictionary<(string, string), int> _mergeRanks;
         private readonly bool _isByteLevelBpe;
-        
+
         // Pre-tokenization regex (GPT-2 style): uses GeneratedRegex for optimal performance
         // Matches contractions, letters, numbers, punctuation, and whitespace sequences
         // Removed static readonly field - now using centralized RegexPatterns.Gpt2PreTokenize()
-        
+
         // Byte-level BPE mapping (GPT-2 style)
         private readonly Dictionary<byte, string>? _byteToChar;
         private readonly Dictionary<string, byte>? _charToByte;
@@ -94,7 +91,7 @@ namespace SmallMind.Tokenizers.Text
         private Dictionary<byte, string> BuildByteToCharMap()
         {
             var map = new Dictionary<byte, string>();
-            
+
             // Direct mappings for printable ASCII, except space
             var directBytes = new List<byte>();
             for (byte b = (byte)'!'; b <= (byte)'~'; b++)
@@ -189,7 +186,7 @@ namespace SmallMind.Tokenizers.Text
                 // We alternate between tokens and tempTokens to avoid allocations
                 List<string> currentTokens = tokens;
                 List<string> tempTokens = new List<string>(tokens.Count);
-                
+
                 while (currentTokens.Count > 1)
                 {
                     // Find the pair with the lowest merge rank
@@ -214,7 +211,7 @@ namespace SmallMind.Tokenizers.Text
                     // Apply the merge using forward scan (O(N) instead of O(N²))
                     tempTokens.Clear();
                     string merged = bestPair.Value.Item1 + bestPair.Value.Item2;
-                    
+
                     for (int i = 0; i < currentTokens.Count; i++)
                     {
                         if (i == bestIndex)
@@ -227,7 +224,7 @@ namespace SmallMind.Tokenizers.Text
                             tempTokens.Add(currentTokens[i]);
                         }
                     }
-                    
+
                     // Swap buffers for next iteration
                     (currentTokens, tempTokens) = (tempTokens, currentTokens);
                 }
@@ -266,7 +263,7 @@ namespace SmallMind.Tokenizers.Text
         {
             string text = Encoding.UTF8.GetString(utf8);
             var tokens = Encode(text);
-            
+
             int count = Math.Min(tokens.Count, tokensOut.Length);
             for (int i = 0; i < count; i++)
             {
@@ -370,7 +367,7 @@ namespace SmallMind.Tokenizers.Text
             {
                 tokenList.Add(token);
             }
-            
+
             string text = Decode(tokenList);
             int bytesWritten = Encoding.UTF8.GetBytes(text.AsSpan(), utf8Out);
             return bytesWritten;

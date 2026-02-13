@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using SmallMind.Quantization.IO.Smq;
 using SmallMind.Quantization.Tensors;
-using Xunit;
 
 namespace SmallMind.Quantization.Tests
 {
@@ -110,7 +106,7 @@ namespace SmallMind.Quantization.Tests
         {
             // Arrange
             var random = new Random(42);
-            
+
             var q8Source = GenerateRandomFloats(random, 4 * 8, -10f, 10f);
             var q8Tensor = Q8Tensor.Quantize(q8Source, 4, 8, blockSize: 4);
 

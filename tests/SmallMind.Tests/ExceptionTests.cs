@@ -1,7 +1,4 @@
-using System;
-using Xunit;
 using SmallMind.Core.Exceptions;
-using SmallMind.Runtime;
 using CoreSmallMindException = SmallMind.Core.Exceptions.SmallMindException;
 
 namespace SmallMind.Tests

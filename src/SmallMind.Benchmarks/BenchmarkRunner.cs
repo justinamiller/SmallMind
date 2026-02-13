@@ -1,9 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime;
 using System.Runtime.InteropServices;
-using System.IO;
 using SmallMind.Abstractions.Telemetry;
 using SmallMind.Quantization.Kernels;
 using SmallMind.Quantization.Tensors;
@@ -81,11 +78,11 @@ namespace SmallMind.Benchmarks
             _environment["ProcessorCount"] = Environment.ProcessorCount;
             _environment["GCMode"] = GCSettings.IsServerGC ? "Server" : "Workstation";
             _environment["GCLatencyMode"] = GCSettings.LatencyMode.ToString();
-            
+
             // SIMD capabilities
             _environment["Vector<float>.Count"] = System.Numerics.Vector<float>.Count;
             _environment["Vector.IsHardwareAccelerated"] = System.Numerics.Vector.IsHardwareAccelerated;
-            
+
 #if NET7_0_OR_GREATER
             _environment["Avx2.IsSupported"] = System.Runtime.Intrinsics.X86.Avx2.IsSupported;
             _environment["Avx512F.IsSupported"] = System.Runtime.Intrinsics.X86.Avx512F.IsSupported;
@@ -124,7 +121,7 @@ namespace SmallMind.Benchmarks
 
             // Benchmark
             _logger.Info($"  Measuring ({_config.MeasuredIterations} iterations)... ");
-            
+
             var collector = new MetricsCollector();
             var times = new List<double>();
 
@@ -139,7 +136,7 @@ namespace SmallMind.Benchmarks
                 sw.Stop();
 
                 times.Add(sw.Elapsed.TotalMilliseconds);
-                
+
                 if (i % 3 == 0)
                     collector.UpdatePeak();
             }
@@ -159,7 +156,7 @@ namespace SmallMind.Benchmarks
             // FP32 MatMul: 2*M*N*K FLOPs (multiply-add counted as 2 operations)
             var operations = 2.0 * m * n * k;
             var gflops = operations / (mean * 1e6);
-            
+
             // Get kernel info
             var kernel = SmallMind.Core.Simd.MatMulOps.LastKernelUsed.ToString();
 
@@ -167,7 +164,7 @@ namespace SmallMind.Benchmarks
             _logger.Info($"  GFLOPS:    {gflops:F2}");
             _logger.Info($"  Kernel:    {kernel}");
             _logger.Info($"  Allocated: {alloc / 1024.0:F2} KB, Gen0: {gen0}");
-            
+
             // Highlight if we're meeting the 60+ GFLOPS goal
             if (gflops >= 60.0)
             {
@@ -246,7 +243,7 @@ namespace SmallMind.Benchmarks
 
             // Benchmark original
             _logger.Info($"  Measuring Original ({_config.MeasuredIterations} iterations)... ");
-            
+
             var collector = new MetricsCollector();
             var timesOriginal = new List<double>();
 
@@ -261,7 +258,7 @@ namespace SmallMind.Benchmarks
                 sw.Stop();
 
                 timesOriginal.Add(sw.Elapsed.TotalMilliseconds);
-                
+
                 if (i % 3 == 0)
                     collector.UpdatePeak();
             }
@@ -278,7 +275,7 @@ namespace SmallMind.Benchmarks
 
             // Benchmark optimized
             _logger.Info($"  Measuring Optimized ({_config.MeasuredIterations} iterations)... ");
-            
+
             collector = new MetricsCollector();
             var timesOptimized = new List<double>();
 
@@ -293,7 +290,7 @@ namespace SmallMind.Benchmarks
                 sw.Stop();
 
                 timesOptimized.Add(sw.Elapsed.TotalMilliseconds);
-                
+
                 if (i % 3 == 0)
                     collector.UpdatePeak();
             }
@@ -319,7 +316,7 @@ namespace SmallMind.Benchmarks
             var operations = 2.0 * m * n * k;
             var gflopsOriginal = operations / (meanOriginal * 1e6);
             var gflopsOptimized = operations / (meanOptimized * 1e6);
-            
+
             var speedup = meanOriginal / meanOptimized;
 
             _logger.Info($"  Original:  {meanOriginal:F3} ms (median: {medianOriginal:F3} ms), {gflopsOriginal:F2} GFLOPS");
@@ -395,47 +392,47 @@ namespace SmallMind.Benchmarks
             Directory.CreateDirectory(outputDir);
 
             var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-            
+
             var formats = _config.OutputFormats ?? new List<string> { "markdown" };
 
             foreach (var format in formats)
             {
                 if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
                 {
-                        var jsonPath = Path.Combine(outputDir, $"perf-results-{timestamp}.json");
-                        JsonReportWriter.WriteReport(jsonPath, _results);
-                        _logger.Info($"  JSON: {jsonPath}");
-                        
-                        // Also write latest
-                        var latestJsonPath = Path.Combine(outputDir, "perf-results-latest.json");
-                        JsonReportWriter.WriteReport(latestJsonPath, _results);
+                    var jsonPath = Path.Combine(outputDir, $"perf-results-{timestamp}.json");
+                    JsonReportWriter.WriteReport(jsonPath, _results);
+                    _logger.Info($"  JSON: {jsonPath}");
+
+                    // Also write latest
+                    var latestJsonPath = Path.Combine(outputDir, "perf-results-latest.json");
+                    JsonReportWriter.WriteReport(latestJsonPath, _results);
                 }
-                else if (format.Equals("markdown", StringComparison.OrdinalIgnoreCase) || 
+                else if (format.Equals("markdown", StringComparison.OrdinalIgnoreCase) ||
                          format.Equals("md", StringComparison.OrdinalIgnoreCase))
                 {
-                        var mdPath = Path.Combine(outputDir, $"perf-results-{timestamp}.md");
-                        
-                        // Try to load baseline (look in common locations)
-                        var baselinePath = Path.Combine(outputDir, "baseline.json");
-                        if (!File.Exists(baselinePath))
-                        {
-                            baselinePath = "/home/runner/work/SmallMind/SmallMind/perf/baselines/baseline.json";
-                        }
-                        
-                        var baseline = File.Exists(baselinePath) ? JsonReportWriter.ReadBaseline(baselinePath) : null;
-                        
-                        MarkdownReportWriter.WriteReport(mdPath, _results, baseline);
-                        _logger.Info($"  Markdown: {mdPath}");
-                        
-                        // Also write latest
-                        var latestMdPath = Path.Combine(outputDir, "perf-results-latest.md");
-                        MarkdownReportWriter.WriteReport(latestMdPath, _results, baseline);
-                        
-                        // Check for regressions if baseline exists
-                        if (baseline != null)
-                        {
-                            CheckRegressions(baseline);
-                        }
+                    var mdPath = Path.Combine(outputDir, $"perf-results-{timestamp}.md");
+
+                    // Try to load baseline (look in common locations)
+                    var baselinePath = Path.Combine(outputDir, "baseline.json");
+                    if (!File.Exists(baselinePath))
+                    {
+                        baselinePath = "/home/runner/work/SmallMind/SmallMind/perf/baselines/baseline.json";
+                    }
+
+                    var baseline = File.Exists(baselinePath) ? JsonReportWriter.ReadBaseline(baselinePath) : null;
+
+                    MarkdownReportWriter.WriteReport(mdPath, _results, baseline);
+                    _logger.Info($"  Markdown: {mdPath}");
+
+                    // Also write latest
+                    var latestMdPath = Path.Combine(outputDir, "perf-results-latest.md");
+                    MarkdownReportWriter.WriteReport(latestMdPath, _results, baseline);
+
+                    // Check for regressions if baseline exists
+                    if (baseline != null)
+                    {
+                        CheckRegressions(baseline);
+                    }
                 }
             }
 
@@ -459,7 +456,7 @@ namespace SmallMind.Benchmarks
                 // Check allocations per iteration
                 var currentAlloc = result.Metrics.AllocatedBytesForDecode / (double)_config.MeasuredIterations;
                 var baselineAlloc = baselineResult.Metrics.AllocatedBytesForDecode / (double)baselineResult.Config.MeasuredIterations;
-                
+
                 if (currentAlloc > baselineAlloc * 1.1) // 10% threshold
                 {
                     _logger.Error($"❌ {result.Name}: Allocation regression!");

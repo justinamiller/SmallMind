@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace SmallMind.Core
 {
@@ -52,11 +47,11 @@ namespace SmallMind.Core
                 ((List<object>)legacyCheckpoint["parameters"]).Add(paramData);
             }
 
-            var json = JsonSerializer.Serialize(legacyCheckpoint, new JsonSerializerOptions 
-            { 
-                WriteIndented = true 
+            var json = JsonSerializer.Serialize(legacyCheckpoint, new JsonSerializerOptions
+            {
+                WriteIndented = true
             });
-            
+
             await File.WriteAllTextAsync(path, json, cancellationToken);
         }
 
@@ -112,9 +107,9 @@ namespace SmallMind.Core
                 if (!param.ContainsKey("shape") || !param.ContainsKey("data"))
                     throw new InvalidDataException("Parameter missing 'shape' or 'data' field");
 
-                var shape = JsonSerializer.Deserialize<int[]>(param["shape"].GetRawText()) 
+                var shape = JsonSerializer.Deserialize<int[]>(param["shape"].GetRawText())
                     ?? Array.Empty<int>();
-                var floatData = JsonSerializer.Deserialize<float[]>(param["data"].GetRawText()) 
+                var floatData = JsonSerializer.Deserialize<float[]>(param["data"].GetRawText())
                     ?? Array.Empty<float>();
 
                 checkpoint.Parameters.Add(new TensorData

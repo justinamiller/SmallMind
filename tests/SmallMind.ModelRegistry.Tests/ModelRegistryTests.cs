@@ -1,7 +1,3 @@
-using System;
-using System.IO;
-using System.Text.Json;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace SmallMind.ModelRegistry.Tests
@@ -47,7 +43,7 @@ namespace SmallMind.ModelRegistry.Tests
                 Assert.NotNull(manifest);
                 Assert.Equal("test-model", manifest.ModelId);
                 Assert.Single(manifest.Files);
-                
+
                 string? modelFilePath = registry.GetModelFilePath(modelId);
                 Assert.NotNull(modelFilePath);
                 Assert.True(File.Exists(modelFilePath));
@@ -167,10 +163,10 @@ namespace SmallMind.ModelRegistry.Tests
         {
             // Arrange
             var registry = new ModelRegistry(_tempCacheDir);
-            
+
             string file1 = Path.GetTempFileName();
             string file2 = Path.GetTempFileName();
-            
+
             try
             {
                 File.WriteAllText(file1, "model 1");
@@ -216,11 +212,11 @@ namespace SmallMind.ModelRegistry.Tests
             {
                 File.WriteAllText(sourceFile, "test");
                 var registry = new ModelRegistry(_tempCacheDir);
-                
+
                 // Act
                 string modelId = await registry.AddModelAsync(
-                    sourceFile, 
-                    modelId: "roundtrip-test", 
+                    sourceFile,
+                    modelId: "roundtrip-test",
                     displayName: "Roundtrip Test Model");
 
                 var manifest = registry.GetManifest(modelId);

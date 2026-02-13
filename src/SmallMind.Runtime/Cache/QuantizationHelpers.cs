@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 
 namespace SmallMind.Runtime.Cache
@@ -20,13 +19,13 @@ namespace SmallMind.Runtime.Cache
         {
             if (input.Length != output.Length)
                 throw new ArgumentException("Input and output must have same length");
-            
+
             int length = input.Length;
-            
+
             // Find min/max using unsafe pointers for better performance
             float min = float.MaxValue;
             float max = float.MinValue;
-            
+
             unsafe
             {
                 fixed (float* pInput = input)
@@ -39,10 +38,10 @@ namespace SmallMind.Runtime.Cache
                     }
                 }
             }
-            
+
             // Compute scale and offset
             float range = max - min;
-            
+
             // Handle degenerate case where all values are identical
             if (range < 1e-7f)
             {
@@ -51,10 +50,10 @@ namespace SmallMind.Runtime.Cache
                 output.Fill((byte)127); // Mid-range value - Fill works directly on Span
                 return;
             }
-            
+
             scale = range / 255.0f;
             offset = min;
-            
+
             // Quantize with unsafe pointers for better performance
             float invScale = 1.0f / scale;
             unsafe
@@ -70,7 +69,7 @@ namespace SmallMind.Runtime.Cache
                 }
             }
         }
-        
+
         /// <summary>
         /// Dequantizes INT8 back to FP32.
         /// </summary>
@@ -86,13 +85,13 @@ namespace SmallMind.Runtime.Cache
                 output[i] = input[i] * scale + offset;
             }
         }
-        
+
         /// <summary>
         /// Converts FP32 to FP16 (Half).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Half FloatToHalf(float value) => (Half)value;
-        
+
         /// <summary>
         /// Converts FP16 (Half) to FP32.
         /// </summary>

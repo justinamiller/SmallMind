@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Text;
 
@@ -325,26 +323,26 @@ namespace SmallMind.Quantization.IO.Gguf
             switch (elementType)
             {
                 case GgufValueType.UInt32:
-                {
-                    var arr = new uint[count];
-                    for (ulong i = 0; i < count; i++)
                     {
-                        arr[i] = _accessor.ReadUInt32(pos);
-                        pos += 4;
+                        var arr = new uint[count];
+                        for (ulong i = 0; i < count; i++)
+                        {
+                            arr[i] = _accessor.ReadUInt32(pos);
+                            pos += 4;
+                        }
+                        return (arr, pos);
                     }
-                    return (arr, pos);
-                }
                 case GgufValueType.String:
-                {
-                    var arr = new string[count];
-                    for (ulong i = 0; i < count; i++)
                     {
-                        var (str, newPos) = ReadGgufStringMmap(pos);
-                        arr[i] = str;
-                        pos = newPos;
+                        var arr = new string[count];
+                        for (ulong i = 0; i < count; i++)
+                        {
+                            var (str, newPos) = ReadGgufStringMmap(pos);
+                            arr[i] = str;
+                            pos = newPos;
+                        }
+                        return (arr, pos);
                     }
-                    return (arr, pos);
-                }
                 // Add other array types as needed
                 default:
                     throw new NotSupportedException($"Unsupported array element type: {elementType}");

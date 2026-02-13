@@ -1,9 +1,8 @@
-using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 
 namespace SmallMind.Core.Simd
 {
@@ -272,7 +271,7 @@ namespace SmallMind.Core.Simd
                         Vector256<float> va = Avx.LoadVector256(pA + i);
                         Vector256<float> vb = Avx.LoadVector256(pB + i);
                         Vector256<float> vc = Avx.LoadVector256(pC + i);
-                        
+
                         // FMA: va * vb + vc
                         Vector256<float> vResult = Fma.MultiplyAdd(va, vb, vc);
                         Avx.Store(pResult + i, vResult);

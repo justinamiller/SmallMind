@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Core.Validation;
 
 namespace SmallMind.Core.Core
@@ -43,7 +42,7 @@ namespace SmallMind.Core.Core
         private readonly int _checkpointInterval;
         private readonly int _slidingWindowSize;
         private readonly int _slidingWindowStride;
-        
+
         // Strict memory budgeting (optional)
         private readonly StrictMemoryBudget? _strictBudget;
 
@@ -278,8 +277,8 @@ namespace SmallMind.Core.Core
             long activationsPerLayer = (long)batchSize * seqLength * embeddingDim;
             long attentionScores = (long)batchSize * numHeads * seqLength * seqLength;
 
-            int numStoredLayers = _enableGradientCheckpointing 
-                ? (numLayers + _checkpointInterval - 1) / _checkpointInterval 
+            int numStoredLayers = _enableGradientCheckpointing
+                ? (numLayers + _checkpointInterval - 1) / _checkpointInterval
                 : numLayers;
 
             long activationsMemory = numStoredLayers * activationsPerLayer * 4; // FP32 for activations
@@ -366,7 +365,7 @@ namespace SmallMind.Core.Core
 
             // Otherwise, use advisory limits (80% of available memory)
             long available = (long)(_systemMemoryBytes * 0.8);
-            
+
             if (breakdown.TotalBytes <= available)
             {
                 return BudgetCheckResult.Success(breakdown.TotalBytes, available, breakdown);
@@ -398,10 +397,10 @@ namespace SmallMind.Core.Core
             int seqLength)
         {
             long required = EstimateMemoryUsage(vocabSize, embeddingDim, numLayers, numHeads, batchSize, seqLength);
-            
+
             // Use 80% of available memory as safe threshold
             long available = (long)(_systemMemoryBytes * 0.8);
-            
+
             return required <= available;
         }
 
@@ -419,12 +418,12 @@ namespace SmallMind.Core.Core
                    $"  Memory Mapping: {(EnableMemoryMapping ? "Enabled" : "Disabled")}\n" +
                    $"  Sliding Window: {SlidingWindowSize} tokens (Stride: {SlidingWindowStride})\n" +
                    $"  Strict Mode: {(IsStrictMode ? "Enabled" : "Disabled")}";
-            
+
             if (_strictBudget != null)
             {
                 summary += $"\n\n{_strictBudget.GetSummary()}";
             }
-            
+
             return summary;
         }
     }

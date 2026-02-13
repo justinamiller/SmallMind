@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Abstractions
@@ -58,10 +56,10 @@ namespace SmallMind.Abstractions
         /// <summary>
         /// Creates a JSON schema format with the specified schema.
         /// </summary>
-        public static ResponseFormat JsonSchema(string schema) => new ResponseFormat 
-        { 
-            Type = ResponseFormatType.JsonSchema, 
-            Schema = schema 
+        public static ResponseFormat JsonSchema(string schema) => new ResponseFormat
+        {
+            Type = ResponseFormatType.JsonSchema,
+            Schema = schema
         };
     }
 

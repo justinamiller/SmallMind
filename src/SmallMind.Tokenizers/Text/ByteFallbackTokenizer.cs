@@ -1,6 +1,4 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Text;
 
 namespace SmallMind.Tokenizers
@@ -27,17 +25,17 @@ namespace SmallMind.Tokenizers
         public ByteFallbackTokenizer(ITokenizer innerTokenizer)
         {
             _innerTokenizer = innerTokenizer ?? throw new ArgumentNullException(nameof(innerTokenizer));
-            
+
             // Byte tokens start after inner vocab
             _byteTokenStart = _innerTokenizer.VocabSize;
-            
+
             // Extended vocab includes inner tokens + 256 byte tokens
             VocabSize = _byteTokenStart + 256;
 
             // Initialize byte token mappings
             _tokenToByte = new Dictionary<int, byte>(256);
             _byteToToken = new Dictionary<byte, int>(256);
-            
+
             for (int i = 0; i < 256; i++)
             {
                 int tokenId = _byteTokenStart + i;
@@ -69,7 +67,7 @@ namespace SmallMind.Tokenizers
 
             byte[] utf8Bytes = Encoding.UTF8.GetBytes(text);
             int[] tokens = ArrayPool<int>.Shared.Rent(utf8Bytes.Length * 2);
-            
+
             try
             {
                 int count = Encode(utf8Bytes, tokens);
@@ -96,17 +94,17 @@ namespace SmallMind.Tokenizers
 
             // Try encoding with inner tokenizer first
             int[] innerTokens = ArrayPool<int>.Shared.Rent(utf8.Length * 2);
-            
+
             try
             {
                 int innerCount = _innerTokenizer.Encode(utf8, innerTokens);
-                
+
                 // Check if we need byte fallback
                 // If the inner tokenizer doesn't support byte fallback and has UNK tokens, OR
                 // if it skipped characters (e.g., CharTokenizer), fall back to bytes
                 int unkId = _innerTokenizer.Info.UnkTokenId;
                 bool needsFallback = false;
-                
+
                 // Check for UNK tokens
                 if (unkId >= 0)
                 {
@@ -119,7 +117,7 @@ namespace SmallMind.Tokenizers
                         }
                     }
                 }
-                
+
                 // Also check if inner tokenizer might have skipped bytes
                 // Decode and compare byte counts to detect loss
                 if (!needsFallback && innerCount > 0)
@@ -208,7 +206,7 @@ namespace SmallMind.Tokenizers
                             byteCount += DecodeInnerTokens(innerTokens, utf8Out.Slice(byteCount));
                             innerTokens.Clear();
                         }
-                        
+
                         utf8Out[byteCount++] = _tokenToByte[tokenId];
                     }
                 }
@@ -238,7 +236,7 @@ namespace SmallMind.Tokenizers
                 {
                     tokenArray[i] = tokens[i];
                 }
-                
+
                 int count = _innerTokenizer.Decode(tokenArray.AsSpan(0, tokens.Count), buffer);
                 int toCopy = Math.Min(count, utf8Out.Length);
                 buffer.AsSpan(0, toCopy).CopyTo(utf8Out);
@@ -264,7 +262,7 @@ namespace SmallMind.Tokenizers
                 {
                     tokenArray[i] = tokens[i];
                 }
-                
+
                 int byteCount = Decode(tokenArray.AsSpan(0, tokens.Count), buffer);
                 return Encoding.UTF8.GetString(buffer, 0, byteCount);
             }
@@ -310,7 +308,7 @@ namespace SmallMind.Tokenizers
                 // Inner token - use inner tokenizer's decode
                 Span<int> tokenSpan = stackalloc int[1];
                 tokenSpan[0] = tokenId;
-                
+
                 byte[] buffer = ArrayPool<byte>.Shared.Rent(10);
                 try
                 {

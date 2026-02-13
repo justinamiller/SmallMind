@@ -1,12 +1,8 @@
-using System;
-using System.IO;
 using System.Diagnostics;
-using SmallMind.Core;
-using SmallMind.Tokenizers;
-using SmallMind.Transformers;
-using SmallMind.Runtime;
-using SmallMind.Core.Simd;
 using SmallMind.ConsoleApp.Commands;
+using SmallMind.Core.Simd;
+using SmallMind.Runtime;
+using SmallMind.Tokenizers;
 
 namespace SmallMind.ConsoleApp
 {
@@ -115,7 +111,7 @@ namespace SmallMind.ConsoleApp
         private const int SEED = 42;
         private const string CHECKPOINT_DIR = "checkpoints";
         private const string DATA_FILE = "data.txt";
-        
+
         // Maximum safe block size for this architecture (increased for larger context windows)
         // Can be overridden with --max-block-size for even larger contexts
         // Supports up to 128GB RAM with 32768 tokens
@@ -127,7 +123,7 @@ namespace SmallMind.ConsoleApp
             if (args.Length > 0)
             {
                 var router = new CommandRouter();
-                
+
                 // Try two-word command first (e.g., "model add")
                 if (args.Length >= 2)
                 {
@@ -140,7 +136,7 @@ namespace SmallMind.ConsoleApp
                         return;
                     }
                 }
-                
+
                 // Try single-word command
                 if (router.HasCommand(args[0]))
                 {
@@ -175,11 +171,11 @@ namespace SmallMind.ConsoleApp
                 int generateSteps = int.Parse(GetArgValue(args, "--steps", "200"));
                 double temperature = double.Parse(GetArgValue(args, "--temperature", "1.0"));
                 int topK = int.Parse(GetArgValue(args, "--top-k", "0"));
-                
+
                 // Tokenizer selection
                 string tokenizerType = GetArgValue(args, "--tokenizer", "char").ToLower();
                 int vocabSize = int.Parse(GetArgValue(args, "--vocab-size", "1024"));
-                
+
                 // List available model presets and exit if requested
                 if (listPresets)
                 {
@@ -197,7 +193,7 @@ namespace SmallMind.ConsoleApp
                     }
                     return;
                 }
-                
+
                 // Select model preset (default to "default")
                 string presetName = GetArgValue(args, "--model-preset", "default").ToLower();
                 if (!MODEL_PRESETS.ContainsKey(presetName))
@@ -207,16 +203,16 @@ namespace SmallMind.ConsoleApp
                     Console.WriteLine("Use --list-presets to see detailed information about each preset");
                     Environment.Exit(1);
                 }
-                
+
                 ModelConfig selectedPreset = MODEL_PRESETS[presetName];
                 Console.WriteLine($"\n=== Using Model Preset: {selectedPreset.Name} ===");
                 Console.WriteLine($"Description: {selectedPreset.Description}");
                 Console.WriteLine($"Configuration: {selectedPreset.NEmbedding} embedding dim, {selectedPreset.NLayers} layers, {selectedPreset.NHeads} heads\n");
-                
+
                 // Enhanced training parameters
                 int gradAccumSteps = int.Parse(GetArgValue(args, "--grad-accum", "1"));
                 int warmupSteps = int.Parse(GetArgValue(args, "--warmup", "100"));
-                
+
                 // Get max block size override if provided
                 string maxBlockSizeArg = GetArgValue(args, "--max-block-size", "");
                 int maxBlockSize = MAX_BLOCK_SIZE;
@@ -225,11 +221,11 @@ namespace SmallMind.ConsoleApp
                     maxBlockSize = int.Parse(maxBlockSizeArg);
                     Console.WriteLine($"Maximum block size override: {maxBlockSize}");
                 }
-                
+
                 // Determine block size (priority: command-line > auto-config > preset default)
                 int blockSize = selectedPreset.BlockSize;
                 string blockSizeArg = GetArgValue(args, "--block-size", "");
-                
+
                 if (!string.IsNullOrEmpty(blockSizeArg))
                 {
                     // User specified block size
@@ -251,11 +247,11 @@ namespace SmallMind.ConsoleApp
                 {
                     Console.WriteLine($"Using preset block size: {blockSize}");
                 }
-                
+
                 // Determine batch size (priority: command-line > auto-config > preset default)
                 int batchSize = selectedPreset.BatchSize;
                 string batchSizeArg = GetArgValue(args, "--batch-size", "");
-                
+
                 if (!string.IsNullOrEmpty(batchSizeArg))
                 {
                     batchSize = int.Parse(batchSizeArg);
@@ -289,7 +285,7 @@ namespace SmallMind.ConsoleApp
                         tokenizer = TokenizerFactory.CreateByteLevelBpe(trainingText, vocabSize);
                         Console.WriteLine($"BPE tokenizer ready. Vocabulary size: {tokenizer.VocabSize}");
                         break;
-                    
+
                     case "char":
                     case "character":
                     default:
@@ -430,7 +426,7 @@ namespace SmallMind.ConsoleApp
         /// <summary>
         /// Run Q&A mode for answering single questions
         /// </summary>
-        private static void RunQAMode(SmallMind.Transformers.TransformerModel model, ITokenizer tokenizer, int blockSize, string trainingText, 
+        private static void RunQAMode(SmallMind.Transformers.TransformerModel model, ITokenizer tokenizer, int blockSize, string trainingText,
                                       string question, int maxTokens, double temperature, int topK)
         {
             Console.WriteLine("\n=== Question-Answering Mode ===");
@@ -482,9 +478,9 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
         private static int DetermineOptimalBlockSize(int maxBlockSize = MAX_BLOCK_SIZE)
         {
             var (totalMemoryGB, availableMemoryGB, cpuCores) = GetSystemInfo();
-            
+
             Console.WriteLine($"System resources: {availableMemoryGB:F1}GB available RAM, {cpuCores} CPU cores");
-            
+
             // Algorithm to determine block size based on resources:
             // - Base calculation on available memory (primary constraint)
             // - Each token in the model uses approximately memory proportional to:
@@ -492,14 +488,14 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
             //   - Attention masks: blockSize * blockSize * 4 bytes (most significant)
             //   - Intermediate tensors during forward/backward pass
             // - We want to stay well under available memory to avoid swapping
-            
+
             int recommendedBlockSize;
-            
+
             // Empirically determined thresholds based on testing with the current architecture
             // (batch_size=16, nEmbd=128, nLayer=4, nHead=4)
             // Memory usage scales primarily with blockSize^2 due to attention mechanism
             // Updated values to support larger context windows up to 128GB RAM
-            
+
             if (availableMemoryGB >= 128.0)
             {
                 // Extreme memory (128GB+) - use maximum (32768)
@@ -545,13 +541,13 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                 // Extremely limited memory (<1GB) - use 256
                 recommendedBlockSize = 256;
             }
-            
+
             // Ensure we don't exceed maximum
             recommendedBlockSize = Math.Min(recommendedBlockSize, maxBlockSize);
-            
+
             return recommendedBlockSize;
         }
-        
+
         /// <summary>
         /// Determine optimal batch size based on block size and available memory.
         /// Larger batches improve throughput but require more memory.
@@ -559,11 +555,11 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
         private static int DetermineOptimalBatchSize(int blockSize)
         {
             var (totalMemoryGB, availableMemoryGB, cpuCores) = GetSystemInfo();
-            
+
             // Scale batch size inversely with block size to maintain memory usage
             // Larger block sizes need smaller batches to fit in memory
             int recommendedBatchSize;
-            
+
             if (blockSize >= 16384)
             {
                 // Extreme context (16K+ tokens) - use very small batches
@@ -594,10 +590,10 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                 // Smaller context (<1K tokens) - can use larger batches for better throughput
                 recommendedBatchSize = availableMemoryGB >= 4.0 ? 32 : 24;
             }
-            
+
             return recommendedBatchSize;
         }
-        
+
         /// <summary>
         /// Get system information (RAM and CPU cores) using pure C#.
         /// </summary>
@@ -605,13 +601,13 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
         {
             // Get CPU cores
             int cpuCores = Environment.ProcessorCount;
-            
+
             // Get memory information
             // On Linux, we can read from /proc/meminfo
             // On Windows, we use GC.GetGCMemoryInfo (available in .NET Core 3.0+)
             double totalMemoryGB = 0;
             double availableMemoryGB = 0;
-            
+
             try
             {
                 if (OperatingSystem.IsLinux() && File.Exists("/proc/meminfo"))
@@ -620,7 +616,7 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                     var lines = File.ReadAllLines("/proc/meminfo");
                     long totalKB = 0;
                     long availableKB = 0;
-                    
+
                     foreach (var line in lines)
                     {
                         if (line.StartsWith("MemTotal:"))
@@ -664,7 +660,7 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                             }
                         }
                     }
-                    
+
                     totalMemoryGB = totalKB / 1024.0 / 1024.0; // Convert KB to GB
                     availableMemoryGB = availableKB / 1024.0 / 1024.0;
                 }
@@ -673,12 +669,12 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                     // Fallback: Use GC memory info (available on all platforms)
                     var gcMemoryInfo = GC.GetGCMemoryInfo();
                     totalMemoryGB = gcMemoryInfo.TotalAvailableMemoryBytes / 1024.0 / 1024.0 / 1024.0;
-                    
+
                     // Estimate available memory as total minus current process memory
                     var currentProcess = Process.GetCurrentProcess();
                     long processMemoryBytes = currentProcess.WorkingSet64;
                     availableMemoryGB = totalMemoryGB - (processMemoryBytes / 1024.0 / 1024.0 / 1024.0);
-                    
+
                     // On non-Linux platforms, GC info may not be accurate for available memory.
                     // Use a conservative estimate based on total memory.
                     if (availableMemoryGB <= 0 || availableMemoryGB > totalMemoryGB)
@@ -694,7 +690,7 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
                 totalMemoryGB = 4.0;
                 availableMemoryGB = 2.0;
             }
-            
+
             return (totalMemoryGB, availableMemoryGB, cpuCores);
         }
 

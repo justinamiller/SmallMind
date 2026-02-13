@@ -1,6 +1,3 @@
-using System;
-using SmallMind.Core.Utilities;
-
 namespace SmallMind.Runtime
 {
     /// <summary>
@@ -11,7 +8,7 @@ namespace SmallMind.Runtime
     {
         private const int FloatSize = sizeof(float);
         private const int IntSize = sizeof(int);
-        
+
         /// <summary>
         /// Estimate memory usage for a single inference session.
         /// Includes model parameters, KV cache, and temporary buffers.
@@ -37,42 +34,42 @@ namespace SmallMind.Runtime
                 throw new ArgumentOutOfRangeException(nameof(nLayer));
             if (nHead <= 0)
                 throw new ArgumentOutOfRangeException(nameof(nHead));
-            
+
             options?.Validate();
-            
+
             long totalBytes = 0;
-            
+
             // Model parameters (shared across sessions, counted once)
             long modelBytes = modelParams * FloatSize;
-            
+
             // KV cache per session
             // Each layer stores key and value for each position
             int maxContext = options?.MaxContextTokens ?? 2048;
             int headDim = nEmbd / nHead;
-            
+
             // Per layer: 2 caches (K and V) * max_context * num_heads * head_dim
             long kvCachePerLayer = 2L * maxContext * nHead * headDim * FloatSize;
             long totalKvCache = kvCachePerLayer * nLayer;
-            
+
             // Working memory (logits, activations, temp buffers)
             // Rough estimate: ~3x embedding dimension for activations per token
             int vocabSize = 256; // Rough estimate, can be passed as parameter
             long workingMemory = (long)maxContext * nEmbd * 3 * FloatSize;
-            
+
             // Logits buffer (vocab_size * float)
             long logitsBuffer = (long)vocabSize * FloatSize;
-            
+
             // Probability buffer for sampling
             long probsBuffer = (long)vocabSize * FloatSize;
-            
+
             // Context token buffer
             long contextBuffer = (long)maxContext * IntSize;
-            
+
             totalBytes = modelBytes + totalKvCache + workingMemory + logitsBuffer + probsBuffer + contextBuffer;
-            
+
             return totalBytes;
         }
-        
+
         /// <summary>
         /// Estimate memory for the engine with concurrent sessions.
         /// Model weights are shared, but each session has its own state.
@@ -94,17 +91,17 @@ namespace SmallMind.Runtime
         {
             if (maxConcurrentSessions <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxConcurrentSessions));
-            
+
             // Model weights (shared, counted once)
             long modelBytes = modelParams * FloatSize;
-            
+
             // Per-session state (not including model)
             long sessionBytes = EstimateSessionBytes(modelParams, options, nEmbd, nLayer, nHead) - modelBytes;
-            
+
             // Total = model + (per-session state * num sessions)
             return modelBytes + (sessionBytes * maxConcurrentSessions);
         }
-        
+
         /// <summary>
         /// Estimate KV cache size only.
         /// Useful for understanding cache memory requirements.
@@ -128,13 +125,13 @@ namespace SmallMind.Runtime
                 throw new ArgumentOutOfRangeException(nameof(nLayer));
             if (nHead <= 0)
                 throw new ArgumentOutOfRangeException(nameof(nHead));
-            
+
             int headDim = nEmbd / nHead;
-            
+
             // 2 caches (K and V) per layer
             long cachePerLayer = 2L * maxContextTokens * nHead * headDim * FloatSize;
             return cachePerLayer * nLayer;
         }
-        
+
     }
 }

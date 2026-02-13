@@ -1,8 +1,4 @@
-using System;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
-using System.Threading.Tasks;
 using SmallMind.Quantization.IO.Smq;
 
 namespace SmallMind.ConsoleApp.Commands
@@ -79,7 +75,7 @@ namespace SmallMind.ConsoleApp.Commands
                     {
                         System.Console.WriteLine();
                         System.Console.WriteLine($"Manifest file: Found");
-                        
+
                         if (verbose)
                         {
                             try
@@ -148,12 +144,12 @@ namespace SmallMind.ConsoleApp.Commands
                 System.Console.ForegroundColor = ConsoleColor.Red;
                 System.Console.Error.WriteLine($"Error during verification: {ex.Message}");
                 System.Console.ResetColor();
-                
+
                 if (verbose)
                 {
                     System.Console.Error.WriteLine(ex.StackTrace);
                 }
-                
+
                 return 1;
             }
         }

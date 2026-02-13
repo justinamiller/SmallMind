@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using SmallMind.Abstractions;
-using SmallMind.Engine;
 
 namespace SmallMind.Internal
 {
@@ -106,7 +101,7 @@ namespace SmallMind.Internal
                 SupportsBatching = internalCaps.SupportsBatching,
                 MaxContextTokens = _publicOptions.MaxContextTokens,
                 ModelFormat = System.IO.Path.GetExtension(_publicOptions.ModelPath).TrimStart('.'),
-                Quantization = modelInfo.QuantizationSchemes.Length > 0 
+                Quantization = modelInfo.QuantizationSchemes.Length > 0
                     ? string.Join(", ", modelInfo.QuantizationSchemes)
                     : "FP32",
                 TokenizerId = null // Not exposed by current model info
@@ -268,7 +263,7 @@ namespace SmallMind.Internal
             // Load model synchronously
             // Since model loading is CPU-bound (no actual I/O awaits in the async path),
             // we use Task.Run to avoid SynchronizationContext deadlocks in ASP.NET/UI contexts
-            return Task.Run(async () => 
+            return Task.Run(async () =>
                 await _internalEngine.LoadModelAsync(request, CancellationToken.None)
                     .ConfigureAwait(false)
             ).GetAwaiter().GetResult();

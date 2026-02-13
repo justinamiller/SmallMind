@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using SmallMind.Quantization.IO.Gguf;
 
 namespace SmallMind.Runtime.Gguf.TensorDecoders
@@ -249,7 +247,7 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
 
                     // Read scales (12 bytes encoding 6-bit scales and mins for 8 sub-blocks)
                     byte[] scalesBytes = br.ReadBytes(12);
-                    
+
                     // Read quantized values (128 bytes, 2 values per byte)
                     byte[] qs = br.ReadBytes(128);
 
@@ -263,7 +261,7 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
                     scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
                     scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
                     scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
-                    
+
                     // Unpack mins (last 6 bytes)
                     mins[0] = (byte)(scalesBytes[6] & 0x3F);
                     mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));
@@ -346,10 +344,10 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
 
                     // Read scales (12 bytes encoding 6-bit scales and mins for 8 sub-blocks)
                     byte[] scalesBytes = br.ReadBytes(12);
-                    
+
                     // Read high bits (32 bytes, 1 bit per value)
                     byte[] qh = br.ReadBytes(32);
-                    
+
                     // Read low 4-bit quantized values (128 bytes, 2 values per byte)
                     byte[] qs = br.ReadBytes(128);
 
@@ -363,7 +361,7 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
                     scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
                     scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
                     scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
-                    
+
                     // Unpack mins (last 6 bytes)
                     mins[0] = (byte)(scalesBytes[6] & 0x3F);
                     mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));
@@ -474,21 +472,21 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
                         for (int i = 0; i < SUB_BLOCK_SIZE; i++)
                         {
                             int valueIdx = subBlock * SUB_BLOCK_SIZE + i;
-                            
+
                             // Reconstruct 6-bit value from low 4 bits (ql) and high 2 bits (qh)
                             // ql packs 2 values per byte: even values in low nibble, odd in high nibble
                             int qlIdx = valueIdx / 2;
                             byte qlByte = ql[qlIdx];
                             byte low4 = (valueIdx % 2 == 0) ? (byte)(qlByte & 0xF) : (byte)((qlByte >> 4) & 0xF);
-                            
+
                             // Extract high 2 bits from qh (4 values per byte)
                             int qhIdx = valueIdx / 4;
                             int qhShift = (valueIdx % 4) * 2;
                             byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
-                            
+
                             // Combine to form 6-bit value (range 0-63)
                             int q = low4 | (high2 << 4);
-                            
+
                             // Dequantize: center around 0 with -32 bias
                             floatData[subBlockDstOffset + i] = sc * (q - 32);
                         }

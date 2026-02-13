@@ -1,7 +1,5 @@
-using System;
-using Xunit;
-using SmallMind.Core.Validation;
 using SmallMind.Core.Exceptions;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Tests
 {

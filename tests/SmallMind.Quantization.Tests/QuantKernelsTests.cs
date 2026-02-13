@@ -1,6 +1,5 @@
-using SmallMind.Quantization.Tensors;
 using SmallMind.Quantization.Kernels;
-using Xunit;
+using SmallMind.Quantization.Tensors;
 
 namespace SmallMind.Quantization.Tests
 {
@@ -202,8 +201,8 @@ namespace SmallMind.Quantization.Tests
         {
             // Test with various matrix sizes
             var random = new Random(42);
-            
-            var testCases = new[] 
+
+            var testCases = new[]
             {
                 (m: 1, k: 128, n: 128),
                 (m: 2, k: 256, n: 64),

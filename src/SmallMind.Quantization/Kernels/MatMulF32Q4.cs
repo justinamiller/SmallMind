@@ -1,4 +1,3 @@
-using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using SmallMind.Quantization.Tensors;
@@ -18,7 +17,7 @@ namespace SmallMind.Quantization.Kernels
             0, 1, 2, 3, 4, 5, 6, 7,      // 0-7: positive values
             -8, -7, -6, -5, -4, -3, -2, -1  // 8-15: negative values (two's complement)
         };
-        
+
         /// <summary>
         /// Matrix multiply: C[M×N] = A[M×K] * B[K×N] where B is Q4 quantized.
         /// </summary>

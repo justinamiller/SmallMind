@@ -1,9 +1,6 @@
-using System;
-using Xunit;
-using SmallMind.Core;
-using SmallMind.Core.Simd;
-using SmallMind.Core.Exceptions;
 using SmallMind.Core.Core;
+using SmallMind.Core.Exceptions;
+using SmallMind.Core.Simd;
 
 namespace SmallMind.Tests
 {
@@ -425,7 +422,7 @@ namespace SmallMind.Tests
             var result = MatMulOps.DotProduct(a, b);
 
             // Assert
-            Assert.True(Math.Abs(result - expected) < Tolerance, 
+            Assert.True(Math.Abs(result - expected) < Tolerance,
                 $"DotProduct with size {size}: expected {expected}, got {result}");
         }
 
@@ -545,7 +542,7 @@ namespace SmallMind.Tests
             // Assert - Reshape clones, ReshapeView shares
             Assert.NotSame(tensor.Data, reshaped.Data); // Reshape clones
             Assert.Same(tensor.Data, reshapedView.Data); // ReshapeView shares
-            
+
             // Both should have same values
             for (int i = 0; i < 6; i++)
             {

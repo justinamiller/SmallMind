@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
-using Xunit;
 using SmallMind.Quantization.IO.Gguf;
 
 namespace SmallMind.Quantization.Tests
@@ -281,7 +277,7 @@ namespace SmallMind.Quantization.Tests
 
             // Assert
             Assert.Equal(2, modelInfo.Tensors.Count);
-            
+
             Assert.Equal("weight.0", modelInfo.Tensors[0].Name);
             Assert.Equal(GgufTensorType.Q8_0, modelInfo.Tensors[0].Type);
             Assert.Equal(2, modelInfo.Tensors[0].Dimensions.Length);

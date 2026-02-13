@@ -1,8 +1,3 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using Xunit;
-
 namespace SmallMind.Tests
 {
     /// <summary>
@@ -19,7 +14,7 @@ namespace SmallMind.Tests
         {
             _testsEnabled = Environment.GetEnvironmentVariable("SMALLMIND_TEST_DOWNLOADS") == "1";
             _testDir = Path.Combine(Path.GetTempPath(), $"smallmind_test_{Guid.NewGuid():N}");
-            
+
             if (_testsEnabled && !Directory.Exists(_testDir))
             {
                 Directory.CreateDirectory(_testDir);
@@ -53,7 +48,7 @@ namespace SmallMind.Tests
             // Arrange
             var downloader = new SmallMind.ConsoleApp.Commands.ModelDownloadCommand();
             string outputPath = Path.Combine(_testDir, "tinyllama.gguf");
-            
+
             string[] args = new[]
             {
                 "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
@@ -67,7 +62,7 @@ namespace SmallMind.Tests
             // Assert
             Assert.Equal(0, exitCode);
             Assert.True(File.Exists(outputPath));
-            
+
             var fileInfo = new FileInfo(outputPath);
             Assert.True(fileInfo.Length > 1000000); // At least 1MB
         }
@@ -82,7 +77,7 @@ namespace SmallMind.Tests
 
             // This test assumes the download test has run or model exists
             string ggufPath = Path.Combine(_testDir, "tinyllama.gguf");
-            
+
             // Skip if GGUF not available
             if (!File.Exists(ggufPath))
             {
@@ -92,7 +87,7 @@ namespace SmallMind.Tests
             // Arrange
             var importer = new SmallMind.ConsoleApp.Commands.ImportGgufCommand();
             string smqPath = Path.Combine(_testDir, "tinyllama.smq");
-            
+
             string[] args = new[] { ggufPath, smqPath };
 
             // Act
@@ -102,7 +97,7 @@ namespace SmallMind.Tests
             Assert.Equal(0, exitCode);
             Assert.True(File.Exists(smqPath));
             Assert.True(File.Exists($"{smqPath}.manifest.json"));
-            
+
             var fileInfo = new FileInfo(smqPath);
             Assert.True(fileInfo.Length > 1000000); // At least 1MB
         }
@@ -209,7 +204,7 @@ namespace SmallMind.Tests
 
             // This test requires an SMQ model to exist
             string smqPath = Path.Combine(_testDir, "tinyllama.smq");
-            
+
             if (!File.Exists(smqPath))
             {
                 // Skip if model not available

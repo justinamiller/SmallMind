@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using SmallMind.Core.Core;
 using SmallMind.Runtime;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
@@ -87,7 +83,7 @@ namespace SmallMind.Rag.Generation
             // NOTE: This is a fallback implementation until Sampling supports true streaming.
             // For production use, consider using InferenceEngine/InferenceSession directly,
             // which provide full streaming support via IAsyncEnumerable<GeneratedToken>.
-            
+
             var result = _sampling.Generate(
                 prompt: prompt,
                 maxNewTokens: options.MaxTokens,
@@ -100,7 +96,7 @@ namespace SmallMind.Rag.Generation
 
             // Signal completion (in a real streaming impl, would yield actual token IDs)
             await System.Threading.Tasks.Task.CompletedTask;
-            
+
             // Return -1 to signal end of generation (not a valid token ID)
             // Callers should check for -1 and stop consuming the stream
             yield return -1;

@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Core.Core
 {
     /// <summary>
@@ -90,7 +88,7 @@ namespace SmallMind.Core.Core
             var budgetMB = AvailableBudgetBytes / 1024.0 / 1024.0;
 
             var summary = $"Budget Check [{status}]: Estimated {estimatedMB:F2}MB / Budget {budgetMB:F2}MB";
-            
+
             if (!CanProceed && !string.IsNullOrEmpty(FailureReason))
             {
                 summary += $"\nReason: {FailureReason}";
@@ -222,7 +220,7 @@ namespace SmallMind.Core.Core
         /// <param name="right">The second MemoryBreakdown to compare.</param>
         /// <returns>true if left and right are equal; otherwise, false.</returns>
         public static bool operator ==(MemoryBreakdown left, MemoryBreakdown right) => left.Equals(right);
-        
+
         /// <summary>
         /// Determines whether two specified MemoryBreakdown instances are not equal.
         /// </summary>

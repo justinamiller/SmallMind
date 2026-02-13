@@ -1,8 +1,3 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using SmallMind;
-
 namespace SmallMind.ConsoleApp.Commands
 {
     /// <summary>
@@ -126,7 +121,7 @@ namespace SmallMind.ConsoleApp.Commands
                 };
 
                 using var session = engine.CreateTextGenerationSession(sessionOptions);
-                
+
                 var request = new TextGenerationRequest
                 {
                     Prompt = formattedPrompt.AsMemory()

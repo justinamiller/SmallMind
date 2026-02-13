@@ -109,7 +109,7 @@ internal sealed class VectorStoreFlat : IVectorStore
     public void Save(string path)
     {
         using var writer = new BinaryWriter(File.Open(path, FileMode.Create));
-        
+
         writer.Write(FILE_VERSION);
         writer.Write(_dimension);
         writer.Write(_vectors.Count);
@@ -118,7 +118,7 @@ internal sealed class VectorStoreFlat : IVectorStore
         {
             var (chunkId, vector) = _vectors[i];
             writer.Write(chunkId);
-            
+
             for (int j = 0; j < vector.Length; j++)
             {
                 writer.Write(vector[j]);
@@ -132,7 +132,7 @@ internal sealed class VectorStoreFlat : IVectorStore
         _vectors.Clear();
 
         using var reader = new BinaryReader(File.Open(path, FileMode.Open));
-        
+
         int version = reader.ReadInt32();
         if (version != FILE_VERSION)
             throw new InvalidOperationException($"Unsupported file version {version}");
@@ -147,7 +147,7 @@ internal sealed class VectorStoreFlat : IVectorStore
         {
             string chunkId = reader.ReadString();
             float[] vector = new float[_dimension];
-            
+
             for (int j = 0; j < _dimension; j++)
             {
                 vector[j] = reader.ReadSingle();

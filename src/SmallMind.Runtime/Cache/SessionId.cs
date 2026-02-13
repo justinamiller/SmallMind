@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Runtime.Cache
 {
     /// <summary>
@@ -17,7 +15,7 @@ namespace SmallMind.Runtime.Cache
         {
             if (string.IsNullOrWhiteSpace(value))
                 throw new ArgumentException("Session ID cannot be null or whitespace", nameof(value));
-            
+
             _value = value;
         }
 

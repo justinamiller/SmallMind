@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using SmallMind.Quantization.Tensors;
 
@@ -20,12 +17,12 @@ namespace SmallMind.Quantization.IO.Smq
             /// Error or warning message.
             /// </summary>
             public string Message { get; set; } = "";
-            
+
             /// <summary>
             /// Associated tensor name (null if not tensor-specific).
             /// </summary>
             public string? TensorName { get; set; }
-            
+
             /// <summary>
             /// Severity level of the validation issue.
             /// </summary>
@@ -51,7 +48,7 @@ namespace SmallMind.Quantization.IO.Smq
             /// Warning: non-critical issue.
             /// </summary>
             Warning,
-            
+
             /// <summary>
             /// Error: critical issue that prevents file from being read.
             /// </summary>
@@ -452,9 +449,9 @@ namespace SmallMind.Quantization.IO.Smq
 
         private static bool IsValidQuantScheme(QuantScheme scheme)
         {
-            return scheme == QuantScheme.F32 
-                || scheme == QuantScheme.F16 
-                || scheme == QuantScheme.Q8_0 
+            return scheme == QuantScheme.F32
+                || scheme == QuantScheme.F16
+                || scheme == QuantScheme.Q8_0
                 || scheme == QuantScheme.Q4_0;
         }
     }

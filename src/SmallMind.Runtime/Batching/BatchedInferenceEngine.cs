@@ -1,13 +1,6 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Channels;
-using System.Threading.Tasks;
 using SmallMind.Core.Core;
-using SmallMind.Core.Exceptions;
 using SmallMind.Runtime.Cache;
 using SmallMind.Runtime.Telemetry;
 using SmallMind.Tokenizers;
@@ -337,76 +330,76 @@ namespace SmallMind.Runtime.Batching
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-                // Crop context to last blockSize tokens - reuse buffer
-                List<int> contextCropped;
-                if (context.Count <= _blockSize)
+            // Crop context to last blockSize tokens - reuse buffer
+            List<int> contextCropped;
+            if (context.Count <= _blockSize)
+            {
+                contextCropped = context;
+            }
+            else
+            {
+                var buffer = _contextCroppedBuffer.Value!;
+                buffer.Clear();
+                if (buffer.Capacity < _blockSize)
                 {
-                    contextCropped = context;
-                }
-                else
-                {
-                    var buffer = _contextCroppedBuffer.Value!;
-                    buffer.Clear();
-                    if (buffer.Capacity < _blockSize)
-                    {
-                        buffer.Capacity = _blockSize;
-                    }
-                    
-                    int startIdx = context.Count - _blockSize;
-                    for (int idx = startIdx; idx < context.Count; idx++)
-                    {
-                        buffer.Add(context[idx]);
-                    }
-                    contextCropped = buffer;
+                    buffer.Capacity = _blockSize;
                 }
 
-                // Convert to tensor
-                var contextData = new float[contextCropped.Count];
-                for (int j = 0; j < contextCropped.Count; j++)
+                int startIdx = context.Count - _blockSize;
+                for (int idx = startIdx; idx < context.Count; idx++)
                 {
-                    contextData[j] = contextCropped[j];
+                    buffer.Add(context[idx]);
                 }
-                var contextTensor = new Tensor(contextData, new int[] { 1, contextCropped.Count });
+                contextCropped = buffer;
+            }
 
-                // Forward pass
-                var logits = _model.Forward(contextTensor);
+            // Convert to tensor
+            var contextData = new float[contextCropped.Count];
+            for (int j = 0; j < contextCropped.Count; j++)
+            {
+                contextData[j] = contextCropped[j];
+            }
+            var contextTensor = new Tensor(contextData, new int[] { 1, contextCropped.Count });
 
-                // Get logits for last position using ArrayPool to reduce allocations
-                int T = contextCropped.Count;
-                int vocabSize = logits.Shape[2];
-                float[]? logitsLastPooled = null;
-                float[] logitsLast;
-                try
+            // Forward pass
+            var logits = _model.Forward(contextTensor);
+
+            // Get logits for last position using ArrayPool to reduce allocations
+            int T = contextCropped.Count;
+            int vocabSize = logits.Shape[2];
+            float[]? logitsLastPooled = null;
+            float[] logitsLast;
+            try
+            {
+                logitsLastPooled = ArrayPool<float>.Shared.Rent(vocabSize);
+                int lastPosOffset = (T - 1) * vocabSize;
+
+                // SIMD-optimized copy and temperature scaling
+                CopyAndScaleLogits(logits.Data, logitsLastPooled, lastPosOffset, vocabSize, (float)options.Temperature);
+
+                // Copy to exact-size array for remaining operations
+                logitsLast = new float[vocabSize];
+                Array.Copy(logitsLastPooled, logitsLast, vocabSize);
+            }
+            finally
+            {
+                if (logitsLastPooled != null)
                 {
-                    logitsLastPooled = ArrayPool<float>.Shared.Rent(vocabSize);
-                    int lastPosOffset = (T - 1) * vocabSize;
-                    
-                    // SIMD-optimized copy and temperature scaling
-                    CopyAndScaleLogits(logits.Data, logitsLastPooled, lastPosOffset, vocabSize, (float)options.Temperature);
-
-                    // Copy to exact-size array for remaining operations
-                    logitsLast = new float[vocabSize];
-                    Array.Copy(logitsLastPooled, logitsLast, vocabSize);
+                    ArrayPool<float>.Shared.Return(logitsLastPooled, clearArray: false);
                 }
-                finally
-                {
-                    if (logitsLastPooled != null)
-                    {
-                        ArrayPool<float>.Shared.Return(logitsLastPooled, clearArray: false);
-                    }
-                }
+            }
 
-                // Apply top-k filtering
-                if (options.TopK > 0)
-                {
-                    logitsLast = ApplyTopK(logitsLast, options.TopK);
-                }
+            // Apply top-k filtering
+            if (options.TopK > 0)
+            {
+                logitsLast = ApplyTopK(logitsLast, options.TopK);
+            }
 
-                // Convert to probabilities (softmax)
-                var probs = Softmax(logitsLast);
+            // Convert to probabilities (softmax)
+            var probs = Softmax(logitsLast);
 
-                // Sample from the distribution
-                return Task.FromResult(SampleFromProbs(probs, options));
+            // Sample from the distribution
+            return Task.FromResult(SampleFromProbs(probs, options));
         }
 
         private float[] ApplyTopK(float[] logits, int k)
@@ -511,7 +504,7 @@ namespace SmallMind.Runtime.Batching
         private int SampleFromProbs(float[] probs, ProductionInferenceOptions options)
         {
             Random random;
-            
+
             if (options.Seed.HasValue)
             {
                 // Always create new deterministic random with seed for reproducibility
@@ -592,7 +585,7 @@ namespace SmallMind.Runtime.Batching
             float invTemp = temperature != 1.0f ? (1.0f / temperature) : 1.0f;
             int vectorSize = System.Numerics.Vector<float>.Count;
             int i = 0;
-            
+
             if (temperature != 1.0f)
             {
                 // Copy + scale with SIMD
@@ -602,7 +595,7 @@ namespace SmallMind.Runtime.Batching
                     var scaled = vec * invTemp;
                     scaled.CopyTo(dest, i);
                 }
-                
+
                 // Handle remainder
                 for (; i < length; i++)
                 {
@@ -617,7 +610,7 @@ namespace SmallMind.Runtime.Batching
                     var vec = new System.Numerics.Vector<float>(source, sourceOffset + i);
                     vec.CopyTo(dest, i);
                 }
-                
+
                 // Handle remainder
                 for (; i < length; i++)
                 {

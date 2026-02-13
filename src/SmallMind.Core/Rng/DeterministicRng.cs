@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Core.Rng
 {
     /// <summary>
@@ -23,7 +21,7 @@ namespace SmallMind.Core.Rng
             ulong s = (ulong)seed;
             _state0 = SplitMix64(ref s);
             _state1 = SplitMix64(ref s);
-            
+
             // Ensure neither state is zero (degenerate case)
             if (_state0 == 0 && _state1 == 0)
             {
@@ -84,7 +82,7 @@ namespace SmallMind.Core.Rng
             // Use rejection sampling to avoid modulo bias
             ulong range = (ulong)maxValue;
             ulong limit = ulong.MaxValue - (ulong.MaxValue % range);
-            
+
             ulong sample;
             do
             {

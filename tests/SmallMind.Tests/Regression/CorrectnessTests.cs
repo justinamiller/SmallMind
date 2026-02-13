@@ -1,8 +1,5 @@
-using System;
-using Xunit;
-using SmallMind.Tests.Fixtures;
-using SmallMind.Tests.Utilities;
 using SmallMind.Core.Core;
+using SmallMind.Tests.Fixtures;
 
 namespace SmallMind.Tests.Regression
 {
@@ -44,18 +41,18 @@ namespace SmallMind.Tests.Regression
                 for (int i = 0; i < logits.Data.Length; i++)
                 {
                     var value = logits.Data[i];
-                    Assert.False(float.IsNaN(value), 
+                    Assert.False(float.IsNaN(value),
                         $"Logit at position {i} is NaN for prompt: {key}");
-                    Assert.False(float.IsInfinity(value), 
+                    Assert.False(float.IsInfinity(value),
                         $"Logit at position {i} is Infinity for prompt: {key}");
                 }
 
                 // Logits should typically be in a reasonable range before softmax
                 var maxLogit = MaxValue(logits.Data);
                 var minLogit = MinValue(logits.Data);
-                Assert.True(maxLogit < 100f, 
+                Assert.True(maxLogit < 100f,
                     $"Max logit {maxLogit:F2} seems unreasonably high for prompt: {key}");
-                Assert.True(minLogit > -100f, 
+                Assert.True(minLogit > -100f,
                     $"Min logit {minLogit:F2} seems unreasonably low for prompt: {key}");
             }
         }
@@ -78,7 +75,7 @@ namespace SmallMind.Tests.Regression
             // Assert
             Assert.NotNull(logits);
             Assert.Equal(3, logits.Shape.Length); // [batch_size, seq_len, vocab_size]
-            
+
             // Last dimension should be vocab size
             var lastDim = logits.Shape[2];
             Assert.Equal(TinyModelFixture.VocabSize, lastDim);
@@ -102,7 +99,7 @@ namespace SmallMind.Tests.Regression
 
             // Assert
             Assert.True(nextTokenId >= 0, "Token ID should be non-negative");
-            Assert.True(nextTokenId < TinyModelFixture.VocabSize, 
+            Assert.True(nextTokenId < TinyModelFixture.VocabSize,
                 $"Token ID {nextTokenId} should be < vocab size {TinyModelFixture.VocabSize}");
         }
 
@@ -160,11 +157,11 @@ namespace SmallMind.Tests.Regression
             int batchSize = logits.Shape[0];
             int seqLen = logits.Shape[1];
             int vocabSize = logits.Shape[2];
-            
+
             var lastLogits = new float[vocabSize];
             int offset = (seqLen - 1) * vocabSize;
             Array.Copy(logits.Data, offset, lastLogits, 0, vocabSize);
-            
+
             return lastLogits;
         }
 

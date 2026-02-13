@@ -56,7 +56,7 @@ internal sealed class FeatureHashingEmbedder : IEmbedder
     public List<float[]> EmbedBatch(List<string> texts)
     {
         var embeddings = new List<float[]>(texts.Count);
-        
+
         for (int i = 0; i < texts.Count; i++)
         {
             embeddings.Add(Embed(texts[i]));

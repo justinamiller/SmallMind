@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
 using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Rag.Retrieval
@@ -16,7 +13,7 @@ namespace SmallMind.Rag.Retrieval
         private readonly Dictionary<string, double> _idfScores;
         private readonly int _maxFeatures;
         private readonly HashSet<string> _stopWords;
-        
+
         public int EmbeddingDimension => _maxFeatures;
 
         /// <summary>
@@ -41,7 +38,7 @@ namespace SmallMind.Rag.Retrieval
         public void Fit(List<string> documents, IRuntimeLogger? logger = null)
         {
             logger ??= NullRuntimeLogger.Instance;
-            
+
             if (documents == null || documents.Count == 0)
             {
                 throw new ArgumentException("Documents cannot be null or empty", nameof(documents));
@@ -58,7 +55,7 @@ namespace SmallMind.Rag.Retrieval
                 var terms = Tokenize(documents[i]);
                 // Pre-size based on term count
                 var uniqueTerms = new HashSet<string>(capacity: Math.Min(terms.Count, 256));
-                
+
                 for (int j = 0; j < terms.Count; j++)
                 {
                     allTerms.Add(terms[j]);
@@ -121,12 +118,12 @@ namespace SmallMind.Rag.Retrieval
             }
 
             var embedding = new float[_maxFeatures];
-            
+
             // Tokenize and count term frequencies
             var terms = Tokenize(text);
             // Pre-size dictionary for term counts
             var termCounts = new Dictionary<string, int>(capacity: Math.Min(terms.Count, 128));
-            
+
             for (int i = 0; i < terms.Count; i++)
             {
                 var term = terms[i];
@@ -163,7 +160,7 @@ namespace SmallMind.Rag.Retrieval
             {
                 norm += embedding[i] * embedding[i];
             }
-            
+
             if (norm > 0f)
             {
                 norm = MathF.Sqrt(norm);
@@ -190,19 +187,19 @@ namespace SmallMind.Rag.Retrieval
             // Use Span-based parsing to reduce allocations
             ReadOnlySpan<char> textSpan = text.AsSpan();
             int wordStart = -1;
-            
+
             // Rent buffer for lowercase conversion to avoid allocations
             int maxWordLength = 256; // reasonable max for most words
             char[]? rentedBuffer = null;
-            
+
             try
             {
                 rentedBuffer = System.Buffers.ArrayPool<char>.Shared.Rent(maxWordLength);
-                
+
                 for (int i = 0; i <= textSpan.Length; i++)
                 {
                     bool isLetterOrDigit = i < textSpan.Length && char.IsLetterOrDigit(textSpan[i]);
-                    
+
                     if (!isLetterOrDigit && wordStart >= 0)
                     {
                         // End of word
@@ -211,7 +208,7 @@ namespace SmallMind.Rag.Retrieval
                         {
                             // Convert to lowercase using rented buffer
                             ReadOnlySpan<char> wordSpan = textSpan.Slice(wordStart, wordLength);
-                            
+
                             // If word is too long, fall back to direct conversion
                             if (wordLength > maxWordLength)
                             {
@@ -225,7 +222,7 @@ namespace SmallMind.Rag.Retrieval
                             {
                                 // Use vectorized ToLowerInvariant for better performance
                                 wordSpan.ToLowerInvariant(rentedBuffer.AsSpan(0, wordLength));
-                                
+
                                 // Create string from buffer and check stopwords
                                 string word = new string(rentedBuffer, 0, wordLength);
                                 if (!_stopWords.Contains(word))

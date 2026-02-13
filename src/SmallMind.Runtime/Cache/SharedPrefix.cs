@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Runtime.Cache
 {
     /// <summary>
@@ -10,20 +8,20 @@ namespace SmallMind.Runtime.Cache
         public string PrefixHash { get; }
         public int[] TokenIds { get; }
         public int Length => TokenIds.Length;
-        
+
         private int _referenceCount;
-        public int ReferenceCount 
-        { 
+        public int ReferenceCount
+        {
             get => System.Threading.Interlocked.CompareExchange(ref _referenceCount, 0, 0);
             set => System.Threading.Interlocked.Exchange(ref _referenceCount, value);
         }
-        
+
         public DateTime LastUsed { get; set; }
-        
+
         // Cached K/V for this prefix (shared across sessions)
         public float[][]? CachedKeys { get; set; }
         public float[][]? CachedValues { get; set; }
-        
+
         public SharedPrefix(string prefixHash, int[] tokenIds)
         {
             PrefixHash = prefixHash ?? throw new ArgumentNullException(nameof(prefixHash));
@@ -31,7 +29,7 @@ namespace SmallMind.Runtime.Cache
             _referenceCount = 0;
             LastUsed = DateTime.UtcNow;
         }
-        
+
         /// <summary>
         /// Increments the reference count atomically.
         /// </summary>
@@ -39,7 +37,7 @@ namespace SmallMind.Runtime.Cache
         {
             System.Threading.Interlocked.Increment(ref _referenceCount);
         }
-        
+
         /// <summary>
         /// Decrements the reference count atomically.
         /// </summary>

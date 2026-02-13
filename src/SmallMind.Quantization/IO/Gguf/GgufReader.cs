@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
 
 namespace SmallMind.Quantization.IO.Gguf
@@ -160,89 +157,89 @@ namespace SmallMind.Quantization.IO.Gguf
             switch (elementType)
             {
                 case GgufValueType.UInt8:
-                {
-                    var arr = new byte[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadByte();
-                    return arr;
-                }
+                    {
+                        var arr = new byte[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadByte();
+                        return arr;
+                    }
                 case GgufValueType.Int8:
-                {
-                    var arr = new sbyte[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadSByte();
-                    return arr;
-                }
+                    {
+                        var arr = new sbyte[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadSByte();
+                        return arr;
+                    }
                 case GgufValueType.UInt16:
-                {
-                    var arr = new ushort[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadUInt16();
-                    return arr;
-                }
+                    {
+                        var arr = new ushort[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadUInt16();
+                        return arr;
+                    }
                 case GgufValueType.Int16:
-                {
-                    var arr = new short[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadInt16();
-                    return arr;
-                }
+                    {
+                        var arr = new short[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadInt16();
+                        return arr;
+                    }
                 case GgufValueType.UInt32:
-                {
-                    var arr = new uint[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadUInt32();
-                    return arr;
-                }
+                    {
+                        var arr = new uint[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadUInt32();
+                        return arr;
+                    }
                 case GgufValueType.Int32:
-                {
-                    var arr = new int[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadInt32();
-                    return arr;
-                }
+                    {
+                        var arr = new int[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadInt32();
+                        return arr;
+                    }
                 case GgufValueType.Float32:
-                {
-                    var arr = new float[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadSingle();
-                    return arr;
-                }
+                    {
+                        var arr = new float[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadSingle();
+                        return arr;
+                    }
                 case GgufValueType.Float64:
-                {
-                    var arr = new double[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadDouble();
-                    return arr;
-                }
+                    {
+                        var arr = new double[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadDouble();
+                        return arr;
+                    }
                 case GgufValueType.Bool:
-                {
-                    var arr = new bool[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadByte() != 0;
-                    return arr;
-                }
+                    {
+                        var arr = new bool[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadByte() != 0;
+                        return arr;
+                    }
                 case GgufValueType.String:
-                {
-                    var arr = new string[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = ReadGgufString();
-                    return arr;
-                }
+                    {
+                        var arr = new string[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = ReadGgufString();
+                        return arr;
+                    }
                 case GgufValueType.UInt64:
-                {
-                    var arr = new ulong[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadUInt64();
-                    return arr;
-                }
+                    {
+                        var arr = new ulong[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadUInt64();
+                        return arr;
+                    }
                 case GgufValueType.Int64:
-                {
-                    var arr = new long[count];
-                    for (ulong i = 0; i < count; i++)
-                        arr[i] = _reader.ReadInt64();
-                    return arr;
-                }
+                    {
+                        var arr = new long[count];
+                        for (ulong i = 0; i < count; i++)
+                            arr[i] = _reader.ReadInt64();
+                        return arr;
+                    }
                 default:
                     throw new NotSupportedException($"Unsupported array element type: {elementType}");
             }

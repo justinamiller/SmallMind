@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Tokenizers.Gguf
@@ -26,7 +24,7 @@ namespace SmallMind.Tokenizers.Gguf
 
             if (metadata == null || metadata.Count == 0)
             {
-                diagnostics.AddIssue(RuntimeDegradeReason.TokenizerGgufMetadataMissing, 
+                diagnostics.AddIssue(RuntimeDegradeReason.TokenizerGgufMetadataMissing,
                     "GGUF metadata is null or empty");
                 logger.Warn("GGUF metadata is null or empty - cannot create tokenizer");
                 return (null, diagnostics);
@@ -79,7 +77,7 @@ namespace SmallMind.Tokenizers.Gguf
             // Extract merges (if available)
             var merges = new List<(string, string)>();
             bool hasMerges = false;
-            if (metadata.TryGetValue("tokenizer.ggml.merges", out var mergesObj) && 
+            if (metadata.TryGetValue("tokenizer.ggml.merges", out var mergesObj) &&
                 mergesObj is object[] mergesArray && mergesArray.Length > 0)
             {
                 foreach (var mergeObj in mergesArray)
@@ -151,7 +149,7 @@ namespace SmallMind.Tokenizers.Gguf
             var specialTokens = new SpecialTokens();
 
             // Try to get special token IDs from metadata
-            if (metadata.TryGetValue("tokenizer.ggml.bos_token_id", out var bosObj) && 
+            if (metadata.TryGetValue("tokenizer.ggml.bos_token_id", out var bosObj) &&
                 bosObj is uint or int)
             {
                 specialTokens.BosTokenId = Convert.ToInt32(bosObj);
@@ -162,7 +160,7 @@ namespace SmallMind.Tokenizers.Gguf
                 specialTokens.BosTokenId = FindTokenId(vocab, "<s>", "<|startoftext|>", "<bos>");
             }
 
-            if (metadata.TryGetValue("tokenizer.ggml.eos_token_id", out var eosObj) && 
+            if (metadata.TryGetValue("tokenizer.ggml.eos_token_id", out var eosObj) &&
                 eosObj is uint or int)
             {
                 specialTokens.EosTokenId = Convert.ToInt32(eosObj);
@@ -172,7 +170,7 @@ namespace SmallMind.Tokenizers.Gguf
                 specialTokens.EosTokenId = FindTokenId(vocab, "</s>", "<|endoftext|>", "<eos>", "<|im_end|>");
             }
 
-            if (metadata.TryGetValue("tokenizer.ggml.unknown_token_id", out var unkObj) && 
+            if (metadata.TryGetValue("tokenizer.ggml.unknown_token_id", out var unkObj) &&
                 unkObj is uint or int)
             {
                 specialTokens.UnkTokenId = Convert.ToInt32(unkObj);
@@ -182,7 +180,7 @@ namespace SmallMind.Tokenizers.Gguf
                 specialTokens.UnkTokenId = FindTokenId(vocab, "<unk>", "[UNK]");
             }
 
-            if (metadata.TryGetValue("tokenizer.ggml.padding_token_id", out var padObj) && 
+            if (metadata.TryGetValue("tokenizer.ggml.padding_token_id", out var padObj) &&
                 padObj is uint or int)
             {
                 specialTokens.PadTokenId = Convert.ToInt32(padObj);

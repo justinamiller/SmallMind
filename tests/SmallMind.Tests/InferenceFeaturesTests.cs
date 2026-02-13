@@ -1,11 +1,6 @@
-using Xunit;
 using SmallMind.Runtime;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using InternalFinishReason = SmallMind.Runtime.FinishReason;
 
 namespace SmallMind.Tests
@@ -99,15 +94,15 @@ namespace SmallMind.Tests
         public void ProductionInferenceOptions_Validation_RejectsInvalidTopP()
         {
             var options = new ProductionInferenceOptions();
-            
+
             // TopP > 1.0 should fail
             options.TopP = 1.5;
             Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => options.Validate());
-            
+
             // TopP < 0.0 should fail
             options.TopP = -0.1;
             Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => options.Validate());
-            
+
             // Valid TopP should pass
             options.TopP = 0.9;
             options.Validate(); // Should not throw
@@ -117,15 +112,15 @@ namespace SmallMind.Tests
         public void ProductionInferenceOptions_Validation_RejectsInvalidMinP()
         {
             var options = new ProductionInferenceOptions();
-            
+
             // MinP > 1.0 should fail
             options.MinP = 1.5;
             Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => options.Validate());
-            
+
             // MinP < 0.0 should fail
             options.MinP = -0.1;
             Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => options.Validate());
-            
+
             // Valid MinP should pass
             options.MinP = 0.1;
             options.Validate(); // Should not throw
@@ -135,14 +130,14 @@ namespace SmallMind.Tests
         public void ProductionInferenceOptions_Validation_RejectsInvalidRepetitionPenalty()
         {
             var options = new ProductionInferenceOptions();
-            
+
             // RepetitionPenalty <= 0 should fail
             options.RepetitionPenalty = 0.0f;
             Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => options.Validate());
-            
+
             options.RepetitionPenalty = -1.0f;
             Assert.Throws<SmallMind.Core.Exceptions.ValidationException>(() => options.Validate());
-            
+
             // Valid RepetitionPenalty should pass
             options.RepetitionPenalty = 1.1f;
             options.Validate(); // Should not throw
@@ -222,7 +217,7 @@ namespace SmallMind.Tests
             // Create a small test model
             const int vocabSize = 50;
             const int eosTokenId = 10;
-            
+
             var model = new TransformerModel(
                 vocabSize: vocabSize,
                 blockSize: 32,
@@ -234,7 +229,7 @@ namespace SmallMind.Tests
             );
 
             var tokenizer = new MockTokenizer(vocabSize, eosTokenId);
-            
+
             var options = new ProductionInferenceOptions
             {
                 MaxNewTokens = 100, // Request many tokens
@@ -248,7 +243,7 @@ namespace SmallMind.Tests
             // Note: This test validates the API structure, but actual EOS detection
             // depends on the model actually generating the EOS token, which is
             // probabilistic. In a real test, we'd use a mocked model.
-            
+
             // For now, just verify the session can be created and used
             var result = await session.GenerateAsync("test");
             Assert.NotNull(result);
@@ -258,7 +253,7 @@ namespace SmallMind.Tests
         public async Task InferenceSession_StreamingWithTimeout_EmitsTimeoutReasonAsync()
         {
             const int vocabSize = 50;
-            
+
             var model = new TransformerModel(
                 vocabSize: vocabSize,
                 blockSize: 32,
@@ -270,7 +265,7 @@ namespace SmallMind.Tests
             );
 
             var tokenizer = new MockTokenizer(vocabSize);
-            
+
             var options = new ProductionInferenceOptions
             {
                 MaxNewTokens = 10, // Limit tokens to prevent context overflow

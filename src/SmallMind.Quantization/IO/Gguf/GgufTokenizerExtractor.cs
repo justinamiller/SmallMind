@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using SmallMind.Tokenizers;
 
 namespace SmallMind.Quantization.IO.Gguf
@@ -107,10 +104,10 @@ namespace SmallMind.Quantization.IO.Gguf
 
             // Create GGUF BPE tokenizer (supports both character and byte-level)
             return new SmallMind.Tokenizers.Text.GgufBpeTokenizer(
-                vocab, 
-                merges, 
-                bosTokenId, 
-                eosTokenId, 
+                vocab,
+                merges,
+                bosTokenId,
+                eosTokenId,
                 unkTokenId,
                 isByteLevelBpe);
         }
@@ -125,10 +122,10 @@ namespace SmallMind.Quantization.IO.Gguf
             // 1. Tokens starting with "Ġ" (GPT-2 space marker)
             // 2. High Unicode characters (used for byte mapping)
             // 3. Byte-level tokens like "Ċ", "ĉ", etc.
-            
+
             int byteLevelIndicators = 0;
             int sampleSize = Math.Min(1000, vocab.Count);
-            
+
             foreach (var kvp in vocab.Take(sampleSize))
             {
                 string token = kvp.Key;
@@ -138,7 +135,7 @@ namespace SmallMind.Quantization.IO.Gguf
                 // Check for GPT-2 style space marker
                 if (token.StartsWith("Ġ"))
                     byteLevelIndicators++;
-                
+
                 // Check for high Unicode (often used in byte-level mapping)
                 foreach (char c in token)
                 {
@@ -169,7 +166,7 @@ namespace SmallMind.Quantization.IO.Gguf
                     return (int)longVal;
                 if (value is ulong ulongVal)
                     return (int)ulongVal;
-                
+
                 // Try to parse as string
                 if (value is string strVal && int.TryParse(strVal, out int parsed))
                     return parsed;

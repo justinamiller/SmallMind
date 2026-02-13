@@ -1,10 +1,5 @@
-using System;
-using System.IO;
-using System.Text;
-using Xunit;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Gguf;
-using SmallMind.Quantization.IO.Gguf;
 
 namespace SmallMind.Tests
 {
@@ -147,13 +142,13 @@ namespace SmallMind.Tests
 
             // Note: Creating a full GGUF file with unsupported types is complex
             // This is a placeholder for future implementation with a test fixture
-            
+
             // If we had a test file with IQ2_XXS tensors:
             // var report = GgufModelLoader.GetCompatibilityReport("test_iq2_xxs.gguf");
             // Assert.False(report.IsFullyCompatible);
             // Assert.Contains("IQ2_XXS", report.UnsupportedTensorsByType.Keys);
             // Assert.True(report.UnsupportedTensors > 0);
-            
+
             // For now, just ensure the API exists
             Assert.NotNull(typeof(GgufCompatibilityReport));
         }

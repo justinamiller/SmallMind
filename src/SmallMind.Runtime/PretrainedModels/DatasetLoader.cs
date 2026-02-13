@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text.Json;
 using SmallMind.Abstractions.Telemetry;
 
@@ -103,9 +99,9 @@ namespace SmallMind.Runtime.PretrainedModels
 
                 try
                 {
-                    var options = new JsonSerializerOptions 
-                    { 
-                        PropertyNameCaseInsensitive = true 
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
                     };
                     var sample = JsonSerializer.Deserialize<LabeledSample>(line, options);
                     if (sample == null)
@@ -115,7 +111,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     }
 
                     // Validate label if expected labels provided
-                    if (expectedLabelSet != null && !string.IsNullOrWhiteSpace(sample.Label) 
+                    if (expectedLabelSet != null && !string.IsNullOrWhiteSpace(sample.Label)
                         && !expectedLabelSet.Contains(sample.Label))
                     {
                         logger.Warn($"Unexpected label '{sample.Label}' at line {lineNumber}. Expected one of: {string.Join(", ", expectedLabels!)}");
@@ -177,7 +173,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     {
                         return LoadFromJsonl(filePath, expectedLabels, logger);
                     }
-                    
+
                     // Otherwise assume legacy pipe-delimited format
                     break;
                 }
@@ -288,7 +284,7 @@ namespace SmallMind.Runtime.PretrainedModels
             {
                 train.Add(shuffled[i]);
             }
-            
+
             var validation = new List<LabeledSample>(shuffled.Count - trainCount);
             for (int i = trainCount; i < shuffled.Count; i++)
             {
@@ -310,7 +306,7 @@ namespace SmallMind.Runtime.PretrainedModels
             {
                 labelSet.Add(samples[i].Label);
             }
-            
+
             var labels = new List<string>(labelSet);
             labels.Sort();
             return labels.ToArray();
@@ -324,7 +320,7 @@ namespace SmallMind.Runtime.PretrainedModels
         public static Dictionary<string, int> GetLabelDistribution(List<LabeledSample> samples)
         {
             var counts = new Dictionary<string, int>();
-            
+
             // Count occurrences
             for (int i = 0; i < samples.Count; i++)
             {
@@ -338,7 +334,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     counts[label] = 1;
                 }
             }
-            
+
             return counts;
         }
 
@@ -354,7 +350,7 @@ namespace SmallMind.Runtime.PretrainedModels
 
             logger.Info($"\n{datasetName} Statistics:");
             logger.Info($"Total samples: {samples.Count}");
-            
+
             var distribution = GetLabelDistribution(samples);
             logger.Info("\nLabel distribution:");
             foreach (var kvp in distribution)
@@ -369,7 +365,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 int min = int.MaxValue;
                 int max = int.MinValue;
                 long sum = 0;
-                
+
                 for (int i = 0; i < samples.Count; i++)
                 {
                     int len = samples[i].Text.Length;
@@ -377,9 +373,9 @@ namespace SmallMind.Runtime.PretrainedModels
                     if (len > max) max = len;
                     sum += len;
                 }
-                
+
                 double average = (double)sum / samples.Count;
-                
+
                 logger.Info($"\nText length statistics:");
                 logger.Info($"  Min: {min}");
                 logger.Info($"  Max: {max}");

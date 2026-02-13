@@ -1,6 +1,3 @@
-using System;
-using System.Threading.Tasks;
-using SmallMind.ModelRegistry;
 using SmallMind.Core.Utilities;
 
 namespace SmallMind.ConsoleApp.Commands
@@ -40,22 +37,22 @@ namespace SmallMind.ConsoleApp.Commands
                 Console.WriteLine($"Format: {manifest.Format}");
                 Console.WriteLine($"Source: {manifest.Source}");
                 Console.WriteLine($"Created: {manifest.CreatedUtc}");
-                
+
                 if (!string.IsNullOrWhiteSpace(manifest.Quantization))
                 {
                     Console.WriteLine($"Quantization: {manifest.Quantization}");
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(manifest.TokenizerId))
                 {
                     Console.WriteLine($"Tokenizer ID: {manifest.TokenizerId}");
                 }
-                
+
                 if (manifest.MaxContextTokens.HasValue)
                 {
                     Console.WriteLine($"Max Context Tokens: {manifest.MaxContextTokens.Value}");
                 }
-                
+
                 if (!string.IsNullOrWhiteSpace(manifest.Notes))
                 {
                     Console.WriteLine($"Notes: {manifest.Notes}");
@@ -63,7 +60,7 @@ namespace SmallMind.ConsoleApp.Commands
 
                 Console.WriteLine();
                 Console.WriteLine("Files:");
-                
+
                 long totalSize = 0;
                 foreach (var file in manifest.Files)
                 {

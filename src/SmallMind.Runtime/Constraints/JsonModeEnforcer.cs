@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Runtime.Constraints
 {
     /// <summary>
@@ -26,7 +24,7 @@ namespace SmallMind.Runtime.Constraints
                 return false;
 
             string combined = generatedSoFar + candidateTokenText;
-            
+
             // Basic structural checks
             int braceDepth = 0;
             int bracketDepth = 0;

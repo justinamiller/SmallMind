@@ -1,16 +1,12 @@
-using System;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Numerics;
-using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Text.Json;
+using SmallMind.Core.Core;
 using SmallMind.Tests.TestHelpers;
 using SmallMind.Tokenizers;
-using SmallMind.Tokenizers.Text;
-using SmallMind.Core.Core;
 
 namespace SmallMind.Benchmarks.CpuComparison;
 
@@ -41,7 +37,7 @@ internal class Program
 
         // Run benchmarks
         Console.WriteLine("\n=== Running Benchmarks ===\n");
-        
+
         var results = new BenchmarkResults
         {
             Timestamp = DateTime.UtcNow,
@@ -107,7 +103,7 @@ internal class Program
         Console.WriteLine($"Best Instruction Set: {info.BestInstructionSet}");
         Console.WriteLine($"Working Set:         {Process.GetCurrentProcess().WorkingSet64 / 1024 / 1024} MB");
         Console.WriteLine($"GC Memory:           {GC.GetTotalMemory(false) / 1024 / 1024} MB");
-        
+
         Console.WriteLine("\nSIMD Capabilities:");
         foreach (var cap in info.SimdCapabilities.Where(kv => kv.Value))
         {
@@ -118,7 +114,7 @@ internal class Program
     static BenchmarkResult BenchmarkPromptProcessing()
     {
         Console.WriteLine($"Benchmarking Prompt Processing ({PROMPT_TOKENS} tokens)...");
-        
+
         // Create synthetic model for consistent benchmarking (use dynamic to access internal type)
         dynamic model = SyntheticModelFactory.CreateTinyModel(seed: 42);
         var tokenizer = TokenizerFactory.CreateCharLevel(
@@ -128,7 +124,7 @@ internal class Program
         // Generate synthetic prompt
         var promptText = "The quick brown fox jumps over the lazy dog. ";
         var promptTokens = tokenizer.Encode(promptText);
-        
+
         // Ensure we have exactly PROMPT_TOKENS tokens
         while (promptTokens.Count < PROMPT_TOKENS)
         {
@@ -137,7 +133,7 @@ internal class Program
         promptTokens = promptTokens.Take(PROMPT_TOKENS).ToList();
 
         var results = new double[BENCHMARK_RUNS];
-        
+
         // Warmup
         for (int i = 0; i < WARMUP_RUNS; i++)
         {
@@ -167,7 +163,7 @@ internal class Program
         }
 
         var inputTensor = new Tensor(inputData, new int[] { 1, tokens.Count });
-        
+
         // Run forward pass
         var output = model.Forward(inputTensor);
     }
@@ -175,7 +171,7 @@ internal class Program
     static BenchmarkResult BenchmarkGeneration()
     {
         Console.WriteLine($"\nBenchmarking Generation ({GENERATION_TOKENS} tokens)...");
-        
+
         // For generation, we'd ideally use InferenceSession, but for this benchmark
         // we'll simulate by running forward passes (use dynamic to access internal type)
         dynamic model = SyntheticModelFactory.CreateTinyModel(seed: 42);
@@ -234,7 +230,7 @@ internal class Program
             int[] shape = output.Shape;
             int vocabSize = shape[shape.Length - 1];
             int offset = logits.Length - vocabSize; // Get last token's logits
-            
+
             int maxIdx = 0;
             float maxVal = logits[offset];
             for (int j = 1; j < vocabSize; j++)
@@ -277,8 +273,8 @@ internal class Program
 
     static void OutputJson(BenchmarkResults results, string path)
     {
-        var options = new JsonSerializerOptions 
-        { 
+        var options = new JsonSerializerOptions
+        {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
@@ -293,7 +289,7 @@ internal class Program
         sb.AppendLine();
         sb.AppendLine($"**Timestamp**: {results.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
         sb.AppendLine();
-        
+
         sb.AppendLine("## System Information");
         sb.AppendLine();
         sb.AppendLine($"- **CPU Architecture**: {results.SystemInfo.CpuArchitecture}");
@@ -313,7 +309,7 @@ internal class Program
 
         sb.AppendLine("## Benchmark Results");
         sb.AppendLine();
-        
+
         sb.AppendLine("### Prompt Processing (32 tokens - synthetic model)");
         sb.AppendLine();
         OutputBenchmarkTable(sb, results.PromptProcessing);

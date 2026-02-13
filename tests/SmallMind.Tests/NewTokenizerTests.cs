@@ -1,6 +1,4 @@
-using System;
 using System.Text;
-using Xunit;
 using SmallMind.Tokenizers;
 
 namespace SmallMind.Tests
@@ -9,7 +7,7 @@ namespace SmallMind.Tests
     {
         private const string SampleText = "Hello, World! 🌍";
         private const string AsciiText = "The quick brown fox jumps over the lazy dog.";
-        
+
         #region CharTokenizer Tests
 
         [Fact]
@@ -285,7 +283,7 @@ namespace SmallMind.Tests
             // Act
             int[] tokens = new int[originalBytes.Length * 2];
             int tokenCount = tokenizer.Encode(originalBytes, tokens);
-            
+
             byte[] decodedBytes = new byte[originalBytes.Length * 2];
             int byteCount = tokenizer.Decode(tokens.AsSpan(0, tokenCount), decodedBytes);
 

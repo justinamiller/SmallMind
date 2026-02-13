@@ -1,7 +1,5 @@
-using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 
 namespace SmallMind.Core.Core
 {
@@ -24,9 +22,9 @@ namespace SmallMind.Core.Core
         {
             // C = A × B^T without creating transposed copy
             // Access pattern: B[j,k] instead of B[k,j]
-            
+
             int vectorSize = Vector<float>.Count;
-            
+
             // Parallelize when M >= 32 to amortize overhead
             if (M >= 32)
             {
@@ -34,14 +32,14 @@ namespace SmallMind.Core.Core
                 {
                     int aRowStart = i * K;
                     int cRowStart = i * N;
-                    
+
                     for (int j = 0; j < N; j++)
                     {
                         int bRowStart = j * K;  // B is N×K, we want column j of B^T = row j of B
-                        
+
                         float sum = 0f;
                         int k = 0;
-                        
+
                         // SIMD dot product
                         for (; k <= K - vectorSize; k += vectorSize)
                         {
@@ -49,13 +47,13 @@ namespace SmallMind.Core.Core
                             var vb = new Vector<float>(B, bRowStart + k);
                             sum += Vector.Dot(va, vb);
                         }
-                        
+
                         // Remainder
                         for (; k < K; k++)
                         {
                             sum += A[aRowStart + k] * B[bRowStart + k];
                         }
-                        
+
                         C[cRowStart + j] = sum;
                     }
                 });
@@ -67,14 +65,14 @@ namespace SmallMind.Core.Core
                 {
                     int aRowStart = i * K;
                     int cRowStart = i * N;
-                    
+
                     for (int j = 0; j < N; j++)
                     {
                         int bRowStart = j * K;
-                        
+
                         float sum = 0f;
                         int k = 0;
-                        
+
                         // SIMD dot product
                         for (; k <= K - vectorSize; k += vectorSize)
                         {
@@ -82,13 +80,13 @@ namespace SmallMind.Core.Core
                             var vb = new Vector<float>(B, bRowStart + k);
                             sum += Vector.Dot(va, vb);
                         }
-                        
+
                         // Remainder
                         for (; k < K; k++)
                         {
                             sum += A[aRowStart + k] * B[bRowStart + k];
                         }
-                        
+
                         C[cRowStart + j] = sum;
                     }
                 }
@@ -109,35 +107,35 @@ namespace SmallMind.Core.Core
         {
             // C = A^T × B without creating transposed copy
             // Access pattern: A[k,i] instead of A[i,k]
-            
+
             // Zero output first (we're accumulating) - use Span.Clear for better performance
             C.AsSpan().Clear();
-            
+
             int vectorSize = Vector<float>.Count;
-            
+
             // Parallelize when M >= 32
             if (M >= 32)
             {
                 Parallel.For(0, M, i =>
                 {
                     int cRowStart = i * N;
-                    
+
                     for (int k = 0; k < K; k++)
                     {
                         float aVal = A[k * M + i];  // A[k,i] = A^T[i,k]
                         int bRowStart = k * N;
-                        
+
                         // SIMD scalar-vector multiply and add
                         int j = 0;
                         var vA = new Vector<float>(aVal);
-                        
+
                         for (; j <= N - vectorSize; j += vectorSize)
                         {
                             var vb = new Vector<float>(B, bRowStart + j);
                             var vc = new Vector<float>(C, cRowStart + j);
                             (vc + vA * vb).CopyTo(C, cRowStart + j);
                         }
-                        
+
                         for (; j < N; j++)
                         {
                             C[cRowStart + j] += aVal * B[bRowStart + j];
@@ -151,23 +149,23 @@ namespace SmallMind.Core.Core
                 for (int i = 0; i < M; i++)
                 {
                     int cRowStart = i * N;
-                    
+
                     for (int k = 0; k < K; k++)
                     {
                         float aVal = A[k * M + i];  // A[k,i] = A^T[i,k]
                         int bRowStart = k * N;
-                        
+
                         // SIMD scalar-vector multiply and add
                         int j = 0;
                         var vA = new Vector<float>(aVal);
-                        
+
                         for (; j <= N - vectorSize; j += vectorSize)
                         {
                             var vb = new Vector<float>(B, bRowStart + j);
                             var vc = new Vector<float>(C, cRowStart + j);
                             (vc + vA * vb).CopyTo(C, cRowStart + j);
                         }
-                        
+
                         for (; j < N; j++)
                         {
                             C[cRowStart + j] += aVal * B[bRowStart + j];
@@ -176,7 +174,7 @@ namespace SmallMind.Core.Core
                 }
             }
         }
-        
+
         /// <summary>
         /// GELU derivative - used in fused backward operations
         /// Approximation: sigmoid(1.702x) based

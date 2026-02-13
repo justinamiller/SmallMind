@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Abstractions.Telemetry
 {
     /// <summary>

@@ -1,18 +1,13 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Threading;
+using SmallMind.Rag.Generation;
 using SmallMind.Rag.Indexing;
 using SmallMind.Rag.Indexing.Sparse;
 using SmallMind.Rag.Ingestion;
+using SmallMind.Rag.Prompting;
 using SmallMind.Rag.Retrieval;
 using SmallMind.Rag.Security;
 using SmallMind.Rag.Telemetry;
-using SmallMind.Rag.Prompting;
-using SmallMind.Rag.Generation;
 
 namespace SmallMind.Rag.Pipeline
 {
@@ -54,7 +49,7 @@ namespace SmallMind.Rag.Pipeline
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _indexDirectory = options.IndexDirectory ?? throw new ArgumentException("IndexDirectory must be set", nameof(options));
-            
+
             _authorizer = authorizer ?? new DefaultAuthorizer();
             _logger = logger ?? new ConsoleRagLogger();
             _metrics = metrics ?? new InMemoryRagMetrics();
@@ -263,7 +258,7 @@ namespace SmallMind.Rag.Pipeline
                 {
                     _logger.LogInfo(traceId, $"Applying authorization filter for user: {userContext.UserId}");
                     int beforeCount = results.Count;
-                    
+
                     var filteredResults = new List<RetrievedChunk>();
                     foreach (var r in results)
                     {
@@ -276,7 +271,7 @@ namespace SmallMind.Rag.Pipeline
                         }
                     }
                     results = filteredResults;
-                    
+
                     int afterCount = results.Count;
                     if (beforeCount != afterCount)
                     {
@@ -298,7 +293,7 @@ namespace SmallMind.Rag.Pipeline
                     }
                     results = filteredResults;
                     int afterCount = results.Count;
-                    
+
                     if (beforeCount != afterCount)
                     {
                         _logger.LogInfo(traceId, $"Score threshold filtered {beforeCount - afterCount} chunks");
@@ -333,9 +328,9 @@ namespace SmallMind.Rag.Pipeline
         /// <param name="temperature">Sampling temperature for generation (only used if text generator is configured).</param>
         /// <returns>Generated answer if text generator is configured, otherwise the composed prompt with context.</returns>
         public string AskQuestion(
-            string question, 
-            UserContext? userContext = null, 
-            int? topK = null, 
+            string question,
+            UserContext? userContext = null,
+            int? topK = null,
             int maxTokens = 200,
             double temperature = 0.7)
         {
@@ -428,7 +423,7 @@ namespace SmallMind.Rag.Pipeline
             // Retrieve relevant chunks
             List<RetrievedChunk> chunks;
             string prompt;
-            
+
             try
             {
                 chunks = Retrieve(question, userContext, topK);
@@ -458,7 +453,7 @@ namespace SmallMind.Rag.Pipeline
             if (_textGenerator != null)
             {
                 _logger.LogInfo(traceId, $"Generating answer with LLM (streaming)");
-                
+
                 int? seed = _options.Deterministic ? _options.Seed : null;
                 var options = new GenerationOptions
                 {
@@ -471,7 +466,7 @@ namespace SmallMind.Rag.Pipeline
                 {
                     yield return tokenId;
                 }
-                
+
                 _logger.LogInfo(traceId, $"Answer generation completed");
             }
             else
@@ -504,7 +499,7 @@ namespace SmallMind.Rag.Pipeline
 
                 // Build vector index from existing chunks
                 _logger.LogInfo(traceId, $"Building vector index from {_chunkStore.Count} chunks");
-                
+
                 foreach (var kvp in _chunkStore)
                 {
                     string chunkId = kvp.Key;

@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Rag;
 using SmallMind.Rag.Prompting;
-using Xunit;
 
 namespace SmallMind.Tests.Rag
 {
@@ -130,7 +127,7 @@ namespace SmallMind.Tests.Rag
             // Arrange
             var options = new RagOptions.RetrievalOptions();
             var composer = new PromptComposer(options);
-            
+
             var chunk = new Chunk
             {
                 ChunkId = "chunk1",

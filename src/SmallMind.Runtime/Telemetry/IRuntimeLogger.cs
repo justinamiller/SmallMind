@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Runtime.Telemetry
@@ -59,7 +58,7 @@ namespace SmallMind.Runtime.Telemetry
     internal sealed class NullInternalRuntimeLogger : IInternalRuntimeLogger
     {
         public static readonly NullInternalRuntimeLogger Instance = new NullInternalRuntimeLogger();
-        
+
         private NullInternalRuntimeLogger() { }
 
         public void LogDebug(string message) { }

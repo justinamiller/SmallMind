@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 
 namespace SmallMind.Quantization.Tensors
@@ -105,7 +104,7 @@ namespace SmallMind.Quantization.Tensors
             int numBlocks = (totalSize + Q5_0_BLOCK_SIZE - 1) / Q5_0_BLOCK_SIZE;
             int packedLowLen = (totalSize + 1) / 2;
             int packedHighLen = numBlocks * 4; // 4 bytes per block
-            
+
             var dataLow = new byte[packedLowLen];
             var dataHigh = new byte[packedHighLen];
             var scales = new float[numBlocks];
@@ -130,17 +129,17 @@ namespace SmallMind.Quantization.Tensors
                 // Quantize values in block
                 float invScale = 1f / scale;
                 uint highBits = 0; // Accumulate high bits for this block
-                
+
                 for (int i = blockStart; i < blockEnd; i++)
                 {
                     float quantized = source[i] * invScale;
                     // Clamp to [-16, 15] and round, then add 16 to get [0, 31]
                     int clamped = (int)MathF.Round(Math.Clamp(quantized, -16f, 15f)) + 16;
-                    
+
                     // Extract low 4 bits and high bit
                     int lowNibble = clamped & 0xF;
                     int highBit = (clamped >> 4) & 1;
-                    
+
                     // Pack low nibble (two values per byte)
                     int byteIdx = i / 2;
                     if (i % 2 == 0)
@@ -151,7 +150,7 @@ namespace SmallMind.Quantization.Tensors
                     {
                         dataLow[byteIdx] = (byte)((dataLow[byteIdx] & 0x0F) | ((lowNibble & 0xF) << 4));
                     }
-                    
+
                     // Pack high bit into highBits accumulator
                     int bitPos = i - blockStart; // Position within block [0, 31]
                     if (highBit != 0)
@@ -159,7 +158,7 @@ namespace SmallMind.Quantization.Tensors
                         highBits |= (uint)(1 << bitPos);
                     }
                 }
-                
+
                 // Store high bits (4 bytes per block, little-endian)
                 int highByteStart = blockIdx * 4;
                 dataHigh[highByteStart + 0] = (byte)(highBits & 0xFF);
@@ -197,7 +196,7 @@ namespace SmallMind.Quantization.Tensors
                 int blockStart = blockIdx * Q5_0_BLOCK_SIZE;
                 int blockEnd = Math.Min(blockStart + Q5_0_BLOCK_SIZE, totalSize);
                 float scale = Scales[blockIdx];
-                
+
                 // Load high bits for this block (4 bytes = 32 bits)
                 int highByteStart = blockIdx * 4;
                 uint highBits = (uint)(
@@ -211,16 +210,16 @@ namespace SmallMind.Quantization.Tensors
                 {
                     int byteIdx = i / 2;
                     byte packedByte = DataLow[byteIdx];
-                    
+
                     // Extract low nibble
-                    byte lowNibble = (i % 2 == 0) 
+                    byte lowNibble = (i % 2 == 0)
                         ? (byte)(packedByte & 0xF)
                         : (byte)((packedByte >> 4) & 0xF);
-                    
+
                     // Extract high bit
                     int bitPos = i - blockStart;
                     int highBit = (int)((highBits >> bitPos) & 1);
-                    
+
                     int quantized = Decode5Bit(lowNibble, highBit);
                     result[i] = quantized * scale;
                 }

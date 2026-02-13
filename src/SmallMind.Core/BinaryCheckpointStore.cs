@@ -1,10 +1,5 @@
-using System;
-using System.Buffers.Binary;
-using System.IO;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace SmallMind.Core
 {
@@ -16,7 +11,6 @@ namespace SmallMind.Core
     {
         private const string MagicHeader = "SMND"; // SmallMiND
         private const int CurrentFormatVersion = 1;
-        private const int HeaderSize = 16; // Magic(4) + Version(4) + Reserved(8)
 
         /// <summary>
         /// Save a model checkpoint in binary format.
@@ -45,9 +39,9 @@ namespace SmallMind.Core
             WriteHeader(writer);
 
             // Serialize metadata to JSON
-            var metadataJson = JsonSerializer.Serialize(checkpoint.Metadata, new JsonSerializerOptions 
-            { 
-                WriteIndented = false 
+            var metadataJson = JsonSerializer.Serialize(checkpoint.Metadata, new JsonSerializerOptions
+            {
+                WriteIndented = false
             });
             var metadataBytes = Encoding.UTF8.GetBytes(metadataJson);
 
@@ -72,12 +66,12 @@ namespace SmallMind.Core
 
                 // Write data
                 writer.Write(param.Data.Length);
-                
+
                 // Write float data efficiently
                 var byteCount = param.Data.Length * sizeof(float);
                 var bytes = new byte[byteCount];
                 Buffer.BlockCopy(param.Data, 0, bytes, 0, byteCount);
-                
+
                 // Ensure little-endian
                 if (!BitConverter.IsLittleEndian)
                 {
@@ -87,7 +81,7 @@ namespace SmallMind.Core
                         Array.Reverse(bytes, offset, sizeof(float));
                     }
                 }
-                
+
                 await stream.WriteAsync(bytes, 0, byteCount, cancellationToken);
             }
 
@@ -119,7 +113,7 @@ namespace SmallMind.Core
 
             var metadataBytes = reader.ReadBytes(metadataLength);
             var metadataJson = Encoding.UTF8.GetString(metadataBytes);
-            var metadata = JsonSerializer.Deserialize<ModelMetadata>(metadataJson) 
+            var metadata = JsonSerializer.Deserialize<ModelMetadata>(metadataJson)
                 ?? throw new InvalidDataException("Failed to deserialize metadata");
 
             // Read parameters
@@ -158,12 +152,12 @@ namespace SmallMind.Core
                 var data = new float[dataLength];
                 var byteCount = dataLength * sizeof(float);
                 var bytes = new byte[byteCount];
-                
+
                 await stream.ReadExactlyAsync(bytes, 0, byteCount, cancellationToken);
 
                 // Convert bytes to floats
                 Buffer.BlockCopy(bytes, 0, data, 0, byteCount);
-                
+
                 // Handle endianness
                 if (!BitConverter.IsLittleEndian)
                 {
@@ -189,10 +183,10 @@ namespace SmallMind.Core
         {
             // Magic header
             writer.Write(Encoding.ASCII.GetBytes(MagicHeader));
-            
+
             // Format version
             writer.Write(CurrentFormatVersion);
-            
+
             // Reserved bytes for future use
             writer.Write(0L); // 8 bytes
         }

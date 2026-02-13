@@ -1,9 +1,5 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using SmallMind.Runtime.PretrainedModels;
 using SmallMind.Tokenizers;
-using Xunit;
 
 namespace SmallMind.Tests.PretrainedModels
 {
@@ -126,7 +122,7 @@ namespace SmallMind.Tests.PretrainedModels
                 // Assert
                 Assert.NotNull(loaded);
                 Assert.IsType<TextClassificationModel>(loaded);
-                
+
                 var classifier = (TextClassificationModel)loaded;
                 Assert.Equal(TaskType.TextClassification, classifier.Task);
                 Assert.Equal(DomainType.Legal, classifier.Domain);
@@ -185,11 +181,11 @@ namespace SmallMind.Tests.PretrainedModels
             Assert.True(scores.ContainsKey("Positive"));
             Assert.True(scores.ContainsKey("Negative"));
             Assert.True(scores.ContainsKey("Neutral"));
-            
+
             // Probabilities should sum to approximately 1.0
             var sum = scores["Positive"] + scores["Negative"] + scores["Neutral"];
             Assert.InRange(sum, 0.99f, 1.01f);
-            
+
             // All probabilities should be between 0 and 1
             Assert.InRange(scores["Positive"], 0f, 1f);
             Assert.InRange(scores["Negative"], 0f, 1f);
@@ -240,14 +236,14 @@ namespace SmallMind.Tests.PretrainedModels
             // Assert
             Assert.NotNull(probs);
             Assert.Equal(labels.Length, probs.Count);
-            
+
             // All labels should be present
             foreach (var label in labels)
             {
                 Assert.True(probs.ContainsKey(label));
                 Assert.InRange(probs[label], 0f, 1f);
             }
-            
+
             // Probabilities should sum to approximately 1.0
             var sum = 0f;
             foreach (var prob in probs.Values)

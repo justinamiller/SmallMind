@@ -1,7 +1,5 @@
-using System;
 using SmallMind.Core.Exceptions;
 using SmallMind.Runtime.Batching;
-using Xunit;
 
 namespace SmallMind.Tests.Batching
 {

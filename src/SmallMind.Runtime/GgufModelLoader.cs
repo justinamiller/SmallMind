@@ -1,14 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+using SmallMind.Abstractions.Telemetry;
 using SmallMind.Quantization.IO.Gguf;
+using SmallMind.Quantization.Tensors;
+using SmallMind.Runtime.Telemetry;
 using SmallMind.Tokenizers;
 using SmallMind.Tokenizers.Gguf;
 using SmallMind.Transformers;
-using SmallMind.Quantization.Tensors;
-using SmallMind.Runtime.Telemetry;
-using SmallMind.Abstractions.Telemetry;
 using Tensor = SmallMind.Core.Core.Tensor;
 
 namespace SmallMind.Runtime
@@ -33,13 +29,13 @@ namespace SmallMind.Runtime
         /// <param name="logger">Optional logger for diagnostics</param>
         /// <returns>Tuple of (model, tokenizer, config)</returns>
         public static (TransformerModel model, ITokenizer tokenizer, ModelConfig config) LoadFromGguf(
-            string ggufPath, 
+            string ggufPath,
             int seed = 42,
             bool useMmap = false,
             IInternalRuntimeLogger? logger = null)
         {
             logger ??= NullInternalRuntimeLogger.Instance;
-            
+
             if (string.IsNullOrEmpty(ggufPath))
                 throw new ArgumentNullException(nameof(ggufPath));
             if (!File.Exists(ggufPath))
@@ -68,11 +64,11 @@ namespace SmallMind.Runtime
             IRuntimeLogger publicLogger = logger is RuntimeLoggerAdapter adapter
                 ? adapter.PublicLogger
                 : NullRuntimeLogger.Instance;
-            
+
             var (tokenizer, diagnostics) = GgufTokenizerFactory.CreateTokenizer(
-                modelInfo.Metadata, 
+                modelInfo.Metadata,
                 publicLogger);
-            
+
             if (tokenizer == null)
             {
                 throw new NotSupportedException(
@@ -80,7 +76,7 @@ namespace SmallMind.Runtime
                     "Ensure the file contains tokenizer metadata (tokenizer.ggml.*). " +
                     $"Diagnostics: {string.Join(", ", diagnostics.Issues.Select(i => i.message))}");
             }
-            
+
             // Log tokenizer diagnostics
             if (diagnostics.HasIssues)
             {
@@ -89,7 +85,7 @@ namespace SmallMind.Runtime
                     logger.LogWarning($"Tokenizer diagnostic [{reason}]: {message}");
                 }
             }
-            
+
             logger.LogInfo($"Created tokenizer: {diagnostics.TokenizerType ?? "Unknown"} " +
                           $"(vocab size: {diagnostics.VocabSize}, " +
                           $"has merges: {diagnostics.HasMerges}, " +
@@ -131,7 +127,7 @@ namespace SmallMind.Runtime
             {
                 using (var mmapReader = new GgufMmapReader(ggufPath))
                 {
-                    LoadWeightsWithReader(mmapReader, modelInfo, tensorMapping, namedParams, loadedParams, 
+                    LoadWeightsWithReader(mmapReader, modelInfo, tensorMapping, namedParams, loadedParams,
                         ref mainLoopReads, ref qkvSkipped, ref qkvReads, logger);
                 }
             }
@@ -142,7 +138,7 @@ namespace SmallMind.Runtime
                 {
                     // Re-read model info to position stream correctly
                     reader.ReadModelInfo();
-                    
+
                     LoadWeightsWithReader(reader, modelInfo, tensorMapping, namedParams, loadedParams,
                         ref mainLoopReads, ref qkvSkipped, ref qkvReads, logger);
                 }
@@ -160,7 +156,7 @@ namespace SmallMind.Runtime
             var missingCritical = new List<string>();
             foreach (var key in namedParams.Keys)
             {
-                if (!loadedParams.Contains(key) && 
+                if (!loadedParams.Contains(key) &&
                     (key.Contains("token_embd") || key.Contains("output_norm") || key.Contains("attn")))
                 {
                     missingCritical.Add(key);
@@ -185,7 +181,7 @@ namespace SmallMind.Runtime
         /// <summary>
         /// Load weights using the provided tensor data reader (stream-based or mmap).
         /// </summary>
-        private static void LoadWeightsWithReader(ITensorDataReader reader, GgufModelInfo modelInfo, 
+        private static void LoadWeightsWithReader(ITensorDataReader reader, GgufModelInfo modelInfo,
             Dictionary<string, string> tensorMapping, Dictionary<string, Tensor> namedParams,
             HashSet<string> loadedParams, ref int mainLoopReads, ref int qkvSkipped, ref int qkvReads, IInternalRuntimeLogger logger)
         {
@@ -251,8 +247,8 @@ namespace SmallMind.Runtime
             }
 
             // Determine architecture naming convention
-            bool isLlamaFamily = config.Architecture.StartsWith("llama") || 
-                                config.Architecture.StartsWith("mistral") || 
+            bool isLlamaFamily = config.Architecture.StartsWith("llama") ||
+                                config.Architecture.StartsWith("mistral") ||
                                 config.Architecture.StartsWith("phi");
             bool isGpt2 = config.Architecture.StartsWith("gpt");
 
@@ -263,7 +259,7 @@ namespace SmallMind.Runtime
 
                 // Output norm and head
                 mapping["output_norm.weight"] = "output_norm.weight";
-                
+
                 // Output head (may not exist due to weight tying)
                 if (modelInfo.Tensors.Any(t => t.Name == "output.weight"))
                 {
@@ -310,20 +306,20 @@ namespace SmallMind.Runtime
                 // GPT-2 tensor naming (uses different conventions)
                 // Token embeddings
                 mapping["token_embd.weight"] = "token_embd.weight";
-                
+
                 // Position embeddings (GPT-2 uses learned, not RoPE)
                 if (tensorNames.Contains("position_embd.weight"))
                 {
                     mapping["position_embd.weight"] = "position_embd.weight";
                 }
-                
+
                 // Output norm (LayerNorm with bias)
                 mapping["output_norm.weight"] = "output_norm.weight";
                 if (tensorNames.Contains("output_norm.bias"))
                 {
                     mapping["output_norm.bias"] = "output_norm.bias";
                 }
-                
+
                 // Output head (may be tied to token embeddings)
                 if (tensorNames.Contains("output.weight"))
                 {
@@ -360,7 +356,7 @@ namespace SmallMind.Runtime
                         mapping[$"{ggufPrefix}attn_q.weight"] = $"PENDING_Q_{i}";
                         mapping[$"{ggufPrefix}attn_k.weight"] = $"PENDING_K_{i}";
                         mapping[$"{ggufPrefix}attn_v.weight"] = $"PENDING_V_{i}";
-                        
+
                         // GPT-2 has biases
                         if (tensorNames.Contains($"{ggufPrefix}attn_q.bias"))
                         {
@@ -387,7 +383,7 @@ namespace SmallMind.Runtime
                     // FFN projections (GPT-2 uses GELU, not SwiGLU)
                     mapping[$"{ggufPrefix}ffn_up.weight"] = $"{smPrefix}ffn_up.weight";
                     mapping[$"{ggufPrefix}ffn_down.weight"] = $"{smPrefix}ffn_down.weight";
-                    
+
                     if (tensorNames.Contains($"{ggufPrefix}ffn_up.bias"))
                     {
                         mapping[$"{ggufPrefix}ffn_up.bias"] = $"{smPrefix}ffn_up.bias";
@@ -433,7 +429,7 @@ namespace SmallMind.Runtime
         {
             int totalElements = CalculateTotalElements(dimensions);
             var floatData = new float[totalElements];
-            
+
             using (var ms = new MemoryStream(rawData))
             using (var br = new BinaryReader(ms))
             {
@@ -443,7 +439,7 @@ namespace SmallMind.Runtime
                     floatData[i] = HalfToFloat(halfBits);
                 }
             }
-            
+
             return floatData;
         }
 
@@ -465,7 +461,7 @@ namespace SmallMind.Runtime
                     // Read int8 values
                     int blockStart = blockIdx * GgufBlockSize;
                     int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
-                    
+
                     for (int i = blockStart; i < blockEnd; i++)
                     {
                         sbyte quantized = br.ReadSByte();
@@ -495,16 +491,16 @@ namespace SmallMind.Runtime
                     // Read 4-bit packed values (16 bytes = 32 values)
                     int blockStart = blockIdx * GgufBlockSize;
                     int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
-                    
+
                     for (int i = blockStart; i < blockEnd; i += 2)
                     {
                         byte packedByte = br.ReadByte();
-                        
+
                         // Low nibble
                         byte nibble0 = (byte)(packedByte & 0xF);
                         int q0 = Q4Tensor.DecodeNibble(nibble0);
                         floatData[i] = q0 * scale;
-                        
+
                         // High nibble (if not last element)
                         if (i + 1 < blockEnd)
                         {
@@ -548,10 +544,10 @@ namespace SmallMind.Runtime
                     for (int i = blockStart; i < blockEnd; i++)
                     {
                         int localIdx = i - blockStart;
-                        
+
                         // Extract high bit
                         int highBit = (int)(((highBits >> localIdx) & 1) << 4);
-                        
+
                         // Extract low 4 bits
                         byte packedByte = br.ReadByte();
                         int lowNibble;
@@ -608,10 +604,10 @@ namespace SmallMind.Runtime
                     for (int i = blockStart; i < blockEnd; i++)
                     {
                         int localIdx = i - blockStart;
-                        
+
                         // Extract high bit
                         int highBit = (int)(((highBits >> localIdx) & 1) << 4);
-                        
+
                         // Extract low 4 bits
                         int byteIdx = localIdx / 2;
                         int lowNibble;
@@ -656,18 +652,18 @@ namespace SmallMind.Runtime
                     // Read scales and mins (quantized as 6-bit values)
                     var scales = new float[NumScales];
                     var mins = new float[NumScales];
-                    
+
                     // Read fp16 scale for scales
                     ushort dHalf = br.ReadUInt16();
                     float d = HalfToFloat(dHalf);
-                    
+
                     // Read fp16 min for mins
                     ushort dminHalf = br.ReadUInt16();
                     float dmin = HalfToFloat(dminHalf);
 
                     // Read quantized scales (6-bit, packed)
                     byte[] scaleBytes = br.ReadBytes(NumScales * 3 / 4 + 1); // Packed 6-bit values
-                    
+
                     for (int i = 0; i < NumScales; i++)
                     {
                         // Unpack 6-bit scale values (simplified)
@@ -686,14 +682,14 @@ namespace SmallMind.Runtime
                     // Read quantized values (4-bit)
                     int sbStart = sbIdx * SuperBlockSize;
                     int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
-                    
+
                     for (int i = sbStart; i < sbEnd; i++)
                     {
                         int localIdx = i - sbStart;
                         int scaleIdx = localIdx / BlockSize;
-                        
+
                         if (scaleIdx >= NumScales) scaleIdx = NumScales - 1;
-                        
+
                         // Read packed 4-bit value
                         byte packedByte = br.ReadByte();
                         int nibble;
@@ -736,7 +732,7 @@ namespace SmallMind.Runtime
                 {
                     var scales = new float[NumScales];
                     var mins = new float[NumScales];
-                    
+
                     // Read scales
                     ushort dHalf = br.ReadUInt16();
                     float d = HalfToFloat(dHalf);
@@ -763,18 +759,18 @@ namespace SmallMind.Runtime
                     // Read 4-bit low values
                     int sbStart = sbIdx * SuperBlockSize;
                     int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
-                    
+
                     byte[] lowBits = br.ReadBytes((sbEnd - sbStart + 1) / 2);
-                    
+
                     for (int i = sbStart; i < sbEnd; i++)
                     {
                         int localIdx = i - sbStart;
                         int scaleIdx = localIdx / BlockSize;
                         if (scaleIdx >= NumScales) scaleIdx = NumScales - 1;
-                        
+
                         // Extract high bit
                         int highBit = (int)(((highBits >> localIdx) & 1) << 4);
-                        
+
                         // Extract low 4 bits
                         int byteIdx = localIdx / 2;
                         int lowNibble;
@@ -830,22 +826,22 @@ namespace SmallMind.Runtime
                     // Read 6-bit quantized values (packed)
                     int sbStart = sbIdx * SuperBlockSize;
                     int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
-                    
+
                     // 6-bit values require 3 bytes for every 4 values
                     int numBytes = ((sbEnd - sbStart) * 6 + 7) / 8;
                     byte[] qData = br.ReadBytes(numBytes);
-                    
+
                     int bitOffset = 0;
                     for (int i = sbStart; i < sbEnd; i++)
                     {
                         int localIdx = i - sbStart;
                         int scaleIdx = localIdx / BlockSize;
                         if (scaleIdx >= NumScales) scaleIdx = NumScales - 1;
-                        
+
                         // Extract 6-bit value from bit stream
                         int byteIdx = bitOffset / 8;
                         int bitIdx = bitOffset % 8;
-                        
+
                         int q6;
                         if (bitIdx <= 2)
                         {
@@ -859,9 +855,9 @@ namespace SmallMind.Runtime
                             int highBits = (byteIdx + 1 < qData.Length) ? (qData[byteIdx + 1] << (8 - bitIdx)) : 0;
                             q6 = (lowBits | highBits) & 0x3F;
                         }
-                        
+
                         bitOffset += 6;
-                        
+
                         // Center the 6-bit value (range -32 to 31)
                         int centered = q6 - 32;
                         floatData[i] = scales[scaleIdx] * centered;
@@ -925,7 +921,7 @@ namespace SmallMind.Runtime
         /// Copy weights from source array to target tensor with shape validation.
         /// Handles transposition if needed based on Linear weight layout (outFeatures, inFeatures).
         /// </summary>
-        private static void CopyWeights(float[] source, Tensor target, 
+        private static void CopyWeights(float[] source, Tensor target,
             string ggufName, string smName, ulong[] ggufDims, IInternalRuntimeLogger logger)
         {
             // Validate total element count matches
@@ -980,19 +976,19 @@ namespace SmallMind.Runtime
         /// Merge separate Q/K/V weight tensors from GGUF into combined QKV tensor in SmallMind.
         /// Returns the count of Q/K/V tensor reads.
         /// </summary>
-        private static int MergeQKVWeights(ITensorDataReader reader, GgufModelInfo modelInfo, 
-            Dictionary<string, Tensor> namedParams, 
+        private static int MergeQKVWeights(ITensorDataReader reader, GgufModelInfo modelInfo,
+            Dictionary<string, Tensor> namedParams,
             Dictionary<string, string> tensorMapping, HashSet<string> loadedParams, IInternalRuntimeLogger logger)
         {
             int qkvReadsCount = 0;
-            
+
             // Group Q/K/V tensors by layer
             var qkvGroups = new Dictionary<int, (GgufTensorInfo? q, GgufTensorInfo? k, GgufTensorInfo? v)>();
 
             foreach (var tensorInfo in modelInfo.Tensors)
             {
                 string name = tensorInfo.Name;
-                
+
                 if (name.Contains(".attn_q.weight"))
                 {
                     int layer = ExtractLayerIndex(name);
@@ -1061,7 +1057,7 @@ namespace SmallMind.Runtime
                 logger.LogDebug($"  blk.{layer}.attn_qkv.weight: Merged Q({qSize}) + K({kSize}) + V({vSize}) = {totalSize} elements");
                 loadedParams.Add(targetName);
             }
-            
+
             return qkvReadsCount;
         }
 
@@ -1079,14 +1075,14 @@ namespace SmallMind.Runtime
         /// <summary>
         /// Handle weight tying: copy token embeddings to output head if missing.
         /// </summary>
-        private static void HandleWeightTying(Dictionary<string, Tensor> namedParams, 
+        private static void HandleWeightTying(Dictionary<string, Tensor> namedParams,
             HashSet<string> loadedParams, ModelConfig config, IInternalRuntimeLogger logger)
         {
             // Check if output.weight is loaded
             if (!loadedParams.Contains("output.weight") && namedParams.ContainsKey("output.weight"))
             {
                 logger.LogInfo("  Applying weight tying: copying token_embd.weight to output.weight");
-                
+
                 var tokenEmbed = namedParams["token_embd.weight"];
                 var outputWeight = namedParams["output.weight"];
 
@@ -1151,9 +1147,9 @@ namespace SmallMind.Runtime
             var modelInfo = reader.ReadModelInfo();
 
             var (tokenizer, diagnostics) = GgufTokenizerFactory.CreateTokenizer(
-                modelInfo.Metadata, 
+                modelInfo.Metadata,
                 NullRuntimeLogger.Instance);
-                
+
             if (tokenizer == null)
             {
                 throw new NotSupportedException(

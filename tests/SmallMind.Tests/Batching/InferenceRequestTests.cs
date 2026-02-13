@@ -1,9 +1,5 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using SmallMind.Runtime.Batching;
 using SmallMind.Runtime.Cache;
-using Xunit;
 
 namespace SmallMind.Tests.Batching
 {

@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
 namespace SmallMind.ConsoleApp.Commands
 {
     /// <summary>
@@ -19,14 +14,14 @@ namespace SmallMind.ConsoleApp.Commands
                 // Generation commands
                 ["generate"] = new GenerateCommand(),
                 ["run-gguf"] = new RunGgufCommand(),
-                
+
                 // Model management commands
                 ["model download"] = new ModelDownloadCommand(),
                 ["model add"] = new ModelAddCommand(),
                 ["model list"] = new ModelListCommand(),
                 ["model verify"] = new ModelVerifyCommand(),
                 ["model inspect"] = new ModelInspectCommand(),
-                
+
                 // Quantization commands
                 ["quantize"] = new QuantizeCommand(),
                 ["import-gguf"] = new ImportGgufCommand(),
@@ -70,14 +65,14 @@ namespace SmallMind.ConsoleApp.Commands
             System.Console.WriteLine("Usage: smallmind <command> [arguments] [options]");
             System.Console.WriteLine();
             System.Console.WriteLine("Available commands:");
-            
+
             int maxNameLength = _commands.Keys.Max(k => k.Length);
-            
+
             foreach (var kvp in _commands.OrderBy(x => x.Key))
             {
                 System.Console.WriteLine($"  {kvp.Key.PadRight(maxNameLength + 2)}{kvp.Value.Description}");
             }
-            
+
             System.Console.WriteLine();
             System.Console.WriteLine("Run 'smallmind <command> --help' for command-specific help");
         }

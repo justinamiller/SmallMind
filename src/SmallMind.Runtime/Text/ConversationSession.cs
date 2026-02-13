@@ -1,10 +1,5 @@
-using SmallMind.Tokenizers;
-using SmallMind.Core.Core;
-using SmallMind.Transformers;
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
+using SmallMind.Tokenizers;
 
 namespace SmallMind.Runtime
 {
@@ -18,7 +13,7 @@ namespace SmallMind.Runtime
         private readonly int _maxContextTokens;
         private readonly List<ConversationTurn> _history;
         private readonly ITokenizer _tokenizer;
-        
+
         public string SessionId { get; private set; }
         public DateTime CreatedAt { get; private set; }
         public DateTime LastUpdatedAt { get; private set; }
@@ -79,7 +74,7 @@ namespace SmallMind.Runtime
             // Join and check if we need to truncate
             string fullContext = string.Join("\n", contextParts);
             var tokens = _tokenizer.Encode(fullContext);
-            
+
             if (tokens.Count <= _maxContextTokens)
             {
                 return fullContext;
@@ -88,19 +83,19 @@ namespace SmallMind.Runtime
             // If too long, keep most recent turns that fit
             contextParts.Clear();
             int currentTokens = 0;
-            
+
             for (int i = _history.Count - 1; i >= 0; i--)
             {
                 var turn = _history[i];
                 string prefix = turn.Role == "user" ? "User: " : "Assistant: ";
                 string turnText = prefix + turn.Content + "\n";
                 var turnTokens = _tokenizer.Encode(turnText);
-                
+
                 if (currentTokens + turnTokens.Count > _maxContextTokens)
                 {
                     break;
                 }
-                
+
                 contextParts.Insert(0, turnText.TrimEnd());
                 currentTokens += turnTokens.Count;
             }
@@ -154,9 +149,9 @@ namespace SmallMind.Runtime
                 History = _history
             };
 
-            var json = JsonSerializer.Serialize(sessionData, new JsonSerializerOptions 
-            { 
-                WriteIndented = true 
+            var json = JsonSerializer.Serialize(sessionData, new JsonSerializerOptions
+            {
+                WriteIndented = true
             });
             File.WriteAllText(filePath, json);
         }
@@ -168,7 +163,7 @@ namespace SmallMind.Runtime
         {
             var json = File.ReadAllText(filePath);
             var sessionData = JsonSerializer.Deserialize<SessionData>(json);
-            
+
             if (sessionData == null)
             {
                 throw new InvalidOperationException("Failed to deserialize session data");

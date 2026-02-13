@@ -1,5 +1,5 @@
-using SmallMind.Server.Models;
 using System.Text;
+using SmallMind.Server.Models;
 
 namespace SmallMind.Server.Services;
 
@@ -11,11 +11,11 @@ public static class PromptBuilder
             return string.Empty;
 
         var sb = new StringBuilder(capacity: 512);
-        
+
         for (int i = 0; i < messages.Count; i++)
         {
             var msg = messages[i];
-            
+
             switch (msg.Role.ToLowerInvariant())
             {
                 case "system":
@@ -23,19 +23,19 @@ public static class PromptBuilder
                     sb.Append(msg.Content);
                     sb.Append("\n\n");
                     break;
-                    
+
                 case "user":
                     sb.Append("User: ");
                     sb.Append(msg.Content);
                     sb.Append("\n\n");
                     break;
-                    
+
                 case "assistant":
                     sb.Append("Assistant: ");
                     sb.Append(msg.Content);
                     sb.Append("\n\n");
                     break;
-                    
+
                 default:
                     sb.Append(msg.Role);
                     sb.Append(": ");
@@ -44,9 +44,9 @@ public static class PromptBuilder
                     break;
             }
         }
-        
+
         sb.Append("Assistant:");
-        
+
         return sb.ToString();
     }
 }

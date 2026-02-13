@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 
 namespace SmallMind.Runtime.Cache
 {
@@ -65,7 +63,7 @@ namespace SmallMind.Runtime.Cache
                 throw new ObjectDisposedException(nameof(KvCachePool));
 
             var key = new PoolKey(modelShape, maxTokens);
-            
+
             // Try to get from pool
             if (_pools.TryGetValue(key, out var bag) && bag.TryTake(out var entry))
             {

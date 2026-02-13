@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Core.Utilities
 {
     /// <summary>
@@ -40,7 +37,7 @@ namespace SmallMind.Core.Utilities
                         }
                     }
                 }
-                
+
                 // Try direct conversion for other types
                 try
                 {

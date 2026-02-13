@@ -52,8 +52,8 @@ namespace SmallMind.Engine
         /// Gets or sets a caller-supplied session ID for tracking.
         /// If null, the engine will generate one.
         /// </summary>
-        public string? SessionId 
-        { 
+        public string? SessionId
+        {
             get => BaseOptions.SessionId;
             set => BaseOptions.SessionId = value;
         }

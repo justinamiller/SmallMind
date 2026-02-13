@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Tokenizers
 {
     /// <summary>
@@ -17,7 +15,7 @@ namespace SmallMind.Tokenizers
         /// <summary>
         /// Creates a new TokenizationException with the specified message and inner exception.
         /// </summary>
-        public TokenizationException(string message, Exception innerException) 
+        public TokenizationException(string message, Exception innerException)
             : base(message, innerException)
         {
         }

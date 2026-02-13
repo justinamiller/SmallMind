@@ -1,11 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace SmallMind.ModelRegistry
 {
@@ -290,7 +283,7 @@ namespace SmallMind.ModelRegistry
                     validCount++;
                 }
             }
-            
+
             var buffer = new char[validCount];
             int pos = 0;
             for (int i = 0; i < fileName.Length; i++)
@@ -340,7 +333,7 @@ namespace SmallMind.ModelRegistry
             {
                 var sourceInfo = new FileInfo(sourcePath);
                 var targetInfo = new FileInfo(targetPath);
-                
+
                 // Simple check: if sizes match, assume it's already there
                 if (sourceInfo.Length == targetInfo.Length)
                 {

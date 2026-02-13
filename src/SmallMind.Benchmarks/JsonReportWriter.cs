@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -45,7 +42,7 @@ namespace SmallMind.Benchmarks
             {
                 var json = File.ReadAllText(filePath);
                 var document = JsonDocument.Parse(json);
-                
+
                 if (document.RootElement.TryGetProperty("results", out var resultsElement))
                 {
                     return JsonSerializer.Deserialize<List<BenchmarkResult>>(resultsElement.GetRawText(), _options);

@@ -25,7 +25,7 @@ internal sealed class DefaultAuthorizer : IAuthorizer
     public List<Chunk> FilterChunks(UserContext user, List<Chunk> chunks)
     {
         var result = new List<Chunk>(chunks.Count);
-        
+
         for (int i = 0; i < chunks.Count; i++)
         {
             if (IsAuthorized(user, chunks[i]))

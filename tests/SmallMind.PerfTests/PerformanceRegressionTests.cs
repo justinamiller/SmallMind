@@ -1,6 +1,4 @@
-using System;
 using System.Diagnostics;
-using Xunit;
 using SmallMind.Core.Simd;
 
 namespace SmallMind.PerfTests
@@ -223,29 +221,29 @@ namespace SmallMind.PerfTests
             // Arrange
             var workspace = new SmallMind.Transformers.TensorWorkspace();
             int M = 4, K = 4, N = 4;
-            
+
             // Create test matrices
-            var A = new float[] { 1,2,3,4, 5,6,7,8, 9,10,11,12, 13,14,15,16 };
-            var B = new float[] { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 }; // Identity
+            var A = new float[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+            var B = new float[] { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 }; // Identity
             var C = workspace.GetOrCreate("result", new[] { M, N }, requiresGrad: false);
-            
+
             // First MatMul: A × Identity = A
             MatMulOps.MatMul(A, B, C.Data, M, K, N);
-            
+
             // Assert: Result should equal A (identity multiplication)
             for (int i = 0; i < M * N; i++)
             {
                 Assert.Equal(A[i], C.Data[i], precision: 5);
             }
-            
+
             // Reuse workspace for second MatMul
             var C2 = workspace.GetOrCreate("result", new[] { M, N }, requiresGrad: false);
             Assert.Same(C, C2); // Same instance
-            
+
             // Second MatMul with different A
-            var A2 = new float[] { 2,4,6,8, 10,12,14,16, 18,20,22,24, 26,28,30,32 };
+            var A2 = new float[] { 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32 };
             MatMulOps.MatMul(A2, B, C2.Data, M, K, N);
-            
+
             // Assert: Result should equal A2 (MatMul clears output internally)
             for (int i = 0; i < M * N; i++)
             {

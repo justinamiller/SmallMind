@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Core.Simd;
 
 namespace SmallMind.Quantization.Abstractions

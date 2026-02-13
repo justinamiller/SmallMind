@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Core.Core
 {
     /// <summary>
@@ -81,7 +78,7 @@ namespace SmallMind.Core.Core
 
             double min = sorted[0];
             double max = sorted[sorted.Count - 1];
-            
+
             // Calculate mean manually to avoid LINQ
             double sum = 0;
             for (int i = 0; i < values.Count; i++)
@@ -89,7 +86,7 @@ namespace SmallMind.Core.Core
                 sum += values[i];
             }
             double mean = sum / values.Count;
-            
+
             // Use the already-sorted list for efficient percentile calculations
             double p50 = PercentileFromSorted(sorted, 50);
             double p95 = PercentileFromSorted(sorted, 95);

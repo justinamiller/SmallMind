@@ -1,14 +1,12 @@
-using SmallMind.Tokenizers;
-using SmallMind.Core.Core;
-using SmallMind.Transformers;
-using SmallMind.Abstractions.Telemetry;
-using System;
-using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
+using SmallMind.Abstractions.Telemetry;
+using SmallMind.Core.Core;
+using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 
 namespace SmallMind.Runtime
 {
@@ -22,17 +20,17 @@ namespace SmallMind.Runtime
         private readonly TransformerModel _model;
         private readonly ITokenizer _tokenizer;
         private readonly int _blockSize;
-        
+
         // Reusable buffers to reduce allocations
         private float[]? _probabilityBuffer;
         private List<int>? _contextCroppedBuffer;
         private float[]? _logitsLastBuffer;
         private float[]? _topKFilteredBuffer;
-        
+
         // KV-cache state for efficient decode
         private bool _kvCacheActive = false;
         private int _currentPosition = 0;
-        
+
         // Reusable decode tensor for single-token generation
         private float[] _decodeData = new float[1];
         private int[] _decodeShape = new int[] { 1, 1 };
@@ -49,19 +47,19 @@ namespace SmallMind.Runtime
         /// Generate text from a prompt.
         /// </summary>
         public string Generate(
-            string prompt, 
-            int maxNewTokens, 
-            double temperature = 1.0, 
+            string prompt,
+            int maxNewTokens,
+            double temperature = 1.0,
             int topK = 0,
             double topP = 1.0,
-            int? seed = null, 
-            bool showPerf = false, 
-            bool isPerfJsonMode = false, 
+            int? seed = null,
+            bool showPerf = false,
+            bool isPerfJsonMode = false,
             PerformanceMetrics? metrics = null,
             IRuntimeLogger? logger = null)
         {
             logger = logger ?? NullRuntimeLogger.Instance;
-            
+
             _model.Eval();
 
             Random random;
@@ -106,7 +104,7 @@ namespace SmallMind.Runtime
             }
 
             var totalStopwatch = System.Diagnostics.Stopwatch.StartNew();
-            
+
             // Start metrics tracking
             int requestId = -1;
             if (metrics != null)
@@ -126,15 +124,15 @@ namespace SmallMind.Runtime
                 for (int i = 0; i < maxNewTokens; i++)
                 {
                     Tensor logits;
-                    
+
                     if (!_kvCacheActive)
                     {
                         // PREFILL PHASE: Process full prompt to populate KV cache
-                        
+
                         // Reset and enable KV-cache
                         _model.ResetKVCache();
                         _model.EnableKVCache();
-                        
+
                         // Crop context to last blockSize tokens (avoid LINQ allocation)
                         List<int> contextCropped;
                         if (context.Count <= _blockSize)
@@ -152,7 +150,7 @@ namespace SmallMind.Runtime
                             {
                                 _contextCroppedBuffer.Clear();
                             }
-                            
+
                             int startIdx = context.Count - _blockSize;
                             for (int idx = startIdx; idx < context.Count; idx++)
                             {
@@ -160,9 +158,9 @@ namespace SmallMind.Runtime
                             }
                             contextCropped = _contextCroppedBuffer;
                         }
-                        
+
                         int promptLength = contextCropped.Count;
-                        
+
                         // Build tensor from full prompt: shape (1, promptLength)
                         var prefillData = new float[promptLength];
                         for (int j = 0; j < promptLength; j++)
@@ -170,10 +168,10 @@ namespace SmallMind.Runtime
                             prefillData[j] = contextCropped[j];
                         }
                         var prefillTensor = new Tensor(prefillData, new int[] { 1, promptLength });
-                        
+
                         // Forward pass with position offset 0
                         logits = _model.Forward(prefillTensor, positionOffset: 0);
-                        
+
                         // Set position for next decode step
                         _currentPosition = promptLength;
                         _kvCacheActive = true;
@@ -181,20 +179,20 @@ namespace SmallMind.Runtime
                     else
                     {
                         // DECODE PHASE: Single-token forward with KV cache
-                        
+
                         // Get the last token from context
                         int lastToken = context[context.Count - 1];
-                        
+
                         // Reuse decode tensor (zero allocation)
                         _decodeData[0] = lastToken;
                         if (_decodeTensor == null)
                         {
                             _decodeTensor = new Tensor(_decodeData, _decodeShape);
                         }
-                        
+
                         // Forward pass with current position offset
                         logits = _model.Forward(_decodeTensor, positionOffset: _currentPosition);
-                        
+
                         // Increment position for next token
                         _currentPosition++;
                     }
@@ -203,7 +201,7 @@ namespace SmallMind.Runtime
                     // logits shape: (1, T, vocab_size), we want position (0, T-1, :)
                     int T = logits.Shape[1];  // Sequence length (1 for decode, promptLength for prefill)
                     int vocabSize = logits.Shape[2];
-                    
+
                     // Reuse logitsLast buffer
                     int bufferLength = _logitsLastBuffer?.Length ?? 0;
                     if (bufferLength < vocabSize)
@@ -211,7 +209,7 @@ namespace SmallMind.Runtime
                         _logitsLastBuffer = new float[vocabSize];
                         bufferLength = vocabSize;
                     }
-                    
+
                     int lastPosOffset = (T - 1) * vocabSize; // Offset for last position in batch 0
                     // JIT can eliminate bounds checks when loop bound matches buffer length
                     for (int v = 0; v < bufferLength; v++)
@@ -246,7 +244,7 @@ namespace SmallMind.Runtime
 
                     // Add to context
                     context.Add(nextToken);
-                    
+
                     // Record first token for TTFT metric
                     if (metrics != null && !firstTokenRecorded)
                     {
@@ -273,7 +271,7 @@ namespace SmallMind.Runtime
             }
 
             totalStopwatch.Stop();
-            
+
             // Record completion
             if (metrics != null)
             {
@@ -290,7 +288,7 @@ namespace SmallMind.Runtime
             {
                 metrics.Stop();
                 var summary = metrics.GetSummary(maxTokensRequested: maxNewTokens, concurrencyLevel: 1);
-                
+
                 if (isPerfJsonMode)
                 {
                     // JSON output only
@@ -324,7 +322,7 @@ namespace SmallMind.Runtime
             {
                 rentedBuffer = System.Buffers.ArrayPool<float>.Shared.Rent(logitsLength);
                 Array.Copy(logits, rentedBuffer, logitsLength);
-                
+
                 // Partial sort - only need to find k-th largest
                 Array.Sort(rentedBuffer, 0, logitsLength);
                 Array.Reverse(rentedBuffer, 0, logitsLength); // Now in descending order
@@ -335,7 +333,7 @@ namespace SmallMind.Runtime
                 {
                     _topKFilteredBuffer = new float[logitsLength];
                 }
-                
+
                 // Set all values below k-th to -inf
                 for (int i = 0; i < logitsLength; i++)
                 {
@@ -387,7 +385,7 @@ namespace SmallMind.Runtime
                 // Find the cutoff index where cumulative probability exceeds topP
                 float cumSum = 0.0f;
                 int cutoffIndex = probsLength;
-                
+
                 for (int i = 0; i < probsLength; i++)
                 {
                     cumSum += sortedProbs[i];
@@ -483,7 +481,7 @@ namespace SmallMind.Runtime
             {
                 var vInvTemp = new Vector<float>(invTemp);
                 int vectorSize = Vector<float>.Count;
-                
+
                 unsafe
                 {
                     fixed (float* pLogits = logits)
@@ -535,17 +533,17 @@ namespace SmallMind.Runtime
                             var v = Avx512F.LoadVector512(pLogits + i);
                             maxVec512 = Avx512F.Max(maxVec512, v);
                         }
-                        
+
                         // Reduce 512 -> 256 -> scalar
                         var upper = Avx512F.ExtractVector256(maxVec512, 1);
                         var lower = Avx512F.ExtractVector256(maxVec512, 0);
                         var maxVec256 = Avx.Max(upper, lower);
-                        
+
                         float* temp = stackalloc float[8];
                         Avx.Store(temp, maxVec256);
                         for (int j = 0; j < 8; j++)
                         {
-                            if (temp[j] > max && temp[j] != float.NegativeInfinity) 
+                            if (temp[j] > max && temp[j] != float.NegativeInfinity)
                                 max = temp[j];
                         }
                     }
@@ -562,11 +560,11 @@ namespace SmallMind.Runtime
                     var v = new Vector<float>(logits, i);
                     maxVec = Vector.Max(maxVec, v);
                 }
-                
+
                 // Horizontal max reduction
                 for (int j = 0; j < vectorSize; j++)
                 {
-                    if (maxVec[j] > max && maxVec[j] != float.NegativeInfinity) 
+                    if (maxVec[j] > max && maxVec[j] != float.NegativeInfinity)
                         max = maxVec[j];
                 }
             }
@@ -624,7 +622,7 @@ namespace SmallMind.Runtime
                 {
                     var vInvSum = new Vector<float>(invSum);
                     int vectorSize = Vector<float>.Count;
-                    
+
                     unsafe
                     {
                         fixed (float* pProbs = _probabilityBuffer)

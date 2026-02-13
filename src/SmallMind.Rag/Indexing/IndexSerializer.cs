@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Indexing;

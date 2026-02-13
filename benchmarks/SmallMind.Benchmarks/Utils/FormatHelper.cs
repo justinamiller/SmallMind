@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Benchmarks.Utils
 {
     /// <summary>

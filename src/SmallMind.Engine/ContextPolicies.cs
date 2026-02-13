@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using SmallMind.Abstractions;
 
 namespace SmallMind.Engine
@@ -131,7 +128,7 @@ namespace SmallMind.Engine
             }
 
             int remainingBudget = maxTokens - systemTokens;
-            
+
             // Add conversation messages in chronological order until budget exhausted
             var result = new List<ChatMessageV3>(systemMessages);
             for (int i = 0; i < conversationMessages.Count; i++)

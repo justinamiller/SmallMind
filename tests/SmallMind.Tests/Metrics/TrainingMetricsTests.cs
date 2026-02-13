@@ -1,8 +1,4 @@
-using System;
-using Xunit;
 using SmallMind.Runtime.Metrics;
-using SmallMind.Core.Core;
-using SmallMind.Runtime;
 
 namespace SmallMind.Tests.Metrics
 {
@@ -16,12 +12,12 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act
             metrics.RecordTrainingLoss(2.5f);
             metrics.RecordTrainingLoss(2.3f);
             metrics.RecordTrainingLoss(2.1f);
-            
+
             // Assert
             Assert.Equal(2.1f, metrics.GetCurrentTrainingLoss());
             var summary = metrics.GetSummary();
@@ -35,10 +31,10 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act
             metrics.RecordValidationLoss(1.0f);
-            
+
             // Assert
             float? perplexity = metrics.GetCurrentPerplexity();
             Assert.NotNull(perplexity);
@@ -51,10 +47,10 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act - record a very high loss
             metrics.RecordValidationLoss(100.0f);
-            
+
             // Assert - perplexity should be clamped to prevent overflow
             float? perplexity = metrics.GetCurrentPerplexity();
             Assert.NotNull(perplexity);
@@ -66,12 +62,12 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act
             metrics.RecordTokenAccuracy(0.5f);
             metrics.RecordTokenAccuracy(0.6f);
             metrics.RecordTokenAccuracy(0.7f);
-            
+
             // Assert
             Assert.Equal(0.7f, metrics.GetCurrentTokenAccuracy());
             var summary = metrics.GetSummary();
@@ -84,11 +80,11 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act
             metrics.RecordGradientStats(meanNorm: 0.01f, maxNorm: 0.1f, minNorm: 0.001f, nanCount: 0, infCount: 0);
             metrics.RecordGradientStats(meanNorm: 0.02f, maxNorm: 0.2f, minNorm: 0.002f, nanCount: 0, infCount: 0);
-            
+
             // Assert
             var summary = metrics.GetSummary();
             Assert.NotNull(summary.GradientHealthSummary);
@@ -101,12 +97,12 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act
             metrics.RecordValidationLoss(3.0f);
             metrics.RecordValidationLoss(2.5f);
             metrics.RecordValidationLoss(2.8f);
-            
+
             // Assert
             Assert.Equal(2.5f, metrics.GetBestValidationLoss());
         }
@@ -116,13 +112,13 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act - add decreasing losses (good progress)
             for (int i = 0; i < 20; i++)
             {
                 metrics.RecordTrainingLoss(5.0f - i * 0.1f);
             }
-            
+
             // Assert
             Assert.True(metrics.IsTrainingProgressing(lookbackSteps: 5));
         }
@@ -132,13 +128,13 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act - add increasing losses (no progress)
             for (int i = 0; i < 20; i++)
             {
                 metrics.RecordTrainingLoss(2.0f + i * 0.1f);
             }
-            
+
             // Assert
             Assert.False(metrics.IsTrainingProgressing(lookbackSteps: 5));
         }
@@ -151,10 +147,10 @@ namespace SmallMind.Tests.Metrics
             metrics.RecordTrainingLoss(2.5f);
             metrics.RecordValidationLoss(2.8f);
             metrics.RecordTokenAccuracy(0.65f);
-            
+
             // Act
             string report = metrics.GetReport();
-            
+
             // Assert
             Assert.Contains("Training Metrics Report", report);
             Assert.Contains("Training Loss", report);
@@ -168,13 +164,13 @@ namespace SmallMind.Tests.Metrics
         {
             // Arrange
             var metrics = new TrainingMetrics();
-            
+
             // Act
             metrics.RecordTrainingLoss(2.0f);
             metrics.RecordTrainingLoss(float.NaN);
             metrics.RecordTrainingLoss(float.PositiveInfinity);
             metrics.RecordTrainingLoss(1.5f);
-            
+
             // Assert
             var summary = metrics.GetSummary();
             Assert.Equal(2, summary.TrainingLossStats!.Count); // Only 2 valid values

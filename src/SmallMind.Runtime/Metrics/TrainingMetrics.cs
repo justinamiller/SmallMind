@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Runtime.Metrics
 {
     /// <summary>
@@ -14,7 +11,7 @@ namespace SmallMind.Runtime.Metrics
         private readonly List<float> _perplexities = new List<float>();
         private readonly List<float> _tokenAccuracies = new List<float>();
         private readonly List<GradientStats> _gradientStats = new List<GradientStats>();
-        
+
         /// <summary>
         /// Record a training loss value for a step.
         /// </summary>
@@ -36,7 +33,7 @@ namespace SmallMind.Runtime.Metrics
             if (!float.IsNaN(loss) && !float.IsInfinity(loss))
             {
                 _validationLosses.Add(loss);
-                
+
                 // Compute perplexity: exp(loss)
                 // Clamp loss to avoid overflow (max perplexity ~88,000)
                 float clampedLoss = Math.Min(loss, 11.5f);
@@ -111,7 +108,7 @@ namespace SmallMind.Runtime.Metrics
         {
             if (_validationLosses.Count == 0)
                 return null;
-            
+
             // Manual min to avoid LINQ allocation
             float min = _validationLosses[0];
             for (int i = 1; i < _validationLosses.Count; i++)
@@ -129,7 +126,7 @@ namespace SmallMind.Runtime.Metrics
         {
             if (_perplexities.Count == 0)
                 return null;
-            
+
             // Manual min to avoid LINQ allocation
             float min = _perplexities[0];
             for (int i = 1; i < _perplexities.Count; i++)
@@ -167,7 +164,7 @@ namespace SmallMind.Runtime.Metrics
 
             // Manual averaging to avoid LINQ allocations
             int count = _trainingLosses.Count;
-            
+
             // Calculate recent average (last lookbackSteps items)
             int recentStart = Math.Max(0, count - lookbackSteps);
             int recentCount = count - recentStart;
@@ -177,14 +174,14 @@ namespace SmallMind.Runtime.Metrics
                 recentSum += _trainingLosses[i];
             }
             float recentAvg = recentSum / recentCount;
-            
+
             // Calculate previous average (lookbackSteps items before recent)
             int previousStart = Math.Max(0, count - 2 * lookbackSteps);
             int previousEnd = recentStart;
             int previousCount = previousEnd - previousStart;
-            
+
             if (previousCount == 0) return true;
-            
+
             float previousSum = 0f;
             for (int i = previousStart; i < previousEnd; i++)
             {
@@ -267,7 +264,7 @@ namespace SmallMind.Runtime.Metrics
             float sum = 0f;
             float min = values[0];
             float max = values[0];
-            
+
             for (int i = 0; i < count; i++)
             {
                 float val = values[i];
@@ -275,7 +272,7 @@ namespace SmallMind.Runtime.Metrics
                 if (val < min) min = val;
                 if (val > max) max = val;
             }
-            
+
             float mean = sum / count;
 
             return new StatsSummary
@@ -311,7 +308,7 @@ namespace SmallMind.Runtime.Metrics
             int totalNanCount = 0;
             int totalInfCount = 0;
             int healthyCount = 0;
-            
+
             for (int i = 0; i < _gradientStats.Count; i++)
             {
                 var stats = _gradientStats[i];
@@ -323,7 +320,7 @@ namespace SmallMind.Runtime.Metrics
                 if (stats.NanCount == 0 && stats.InfCount == 0)
                     healthyCount++;
             }
-            
+
             return new GradientHealthSummary
             {
                 AverageMeanNorm = sumMeanNorm / _gradientStats.Count,

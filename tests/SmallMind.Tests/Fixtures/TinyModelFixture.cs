@@ -1,7 +1,5 @@
-using System;
-using System.Collections.Generic;
-using SmallMind.Transformers;
 using SmallMind.Tokenizers;
+using SmallMind.Transformers;
 
 namespace SmallMind.Tests.Fixtures
 {
@@ -28,7 +26,7 @@ namespace SmallMind.Tests.Fixtures
         public const int UNK_ID = 2;
 
         // Deterministic test vocabulary (ASCII printable subset)
-        private const string TestVocab = 
+        private const string TestVocab =
             " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\n\r\t";
 
         private TransformerModel? _cachedModel;

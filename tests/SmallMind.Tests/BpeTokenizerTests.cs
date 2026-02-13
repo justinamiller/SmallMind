@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
-using Xunit;
 using SmallMind.Tokenizers;
 
 namespace SmallMind.Tests;
@@ -143,7 +139,7 @@ public class BpeTokenizerTests
         // Assert - repeated pattern should use fewer tokens than character count
         Assert.True(tokensCompressed.Count < "aaabbbcccddd".Length,
             $"Expected compression: tokens={tokensCompressed.Count} < chars={("aaabbbcccddd").Length}");
-        
+
         // Verify roundtrip
         Assert.Equal("aaabbbcccddd", tokenizer.Decode(tokensCompressed));
         Assert.Equal("xyz", tokenizer.Decode(tokensUncompressed));
@@ -223,7 +219,7 @@ public class BpeTokenizerTests
         {
             // Act - save and reload
             originalTokenizer.SaveVocabulary(tempFile);
-            
+
             var loadedTokenizer = new ByteLevelBpeTokenizer();
             loadedTokenizer.LoadVocabulary(tempFile);
 
@@ -286,14 +282,14 @@ public class BpeTokenizerTests
     {
         // Arrange
         var tokenizer = new ByteLevelBpeTokenizer();
-        
+
         // Create a string with all possible byte values
         var allBytes = new byte[256];
         for (int i = 0; i < 256; i++)
         {
             allBytes[i] = (byte)i;
         }
-        
+
         // This may not be valid UTF-8, but we should handle it at byte level
         // Let's create valid UTF-8 test cases for each byte range
         tokenizer.Train("ABCabc123!@# àéîôù ÀÉÎÔÙ 你好世界 🎉🌍", 300);
@@ -362,7 +358,7 @@ public class BpeTokenizerTests
         // Assert
         Assert.True(tokenCount > 0);
         Assert.True(tokenCount <= tokensOut.Length);
-        
+
         // Verify by decoding
         string decoded = tokenizer.DecodeToString(tokensOut.AsSpan(0, tokenCount));
         Assert.Equal(testText, decoded);
@@ -404,7 +400,7 @@ public class BpeTokenizerTests
 
             // Assert
             Assert.True(File.Exists(tempFile));
-            
+
             // Verify we can load it back
             var loaded = new ByteLevelBpeTokenizer();
             loaded.LoadVocabulary(tempFile);

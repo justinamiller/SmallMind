@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace SmallMind.Rag.Prompting;
@@ -42,7 +40,7 @@ internal static class CitationFormatter
         {
             var citation = citations[i];
             sb.Append(FormatCitation(citation.index, citation.title, citation.sourceUri, citation.charStart, citation.charEnd));
-            
+
             if (i < citations.Count - 1)
             {
                 sb.AppendLine();
@@ -86,7 +84,7 @@ internal static class CitationFormatter
                 if (end < length && answer[end] == ']' && end > start)
                 {
                     string citationNum = answer.Substring(start, end - start);
-                    
+
                     // Avoid duplicates
                     bool found = false;
                     for (int j = 0; j < refs.Count; j++)

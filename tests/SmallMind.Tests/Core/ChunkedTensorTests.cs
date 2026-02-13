@@ -1,5 +1,3 @@
-using System;
-using Xunit;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
 
@@ -141,7 +139,7 @@ namespace SmallMind.Tests.Core
             // Arrange
             int[] shape = new int[] { 1000, 1000 };
             var tensor = Tensor.CreateChunked(shape);
-            
+
             // Set some values
             var buffer = tensor.GetChunkedBuffer();
             buffer.Set(0, 1.0f);

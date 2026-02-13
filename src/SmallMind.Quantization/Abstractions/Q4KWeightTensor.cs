@@ -1,6 +1,5 @@
-using System;
-using SmallMind.Quantization.Tensors;
 using SmallMind.Quantization.Kernels;
+using SmallMind.Quantization.Tensors;
 
 namespace SmallMind.Quantization.Abstractions
 {

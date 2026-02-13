@@ -1,7 +1,4 @@
-using System;
 using System.Diagnostics;
-using System.Linq;
-using SmallMind.Core.Core;
 
 namespace SmallMind.Tests.Utilities
 {
@@ -16,7 +13,7 @@ namespace SmallMind.Tests.Utilities
         public static bool ShouldRunPerfTests()
         {
             var envVar = Environment.GetEnvironmentVariable("RUN_PERF_TESTS");
-            return !string.IsNullOrEmpty(envVar) && 
+            return !string.IsNullOrEmpty(envVar) &&
                    envVar.Equals("true", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -26,7 +23,7 @@ namespace SmallMind.Tests.Utilities
         public static bool AllocationDiagnosticsEnabled()
         {
             var envVar = Environment.GetEnvironmentVariable("ALLOCATION_DIAGNOSTICS");
-            return !string.IsNullOrEmpty(envVar) && 
+            return !string.IsNullOrEmpty(envVar) &&
                    envVar.Equals("true", StringComparison.OrdinalIgnoreCase);
         }
     }
@@ -65,7 +62,7 @@ namespace SmallMind.Tests.Utilities
             }
 
             _stopwatch.Stop();
-            
+
             var endBytes = GC.GetAllocatedBytesForCurrentThread();
             var gen0End = GC.CollectionCount(0);
             var gen1End = GC.CollectionCount(1);

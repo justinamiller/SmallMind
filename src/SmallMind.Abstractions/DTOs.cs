@@ -1,5 +1,3 @@
-using System;
-
 namespace SmallMind.Abstractions
 {
     /// <summary>
@@ -441,7 +439,7 @@ namespace SmallMind.Abstractions
         /// <param name="right">The second TokenEvent to compare.</param>
         /// <returns>true if left and right are equal; otherwise, false.</returns>
         public static bool operator ==(TokenEvent left, TokenEvent right) => left.Equals(right);
-        
+
         /// <summary>
         /// Determines whether two specified TokenEvent instances are not equal.
         /// </summary>
@@ -586,7 +584,7 @@ namespace SmallMind.Abstractions
         /// <param name="right">The second SessionInfo to compare.</param>
         /// <returns>true if left and right are equal; otherwise, false.</returns>
         public static bool operator ==(SessionInfo left, SessionInfo right) => left.Equals(right);
-        
+
         /// <summary>
         /// Determines whether two specified SessionInfo instances are not equal.
         /// </summary>

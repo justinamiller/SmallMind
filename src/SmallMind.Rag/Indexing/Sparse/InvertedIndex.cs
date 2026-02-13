@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace SmallMind.Rag.Indexing.Sparse;
 
 /// <summary>
@@ -45,7 +42,7 @@ internal sealed class InvertedIndex
     {
         if (string.IsNullOrEmpty(chunkId))
             throw new ArgumentNullException(nameof(chunkId));
-        
+
         if (text == null)
             throw new ArgumentNullException(nameof(text));
 
@@ -57,7 +54,7 @@ internal sealed class InvertedIndex
 
         // Tokenize text
         List<string> tokens = RagTokenizer.Tokenize(text);
-        
+
         if (tokens.Count == 0)
             return;
 
@@ -109,14 +106,14 @@ internal sealed class InvertedIndex
 
         // Remove from all postings lists
         var termsToRemove = new List<string>();
-        
+
         foreach (var kvp in _index)
         {
             string term = kvp.Key;
             PostingsList postings = kvp.Value;
-            
+
             postings.Remove(chunkId);
-            
+
             // Mark term for removal if postings list is empty
             if (postings.Count == 0)
             {

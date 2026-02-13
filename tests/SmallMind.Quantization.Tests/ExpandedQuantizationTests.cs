@@ -1,6 +1,5 @@
-using SmallMind.Quantization.Tensors;
 using SmallMind.Quantization.Kernels;
-using Xunit;
+using SmallMind.Quantization.Tensors;
 
 namespace SmallMind.Quantization.Tests
 {
@@ -46,7 +45,7 @@ namespace SmallMind.Quantization.Tests
 
             // Assert - Q4_1 should preserve positive-only distribution well
             AssertArraysClose(source, dequantized, Q4_1Tolerance);
-            
+
             // Verify block structure
             Assert.Equal(rows * cols, dequantized.Length);
             int expectedBlocks = (rows * cols + 31) / 32;
@@ -84,7 +83,7 @@ namespace SmallMind.Quantization.Tests
 
             // Assert - tighter tolerance than Q4_0 (which uses 5.0f)
             AssertArraysClose(source, dequantized, Q5_0Tolerance);
-            
+
             // Verify block structure
             Assert.Equal(rows * cols, dequantized.Length);
             int expectedBlocks = (rows * cols + 31) / 32;
@@ -232,7 +231,7 @@ namespace SmallMind.Quantization.Tests
             // Arrange
             var random = new Random(42);
             int m = 4, k = 64, n = 32; // k and n are multiples of block size (32)
-            
+
             var a = GenerateRandomFloats(random, m * k, -1f, 1f);
             var bFloat = GenerateRandomFloats(random, k * n, -2f, 2f);
             var bQuant = Q4_1Tensor.Quantize(bFloat, k, n);
@@ -256,7 +255,7 @@ namespace SmallMind.Quantization.Tests
             // Arrange
             var random = new Random(42);
             int m = 4, k = 64, n = 32; // k and n are multiples of block size (32)
-            
+
             var a = GenerateRandomFloats(random, m * k, -1f, 1f);
             var bFloat = GenerateRandomFloats(random, k * n, -3f, 3f);
             var bQuant = Q5_0Tensor.Quantize(bFloat, k, n);

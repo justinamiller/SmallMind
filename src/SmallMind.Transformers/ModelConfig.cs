@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using SmallMind.Abstractions;
 
 namespace SmallMind.Transformers
@@ -156,7 +154,7 @@ namespace SmallMind.Transformers
 
             // Normalize architecture name (mistral and phi use llama format)
             var archPrefix = config.Architecture.ToLowerInvariant();
-            
+
             // Mistral and Phi variants use the same keys as Llama
             if (archPrefix.StartsWith("mistral") || archPrefix.StartsWith("phi"))
             {
@@ -204,7 +202,7 @@ namespace SmallMind.Transformers
             // RoPE configuration
             config.RopeFreqBase = ExtractDouble(metadata, $"{archPrefix}.rope.freq_base")
                 ?? 10000.0;
-            
+
             config.RopeScalingType = GetMetadataValue(metadata, $"{archPrefix}.rope.scaling.type", null);
             config.RopeScalingFactor = ExtractDouble(metadata, $"{archPrefix}.rope.scaling.factor")
                 ?? 1.0;

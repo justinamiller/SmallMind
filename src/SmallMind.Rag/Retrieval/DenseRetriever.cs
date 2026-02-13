@@ -1,5 +1,4 @@
 using SmallMind.Rag.Common;
-using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Retrieval;
 

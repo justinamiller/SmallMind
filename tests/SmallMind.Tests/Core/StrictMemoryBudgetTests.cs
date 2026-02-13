@@ -1,6 +1,4 @@
-using System;
 using SmallMind.Core.Core;
-using Xunit;
 
 namespace SmallMind.Tests.Core
 {

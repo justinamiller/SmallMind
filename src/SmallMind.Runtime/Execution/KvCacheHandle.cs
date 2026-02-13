@@ -1,4 +1,3 @@
-using System;
 using SmallMind.Runtime.Cache;
 
 namespace SmallMind.Runtime.Execution
@@ -12,48 +11,48 @@ namespace SmallMind.Runtime.Execution
     {
         private readonly KvCacheEntry _cacheEntry;
         private bool _disposed;
-        
+
         /// <summary>
         /// Gets the current position in the cache (number of tokens stored).
         /// </summary>
         public int CurrentPosition => _cacheEntry.CurrentTokenCount;
-        
+
         /// <summary>
         /// Gets the maximum number of tokens this cache can hold.
         /// </summary>
         public int MaxTokens => _cacheEntry.MaxTokens;
-        
+
         /// <summary>
         /// Gets the model shape this cache was created for.
         /// </summary>
         public ModelShape ModelShape => _cacheEntry.ModelShape;
-        
+
         /// <summary>
         /// Gets the session ID for this cache.
         /// </summary>
         public SessionId SessionId => _cacheEntry.SessionId;
-        
+
         /// <summary>
         /// Gets the approximate memory size in bytes.
         /// </summary>
         public long SizeBytes => _cacheEntry.SizeBytes;
-        
+
         /// <summary>
         /// Gets whether the cache can support sliding window.
         /// Always true in current implementation.
         /// </summary>
         public bool SupportsSliding => true;
-        
+
         internal KvCacheHandle(KvCacheEntry cacheEntry)
         {
             _cacheEntry = cacheEntry ?? throw new ArgumentNullException(nameof(cacheEntry));
         }
-        
+
         /// <summary>
         /// Gets the underlying cache entry (internal use only).
         /// </summary>
         internal KvCacheEntry CacheEntry => _cacheEntry;
-        
+
         /// <summary>
         /// Ensures the cache has capacity for the required number of additional tokens.
         /// </summary>
@@ -63,7 +62,7 @@ namespace SmallMind.Runtime.Execution
         {
             return _cacheEntry.EnsureCapacity(requiredTokens);
         }
-        
+
         /// <summary>
         /// Appends K/V tensors for new tokens at the specified layer.
         /// </summary>
@@ -75,7 +74,7 @@ namespace SmallMind.Runtime.Execution
         {
             _cacheEntry.AppendKV(layer, keyData, valueData, numNewTokens);
         }
-        
+
         /// <summary>
         /// Commits the appended tokens, advancing the position counter.
         /// Must be called after all layers have been appended with AppendKV.
@@ -85,7 +84,7 @@ namespace SmallMind.Runtime.Execution
         {
             _cacheEntry.CommitAppend(numNewTokens);
         }
-        
+
         /// <summary>
         /// Gets a read-only span of the cached keys for a layer.
         /// </summary>
@@ -96,7 +95,7 @@ namespace SmallMind.Runtime.Execution
         {
             return _cacheEntry.GetKeys(layer, startToken, tokenCount);
         }
-        
+
         /// <summary>
         /// Gets a read-only span of the cached values for a layer.
         /// </summary>
@@ -107,7 +106,7 @@ namespace SmallMind.Runtime.Execution
         {
             return _cacheEntry.GetValues(layer, startToken, tokenCount);
         }
-        
+
         /// <summary>
         /// Resets the cache, clearing all stored tokens.
         /// Cache can be reused for a new sequence.
@@ -116,7 +115,7 @@ namespace SmallMind.Runtime.Execution
         {
             _cacheEntry.Reset();
         }
-        
+
         /// <summary>
         /// Implements sliding window for the cache.
         /// Removes oldest tokens to make room for new ones.
@@ -127,7 +126,7 @@ namespace SmallMind.Runtime.Execution
         {
             _cacheEntry.Slide(windowSize);
         }
-        
+
         /// <summary>
         /// Disposes the cache handle.
         /// Note: Does NOT dispose the underlying cache entry - that's managed by the pool.
@@ -136,10 +135,10 @@ namespace SmallMind.Runtime.Execution
         {
             if (_disposed)
                 return;
-            
+
             // Do not dispose _cacheEntry - it's owned by the pool
             // The pool will manage its lifecycle
-            
+
             _disposed = true;
         }
     }

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace SmallMind.Rag.Prompting;
@@ -63,7 +61,7 @@ internal sealed class PromptComposer
         for (int i = 0; i < chunks.Count; i++)
         {
             var retrieved = chunks[i];
-            
+
             if (!chunkStore.TryGetValue(retrieved.ChunkId, out var chunk))
                 continue;
 
@@ -76,7 +74,7 @@ internal sealed class PromptComposer
 
             sb.Append(sourceText);
             sb.AppendLine();
-            
+
             currentChars += sourceLength + 1; // +1 for newline
             sourceIndex++;
         }

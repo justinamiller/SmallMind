@@ -1,8 +1,6 @@
 using SmallMind.Core.Core;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
-using System;
-using System.Collections.Generic;
 
 namespace SmallMind.Runtime.PretrainedModels
 {
@@ -17,7 +15,7 @@ namespace SmallMind.Runtime.PretrainedModels
         private readonly string _name;
         private readonly string _description;
         private readonly DomainType _domain;
-        
+
         // Sentiment labels
         private static readonly string[] SentimentLabels = { "Positive", "Negative", "Neutral" };
 
@@ -36,7 +34,7 @@ namespace SmallMind.Runtime.PretrainedModels
         /// <param name="name">Model name</param>
         /// <param name="description">Model description</param>
         public SentimentAnalysisModel(
-            TransformerModel model, 
+            TransformerModel model,
             ITokenizer tokenizer,
             DomainType domain = DomainType.General,
             string? name = null,
@@ -55,7 +53,7 @@ namespace SmallMind.Runtime.PretrainedModels
         public string AnalyzeSentiment(string text)
         {
             var scores = AnalyzeSentimentWithScores(text);
-            
+
             // Find sentiment with highest score
             string? bestSentiment = null;
             float maxScore = float.NegativeInfinity;
@@ -67,7 +65,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     bestSentiment = kvp.Key;
                 }
             }
-            
+
             return bestSentiment ?? "Neutral";
         }
 
@@ -94,7 +92,7 @@ namespace SmallMind.Runtime.PretrainedModels
             {
                 tokens[i] = tokensList[i];
             }
-            
+
             // Truncate to model's block size
             if (tokens.Length > _model.BlockSize)
             {
@@ -111,7 +109,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 inputData[i] = tokens[i];
             }
             var inputTensor = new Tensor(inputData, new[] { 1, seqLen });
-            
+
             // Forward pass through model
             var logits = _model.Forward(inputTensor);
 
@@ -134,10 +132,10 @@ namespace SmallMind.Runtime.PretrainedModels
             // Extract logits for the final position
             var vocabSize = _model.VocabSize;
             var finalLogits = new float[vocabSize];
-            
+
             int startIdx = (seqLen - 1) * vocabSize;
             Array.Copy(logits.Data, startIdx, finalLogits, 0, vocabSize);
-            
+
             return finalLogits;
         }
 
@@ -152,7 +150,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     max = logits[i];
                 }
             }
-            
+
             // Compute exp and sum
             float[] exp = new float[logits.Length];
             float sum = 0f;
@@ -161,14 +159,14 @@ namespace SmallMind.Runtime.PretrainedModels
                 exp[i] = MathF.Exp(logits[i] - max);
                 sum += exp[i];
             }
-            
+
             // Normalize
             float invSum = 1f / sum;
             for (int i = 0; i < exp.Length; i++)
             {
                 exp[i] *= invSum;
             }
-            
+
             return exp;
         }
 
@@ -176,7 +174,7 @@ namespace SmallMind.Runtime.PretrainedModels
         {
             // Simple heuristic: use distribution of probabilities to infer sentiment
             // This is a placeholder - in a real model, you'd have specific output heads
-            
+
             // Calculate basic statistics
             float mean = 0f;
             for (int i = 0; i < probs.Length; i++)
@@ -184,7 +182,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 mean += probs[i];
             }
             mean /= probs.Length;
-            
+
             float variance = 0f;
             for (int i = 0; i < probs.Length; i++)
             {
@@ -192,7 +190,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 variance += diff * diff;
             }
             variance /= probs.Length;
-            
+
             float entropy = 0f;
             for (int i = 0; i < probs.Length; i++)
             {
@@ -201,7 +199,7 @@ namespace SmallMind.Runtime.PretrainedModels
                     entropy -= probs[i] * MathF.Log(probs[i]);
                 }
             }
-            
+
             // High entropy = neutral, low entropy with high values = strong sentiment
             float maxProb = float.NegativeInfinity;
             int maxIdx = 0;
@@ -213,9 +211,9 @@ namespace SmallMind.Runtime.PretrainedModels
                     maxIdx = i;
                 }
             }
-            
+
             float positive, negative, neutral;
-            
+
             if (entropy > 4.0f) // High uncertainty
             {
                 positive = 0.33f;
@@ -228,7 +226,7 @@ namespace SmallMind.Runtime.PretrainedModels
                 // This is simplified - real models would have learned associations
                 var topThird = maxIdx < probs.Length / 3;
                 var bottomThird = maxIdx > 2 * probs.Length / 3;
-                
+
                 if (topThird)
                 {
                     positive = maxProb * 0.6f + 0.2f;

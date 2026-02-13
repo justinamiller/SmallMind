@@ -1,10 +1,4 @@
-using System;
-using System.Buffers;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using SmallMind.Core.Exceptions;
 using SmallMind.Runtime.Scheduling;
 using SmallMind.Runtime.Telemetry;
@@ -271,7 +265,7 @@ namespace SmallMind.Runtime.Batching
 
             // Use the first request's prompt tokens as representative for scheduling
             var representativeRequest = batch[0];
-            
+
             var schedule = _deterministicScheduler.Schedule(
                 representativeRequest.PromptTokens,
                 maxNewTokens: representativeRequest.Options.MaxNewTokens,
@@ -327,7 +321,7 @@ namespace SmallMind.Runtime.Batching
             if (!_disposed)
             {
                 _shutdownCts.Cancel();
-                
+
                 // Best effort wait
                 try
                 {
