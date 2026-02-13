@@ -1,0 +1,16 @@
+{
+  "version": "1.0",
+  "models": [
+    {
+      "name": "TinyStories-1M-Q4_0",
+      "url": "https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin",
+      "sha256": "placeholder_will_update_with_real_model",
+      "size": 8388608,
+      "quantType": "Q4_0",
+      "contextLength": 512,
+      "ci": true,
+      "description": "Tiny 1M parameter model for CI testing (very fast)",
+      "tags": ["ci", "tiny", "stories"]
+    }
+  ]
+}
