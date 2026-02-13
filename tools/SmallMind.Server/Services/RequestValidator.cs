@@ -96,7 +96,8 @@ public sealed class RequestValidator
             return 0;
 
         // Rough approximation: average of 4 characters per token
-        return (int)Math.Ceiling(prompt.Length / 4.0);
+        // Using integer arithmetic with ceiling: (n + 3) / 4 = ceil(n / 4.0)
+        return (prompt.Length + 3) / 4;
     }
 }
 
