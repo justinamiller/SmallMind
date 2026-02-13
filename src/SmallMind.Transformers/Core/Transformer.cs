@@ -1319,53 +1319,26 @@ namespace SmallMind.Transformers
             int embdOffset = index * _nEmbd;  // Offset for Q (0), K (_nEmbd), or V (2*_nEmbd)
 
             // Parallelize over batch when B >= 4
-            if (B >= 4)
+            TransformerHelpers.ParallelOrSequential(B, b =>
             {
-                Parallel.For(0, B, b =>
+                int batchInOffset = b * T * 3 * _nEmbd;
+                int batchOutOffset = b * _nHead * T * _headSize;
+
+                for (int h = 0; h < _nHead; h++)
                 {
-                    int batchInOffset = b * T * 3 * _nEmbd;
-                    int batchOutOffset = b * _nHead * T * _headSize;
+                    int headInOffset = embdOffset + h * _headSize;
+                    int headOutOffset = batchOutOffset + h * T * _headSize;
 
-                    for (int h = 0; h < _nHead; h++)
+                    for (int t = 0; t < T; t++)
                     {
-                        int headInOffset = embdOffset + h * _headSize;
-                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
+                        int dstIdx = headOutOffset + t * _headSize;
 
-                        for (int t = 0; t < T; t++)
-                        {
-                            int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
-                            int dstIdx = headOutOffset + t * _headSize;
-
-                            // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
-                            Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
-                        }
-                    }
-                });
-            }
-            else
-            {
-                // Original sequential code for small batches
-                for (int b = 0; b < B; b++)
-                {
-                    int batchInOffset = b * T * 3 * _nEmbd;
-                    int batchOutOffset = b * _nHead * T * _headSize;
-
-                    for (int h = 0; h < _nHead; h++)
-                    {
-                        int headInOffset = embdOffset + h * _headSize;
-                        int headOutOffset = batchOutOffset + h * T * _headSize;
-
-                        for (int t = 0; t < T; t++)
-                        {
-                            int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
-                            int dstIdx = headOutOffset + t * _headSize;
-
-                            // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
-                            Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
-                        }
+                        // Copy entire head dimension at once using Array.Copy (faster than element-by-element)
+                        Array.Copy(qkv.Data, srcIdx, extracted.Data, dstIdx, _headSize);
                     }
                 }
-            }
+            });
 
             return extracted;
         }
@@ -1383,51 +1356,25 @@ namespace SmallMind.Transformers
             int embdOffset = index * _nEmbd;  // Offset for Q (0), K (_nEmbd), or V (2*_nEmbd)
 
             // Parallelize over batch when B >= 4
-            if (B >= 4)
+            TransformerHelpers.ParallelOrSequential(B, b =>
             {
-                Parallel.For(0, B, b =>
+                int batchInOffset = b * T * 3 * _nEmbd;
+                int batchOutOffset = b * _nHead * T * _headSize;
+
+                for (int h = 0; h < _nHead; h++)
                 {
-                    int batchInOffset = b * T * 3 * _nEmbd;
-                    int batchOutOffset = b * _nHead * T * _headSize;
+                    int headInOffset = embdOffset + h * _headSize;
+                    int headOutOffset = batchOutOffset + h * T * _headSize;
 
-                    for (int h = 0; h < _nHead; h++)
+                    for (int t = 0; t < T; t++)
                     {
-                        int headInOffset = embdOffset + h * _headSize;
-                        int headOutOffset = batchOutOffset + h * T * _headSize;
+                        int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
+                        int dstIdx = headOutOffset + t * _headSize;
 
-                        for (int t = 0; t < T; t++)
-                        {
-                            int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
-                            int dstIdx = headOutOffset + t * _headSize;
-
-                            Array.Copy(qkv.Data, srcIdx, dest.Data, dstIdx, _headSize);
-                        }
-                    }
-                });
-            }
-            else
-            {
-                // Sequential for small batches
-                for (int b = 0; b < B; b++)
-                {
-                    int batchInOffset = b * T * 3 * _nEmbd;
-                    int batchOutOffset = b * _nHead * T * _headSize;
-
-                    for (int h = 0; h < _nHead; h++)
-                    {
-                        int headInOffset = embdOffset + h * _headSize;
-                        int headOutOffset = batchOutOffset + h * T * _headSize;
-
-                        for (int t = 0; t < T; t++)
-                        {
-                            int srcIdx = batchInOffset + t * 3 * _nEmbd + headInOffset;
-                            int dstIdx = headOutOffset + t * _headSize;
-
-                            Array.Copy(qkv.Data, srcIdx, dest.Data, dstIdx, _headSize);
-                        }
+                        Array.Copy(qkv.Data, srcIdx, dest.Data, dstIdx, _headSize);
                     }
                 }
-            }
+            });
         }
 
         /// <summary>
@@ -1798,94 +1745,49 @@ namespace SmallMind.Transformers
         private void ApplySoftmaxInPlace(Tensor scores, int B, int T)
         {
             int totalParallelWork = B * _nHead;
-            if (totalParallelWork >= 4)
+            TransformerHelpers.ParallelOrSequential(totalParallelWork, bh =>
             {
-                Parallel.For(0, totalParallelWork, bh =>
+                int b = bh / _nHead;
+                int h = bh % _nHead;
+
+                for (int i = 0; i < T; i++)
                 {
-                    int b = bh / _nHead;
-                    int h = bh % _nHead;
+                    int offset = ((b * _nHead + h) * T + i) * T;
 
-                    for (int i = 0; i < T; i++)
+                    // Find max for numerical stability
+                    float max = float.NegativeInfinity;
+                    for (int j = 0; j <= i; j++)
                     {
-                        int offset = ((b * _nHead + h) * T + i) * T;
+                        if (scores.Data[offset + j] > max)
+                            max = scores.Data[offset + j];
+                    }
 
-                        // Find max for numerical stability
-                        float max = float.NegativeInfinity;
+                    // Exp and sum
+                    float sum = 0;
+                    for (int j = 0; j <= i; j++)
+                    {
+                        float exp = MathF.Exp(scores.Data[offset + j] - max);
+                        scores.Data[offset + j] = exp;
+                        sum += exp;
+                    }
+
+                    // Normalize
+                    if (sum > 0)
+                    {
+                        float invSum = 1.0f / sum;
                         for (int j = 0; j <= i; j++)
                         {
-                            if (scores.Data[offset + j] > max)
-                                max = scores.Data[offset + j];
-                        }
-
-                        // Exp and sum
-                        float sum = 0;
-                        for (int j = 0; j <= i; j++)
-                        {
-                            float exp = MathF.Exp(scores.Data[offset + j] - max);
-                            scores.Data[offset + j] = exp;
-                            sum += exp;
-                        }
-
-                        // Normalize
-                        if (sum > 0)
-                        {
-                            float invSum = 1.0f / sum;
-                            for (int j = 0; j <= i; j++)
-                            {
-                                scores.Data[offset + j] *= invSum;
-                            }
-                        }
-
-                        // Clear masked positions
-                        for (int j = i + 1; j < T; j++)
-                        {
-                            scores.Data[offset + j] = 0;
+                            scores.Data[offset + j] *= invSum;
                         }
                     }
-                });
-            }
-            else
-            {
-                for (int b = 0; b < B; b++)
-                {
-                    for (int h = 0; h < _nHead; h++)
+
+                    // Clear masked positions
+                    for (int j = i + 1; j < T; j++)
                     {
-                        for (int i = 0; i < T; i++)
-                        {
-                            int offset = ((b * _nHead + h) * T + i) * T;
-
-                            float max = float.NegativeInfinity;
-                            for (int j = 0; j <= i; j++)
-                            {
-                                if (scores.Data[offset + j] > max)
-                                    max = scores.Data[offset + j];
-                            }
-
-                            float sum = 0;
-                            for (int j = 0; j <= i; j++)
-                            {
-                                float exp = MathF.Exp(scores.Data[offset + j] - max);
-                                scores.Data[offset + j] = exp;
-                                sum += exp;
-                            }
-
-                            if (sum > 0)
-                            {
-                                float invSum = 1.0f / sum;
-                                for (int j = 0; j <= i; j++)
-                                {
-                                    scores.Data[offset + j] *= invSum;
-                                }
-                            }
-
-                            for (int j = i + 1; j < T; j++)
-                            {
-                                scores.Data[offset + j] = 0;
-                            }
-                        }
+                        scores.Data[offset + j] = 0;
                     }
                 }
-            }
+            });
         }
 
         /// <summary>
@@ -1907,56 +1809,28 @@ namespace SmallMind.Transformers
 
             int headsPerKvHead = _nHead / _nKvHead;  // For GQA head mapping
             int totalParallelWork = B * _nHead;
-            if (totalParallelWork >= 4)
+            TransformerHelpers.ParallelOrSequential(totalParallelWork, bh =>
             {
-                Parallel.For(0, totalParallelWork, bh =>
-                {
-                    int b = bh / _nHead;
-                    int h = bh % _nHead;
+                int b = bh / _nHead;
+                int h = bh % _nHead;
 
-                    // Map query head to KV head (for GQA)
-                    int kvHead = h / headsPerKvHead;
+                // Map query head to KV head (for GQA)
+                int kvHead = h / headsPerKvHead;
 
-                    // Calculate offsets for this batch and head
-                    int attOffset = (b * _nHead + h) * T * vSeqLen;
-                    int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
-                    int outOffset = (b * _nHead + h) * T * _headSize;
+                // Calculate offsets for this batch and head
+                int attOffset = (b * _nHead + h) * T * vSeqLen;
+                int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
+                int outOffset = (b * _nHead + h) * T * _headSize;
 
-                    // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]
-                    // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
-                    SmallMind.Core.Simd.MatMulOps.MatMul(
-                        att.Data.AsSpan(attOffset, T * vSeqLen),
-                        v.Data.AsSpan(vOffset, vSeqLen * _headSize),
-                        output.Data.AsSpan(outOffset, T * _headSize),
-                        T, vSeqLen, _headSize
-                    );
-                });
-            }
-            else
-            {
-                for (int b = 0; b < B; b++)
-                {
-                    for (int h = 0; h < _nHead; h++)
-                    {
-                        // Map query head to KV head (for GQA)
-                        int kvHead = h / headsPerKvHead;
-
-                        // Calculate offsets for this batch and head
-                        int attOffset = (b * _nHead + h) * T * vSeqLen;
-                        int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
-                        int outOffset = (b * _nHead + h) * T * _headSize;
-
-                        // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]
-                        // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
-                        SmallMind.Core.Simd.MatMulOps.MatMul(
-                            att.Data.AsSpan(attOffset, T * vSeqLen),
-                            v.Data.AsSpan(vOffset, vSeqLen * _headSize),
-                            output.Data.AsSpan(outOffset, T * _headSize),
-                            T, vSeqLen, _headSize
-                        );
-                    }
-                }
-            }
+                // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]
+                // att: (T × vSeqLen), v: (vSeqLen × headSize), output: (T × headSize)
+                SmallMind.Core.Simd.MatMulOps.MatMul(
+                    att.Data.AsSpan(attOffset, T * vSeqLen),
+                    v.Data.AsSpan(vOffset, vSeqLen * _headSize),
+                    output.Data.AsSpan(outOffset, T * _headSize),
+                    T, vSeqLen, _headSize
+                );
+            });
         }
 
         // Overload for backward compatibility (no KV-cache)
