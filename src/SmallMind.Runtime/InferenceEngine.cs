@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Core.Core;
 using SmallMind.Core.Exceptions;
+using SmallMind.Core.Utilities;
 using SmallMind.Tokenizers;
 using SmallMind.Tokenizers.Gguf;
 using SmallMind.Transformers;
@@ -134,16 +135,16 @@ namespace SmallMind.Runtime
                 else
                 {
                     // Fallback to default tokenizer
-                    int vocabSize = ExtractMetadataInt(metadata.Metadata, "llama.vocab_size", 
-                                    ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
+                    int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size", 
+                                    GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
                     tokenizer = CreateDefaultTokenizer(vocabSize);
                 }
             }
             catch
             {
                 // If extraction fails, use default
-                int vocabSize = ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
-                                ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
+                int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
+                                GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
                 tokenizer = CreateDefaultTokenizer(vocabSize);
             }
 
@@ -165,11 +166,11 @@ namespace SmallMind.Runtime
             catch
             {
                 // If modern config fails, fall back to legacy GPT loading
-                int vocabSize = ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257);
-                int blockSize = ExtractMetadataInt(metadata.Metadata, "block_size", 1024);
-                int embedDim = ExtractMetadataInt(metadata.Metadata, "embed_dim", 768);
-                int numLayers = ExtractMetadataInt(metadata.Metadata, "num_layers", 12);
-                int numHeads = ExtractMetadataInt(metadata.Metadata, "num_heads", 12);
+                int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257);
+                int blockSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "block_size", 1024);
+                int embedDim = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "embed_dim", 768);
+                int numLayers = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "num_layers", 12);
+                int numHeads = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "num_heads", 12);
 
                 model = new TransformerModel(
                     vocabSize: vocabSize,
@@ -182,34 +183,6 @@ namespace SmallMind.Runtime
             }
 
             return new InferenceEngine(model, tokenizer, model.BlockSize, maxConcurrentSessions);
-        }
-
-        private static int ExtractMetadataInt(
-            Dictionary<string, object>? metadata,
-            string key,
-            int defaultValue)
-        {
-            if (metadata != null && metadata.TryGetValue(key, out var value))
-            {
-                // Handle JsonElement from deserialized SMQ metadata
-                if (value is System.Text.Json.JsonElement jsonElement)
-                {
-                    if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.Number)
-                    {
-                        return jsonElement.GetInt32();
-                    }
-                    else if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.String)
-                    {
-                        if (int.TryParse(jsonElement.GetString(), out int parsed))
-                        {
-                            return parsed;
-                        }
-                    }
-                }
-                
-                return Convert.ToInt32(value);
-            }
-            return defaultValue;
         }
 
         private static ITokenizer CreateDefaultTokenizer(int vocabSize)

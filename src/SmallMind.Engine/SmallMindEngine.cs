@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SmallMind.Abstractions;
 using SmallMind.Core.Core;
+using SmallMind.Core.Utilities;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Quantization;
 using SmallMind.Tokenizers;
@@ -322,16 +323,16 @@ namespace SmallMind.Engine
                 else
                 {
                     // Fallback to default tokenizer
-                    int vocabSize = ExtractMetadataInt(metadata.Metadata, "llama.vocab_size", 
-                                    ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
+                    int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size", 
+                                    GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
                     tokenizer = CreateDefaultTokenizer(vocabSize);
                 }
             }
             catch
             {
                 // If extraction fails, use default
-                int vocabSize = ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
-                                ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
+                int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
+                                GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
                 tokenizer = CreateDefaultTokenizer(vocabSize);
             }
 
@@ -414,11 +415,11 @@ namespace SmallMind.Engine
         private TransformerModel CreateLegacyGptModel(Dictionary<string, object>? metadata)
         {
             // Extract model dimensions from legacy metadata
-            int vocabSize = ExtractMetadataInt(metadata, "vocab_size", 50257);
-            int blockSize = ExtractMetadataInt(metadata, "block_size", 1024);
-            int embedDim = ExtractMetadataInt(metadata, "embed_dim", 768);
-            int numLayers = ExtractMetadataInt(metadata, "num_layers", 12);
-            int numHeads = ExtractMetadataInt(metadata, "num_heads", 12);
+            int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata, "vocab_size", 50257);
+            int blockSize = GgufMetadataHelpers.ExtractMetadataInt(metadata, "block_size", 1024);
+            int embedDim = GgufMetadataHelpers.ExtractMetadataInt(metadata, "embed_dim", 768);
+            int numLayers = GgufMetadataHelpers.ExtractMetadataInt(metadata, "num_layers", 12);
+            int numHeads = GgufMetadataHelpers.ExtractMetadataInt(metadata, "num_heads", 12);
 
             return new TransformerModel(
                 vocabSize: vocabSize,
@@ -473,34 +474,6 @@ namespace SmallMind.Engine
             };
 
             return await LoadSmqModelAsync(smqRequest, cancellationToken);
-        }
-
-        private static int ExtractMetadataInt(
-            System.Collections.Generic.Dictionary<string, object>? metadata,
-            string key,
-            int defaultValue)
-        {
-            if (metadata != null && metadata.TryGetValue(key, out var value))
-            {
-                // Handle JsonElement from deserialized SMQ metadata
-                if (value is System.Text.Json.JsonElement jsonElement)
-                {
-                    if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.Number)
-                    {
-                        return jsonElement.GetInt32();
-                    }
-                    else if (jsonElement.ValueKind == System.Text.Json.JsonValueKind.String)
-                    {
-                        if (int.TryParse(jsonElement.GetString(), out int parsed))
-                        {
-                            return parsed;
-                        }
-                    }
-                }
-                
-                return Convert.ToInt32(value);
-            }
-            return defaultValue;
         }
 
         private static ITokenizer CreateDefaultTokenizer(int vocabSize)
