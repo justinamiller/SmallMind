@@ -1,0 +1,203 @@
+name: Benchmark CI
+
+# Run on PR with 'benchmark' label, manual trigger, or nightly
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, labeled]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1' # Monday 3 AM UTC
+
+# Prevent concurrent benchmark runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Only run if PR has 'benchmark' label, manual trigger, or scheduled
+  check-trigger:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.result }}
+    steps:
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "result=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ contains(github.event.pull_request.labels.*.name, 'benchmark') }}" = "true" ]; then
+            echo "result=true" >> $GITHUB_OUTPUT
+          else
+            echo "result=false" >> $GITHUB_OUTPUT
+          fi
+
+  benchmark-ci-models:
+    name: Benchmark CI Models (${{ matrix.os }}, ${{ matrix.arch }})
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should-run == 'true'
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # x64 runners
+          - os: ubuntu-latest
+            arch: x64
+            runner: ubuntu-latest
+          - os: windows-latest
+            arch: x64
+            runner: windows-latest
+          - os: macos-latest
+            arch: x64
+            runner: macos-13  # x64 runner
+          
+          # ARM64 runners
+          - os: ubuntu-latest
+            arch: arm64
+            runner: ubuntu-24.04-arm  # ARM64 runner
+          - os: macos-latest
+            arch: arm64
+            runner: macos-14  # Apple Silicon
+    
+    runs-on: ${{ matrix.runner }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need git history for commit SHA
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-${{ matrix.arch }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-nuget-
+
+      - name: Cache Benchmark Models
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/smallmind-bench-models
+            ~/AppData/Local/Temp/smallmind-bench-models
+          key: smallmind-bench-models-${{ hashFiles('bench/models/models.manifest.json') }}
+          restore-keys: |
+            smallmind-bench-models-
+
+      - name: Restore dependencies
+        run: dotnet restore SmallMind.sln
+
+      - name: Build (Release)
+        run: dotnet build SmallMind.sln --no-restore --configuration Release
+
+      - name: Download CI Models
+        working-directory: bench
+        run: |
+          dotnet run --project SmallMind.Benchmarks --configuration Release --no-build -- download --ci-only --continue-on-error
+
+      - name: Run CI Benchmarks
+        working-directory: bench
+        run: |
+          dotnet run --project SmallMind.Benchmarks --configuration Release --no-build -- run \
+            --ci-only \
+            --context 256,1024 \
+            --threads 1,4 \
+            --warmup 2 \
+            --iterations 3 \
+            --tokens 50 \
+            --output ./results \
+            --format all
+
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_number }}
+          path: |
+            bench/results/*.json
+            bench/results/*.md
+            bench/results/*.csv
+          retention-days: 90
+
+      - name: Display Results Summary
+        if: always()
+        working-directory: bench/results
+        shell: bash
+        run: |
+          echo "## Benchmark Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Find the most recent markdown file
+          LATEST_MD=$(ls -t *.md 2>/dev/null | head -n 1)
+          
+          if [ -n "$LATEST_MD" ]; then
+            cat "$LATEST_MD" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No benchmark results found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment PR with Results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Find latest markdown result
+            const resultsDir = 'bench/results';
+            const files = fs.readdirSync(resultsDir).filter(f => f.endsWith('.md'));
+            
+            if (files.length === 0) {
+              console.log('No benchmark results to post');
+              return;
+            }
+            
+            files.sort((a, b) => {
+              return fs.statSync(path.join(resultsDir, b)).mtime - 
+                     fs.statSync(path.join(resultsDir, a)).mtime;
+            });
+            
+            const latestFile = path.join(resultsDir, files[0]);
+            const content = fs.readFileSync(latestFile, 'utf8');
+            
+            const body = `## Benchmark Results (${{ matrix.os }}, ${{ matrix.arch }})\n\n${content}`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  benchmark-summary:
+    name: Benchmark Summary
+    needs: benchmark-ci-models
+    if: always() && needs.check-trigger.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
+          pattern: benchmark-results-*
+
+      - name: Create Summary
+        run: |
+          echo "## Benchmark CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Benchmark run completed across all platforms" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          ls -R all-results >> $GITHUB_STEP_SUMMARY

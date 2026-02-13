@@ -41,3 +41,7 @@ models/
 *.smq.manifest.json
 SmallMind.Showcase/.data/
 *.swp
+
+# Bench artifacts
+bench/results/
+bench/models/*.gguf
