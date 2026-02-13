@@ -243,6 +243,13 @@ namespace SmallMind.Runtime
         {
             var mapping = new Dictionary<string, string>();
 
+            // OPTIMIZATION: Create HashSet for O(1) tensor name lookups instead of repeated .Any() calls
+            var tensorNames = new HashSet<string>(modelInfo.Tensors.Count);
+            for (int i = 0; i < modelInfo.Tensors.Count; i++)
+            {
+                tensorNames.Add(modelInfo.Tensors[i].Name);
+            }
+
             // Determine architecture naming convention
             bool isLlamaFamily = config.Architecture.StartsWith("llama") || 
                                 config.Architecture.StartsWith("mistral") || 
@@ -305,20 +312,20 @@ namespace SmallMind.Runtime
                 mapping["token_embd.weight"] = "token_embd.weight";
                 
                 // Position embeddings (GPT-2 uses learned, not RoPE)
-                if (modelInfo.Tensors.Any(t => t.Name == "position_embd.weight"))
+                if (tensorNames.Contains("position_embd.weight"))
                 {
                     mapping["position_embd.weight"] = "position_embd.weight";
                 }
                 
                 // Output norm (LayerNorm with bias)
                 mapping["output_norm.weight"] = "output_norm.weight";
-                if (modelInfo.Tensors.Any(t => t.Name == "output_norm.bias"))
+                if (tensorNames.Contains("output_norm.bias"))
                 {
                     mapping["output_norm.bias"] = "output_norm.bias";
                 }
                 
                 // Output head (may be tied to token embeddings)
-                if (modelInfo.Tensors.Any(t => t.Name == "output.weight"))
+                if (tensorNames.Contains("output.weight"))
                 {
                     mapping["output.weight"] = "output.weight";
                 }
@@ -331,18 +338,18 @@ namespace SmallMind.Runtime
 
                     // Attention LayerNorm (with bias for GPT-2)
                     mapping[$"{ggufPrefix}attn_norm.weight"] = $"{smPrefix}attn_norm.weight";
-                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_norm.bias"))
+                    if (tensorNames.Contains($"{ggufPrefix}attn_norm.bias"))
                     {
                         mapping[$"{ggufPrefix}attn_norm.bias"] = $"{smPrefix}attn_norm.bias";
                     }
 
                     // Attention weights - GPT-2 may have combined or separate Q/K/V
                     // Check if combined qkv exists
-                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_qkv.weight"))
+                    if (tensorNames.Contains($"{ggufPrefix}attn_qkv.weight"))
                     {
                         // Combined QKV (needs to be split in SmallMind)
                         mapping[$"{ggufPrefix}attn_qkv.weight"] = $"PENDING_QKV_{i}";
-                        if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_qkv.bias"))
+                        if (tensorNames.Contains($"{ggufPrefix}attn_qkv.bias"))
                         {
                             mapping[$"{ggufPrefix}attn_qkv.bias"] = $"PENDING_QKV_BIAS_{i}";
                         }
@@ -355,7 +362,7 @@ namespace SmallMind.Runtime
                         mapping[$"{ggufPrefix}attn_v.weight"] = $"PENDING_V_{i}";
                         
                         // GPT-2 has biases
-                        if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_q.bias"))
+                        if (tensorNames.Contains($"{ggufPrefix}attn_q.bias"))
                         {
                             mapping[$"{ggufPrefix}attn_q.bias"] = $"PENDING_Q_BIAS_{i}";
                             mapping[$"{ggufPrefix}attn_k.bias"] = $"PENDING_K_BIAS_{i}";
@@ -365,14 +372,14 @@ namespace SmallMind.Runtime
 
                     // Attention output projection
                     mapping[$"{ggufPrefix}attn_output.weight"] = $"{smPrefix}attn_output.weight";
-                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}attn_output.bias"))
+                    if (tensorNames.Contains($"{ggufPrefix}attn_output.bias"))
                     {
                         mapping[$"{ggufPrefix}attn_output.bias"] = $"{smPrefix}attn_output.bias";
                     }
 
                     // FFN LayerNorm (with bias)
                     mapping[$"{ggufPrefix}ffn_norm.weight"] = $"{smPrefix}ffn_norm.weight";
-                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}ffn_norm.bias"))
+                    if (tensorNames.Contains($"{ggufPrefix}ffn_norm.bias"))
                     {
                         mapping[$"{ggufPrefix}ffn_norm.bias"] = $"{smPrefix}ffn_norm.bias";
                     }
@@ -381,7 +388,7 @@ namespace SmallMind.Runtime
                     mapping[$"{ggufPrefix}ffn_up.weight"] = $"{smPrefix}ffn_up.weight";
                     mapping[$"{ggufPrefix}ffn_down.weight"] = $"{smPrefix}ffn_down.weight";
                     
-                    if (modelInfo.Tensors.Any(t => t.Name == $"{ggufPrefix}ffn_up.bias"))
+                    if (tensorNames.Contains($"{ggufPrefix}ffn_up.bias"))
                     {
                         mapping[$"{ggufPrefix}ffn_up.bias"] = $"{smPrefix}ffn_up.bias";
                         mapping[$"{ggufPrefix}ffn_down.bias"] = $"{smPrefix}ffn_down.bias";
