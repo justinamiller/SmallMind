@@ -153,7 +153,8 @@ namespace SmallMind.Benchmarks
             Console.WriteLine();
             Console.WriteLine("Writing reports...");
 
-            var outputDir = _options.OutputDirectory ?? "/home/runner/work/SmallMind/SmallMind/artifacts/perf";
+            // Use relative path that works on all platforms
+            var outputDir = _options.OutputDirectory ?? Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "perf");
             Directory.CreateDirectory(outputDir);
 
             var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");

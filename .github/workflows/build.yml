@@ -84,6 +84,8 @@ jobs:
             **/*.trx
           check_name: Test Results (${{ matrix.display_name }})
           comment_mode: off
+          # Note: Only publish from Linux to avoid duplicate check runs.
+          # All platforms run tests; Linux publishes consolidated results.
 
   linux-perf-smoke:
     name: Linux Performance Smoke Tests

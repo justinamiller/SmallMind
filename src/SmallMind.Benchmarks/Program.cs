@@ -111,13 +111,16 @@ namespace SmallMind.Benchmarks
 
         private static RealModelBenchmarkOptions ParseModelBenchmarkOptions(string[] args)
         {
+            // Use relative path that works on all platforms
+            var defaultOutputDir = Path.Combine(Directory.GetCurrentDirectory(), "artifacts", "perf");
+            
             var options = new RealModelBenchmarkOptions
             {
                 Tokens = 128,
                 Prompt = "The future of AI is",
                 WarmupIterations = 3,
                 MeasuredIterations = 10,
-                OutputDirectory = "/home/runner/work/SmallMind/SmallMind/artifacts/perf"
+                OutputDirectory = defaultOutputDir
             };
 
             for (int i = 1; i < args.Length; i++)
