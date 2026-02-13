@@ -649,23 +649,6 @@ namespace SmallMind.Transformers
             return namedParams;
         }
 
-        private Dictionary<string, Tensor> GetNormNamedParameters(Module norm, string baseName)
-        {
-            var namedParams = new Dictionary<string, Tensor>();
-
-            if (norm is LayerNorm layerNorm)
-            {
-                namedParams[$"{baseName}.weight"] = layerNorm.Gamma;
-                namedParams[$"{baseName}.bias"] = layerNorm.Beta;
-            }
-            else if (norm is RMSNorm rmsNorm)
-            {
-                namedParams[$"{baseName}.weight"] = rmsNorm.Gamma;
-            }
-
-            return namedParams;
-        }
-
         // Overload for LayerNorm to avoid virtual dispatch
         private Dictionary<string, Tensor> GetNormNamedParameters(LayerNorm norm, string baseName)
         {
