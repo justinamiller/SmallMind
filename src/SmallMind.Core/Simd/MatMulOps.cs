@@ -64,15 +64,22 @@ namespace SmallMind.Core.Simd
         /// For matrices >= 64×64, uses optimized GemmMicrokernels implementation.
         /// For very small matrices, uses direct SIMD path to avoid packing overhead.
         /// </summary>
+        /// <param name="accumulate">
+        /// If false (default): C = A×B (overwrites C, no pre-zero needed by caller).
+        /// If true: C += A×B (adds to existing C values).
+        /// </param>
         public static void MatMul(
             float[] A, float[] B, float[] C,
-            int M, int K, int N)
+            int M, int K, int N, bool accumulate = false)
         {
             if (A.Length != M * K || B.Length != K * N || C.Length != M * N)
                 throw new ArgumentException("Matrix dimensions don't match buffer sizes");
 
-            // NOTE: Caller must ensure C is zeroed before calling
-            // Kernels use accumulation (C += A * B) via FMA operations
+            // Zero C only if not accumulating (overwrite mode)
+            if (!accumulate)
+            {
+                Array.Clear(C);
+            }
 
             // For medium-to-large matrices, use optimized GemmMicrokernels with B-matrix packing
             // Threshold: 64×64 is break-even point where packing overhead is amortized
@@ -80,7 +87,7 @@ namespace SmallMind.Core.Simd
             {
                 // Use cache-blocked GEMM with implicit B-matrix packing
                 LastKernelUsed = MatMulKernel.Avx2Unsafe; // Track as AVX2 (GemmMicrokernels will select best)
-                GemmMicrokernels.MatMul(A.AsSpan(), B.AsSpan(), C.AsSpan(), M, K, N);
+                GemmMicrokernels.MatMul(A.AsSpan(), B.AsSpan(), C.AsSpan(), M, K, N, accumulate);
                 return;
             }
 
@@ -122,15 +129,22 @@ namespace SmallMind.Core.Simd
         /// For matrices >= 64×64, uses optimized GemmMicrokernels implementation.
         /// For very small matrices, uses direct SIMD path to avoid packing overhead.
         /// </summary>
+        /// <param name="accumulate">
+        /// If false (default): C = A×B (overwrites C, no pre-zero needed by caller).
+        /// If true: C += A×B (adds to existing C values).
+        /// </param>
         public static void MatMul(
             ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
-            int M, int K, int N)
+            int M, int K, int N, bool accumulate = false)
         {
             if (A.Length < M * K || B.Length < K * N || C.Length < M * N)
                 throw new ArgumentException("Matrix dimensions don't match buffer sizes");
 
-            // NOTE: Caller must ensure C is zeroed before calling
-            // Kernels use accumulation (C += A * B) via FMA operations
+            // Zero C only if not accumulating (overwrite mode)
+            if (!accumulate)
+            {
+                C.Clear();
+            }
 
             // For medium-to-large matrices, use optimized GemmMicrokernels with B-matrix packing
             // Threshold: 64×64 is break-even point where packing overhead is amortized
@@ -138,7 +152,7 @@ namespace SmallMind.Core.Simd
             {
                 // Use cache-blocked GEMM with implicit B-matrix packing
                 LastKernelUsed = MatMulKernel.Avx2Unsafe; // Track as AVX2 (GemmMicrokernels will select best)
-                GemmMicrokernels.MatMul(A, B, C, M, K, N);
+                GemmMicrokernels.MatMul(A, B, C, M, K, N, accumulate);
                 return;
             }
 
