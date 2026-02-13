@@ -221,5 +221,6 @@ internal sealed class BudgetEnforcer : IDisposable
         _stopwatch.Stop();
         _timeoutCts?.Dispose();
         _combinedCts.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

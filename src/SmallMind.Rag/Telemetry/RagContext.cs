@@ -48,6 +48,7 @@ internal static class RagContext
         public void Dispose()
         {
             TraceId = _previousTraceId;
+            GC.SuppressFinalize(this);
         }
     }
 }

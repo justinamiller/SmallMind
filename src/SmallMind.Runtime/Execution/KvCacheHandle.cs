@@ -140,6 +140,7 @@ namespace SmallMind.Runtime.Execution
             // The pool will manage its lifecycle
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

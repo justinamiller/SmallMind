@@ -335,6 +335,7 @@ namespace SmallMind.Runtime.Batching
                 _shutdownCts.Dispose();
                 _batchReadySemaphore.Dispose();
                 _disposed = true;
+                GC.SuppressFinalize(this);
             }
         }
     }

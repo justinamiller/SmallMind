@@ -465,6 +465,7 @@ namespace SmallMind.Quantization.IO.Gguf
             _fileStream?.Dispose();
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

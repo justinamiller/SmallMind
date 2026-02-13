@@ -121,6 +121,7 @@ namespace SmallMind.Core.Core
             if (_disposed) return;
             _disposed = true;
             // ArrayPool.Shared is a singleton and doesn't need disposal
+            GC.SuppressFinalize(this);
         }
     }
 }

@@ -150,6 +150,7 @@ namespace SmallMind.Runtime.Cache
 
             Clear();
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

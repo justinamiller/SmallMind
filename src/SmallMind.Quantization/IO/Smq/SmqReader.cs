@@ -346,6 +346,7 @@ namespace SmallMind.Quantization.IO.Smq
             {
                 _reader?.Dispose();
             }
+            GC.SuppressFinalize(this);
         }
     }
 }

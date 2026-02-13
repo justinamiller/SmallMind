@@ -130,6 +130,7 @@ namespace SmallMind.Core.Simd
                 if (_disposed) return;
                 // _data will be GC'd
                 _disposed = true;
+                GC.SuppressFinalize(this);
             }
         }
         

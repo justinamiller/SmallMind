@@ -1070,6 +1070,7 @@ namespace SmallMind.Core.Core
             }
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 
@@ -1134,6 +1135,7 @@ namespace SmallMind.Core.Core
                 tensor.Dispose();
             }
             _tensors.Clear();
+            GC.SuppressFinalize(this);
         }
     }
 }

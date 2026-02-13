@@ -1329,6 +1329,7 @@ namespace SmallMind.Runtime
                 _seenCounts = null;
                 _stopSequenceBuffer = null;
                 _disposed = true;
+                GC.SuppressFinalize(this);
             }
         }
     }

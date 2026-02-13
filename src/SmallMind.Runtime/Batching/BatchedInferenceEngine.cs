@@ -647,6 +647,7 @@ namespace SmallMind.Runtime.Batching
                 _singleTokenBuffer?.Dispose();
                 _contextCroppedBuffer?.Dispose();
                 _disposed = true;
+                GC.SuppressFinalize(this);
             }
         }
     }
