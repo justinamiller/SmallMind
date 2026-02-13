@@ -30,13 +30,12 @@ namespace SmallMind
 
             try
             {
-                // Use the IChatSession's Level 3 API
-                var response = _session.SendAsync(request, _telemetry, cancellationToken)
-                    .AsTask()
-                    .GetAwaiter()
-                    .GetResult();
-
-                return response;
+                // Use Task.Run to avoid SynchronizationContext deadlocks in ASP.NET/UI contexts
+                // Since generation is CPU-bound, this is safe and prevents deadlocks
+                return Task.Run(async () => 
+                    await _session.SendAsync(request, _telemetry, cancellationToken)
+                        .ConfigureAwait(false)
+                ).GetAwaiter().GetResult();
             }
             catch (Exception ex) when (ex is not ObjectDisposedException)
             {
@@ -52,7 +51,10 @@ namespace SmallMind
             if (string.IsNullOrWhiteSpace(content))
                 throw new ArgumentException("System message cannot be empty", nameof(content));
 
-            _session.AddSystemAsync(content).AsTask().GetAwaiter().GetResult();
+            // Use Task.Run to avoid SynchronizationContext deadlocks
+            Task.Run(async () => 
+                await _session.AddSystemAsync(content).ConfigureAwait(false)
+            ).GetAwaiter().GetResult();
         }
 
         public SessionInfo GetSessionInfo()

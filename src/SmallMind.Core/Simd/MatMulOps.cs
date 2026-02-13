@@ -42,10 +42,18 @@ namespace SmallMind.Core.Simd
         }
         
         /// <summary>
-        /// Gets the kernel used for the last MatMul operation.
+        /// Gets the kernel used for the last MatMul operation on this thread.
         /// Useful for benchmarking and diagnostics.
+        /// Thread-safe: Each thread maintains its own value.
         /// </summary>
-        internal static MatMulKernel LastKernelUsed { get; private set; } = MatMulKernel.Unknown;
+        [ThreadStatic]
+        private static MatMulKernel _lastKernelUsed = MatMulKernel.Unknown;
+        
+        internal static MatMulKernel LastKernelUsed
+        {
+            get => _lastKernelUsed;
+            private set => _lastKernelUsed = value;
+        }
 
         /// <summary>
         /// Enhanced matrix multiplication: C = A × B

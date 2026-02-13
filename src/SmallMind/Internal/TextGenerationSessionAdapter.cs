@@ -68,10 +68,12 @@ namespace SmallMind.Internal
                 Abstractions.GenerationResult internalResult;
                 try
                 {
-                    internalResult = _internalEngine.GenerateAsync(_model, internalRequest, linkedCts.Token)
-                        .ConfigureAwait(false)
-                        .GetAwaiter()
-                        .GetResult();
+                    // Use Task.Run to avoid SynchronizationContext deadlocks in ASP.NET/UI contexts
+                    // Since generation is CPU-bound, this is safe and prevents deadlocks
+                    internalResult = Task.Run(async () =>
+                        await _internalEngine.GenerateAsync(_model, internalRequest, linkedCts.Token)
+                            .ConfigureAwait(false)
+                    ).GetAwaiter().GetResult();
                 }
                 catch (OperationCanceledException) when (timeoutCts?.IsCancellationRequested == true)
                 {

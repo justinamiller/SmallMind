@@ -55,6 +55,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{B3
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmallMind.Rag.Cli", "examples\SmallMind.Rag.Cli\SmallMind.Rag.Cli.csproj", "{A30BA865-8F77-4FA9-B720-DD14A85983DF}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "benchmarks", "benchmarks", "{44444444-4444-4444-4444-444444444444}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmallMind.Benchmarks.Runtime", "benchmarks\SmallMind.Benchmarks\SmallMind.Benchmarks.csproj", "{D1111111-1111-1111-1111-111111111111}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -329,6 +333,18 @@ Global
 		{A30BA865-8F77-4FA9-B720-DD14A85983DF}.Release|x64.Build.0 = Release|Any CPU
 		{A30BA865-8F77-4FA9-B720-DD14A85983DF}.Release|x86.ActiveCfg = Release|Any CPU
 		{A30BA865-8F77-4FA9-B720-DD14A85983DF}.Release|x86.Build.0 = Release|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Debug|x64.Build.0 = Debug|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Debug|x86.Build.0 = Debug|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Release|x64.ActiveCfg = Release|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Release|x64.Build.0 = Release|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Release|x86.ActiveCfg = Release|Any CPU
+		{D1111111-1111-1111-1111-111111111111}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -356,5 +372,6 @@ Global
 		{B5555555-5555-5555-5555-555555555555} = {22222222-2222-2222-2222-222222222222}
 		{C1111111-1111-1111-1111-111111111111} = {33333333-3333-3333-3333-333333333333}
 		{A30BA865-8F77-4FA9-B720-DD14A85983DF} = {B36A84DF-456D-A817-6EDD-3EC3E7F6E11F}
+		{D1111111-1111-1111-1111-111111111111} = {44444444-4444-4444-4444-444444444444}
 	EndGlobalSection
 EndGlobal

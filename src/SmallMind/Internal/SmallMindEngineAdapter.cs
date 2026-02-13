@@ -265,11 +265,13 @@ namespace SmallMind.Internal
                 MaxMemoryBytes = null
             };
 
-            // Load model synchronously (block on async operation)
-            return _internalEngine.LoadModelAsync(request, CancellationToken.None)
-                .ConfigureAwait(false)
-                .GetAwaiter()
-                .GetResult();
+            // Load model synchronously
+            // Since model loading is CPU-bound (no actual I/O awaits in the async path),
+            // we use Task.Run to avoid SynchronizationContext deadlocks in ASP.NET/UI contexts
+            return Task.Run(async () => 
+                await _internalEngine.LoadModelAsync(request, CancellationToken.None)
+                    .ConfigureAwait(false)
+            ).GetAwaiter().GetResult();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

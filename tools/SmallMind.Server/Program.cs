@@ -130,7 +130,7 @@ app.MapPost("/v1/chat/completions", async (
     
     try
     {
-        using var slot = await queue.EnqueueAsync(cancellationToken);
+        using var slot = await queue.EnqueueAsync(clientId: null, timeout: null, cancellationToken);
         
         if (!slot.Success)
         {
@@ -237,7 +237,7 @@ app.MapPost("/v1/completions", async (
     
     try
     {
-        using var slot = await queue.EnqueueAsync(cancellationToken);
+        using var slot = await queue.EnqueueAsync(clientId: null, timeout: null, cancellationToken);
         
         if (!slot.Success)
         {
@@ -344,7 +344,7 @@ app.MapPost("/v1/embeddings", async (
             }, statusCode: 400);
         }
         
-        using var slot = await queue.EnqueueAsync(cancellationToken);
+        using var slot = await queue.EnqueueAsync(clientId: null, timeout: null, cancellationToken);
         
         if (!slot.Success)
         {

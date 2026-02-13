@@ -497,7 +497,8 @@ namespace SmallMind.Core.Simd
         }
         
         /// <summary>
-        /// NEON (ARM64) blocked GEMM with cache blocking.
+        /// NEON (ARM64) blocked GEMM with cache blocking and optimized NEON intrinsics.
+        /// Apple Silicon optimized: 4x128-bit NEON registers for MR=4, NR=16 (4 vectors).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private static unsafe void MatMulNeonBlocked(
@@ -526,13 +527,144 @@ namespace SmallMind.Core.Simd
                             int kb = Math.Min(L2_BLOCK_K, K - kc);
                             
                             // Process block with NEON microkernel
-                            GemmMicrokernelScalar(
+                            GemmMicrokernelNeon(
                                 pA + mc * K + kc,
                                 pB + kc * N + nc,
                                 pC + mc * N + nc,
                                 mb, kb, nb, K, N, N);
                         }
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// NEON microkernel: 4x16 register blocking (MR=4, NR=16).
+        /// Uses NEON intrinsics for optimal performance on Apple Silicon and ARM64.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
+        private static unsafe void GemmMicrokernelNeon(
+            float* A, float* B, float* C,
+            int M, int K, int N,
+            int ldA, int ldB, int ldC)
+        {
+            const int MR = 4;  // 4 rows at a time
+            const int NR = 16; // 16 columns (4 NEON vectors of 4 floats each)
+
+            int i = 0;
+            // Process MR rows at a time
+            for (; i + MR <= M; i += MR)
+            {
+                int j = 0;
+                // Process NR columns at a time
+                for (; j + NR <= N; j += NR)
+                {
+                    // 4x16 accumulator registers (4 rows x 4 vector columns)
+                    var c00 = AdvSimd.LoadVector128(C + (i + 0) * ldC + j + 0);
+                    var c01 = AdvSimd.LoadVector128(C + (i + 0) * ldC + j + 4);
+                    var c02 = AdvSimd.LoadVector128(C + (i + 0) * ldC + j + 8);
+                    var c03 = AdvSimd.LoadVector128(C + (i + 0) * ldC + j + 12);
+
+                    var c10 = AdvSimd.LoadVector128(C + (i + 1) * ldC + j + 0);
+                    var c11 = AdvSimd.LoadVector128(C + (i + 1) * ldC + j + 4);
+                    var c12 = AdvSimd.LoadVector128(C + (i + 1) * ldC + j + 8);
+                    var c13 = AdvSimd.LoadVector128(C + (i + 1) * ldC + j + 12);
+
+                    var c20 = AdvSimd.LoadVector128(C + (i + 2) * ldC + j + 0);
+                    var c21 = AdvSimd.LoadVector128(C + (i + 2) * ldC + j + 4);
+                    var c22 = AdvSimd.LoadVector128(C + (i + 2) * ldC + j + 8);
+                    var c23 = AdvSimd.LoadVector128(C + (i + 2) * ldC + j + 12);
+
+                    var c30 = AdvSimd.LoadVector128(C + (i + 3) * ldC + j + 0);
+                    var c31 = AdvSimd.LoadVector128(C + (i + 3) * ldC + j + 4);
+                    var c32 = AdvSimd.LoadVector128(C + (i + 3) * ldC + j + 8);
+                    var c33 = AdvSimd.LoadVector128(C + (i + 3) * ldC + j + 12);
+
+                    // Inner loop over K
+                    for (int k = 0; k < K; k++)
+                    {
+                        // Broadcast A elements
+                        var a0 = Vector128.Create(A[(i + 0) * ldA + k]);
+                        var a1 = Vector128.Create(A[(i + 1) * ldA + k]);
+                        var a2 = Vector128.Create(A[(i + 2) * ldA + k]);
+                        var a3 = Vector128.Create(A[(i + 3) * ldA + k]);
+
+                        // Load B row
+                        var b0 = AdvSimd.LoadVector128(B + k * ldB + j + 0);
+                        var b1 = AdvSimd.LoadVector128(B + k * ldB + j + 4);
+                        var b2 = AdvSimd.LoadVector128(B + k * ldB + j + 8);
+                        var b3 = AdvSimd.LoadVector128(B + k * ldB + j + 12);
+
+                        // FMA: C += A * B (using NEON multiply-add)
+                        // Note: AdvSimd.FusedMultiplyAdd takes (addend, multiplicand1, multiplicand2)
+                        // So we use: FMA(c, b, a) = c + (b * a)
+                        c00 = AdvSimd.FusedMultiplyAdd(c00, b0, a0);
+                        c01 = AdvSimd.FusedMultiplyAdd(c01, b1, a0);
+                        c02 = AdvSimd.FusedMultiplyAdd(c02, b2, a0);
+                        c03 = AdvSimd.FusedMultiplyAdd(c03, b3, a0);
+
+                        c10 = AdvSimd.FusedMultiplyAdd(c10, b0, a1);
+                        c11 = AdvSimd.FusedMultiplyAdd(c11, b1, a1);
+                        c12 = AdvSimd.FusedMultiplyAdd(c12, b2, a1);
+                        c13 = AdvSimd.FusedMultiplyAdd(c13, b3, a1);
+
+                        c20 = AdvSimd.FusedMultiplyAdd(c20, b0, a2);
+                        c21 = AdvSimd.FusedMultiplyAdd(c21, b1, a2);
+                        c22 = AdvSimd.FusedMultiplyAdd(c22, b2, a2);
+                        c23 = AdvSimd.FusedMultiplyAdd(c23, b3, a2);
+
+                        c30 = AdvSimd.FusedMultiplyAdd(c30, b0, a3);
+                        c31 = AdvSimd.FusedMultiplyAdd(c31, b1, a3);
+                        c32 = AdvSimd.FusedMultiplyAdd(c32, b2, a3);
+                        c33 = AdvSimd.FusedMultiplyAdd(c33, b3, a3);
+                    }
+
+                    // Store results
+                    AdvSimd.Store(C + (i + 0) * ldC + j + 0, c00);
+                    AdvSimd.Store(C + (i + 0) * ldC + j + 4, c01);
+                    AdvSimd.Store(C + (i + 0) * ldC + j + 8, c02);
+                    AdvSimd.Store(C + (i + 0) * ldC + j + 12, c03);
+
+                    AdvSimd.Store(C + (i + 1) * ldC + j + 0, c10);
+                    AdvSimd.Store(C + (i + 1) * ldC + j + 4, c11);
+                    AdvSimd.Store(C + (i + 1) * ldC + j + 8, c12);
+                    AdvSimd.Store(C + (i + 1) * ldC + j + 12, c13);
+
+                    AdvSimd.Store(C + (i + 2) * ldC + j + 0, c20);
+                    AdvSimd.Store(C + (i + 2) * ldC + j + 4, c21);
+                    AdvSimd.Store(C + (i + 2) * ldC + j + 8, c22);
+                    AdvSimd.Store(C + (i + 2) * ldC + j + 12, c23);
+
+                    AdvSimd.Store(C + (i + 3) * ldC + j + 0, c30);
+                    AdvSimd.Store(C + (i + 3) * ldC + j + 4, c31);
+                    AdvSimd.Store(C + (i + 3) * ldC + j + 8, c32);
+                    AdvSimd.Store(C + (i + 3) * ldC + j + 12, c33);
+                }
+
+                // Handle remaining columns with scalar code
+                for (; j < N; j++)
+                {
+                    for (int k = 0; k < K; k++)
+                    {
+                        C[(i + 0) * ldC + j] += A[(i + 0) * ldA + k] * B[k * ldB + j];
+                        C[(i + 1) * ldC + j] += A[(i + 1) * ldA + k] * B[k * ldB + j];
+                        C[(i + 2) * ldC + j] += A[(i + 2) * ldA + k] * B[k * ldB + j];
+                        C[(i + 3) * ldC + j] += A[(i + 3) * ldA + k] * B[k * ldB + j];
+                    }
+                }
+            }
+
+            // Handle remaining rows with scalar code
+            for (; i < M; i++)
+            {
+                for (int j = 0; j < N; j++)
+                {
+                    float sum = C[i * ldC + j];
+                    for (int k = 0; k < K; k++)
+                    {
+                        sum += A[i * ldA + k] * B[k * ldB + j];
+                    }
+                    C[i * ldC + j] = sum;
                 }
             }
         }
