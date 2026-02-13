@@ -10,7 +10,9 @@ namespace SmallMind.Core.Core
     /// RMSNorm normalizes using root mean square instead of mean/variance,
     /// and does not use a shift parameter (beta).
     /// Used in modern architectures like Llama, Mistral, Gemma.
+    /// TIER-5 OPTIMIZATION: [SkipLocalsInit] on class to avoid zero-initialization overhead in hot methods.
     /// </summary>
+    [SkipLocalsInit]
     internal static class RMSNormOps
     {
         /// <summary>
@@ -53,26 +55,35 @@ namespace SmallMind.Core.Core
                 if (System.Numerics.Vector.IsHardwareAccelerated && features >= 128)
                 {
                     // SIMD path for large feature dimensions
+                    // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                     int vecSize = System.Numerics.Vector<float>.Count;
                     
-                    var vSqSum = System.Numerics.Vector<float>.Zero;
-                    int f = 0;
-                    for (; f <= features - vecSize; f += vecSize)
+                    unsafe
                     {
-                        var v = new System.Numerics.Vector<float>(input.Slice(offset + f, vecSize));
-                        vSqSum += v * v;
-                    }
-                    
-                    // Horizontal sum reduction
-                    sumSq = 0f;
-                    for (int vi = 0; vi < vecSize; vi++)
-                        sumSq += vSqSum[vi];
-                    
-                    // Add scalar remainder
-                    for (; f < features; f++)
-                    {
-                        float val = input[offset + f];
-                        sumSq += val * val;
+                        fixed (float* pInput = input)
+                        {
+                            var vSqSum = System.Numerics.Vector<float>.Zero;
+                            float* pRow = pInput + offset;
+                            int f = 0;
+                            
+                            for (; f <= features - vecSize; f += vecSize)
+                            {
+                                var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f);
+                                vSqSum += v * v;
+                            }
+                            
+                            // Horizontal sum reduction
+                            sumSq = 0f;
+                            for (int vi = 0; vi < vecSize; vi++)
+                                sumSq += vSqSum[vi];
+                            
+                            // Add scalar remainder
+                            for (; f < features; f++)
+                            {
+                                float val = pRow[f];
+                                sumSq += val * val;
+                            }
+                        }
                     }
                 }
                 else
@@ -139,21 +150,31 @@ namespace SmallMind.Core.Core
                 }
                 
                 // Vector<T> fallback
+                // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                 int vectorSize = System.Numerics.Vector<float>.Count;
                 if (System.Numerics.Vector.IsHardwareAccelerated && f2 <= features - vectorSize)
                 {
                     var vInvRms = new System.Numerics.Vector<float>(invRms);
                     
-                    for (; f2 <= features - vectorSize; f2 += vectorSize)
+                    unsafe
                     {
-                        var vInput = new System.Numerics.Vector<float>(input.Slice(offset + f2, vectorSize));
-                        var vGamma = new System.Numerics.Vector<float>(gamma.Slice(f2, vectorSize));
-                        
-                        // gamma * (input * invRms)
-                        var vNormalized = vInput * vInvRms;
-                        var vResult = vGamma * vNormalized;
-                        
-                        vResult.CopyTo(output.Slice(offset + f2, vectorSize));
+                        fixed (float* pInput = input, pGamma = gamma, pOutput = output)
+                        {
+                            float* pInRow = pInput + offset;
+                            float* pOutRow = pOutput + offset;
+                            
+                            for (; f2 <= features - vectorSize; f2 += vectorSize)
+                            {
+                                var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f2);
+                                var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f2);
+                                
+                                // gamma * (input * invRms)
+                                var vNormalized = vInput * vInvRms;
+                                var vResult = vGamma * vNormalized;
+                                
+                                System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f2, vResult);
+                            }
+                        }
                     }
                 }
                 
@@ -234,26 +255,36 @@ namespace SmallMind.Core.Core
                 
                 if (System.Numerics.Vector.IsHardwareAccelerated && features >= System.Numerics.Vector<float>.Count * 2)
                 {
+                    // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                     int vectorSize = System.Numerics.Vector<float>.Count;
                     
-                    var vSqSum = System.Numerics.Vector<float>.Zero;
-                    int f = 0;
-                    for (; f <= features - vectorSize; f += vectorSize)
+                    unsafe
                     {
-                        var vIn = new System.Numerics.Vector<float>(input.Slice(offset + f, vectorSize));
-                        var vRes = new System.Numerics.Vector<float>(residual.Slice(offset + f, vectorSize));
-                        var vCombined = vIn + vRes;
-                        vSqSum += vCombined * vCombined;
-                    }
-                    
-                    sumSq = 0f;
-                    for (int vi = 0; vi < vectorSize; vi++)
-                        sumSq += vSqSum[vi];
-                    
-                    for (; f < features; f++)
-                    {
-                        float val = input[offset + f] + residual[offset + f];
-                        sumSq += val * val;
+                        fixed (float* pInput = input, pResidual = residual)
+                        {
+                            var vSqSum = System.Numerics.Vector<float>.Zero;
+                            float* pInRow = pInput + offset;
+                            float* pResRow = pResidual + offset;
+                            int f = 0;
+                            
+                            for (; f <= features - vectorSize; f += vectorSize)
+                            {
+                                var vIn = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f);
+                                var vRes = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pResRow + f);
+                                var vCombined = vIn + vRes;
+                                vSqSum += vCombined * vCombined;
+                            }
+                            
+                            sumSq = 0f;
+                            for (int vi = 0; vi < vectorSize; vi++)
+                                sumSq += vSqSum[vi];
+                            
+                            for (; f < features; f++)
+                            {
+                                float val = pInRow[f] + pResRow[f];
+                                sumSq += val * val;
+                            }
+                        }
                     }
                 }
                 else
@@ -299,21 +330,32 @@ namespace SmallMind.Core.Core
                 
                 if (System.Numerics.Vector.IsHardwareAccelerated && f2 <= features - System.Numerics.Vector<float>.Count)
                 {
+                    // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                     int vectorSize = System.Numerics.Vector<float>.Count;
                     var vInvRms = new System.Numerics.Vector<float>(invRms);
                     
-                    for (; f2 <= features - vectorSize; f2 += vectorSize)
+                    unsafe
                     {
-                        var vInput = new System.Numerics.Vector<float>(input.Slice(offset + f2, vectorSize));
-                        var vResidual = new System.Numerics.Vector<float>(residual.Slice(offset + f2, vectorSize));
-                        var vGamma = new System.Numerics.Vector<float>(gamma.Slice(f2, vectorSize));
-                        
-                        // gamma * ((input + residual) * invRms)
-                        var vCombined = vInput + vResidual;
-                        var vNormalized = vCombined * vInvRms;
-                        var vResult = vGamma * vNormalized;
-                        
-                        vResult.CopyTo(output.Slice(offset + f2, vectorSize));
+                        fixed (float* pInput = input, pResidual = residual, pGamma = gamma, pOutput = output)
+                        {
+                            float* pInRow = pInput + offset;
+                            float* pResRow = pResidual + offset;
+                            float* pOutRow = pOutput + offset;
+                            
+                            for (; f2 <= features - vectorSize; f2 += vectorSize)
+                            {
+                                var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f2);
+                                var vResidual = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pResRow + f2);
+                                var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f2);
+                                
+                                // gamma * ((input + residual) * invRms)
+                                var vCombined = vInput + vResidual;
+                                var vNormalized = vCombined * vInvRms;
+                                var vResult = vGamma * vNormalized;
+                                
+                                System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f2, vResult);
+                            }
+                        }
                     }
                 }
                 
