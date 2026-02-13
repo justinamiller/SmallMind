@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace SmallMind.Runtime.Metrics
 {
@@ -110,7 +109,17 @@ namespace SmallMind.Runtime.Metrics
         /// </summary>
         public float? GetBestValidationLoss()
         {
-            return _validationLosses.Count > 0 ? _validationLosses.Min() : null;
+            if (_validationLosses.Count == 0)
+                return null;
+            
+            // Manual min to avoid LINQ allocation
+            float min = _validationLosses[0];
+            for (int i = 1; i < _validationLosses.Count; i++)
+            {
+                if (_validationLosses[i] < min)
+                    min = _validationLosses[i];
+            }
+            return min;
         }
 
         /// <summary>
@@ -118,7 +127,17 @@ namespace SmallMind.Runtime.Metrics
         /// </summary>
         public float? GetBestPerplexity()
         {
-            return _perplexities.Count > 0 ? _perplexities.Min() : null;
+            if (_perplexities.Count == 0)
+                return null;
+            
+            // Manual min to avoid LINQ allocation
+            float min = _perplexities[0];
+            for (int i = 1; i < _perplexities.Count; i++)
+            {
+                if (_perplexities[i] < min)
+                    min = _perplexities[i];
+            }
+            return min;
         }
 
         /// <summary>
@@ -146,14 +165,32 @@ namespace SmallMind.Runtime.Metrics
             if (_trainingLosses.Count < lookbackSteps + 1)
                 return true; // Not enough data, assume progressing
 
-            var recent = _trainingLosses.TakeLast(lookbackSteps).ToList();
-            var previous = _trainingLosses.Skip(Math.Max(0, _trainingLosses.Count - 2 * lookbackSteps))
-                                         .Take(lookbackSteps).ToList();
-
-            if (previous.Count == 0) return true;
-
-            float recentAvg = recent.Average();
-            float previousAvg = previous.Average();
+            // Manual averaging to avoid LINQ allocations
+            int count = _trainingLosses.Count;
+            
+            // Calculate recent average (last lookbackSteps items)
+            int recentStart = Math.Max(0, count - lookbackSteps);
+            int recentCount = count - recentStart;
+            float recentSum = 0f;
+            for (int i = recentStart; i < count; i++)
+            {
+                recentSum += _trainingLosses[i];
+            }
+            float recentAvg = recentSum / recentCount;
+            
+            // Calculate previous average (lookbackSteps items before recent)
+            int previousStart = Math.Max(0, count - 2 * lookbackSteps);
+            int previousEnd = recentStart;
+            int previousCount = previousEnd - previousStart;
+            
+            if (previousCount == 0) return true;
+            
+            float previousSum = 0f;
+            for (int i = previousStart; i < previousEnd; i++)
+            {
+                previousSum += _trainingLosses[i];
+            }
+            float previousAvg = previousSum / previousCount;
 
             // Progress if recent average is lower (better)
             return recentAvg < previousAvg;
@@ -225,35 +262,76 @@ namespace SmallMind.Runtime.Metrics
         {
             if (values.Count == 0) return null;
 
+            // Manual computation to avoid LINQ allocations
+            int count = values.Count;
+            float sum = 0f;
+            float min = values[0];
+            float max = values[0];
+            
+            for (int i = 0; i < count; i++)
+            {
+                float val = values[i];
+                sum += val;
+                if (val < min) min = val;
+                if (val > max) max = val;
+            }
+            
+            float mean = sum / count;
+
             return new StatsSummary
             {
-                Count = values.Count,
-                Mean = values.Average(),
-                Min = values.Min(),
-                Max = values.Max(),
-                StdDev = ComputeStdDev(values)
+                Count = count,
+                Mean = mean,
+                Min = min,
+                Max = max,
+                StdDev = ComputeStdDev(values, mean)
             };
         }
 
-        private float ComputeStdDev(List<float> values)
+        private float ComputeStdDev(List<float> values, float mean)
         {
             if (values.Count < 2) return 0f;
 
-            float mean = values.Average();
-            float sumSquaredDiffs = values.Sum(v => (v - mean) * (v - mean));
+            // Manual computation to avoid LINQ allocations
+            float sumSquaredDiffs = 0f;
+            for (int i = 0; i < values.Count; i++)
+            {
+                float diff = values[i] - mean;
+                sumSquaredDiffs += diff * diff;
+            }
             return MathF.Sqrt(sumSquaredDiffs / values.Count);
         }
 
         private GradientHealthSummary SummarizeGradientHealth()
         {
+            // Manual computation to avoid LINQ allocations
+            float sumMeanNorm = 0f;
+            float maxNorm = float.NegativeInfinity;
+            float minNorm = float.PositiveInfinity;
+            int totalNanCount = 0;
+            int totalInfCount = 0;
+            int healthyCount = 0;
+            
+            for (int i = 0; i < _gradientStats.Count; i++)
+            {
+                var stats = _gradientStats[i];
+                sumMeanNorm += stats.MeanNorm;
+                if (stats.MaxNorm > maxNorm) maxNorm = stats.MaxNorm;
+                if (stats.MinNorm < minNorm) minNorm = stats.MinNorm;
+                totalNanCount += stats.NanCount;
+                totalInfCount += stats.InfCount;
+                if (stats.NanCount == 0 && stats.InfCount == 0)
+                    healthyCount++;
+            }
+            
             return new GradientHealthSummary
             {
-                AverageMeanNorm = _gradientStats.Average(g => g.MeanNorm),
-                MaxNormSeen = _gradientStats.Max(g => g.MaxNorm),
-                MinNormSeen = _gradientStats.Min(g => g.MinNorm),
-                TotalNanCount = _gradientStats.Sum(g => g.NanCount),
-                TotalInfCount = _gradientStats.Sum(g => g.InfCount),
-                HealthyGradientSteps = _gradientStats.Count(g => g.NanCount == 0 && g.InfCount == 0)
+                AverageMeanNorm = sumMeanNorm / _gradientStats.Count,
+                MaxNormSeen = maxNorm,
+                MinNormSeen = minNorm,
+                TotalNanCount = totalNanCount,
+                TotalInfCount = totalInfCount,
+                HealthyGradientSteps = healthyCount
             };
         }
     }
