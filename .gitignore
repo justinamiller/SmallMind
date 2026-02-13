@@ -20,6 +20,7 @@ nupkg/
 benchmark-results.md
 benchmark-results.json
 benchmarks/results/
+benchmarks/SmallMind.Benchmarks/benchmark-results/
 # Temporary profiling logs (keep organized results only)
 *-run.log
 latest-profiling-dir.txt
