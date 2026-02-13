@@ -407,28 +407,39 @@ namespace SmallMind.Core.Simd
             if (input.Length != rows * cols || output.Length != rows * cols)
                 throw new ArgumentException("Input and output sizes must match rows * cols");
 
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
+            // But still use FindMax for SIMD-accelerated max finding
             for (int i = 0; i < rows; i++)
             {
                 int offset = i * cols;
-                var inputRow = input.Slice(offset, cols);
-                var outputRow = output.Slice(offset, cols);
-
-                // Find max
-                float max = FindMax(inputRow);
-
-                // Compute sum of exp(x - max)
-                float sum = 0f;
-                for (int j = 0; j < cols; j++)
+                
+                unsafe
                 {
-                    sum += MathF.Exp(inputRow[j] - max);
-                }
+                    fixed (float* pInput = input, pOutput = output)
+                    {
+                        // Find max using SIMD-accelerated FindMax on the row slice
+                        float* pInputRow = pInput + offset;
+                        float* pOutputRow = pOutput + offset;
+                        
+                        // Create span for FindMax (zero cost - just pointer + length)
+                        ReadOnlySpan<float> inputRow = new ReadOnlySpan<float>(pInputRow, cols);
+                        float max = FindMax(inputRow);
 
-                float logSumExp = MathF.Log(sum);
+                        // Compute sum of exp(x - max)
+                        float sum = 0f;
+                        for (int j = 0; j < cols; j++)
+                        {
+                            sum += MathF.Exp(pInputRow[j] - max);
+                        }
 
-                // Compute log-softmax: x - max - log(sum)
-                for (int j = 0; j < cols; j++)
-                {
-                    outputRow[j] = inputRow[j] - max - logSumExp;
+                        float logSumExp = MathF.Log(sum);
+
+                        // Compute log-softmax: x - max - log(sum)
+                        for (int j = 0; j < cols; j++)
+                        {
+                            pOutputRow[j] = pInputRow[j] - max - logSumExp;
+                        }
+                    }
                 }
             }
         }

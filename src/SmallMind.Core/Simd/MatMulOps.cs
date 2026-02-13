@@ -1809,15 +1809,25 @@ namespace SmallMind.Core.Simd
             }
 
             // Vector<T> fallback
+            // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
             int vectorSize = Vector<float>.Count;
             var sumVec2 = Vector<float>.Zero;
 
             // SIMD loop
-            for (; i <= length - vectorSize; i += vectorSize)
+            if (i <= length - vectorSize)
             {
-                var va = new Vector<float>(a.Slice(i));
-                var vb = new Vector<float>(b.Slice(i));
-                sumVec2 += va * vb;
+                unsafe
+                {
+                    fixed (float* pA = a, pB = b)
+                    {
+                        for (; i <= length - vectorSize; i += vectorSize)
+                        {
+                            var va = Unsafe.Read<Vector<float>>(pA + i);
+                            var vb = Unsafe.Read<Vector<float>>(pB + i);
+                            sumVec2 += va * vb;
+                        }
+                    }
+                }
             }
 
             // Horizontal sum
