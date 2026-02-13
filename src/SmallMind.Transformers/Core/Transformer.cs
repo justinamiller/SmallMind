@@ -332,22 +332,7 @@ namespace SmallMind.Transformers
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void ForwardNorm(Module norm, Tensor input, Tensor dest)
-        {
-            if (norm is LayerNorm layerNorm)
-            {
-                layerNorm.Forward(input, dest);
-            }
-            else if (norm is RMSNorm rmsNorm)
-            {
-                rmsNorm.Forward(input, dest);
-            }
-            else
-            {
-                // Fallback: use base Forward and copy result
-                var result = norm.Forward(input);
-                result.Data.CopyTo(dest.Data, 0);
-            }
-        }
+            => TransformerHelpers.ForwardNorm(norm, input, dest);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Tensor AddPositionEmbeddings(Tensor tokEmb, Tensor posEmb, Tensor dest, int B, int T, int nEmbd)
@@ -833,22 +818,7 @@ namespace SmallMind.Transformers
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void ForwardNorm(Module norm, Tensor input, Tensor dest)
-        {
-            if (norm is LayerNorm layerNorm)
-            {
-                layerNorm.Forward(input, dest);
-            }
-            else if (norm is RMSNorm rmsNorm)
-            {
-                rmsNorm.Forward(input, dest);
-            }
-            else
-            {
-                // Fallback: use base Forward and copy result
-                var result = norm.Forward(input);
-                result.Data.CopyTo(dest.Data, 0);
-            }
-        }
+            => TransformerHelpers.ForwardNorm(norm, input, dest);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Tensor AddTensors(Tensor a, Tensor b, Tensor? dest = null)
@@ -1472,54 +1442,27 @@ namespace SmallMind.Transformers
 
             int qkvDim = _nEmbd + 2 * _nKvHead * _headSize;
 
-            if (B >= 4)
+            TransformerHelpers.ParallelOrSequential(B, b =>
             {
-                Parallel.For(0, B, b =>
+                int batchInOffset = b * T * qkvDim;
+                int batchOutOffset = b * _nHead * T * _headSize;
+
+                // TIER-3: Restructure loops - timestep t outermost for sequential reads
+                for (int t = 0; t < T; t++)
                 {
-                    int batchInOffset = b * T * qkvDim;
-                    int batchOutOffset = b * _nHead * T * _headSize;
+                    int srcBase = batchInOffset + t * qkvDim;
 
-                    // TIER-3: Restructure loops - timestep t outermost for sequential reads
-                    for (int t = 0; t < T; t++)
+                    // Copy all Q heads for this timestep
+                    for (int h = 0; h < _nHead; h++)
                     {
-                        int srcBase = batchInOffset + t * qkvDim;
+                        int srcIdx = srcBase + h * _headSize;
+                        int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
 
-                        // Copy all Q heads for this timestep
-                        for (int h = 0; h < _nHead; h++)
-                        {
-                            int srcIdx = srcBase + h * _headSize;
-                            int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
-
-                            // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
-                            Buffer.BlockCopy(qkv.Data, srcIdx * 4, q.Data, dstIdx * 4, _headSize * 4);
-                        }
-                    }
-                });
-            }
-            else
-            {
-                for (int b = 0; b < B; b++)
-                {
-                    int batchInOffset = b * T * qkvDim;
-                    int batchOutOffset = b * _nHead * T * _headSize;
-
-                    // TIER-3: Restructure loops - timestep t outermost for sequential reads
-                    for (int t = 0; t < T; t++)
-                    {
-                        int srcBase = batchInOffset + t * qkvDim;
-
-                        // Copy all Q heads for this timestep
-                        for (int h = 0; h < _nHead; h++)
-                        {
-                            int srcIdx = srcBase + h * _headSize;
-                            int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
-
-                            // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
-                            Buffer.BlockCopy(qkv.Data, srcIdx * 4, q.Data, dstIdx * 4, _headSize * 4);
-                        }
+                        // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
+                        Buffer.BlockCopy(qkv.Data, srcIdx * 4, q.Data, dstIdx * 4, _headSize * 4);
                     }
                 }
-            }
+            });
         }
 
         /// <summary>
@@ -1536,58 +1479,29 @@ namespace SmallMind.Transformers
             int kvDim = _nKvHead * _headSize;
             int qkvDim = _nEmbd + 2 * kvDim;
 
-            if (B >= 4)
+            TransformerHelpers.ParallelOrSequential(B, b =>
             {
-                Parallel.For(0, B, b =>
+                int batchInOffset = b * T * qkvDim;
+                int batchOutOffset = b * _nKvHead * T * _headSize;
+
+                // TIER-3: Restructure loops - timestep t outermost for sequential reads
+                for (int t = 0; t < T; t++)
                 {
-                    int batchInOffset = b * T * qkvDim;
-                    int batchOutOffset = b * _nKvHead * T * _headSize;
+                    int srcBase = batchInOffset + t * qkvDim;
 
-                    // TIER-3: Restructure loops - timestep t outermost for sequential reads
-                    for (int t = 0; t < T; t++)
+                    // Copy all K and V heads for this timestep
+                    for (int h = 0; h < _nKvHead; h++)
                     {
-                        int srcBase = batchInOffset + t * qkvDim;
+                        int kSrcIdx = srcBase + _nEmbd + h * _headSize;
+                        int vSrcIdx = srcBase + _nEmbd + kvDim + h * _headSize;
+                        int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
 
-                        // Copy all K and V heads for this timestep
-                        for (int h = 0; h < _nKvHead; h++)
-                        {
-                            int kSrcIdx = srcBase + _nEmbd + h * _headSize;
-                            int vSrcIdx = srcBase + _nEmbd + kvDim + h * _headSize;
-                            int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
-
-                            // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
-                            Buffer.BlockCopy(qkv.Data, kSrcIdx * 4, k.Data, dstIdx * 4, _headSize * 4);
-                            Buffer.BlockCopy(qkv.Data, vSrcIdx * 4, v.Data, dstIdx * 4, _headSize * 4);
-                        }
-                    }
-                });
-            }
-            else
-            {
-                for (int b = 0; b < B; b++)
-                {
-                    int batchInOffset = b * T * qkvDim;
-                    int batchOutOffset = b * _nKvHead * T * _headSize;
-
-                    // TIER-3: Restructure loops - timestep t outermost for sequential reads
-                    for (int t = 0; t < T; t++)
-                    {
-                        int srcBase = batchInOffset + t * qkvDim;
-
-                        // Copy all K and V heads for this timestep
-                        for (int h = 0; h < _nKvHead; h++)
-                        {
-                            int kSrcIdx = srcBase + _nEmbd + h * _headSize;
-                            int vSrcIdx = srcBase + _nEmbd + kvDim + h * _headSize;
-                            int dstIdx = batchOutOffset + h * T * _headSize + t * _headSize;
-
-                            // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
-                            Buffer.BlockCopy(qkv.Data, kSrcIdx * 4, k.Data, dstIdx * 4, _headSize * 4);
-                            Buffer.BlockCopy(qkv.Data, vSrcIdx * 4, v.Data, dstIdx * 4, _headSize * 4);
-                        }
+                        // TIER-3: Use Buffer.BlockCopy (faster than Array.Copy for bulk floats)
+                        Buffer.BlockCopy(qkv.Data, kSrcIdx * 4, k.Data, dstIdx * 4, _headSize * 4);
+                        Buffer.BlockCopy(qkv.Data, vSrcIdx * 4, v.Data, dstIdx * 4, _headSize * 4);
                     }
                 }
-            }
+            });
         }
 
         private Tensor ComputeAttentionScores(Tensor q, Tensor k, int B, int T)
@@ -1604,82 +1518,40 @@ namespace SmallMind.Transformers
             // Parallelize over batch and head dimensions for better performance
             // Use parallel processing when B * nHead >= 4
             int totalParallelWork = B * _nHead;
-            if (totalParallelWork >= 4)
+            TransformerHelpers.ParallelOrSequential(totalParallelWork, bh =>
             {
-                Parallel.For(0, totalParallelWork, bh =>
+                int b = bh / _nHead;
+                int h = bh % _nHead;
+                int bhOffset = (b * _nHead + h) * T * _headSize;
+                int scoreOffset = (b * _nHead + h) * T * T;
+
+                for (int i = 0; i < T; i++)
                 {
-                    int b = bh / _nHead;
-                    int h = bh % _nHead;
-                    int bhOffset = (b * _nHead + h) * T * _headSize;
-                    int scoreOffset = (b * _nHead + h) * T * T;
+                    int qOffset = bhOffset + i * _headSize;
+                    int scoreRowOffset = scoreOffset + i * T;
 
-                    for (int i = 0; i < T; i++)
+                    // Only compute for valid positions (causal mask: j <= i)
+                    for (int j = 0; j <= i; j++)
                     {
-                        int qOffset = bhOffset + i * _headSize;
-                        int scoreRowOffset = scoreOffset + i * T;
+                        int kOffset = bhOffset + j * _headSize;
 
-                        // Only compute for valid positions (causal mask: j <= i)
-                        for (int j = 0; j <= i; j++)
-                        {
-                            int kOffset = bhOffset + j * _headSize;
+                        // Use SIMD-accelerated dot product from MatMulOps
+                        float sum = MatMulOps.DotProduct(
+                            new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
+                            new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
+                        );
 
-                            // Use SIMD-accelerated dot product from MatMulOps
-                            float sum = MatMulOps.DotProduct(
-                                new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
-                                new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
-                            );
-
-                            scores.Data[scoreRowOffset + j] = sum * scale;
-                        }
-
-                        // Positions j > i are already zero (tensor initialized to zeros)
-                        // Set them to NegativeInfinity for softmax to ignore
-                        for (int j = i + 1; j < T; j++)
-                        {
-                            scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
-                        }
+                        scores.Data[scoreRowOffset + j] = sum * scale;
                     }
-                });
-            }
-            else
-            {
-                // Sequential for small batches
-                for (int b = 0; b < B; b++)
-                {
-                    for (int h = 0; h < _nHead; h++)
+
+                    // Positions j > i are already zero (tensor initialized to zeros)
+                    // Set them to NegativeInfinity for softmax to ignore
+                    for (int j = i + 1; j < T; j++)
                     {
-                        int bhOffset = (b * _nHead + h) * T * _headSize;
-                        int scoreOffset = (b * _nHead + h) * T * T;
-
-                        for (int i = 0; i < T; i++)
-                        {
-                            int qOffset = bhOffset + i * _headSize;
-                            int scoreRowOffset = scoreOffset + i * T;
-
-                            // Only compute for valid positions (causal mask: j <= i)
-                            for (int j = 0; j <= i; j++)
-                            {
-                                int kOffset = bhOffset + j * _headSize;
-
-                                // Use SIMD-accelerated dot product from MatMulOps
-                                float sum = MatMulOps.DotProduct(
-                                    new ReadOnlySpan<float>(q.Data, qOffset, _headSize),
-                                    new ReadOnlySpan<float>(k.Data, kOffset, _headSize)
-                                );
-
-                                scores.Data[scoreRowOffset + j] = sum * scale;
-                            }
-
-                            // Positions j > i are already zero (tensor initialized to zeros)
-                            // Set them to NegativeInfinity for softmax to ignore
-                            for (int j = i + 1; j < T; j++)
-                            {
-                                scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
-                            }
-                        }
+                        scores.Data[scoreRowOffset + j] = float.NegativeInfinity;
                     }
                 }
-            }
+            });
 
             // Apply softmax over last dimension
             return ApplySoftmax(scores, B, T);
@@ -1694,91 +1566,45 @@ namespace SmallMind.Transformers
 
             // Parallelize softmax computation over batch and head dimensions
             int totalParallelWork = B * _nHead;
-            if (totalParallelWork >= 4)
+            TransformerHelpers.ParallelOrSequential(totalParallelWork, bh =>
             {
-                Parallel.For(0, totalParallelWork, bh =>
+                int b = bh / _nHead;
+                int h = bh % _nHead;
+
+                for (int i = 0; i < T; i++)
                 {
-                    int b = bh / _nHead;
-                    int h = bh % _nHead;
+                    int offset = ((b * _nHead + h) * T + i) * T;
 
-                    for (int i = 0; i < T; i++)
+                    // Find max for numerical stability (only over valid positions: j <= i for causal mask)
+                    float max = float.NegativeInfinity;
+                    for (int j = 0; j <= i; j++)
                     {
-                        int offset = ((b * _nHead + h) * T + i) * T;
-
-                        // Find max for numerical stability (only over valid positions: j <= i for causal mask)
-                        float max = float.NegativeInfinity;
-                        for (int j = 0; j <= i; j++)
-                        {
-                            if (scores.Data[offset + j] > max)
-                                max = scores.Data[offset + j];
-                        }
-
-                        // Exp and sum - branchless for valid positions
-                        float sum = 0;
-                        for (int j = 0; j <= i; j++)
-                        {
-                            float exp = MathF.Exp(scores.Data[offset + j] - max);
-                            result.Data[offset + j] = exp;
-                            sum += exp;
-                        }
-
-                        // Clear masked positions (i+1 to T-1) - already zero from tensor init
-
-                        // Normalize only valid positions
-                        if (sum > 0)
-                        {
-                            float invSum = 1.0f / sum;
-                            for (int j = 0; j <= i; j++)
-                            {
-                                result.Data[offset + j] *= invSum;
-                            }
-                        }
+                        if (scores.Data[offset + j] > max)
+                            max = scores.Data[offset + j];
                     }
-                });
-            }
-            else
-            {
-                // Sequential for small batches
-                for (int b = 0; b < B; b++)
-                {
-                    for (int h = 0; h < _nHead; h++)
+
+                    // Exp and sum - branchless for valid positions
+                    float sum = 0;
+                    for (int j = 0; j <= i; j++)
                     {
-                        for (int i = 0; i < T; i++)
+                        float exp = MathF.Exp(scores.Data[offset + j] - max);
+                        result.Data[offset + j] = exp;
+                        sum += exp;
+                    }
+
+                    // Clear masked positions (i+1 to T-1) - already zero from tensor init
+
+                    // Normalize only valid positions
+                    if (sum > 0)
+                    {
+                        float invSum = 1.0f / sum;
+                        for (int j = 0; j <= i; j++)
                         {
-                            int offset = ((b * _nHead + h) * T + i) * T;
-
-                            // Find max for numerical stability (only over valid positions: j <= i for causal mask)
-                            float max = float.NegativeInfinity;
-                            for (int j = 0; j <= i; j++)
-                            {
-                                if (scores.Data[offset + j] > max)
-                                    max = scores.Data[offset + j];
-                            }
-
-                            // Exp and sum - branchless for valid positions
-                            float sum = 0;
-                            for (int j = 0; j <= i; j++)
-                            {
-                                float exp = MathF.Exp(scores.Data[offset + j] - max);
-                                result.Data[offset + j] = exp;
-                                sum += exp;
-                            }
-
-                            // Clear masked positions (i+1 to T-1) - already zero from tensor init
-
-                            // Normalize only valid positions
-                            if (sum > 0)
-                            {
-                                float invSum = 1.0f / sum;
-                                for (int j = 0; j <= i; j++)
-                                {
-                                    result.Data[offset + j] *= invSum;
-                                }
-                            }
+                            result.Data[offset + j] *= invSum;
                         }
                     }
                 }
-            }
+            });
 
             return _attnDropout.Forward(result);
         }
@@ -1796,55 +1622,27 @@ namespace SmallMind.Transformers
 
             // Parallelize attention application over batch and head dimensions
             int totalParallelWork = B * _nHead;
-            if (totalParallelWork >= 4)
+            TransformerHelpers.ParallelOrSequential(totalParallelWork, bh =>
             {
-                Parallel.For(0, totalParallelWork, bh =>
-                {
-                    int b = bh / _nHead;
-                    int h = bh % _nHead;
+                int b = bh / _nHead;
+                int h = bh % _nHead;
 
-                    for (int i = 0; i < T; i++)
-                    {
-                        for (int d = 0; d < _headSize; d++)
-                        {
-                            float sum = 0;
-                            for (int j = 0; j < T; j++)
-                            {
-                                int attIdx = ((b * _nHead + h) * T + i) * T + j;
-                                int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
-                                sum += att.Data[attIdx] * v.Data[vIdx];
-                            }
-                            int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                            output.Data[outIdx] = sum;
-                        }
-                    }
-                });
-            }
-            else
-            {
-                // Sequential for small batches
-                for (int b = 0; b < B; b++)
+                for (int i = 0; i < T; i++)
                 {
-                    for (int h = 0; h < _nHead; h++)
+                    for (int d = 0; d < _headSize; d++)
                     {
-                        for (int i = 0; i < T; i++)
+                        float sum = 0;
+                        for (int j = 0; j < T; j++)
                         {
-                            for (int d = 0; d < _headSize; d++)
-                            {
-                                float sum = 0;
-                                for (int j = 0; j < T; j++)
-                                {
-                                    int attIdx = ((b * _nHead + h) * T + i) * T + j;
-                                    int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
-                                    sum += att.Data[attIdx] * v.Data[vIdx];
-                                }
-                                int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
-                                output.Data[outIdx] = sum;
-                            }
+                            int attIdx = ((b * _nHead + h) * T + i) * T + j;
+                            int vIdx = ((b * _nHead + h) * T + j) * _headSize + d;
+                            sum += att.Data[attIdx] * v.Data[vIdx];
                         }
+                        int outIdx = ((b * _nHead + h) * T + i) * _headSize + d;
+                        output.Data[outIdx] = sum;
                     }
                 }
-            }
+            });
 
             return output;
         }
@@ -2431,6 +2229,97 @@ namespace SmallMind.Transformers
             _upProj.Eval();
             _downProj.Eval();
             _dropout.Eval();
+        }
+    }
+
+    /// <summary>
+    /// Internal helper class for common Transformer operations.
+    /// Consolidates duplicated code patterns across Transformer components.
+    /// </summary>
+    internal static class TransformerHelpers
+    {
+        /// <summary>
+        /// Executes forward pass through a normalization layer with in-place destination.
+        /// Handles LayerNorm, RMSNorm, and fallback cases.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void ForwardNorm(Module norm, Tensor input, Tensor dest)
+        {
+            if (norm is LayerNorm layerNorm)
+            {
+                layerNorm.Forward(input, dest);
+            }
+            else if (norm is RMSNorm rmsNorm)
+            {
+                rmsNorm.Forward(input, dest);
+            }
+            else
+            {
+                // Fallback: use base Forward and copy result
+                var result = norm.Forward(input);
+                result.Data.CopyTo(dest.Data, 0);
+            }
+        }
+
+        /// <summary>
+        /// Executes work in parallel or sequentially based on workload size.
+        /// Uses parallel execution for workloads >= 4 to amortize threading overhead.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void ParallelOrSequential(int workSize, Action<int> body)
+        {
+            if (workSize >= 4)
+            {
+                Parallel.For(0, workSize, body);
+            }
+            else
+            {
+                for (int i = 0; i < workSize; i++)
+                {
+                    body(i);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Checks if two shape arrays are equal.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static bool ShapesMatch(int[] shape1, ReadOnlySpan<int> shape2)
+        {
+            if (shape1.Length != shape2.Length)
+                return false;
+
+            for (int i = 0; i < shape1.Length; i++)
+            {
+                if (shape1[i] != shape2[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Updates a 4D shape cache array.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void UpdateShapeCache4D(int[] cache, int dim0, int dim1, int dim2, int dim3)
+        {
+            cache[0] = dim0;
+            cache[1] = dim1;
+            cache[2] = dim2;
+            cache[3] = dim3;
+        }
+
+        /// <summary>
+        /// Updates a 3D shape cache array.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void UpdateShapeCache3D(int[] cache, int dim0, int dim1, int dim2)
+        {
+            cache[0] = dim0;
+            cache[1] = dim1;
+            cache[2] = dim2;
         }
     }
 }
