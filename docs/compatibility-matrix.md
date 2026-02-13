@@ -56,15 +56,31 @@ var model = await engine.LoadModelAsync(new ModelLoadRequest
 **Supported GGUF Tensor Types:**
 - F32, F16
 - Q4_0, Q4_1
-- Q5_0, Q5_1
-- Q8_0
+- Q8_0, Q8_1
 - Q4_K, Q5_K, Q6_K, Q8_K (K-quants)
 
-**Unsupported GGUF Tensor Types:**
-- Q2_K, Q3_K (rarely used)
-- Q8_1 (rarely used)
-- IQ variants (experimental)
-- Throws `UnsupportedGgufTensorException` if encountered
+**Unsupported GGUF Tensor Types (with reason):**
+
+| Tensor Type | Reason |
+|-------------|--------|
+| Q2_K | Too low-quality; rarely produces usable output |
+| Q3_K | Insufficient precision for reliable inference |
+| Q5_0, Q5_1 | Size calculation not implemented; use Q5_K instead |
+| IQ1_S | Experimental importance-weighted format |
+| IQ2_XXS, IQ2_XS, IQ2_S | Experimental; extremely low bit-width |
+| IQ3_XXS, IQ3_S | Experimental importance-weighted format |
+| IQ4_NL, IQ4_XS | Experimental non-linear quantization |
+
+> **Diagnostic**: Use `GgufCompatibilityReport` to check model compatibility before loading.
+> Unsupported tensors produce a `NotSupportedException` with details on which tensors are incompatible.
+
+**Supported Architectures:**
+- Llama-class (LLaMA, TinyLlama, Mistral, CodeLlama)
+- GPT-2 / GPT-NeoX
+
+**Supported Tokenizers (from GGUF metadata):**
+- BPE (Byte-Pair Encoding) — extracted from GGUF token tables
+- GGUF token table tokenizer — direct vocabulary lookup
 
 ---
 
