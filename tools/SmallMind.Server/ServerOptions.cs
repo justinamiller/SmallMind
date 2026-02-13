@@ -41,4 +41,16 @@ public sealed class ServerOptions
     /// Default: true.
     /// </summary>
     public bool StrictLimits { get; set; } = true;
+
+    /// <summary>
+    /// Maximum request body size in bytes.
+    /// Prevents oversized payloads. Default: 1 MB.
+    /// </summary>
+    public long MaxRequestBodySizeBytes { get; set; } = 1_048_576;
+
+    /// <summary>
+    /// Whether to enable console logging for request/response details.
+    /// Default: false (null logger — no console spam).
+    /// </summary>
+    public bool EnableConsoleLogging { get; set; }
 }

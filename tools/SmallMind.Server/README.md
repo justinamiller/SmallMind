@@ -89,6 +89,21 @@ Edit `appsettings.json` or use CLI args:
 }
 ```
 
+### Production Hardening Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `MaxConcurrentRequests` | 4 | Maximum in-flight inference requests |
+| `MaxQueueDepth` | 32 | Maximum queued requests before 429 |
+| `RequestTimeoutMs` | 300000 | Whole-request timeout (ms) |
+| `MaxCompletionTokens` | 2048 | Max output tokens per request |
+| `MaxPromptTokens` | 8192 | Max prompt tokens per request |
+| `MaxContextTokens` | 4096 | Max total tokens (prompt + completion) |
+| `PerTokenTimeoutMs` | 5000 | Timeout per generated token (streaming) |
+| `MaxRequestBodySizeBytes` | 1048576 | Max request body size (1 MB) |
+| `StrictLimits` | true | Reject requests exceeding any limit |
+| `EnableConsoleLogging` | false | Enable console logging (default: silent) |
+
 ## Testing
 
 Run the test script:

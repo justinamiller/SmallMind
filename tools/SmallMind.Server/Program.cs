@@ -12,11 +12,23 @@ var builder = WebApplication.CreateBuilder(args);
 var serverOptions = new ServerOptions();
 builder.Configuration.GetSection("ServerOptions").Bind(serverOptions);
 
+// Configure logging based on server options
+if (!serverOptions.EnableConsoleLogging)
+{
+    builder.Logging.ClearProviders();
+}
+
 builder.Services.AddSingleton(serverOptions);
 builder.Services.AddSingleton<RequestQueue>(sp => 
     new RequestQueue(serverOptions.MaxConcurrentRequests, serverOptions.MaxQueueDepth));
 builder.Services.AddSingleton<ServerMetrics>();
 builder.Services.AddSingleton<RequestValidator>();
+
+// Enforce max request body size
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    kestrel.Limits.MaxRequestBodySize = serverOptions.MaxRequestBodySizeBytes;
+});
 builder.Services.AddSingleton<ISmallMindEngine>(sp =>
 {
     var logger = sp.GetRequiredService<ILogger<Program>>();
@@ -290,6 +302,7 @@ app.MapPost("/v1/completions", async (
     ISmallMindEngine engine,
     RequestQueue queue,
     ServerMetrics metrics,
+    RequestValidator validator,
     ServerOptions opts,
     CancellationToken cancellationToken) =>
 {
@@ -299,6 +312,28 @@ app.MapPost("/v1/completions", async (
     
     try
     {
+        int estimatedPromptTokens = validator.EstimatePromptTokens(request.Prompt);
+        
+        var validationResult = validator.ValidateRequest(
+            request.MaxTokens,
+            estimatedPromptTokens,
+            request.Temperature,
+            request.TopP);
+        
+        if (!validationResult.IsValid)
+        {
+            return Results.Json(new ErrorResponse
+            {
+                Error = new ErrorDetail
+                {
+                    Message = validationResult.ErrorMessage!,
+                    Type = validationResult.ErrorType!,
+                    Code = validationResult.ErrorType!,
+                    Param = validationResult.ErrorParam
+                }
+            }, statusCode: 400);
+        }
+        
         using var slot = await queue.EnqueueAsync(clientId: null, timeout: null, cancellationToken);
         
         if (!slot.Success)
@@ -307,7 +342,7 @@ app.MapPost("/v1/completions", async (
             {
                 Error = new ErrorDetail
                 {
-                    Message = "Queue full - too many concurrent requests",
+                    Message = slot.FailureReason ?? "Queue full - too many concurrent requests",
                     Type = "server_error",
                     Code = "queue_full"
                 }
@@ -321,7 +356,9 @@ app.MapPost("/v1/completions", async (
             Temperature = request.Temperature ?? opts.DefaultTemperature,
             TopP = request.TopP ?? opts.DefaultTopP,
             TopK = opts.DefaultTopK,
-            MaxOutputTokens = request.MaxTokens ?? opts.DefaultMaxTokens,
+            MaxOutputTokens = Math.Min(
+                request.MaxTokens ?? opts.DefaultMaxTokens,
+                opts.MaxCompletionTokens),
             StopSequences = stopSequences.Length > 0 ? stopSequences : Array.Empty<string>()
         };
         
@@ -333,7 +370,12 @@ app.MapPost("/v1/completions", async (
             Seed = request.Seed.HasValue ? (int)request.Seed.Value : null
         };
         
-        var result = await Task.Run(() => session.Generate(genRequest, cancellationToken), cancellationToken);
+        using var requestTimeoutCts = new CancellationTokenSource(opts.RequestTimeoutMs);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            requestTimeoutCts.Token);
+        
+        var result = await Task.Run(() => session.Generate(genRequest, linkedCts.Token), linkedCts.Token);
         
         var response = new CompletionResponse
         {
@@ -359,6 +401,34 @@ app.MapPost("/v1/completions", async (
         
         metrics.RecordRequest("completions", sw.Elapsed.TotalMilliseconds, result.Usage.CompletionTokens, true);
         return Results.Ok(response);
+    }
+    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    {
+        metrics.RecordRequest("completions", sw.Elapsed.TotalMilliseconds, 0, false);
+        
+        return Results.Json(new ErrorResponse
+        {
+            Error = new ErrorDetail
+            {
+                Message = "Request cancelled by client",
+                Type = "request_cancelled",
+                Code = "cancelled"
+            }
+        }, statusCode: 499);
+    }
+    catch (OperationCanceledException)
+    {
+        metrics.RecordRequest("completions", sw.Elapsed.TotalMilliseconds, 0, false);
+        
+        return Results.Json(new ErrorResponse
+        {
+            Error = new ErrorDetail
+            {
+                Message = "Request timeout exceeded",
+                Type = "timeout",
+                Code = "timeout"
+            }
+        }, statusCode: 504);
     }
     catch (Exception ex)
     {
