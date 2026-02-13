@@ -139,13 +139,7 @@ namespace SmallMind.Quantization.Kernels
             for (int sb = 0; sb < Q6K_SUB_BLOCKS; sb++)
             {
                 float sc = d * scales_ptr[sb];
-                
-                // Validate sub-block offset
-                int subBlockOffset = sb * Q6K_SUB_BLOCK_SIZE;
-                if (subBlockOffset < 0 || subBlockOffset >= Q6K_BLOCK_SIZE)
-                    continue;
-                
-                float* pA_sub = pA + subBlockOffset;
+                float* pA_sub = pA + sb * Q6K_SUB_BLOCK_SIZE;
 
                 for (int i = 0; i < Q6K_SUB_BLOCK_SIZE; i++)
                 {

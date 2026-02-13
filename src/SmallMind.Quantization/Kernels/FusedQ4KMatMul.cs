@@ -167,13 +167,8 @@ namespace SmallMind.Quantization.Kernels
                 float sc = d * scales[sb];
                 float m = dmin * mins[sb];
 
-                // Validate sub-block offset
-                int subBlockOffset = sb * Q4K_SUB_BLOCK_SIZE;
-                if (subBlockOffset < 0 || subBlockOffset >= Q4K_BLOCK_SIZE)
-                    continue;
-
                 // Process 32 values in sub-block
-                float* pA_sub = pA + subBlockOffset;
+                float* pA_sub = pA + sb * Q4K_SUB_BLOCK_SIZE;
                 byte* qs_sub = qs_ptr + sb * (Q4K_SUB_BLOCK_SIZE / 2);
 
                 // Vectorized inner loop (process 8 values at a time)
