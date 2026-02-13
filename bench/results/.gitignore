@@ -1,0 +1,7 @@
+# Benchmark results (local runs only)
+*.json
+*.md
+*.csv
+
+# Allow README.md
+!README.md

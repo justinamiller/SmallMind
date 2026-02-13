@@ -1,0 +1,58 @@
+name: Benchmark Nightly
+
+on:
+  schedule:
+    # Run at 2 AM UTC daily
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  benchmark-full:
+    name: Full Benchmark (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+      fail-fast: false
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Build
+        run: dotnet build bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -c Release --no-restore
+      
+      - name: Run Full Benchmarks
+        run: |
+          dotnet run -c Release --project bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -- \
+            --contexts 256,1024,4096 \
+            --threads 1,2,4,8 \
+            --tokens 256 \
+            --iterations 10
+      
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-nightly-${{ matrix.os }}
+          path: bench/results/
+          retention-days: 90
+      
+      - name: Display Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "### Nightly Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          if ls bench/results/*.md 1> /dev/null 2>&1; then
+            cat bench/results/*.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No results generated" >> $GITHUB_STEP_SUMMARY
+          fi
