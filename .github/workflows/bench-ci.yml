@@ -9,11 +9,19 @@ on:
 
 jobs:
   benchmark:
-    name: Benchmark (${{ matrix.os }})
+    name: Benchmark (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - name: "x64-linux"
+            os: ubuntu-latest
+          - name: "x64-windows"
+            os: windows-latest
+          - name: "x64-macos"
+            os: macos-13
+          - name: "arm64-macos"
+            os: macos-14
       fail-fast: false
     
     steps:
@@ -35,16 +43,16 @@ jobs:
         run: |
           dotnet run -c Release --project bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -- \
             --ci-only \
-            --contexts 256 \
+            --contexts 256,512,1024 \
             --threads 1,2,4 \
-            --tokens 64 \
-            --iterations 3
+            --tokens 128 \
+            --iterations 5
       
       - name: Upload Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: benchmark-results-${{ matrix.os }}
+          name: benchmark-results-${{ matrix.name }}
           path: bench/results/
           retention-days: 30
       
