@@ -54,16 +54,23 @@ namespace SmallMind.Core.Simd
         /// Uses multi-level cache blocking and microkernel optimization for maximum throughput.
         /// Automatically selects best implementation based on CPU capabilities.
         /// </summary>
+        /// <param name="accumulate">
+        /// If false (default): C = A×B (overwrites C, no pre-zero needed by caller).
+        /// If true: C += A×B (adds to existing C values).
+        /// </param>
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         public static void MatMul(
             ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
-            int M, int K, int N)
+            int M, int K, int N, bool accumulate = false)
         {
             if (A.Length < M * K || B.Length < K * N || C.Length < M * N)
                 throw new ArgumentException("Matrix dimensions don't match buffer sizes");
             
-            // Zero output (required for accumulation)
-            C.Clear();
+            // Zero output only if not accumulating (overwrite mode)
+            if (!accumulate)
+            {
+                C.Clear();
+            }
             
             // Dispatch to optimal implementation
             if (Avx512F.IsSupported && N >= NR_AVX512)
