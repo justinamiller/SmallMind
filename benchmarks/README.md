@@ -2,12 +2,19 @@
 
 Comprehensive runtime/engine performance benchmarking for SmallMind. This benchmarking harness measures **runtime metrics** (not model intelligence metrics) including throughput, latency, memory usage, and stability.
 
+## Quick Links
+
+📊 **[Latest Benchmark Results](BENCHMARK_RESULTS.md)** - Current performance metrics and analysis  
+📈 **[Framework Comparison](../docs/BENCHMARK_COMPARISON.md)** - Compare SmallMind vs llama.cpp, vLLM, TGI, etc.  
+📚 **Usage Guide** - See below for detailed instructions
+
 ## Features
 
 - **No 3rd-party dependencies** - Pure .NET implementation
 - **Deterministic and repeatable** - Suitable for CI/CD pipelines
 - **Cross-platform** - Works on Windows, Linux, and macOS
 - **Multiple output formats** - JSON (machine-readable), Markdown (README-ready), CSV
+- **Comprehensive metrics** - Throughput, latency, memory, GC stats, SIMD capabilities
 
 ## Metrics Measured
 
