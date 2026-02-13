@@ -1,10 +1,17 @@
 # SmallMind
 
+<!-- Credibility Badges -->
+[![Dependabot](https://img.shields.io/badge/Dependabot-Enabled-brightgreen?logo=dependabot)](https://github.com/justinamiller/SmallMind/security/dependabot)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/justinamiller/SmallMind/badge)](https://securityscorecards.dev/viewer/?uri=github.com/justinamiller/SmallMind)
+[![NuGet Version](https://img.shields.io/nuget/v/SmallMind.svg?logo=nuget)](https://www.nuget.org/packages/SmallMind/)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/SmallMind.svg?logo=nuget)](https://www.nuget.org/packages/SmallMind/)
+[![Pure .NET](https://img.shields.io/badge/Pure_.NET-10.0+-512BD4?logo=.net)](https://dotnet.microsoft.com/)
+[![No Native Dependencies](https://img.shields.io/badge/Dependencies-Zero_Native-success?logo=nuget)](https://github.com/justinamiller/SmallMind)
+
+<!-- Build & Quality Badges -->
 [![Build and Test](https://github.com/justinamiller/SmallMind/actions/workflows/build.yml/badge.svg)](https://github.com/justinamiller/SmallMind/actions/workflows/build.yml)
 [![CodeQL](https://github.com/justinamiller/SmallMind/actions/workflows/codeql.yml/badge.svg)](https://github.com/justinamiller/SmallMind/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![.NET Version](https://img.shields.io/badge/.NET-10.0%2B-512BD4)](https://dotnet.microsoft.com/download)
-![NuGet](https://img.shields.io/badge/NuGet-Coming%20Soon-blue)
 
 **Production-ready LLM inference runtime for .NET with zero external dependencies.**
 
