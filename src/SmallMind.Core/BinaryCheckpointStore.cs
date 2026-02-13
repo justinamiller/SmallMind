@@ -11,7 +11,6 @@ namespace SmallMind.Core
     {
         private const string MagicHeader = "SMND"; // SmallMiND
         private const int CurrentFormatVersion = 1;
-        private const int HeaderSize = 16; // Magic(4) + Version(4) + Reserved(8)
 
         /// <summary>
         /// Save a model checkpoint in binary format.

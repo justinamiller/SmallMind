@@ -495,14 +495,12 @@ namespace SmallMind.Transformers
     /// </summary>
     internal sealed class LayerNorm : Module
     {
-        private int _normalizedShape;
         private float _eps;
         public Tensor Gamma { get; private set; }
         public Tensor Beta { get; private set; }
 
         public LayerNorm(int normalizedShape, float eps = 1e-5f)
         {
-            _normalizedShape = normalizedShape;
             _eps = eps;
 
             Gamma = Tensor.Ones(new int[] { normalizedShape }, requiresGrad: true);
@@ -615,13 +613,11 @@ namespace SmallMind.Transformers
     /// </summary>
     internal sealed class RMSNorm : Module
     {
-        private int _normalizedShape;
         private float _eps;
         public Tensor Gamma { get; private set; }
 
         public RMSNorm(int normalizedShape, float eps = 1e-5f)
         {
-            _normalizedShape = normalizedShape;
             _eps = eps;
 
             Gamma = Tensor.Ones(new int[] { normalizedShape }, requiresGrad: true);

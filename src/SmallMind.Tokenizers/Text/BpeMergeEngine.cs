@@ -14,13 +14,6 @@ internal static class BpeMergeEngine
     /// </summary>
     internal readonly struct PairCounter
     {
-        private readonly Dictionary<long, int> _pairCounts;
-
-        public PairCounter()
-        {
-            _pairCounts = new Dictionary<long, int>();
-        }
-
         /// <summary>
         /// Pack two int token IDs into a single long key.
         /// This avoids tuple allocations and provides better cache locality.

@@ -10,8 +10,6 @@ namespace SmallMind.Quantization.Kernels
     /// </summary>
     internal static class MatMulF32Q4Optimized
     {
-        private const int BLOCK_SIZE = 64; // Must match Q4Tensor block size
-
         /// <summary>
         /// Matrix multiply: C[M×N] = A[M×K] * B[K×N] where B is Q4 quantized.
         /// Optimized with block-oriented processing and AVX2 fast path.

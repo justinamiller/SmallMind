@@ -28,10 +28,6 @@ namespace SmallMind.Quantization.Kernels
         private const int L1_BLOCK_K = 512;  // Larger K block since Q4_K super-blocks are 256 values
         private const int L1_BLOCK_N = 128;
 
-        // Microkernel sizes
-        private const int MR = 6;   // M-register blocking
-        private const int NR = 16;  // N-register blocking (matches AVX2 2x8)
-
         private const int Q4K_BLOCK_SIZE = 256;
         private const int Q4K_BYTES_PER_BLOCK = 144;
         private const int Q4K_SUB_BLOCKS = 8;

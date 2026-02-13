@@ -20,15 +20,6 @@ namespace SmallMind.Core.Simd
     [SkipLocalsInit]
     internal static class GemmMicrokernels
     {
-        // Cache-line and block sizes tuned for modern CPUs
-        private const int CACHE_LINE_SIZE = 64; // bytes (512 bits = 16 floats)
-
-        // L1 cache blocking: ~32KB data cache per core
-        // Leave headroom for A-matrix and accumulators
-        private const int L1_BLOCK_M = 32;  // M-dimension block size
-        private const int L1_BLOCK_K = 256; // K-dimension block size  
-        private const int L1_BLOCK_N = 128; // N-dimension block size
-
         // L2 cache blocking: ~256KB-1MB shared L2 per core
         private const int L2_BLOCK_M = 128;
         private const int L2_BLOCK_K = 512;

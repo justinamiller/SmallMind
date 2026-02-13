@@ -609,7 +609,6 @@ namespace SmallMind.Core.Simd
             int M, int K, int N)
         {
             const int vecSize = 8; // AVX processes 8 floats
-            const int TILING_THRESHOLD = 192; // Consistency with AVX2 and Vector implementations
 
             // For AVX (without FMA), keep it simple - just choose parallel vs sequential
             // No tiling implementation available for AVX-only path
@@ -918,9 +917,7 @@ namespace SmallMind.Core.Simd
             float* pA, float* pB, float* pC,
             int M, int K, int N)
         {
-            const int vecSize = VEC512_SIZE;
             const int TILE_M = 4;  // Process 4 rows of C at a time
-            const int TILE_N = 64; // Process 64 cols of C at a time (4 vectors)
 
             if (M >= PARALLEL_THRESHOLD)
             {
@@ -1022,9 +1019,7 @@ namespace SmallMind.Core.Simd
             float* pA, float* pB, float* pC,
             int M, int K, int N)
         {
-            const int vecSize = 8;
             const int TILE_M = 4;  // Process 4 rows of C at a time
-            const int TILE_N = 32; // Process 32 cols of C at a time (4 vectors)
 
             if (M >= PARALLEL_THRESHOLD)
             {

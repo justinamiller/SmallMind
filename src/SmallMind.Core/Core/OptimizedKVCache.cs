@@ -22,8 +22,6 @@ namespace SmallMind.Core.Core
         private readonly int _maxSeqLen;
         private readonly int _numHeads;
         private readonly int _headDim;
-        private readonly int _pageSize;
-        private readonly bool _isMultiQueryAttn;  // True for MQA/GQA
         private readonly int _kvHeads;            // Number of KV heads (< numHeads for MQA/GQA)
 
         // Per-layer key/value caches with 64-byte alignment
@@ -80,8 +78,6 @@ namespace SmallMind.Core.Core
             _numHeads = numHeads;
             _headDim = headDim;
             _kvHeads = kvHeads ?? numHeads;
-            _pageSize = pageSize;
-            _isMultiQueryAttn = _kvHeads < numHeads;
 
             if (numHeads % _kvHeads != 0)
                 throw new ArgumentException($"numHeads ({numHeads}) must be divisible by kvHeads ({_kvHeads})");
