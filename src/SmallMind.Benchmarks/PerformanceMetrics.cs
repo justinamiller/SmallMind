@@ -108,6 +108,16 @@ namespace SmallMind.Benchmarks
         /// CPU core to pin to (if UseCpuAffinity is true).
         /// </summary>
         public int CpuCore { get; set; } = 0;
+
+        /// <summary>
+        /// Output directory for benchmark results.
+        /// </summary>
+        public string OutputDirectory { get; set; } = ".";
+
+        /// <summary>
+        /// Output formats (json, markdown).
+        /// </summary>
+        public List<string> OutputFormats { get; set; } = new List<string> { "markdown" };
     }
 
     /// <summary>

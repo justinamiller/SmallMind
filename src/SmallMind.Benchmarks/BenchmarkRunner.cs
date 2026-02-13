@@ -391,39 +391,56 @@ namespace SmallMind.Benchmarks
         {
             _logger.Info("Writing reports...");
 
-            var outputDir = "/home/runner/work/SmallMind/SmallMind/artifacts/perf";
+            var outputDir = _config.OutputDirectory;
             Directory.CreateDirectory(outputDir);
 
             var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-            var jsonPath = Path.Combine(outputDir, $"perf-results-{timestamp}.json");
-            var mdPath = Path.Combine(outputDir, $"perf-results-{timestamp}.md");
+            
+            var formats = _config.OutputFormats ?? new List<string> { "markdown" };
 
-            // Try to load baseline
-            var baselinePath = "/home/runner/work/SmallMind/SmallMind/perf/baselines/baseline.json";
-            var baseline = JsonReportWriter.ReadBaseline(baselinePath);
-
-            // Write JSON
-            JsonReportWriter.WriteReport(jsonPath, _results);
-            _logger.Info($"  JSON: {jsonPath}");
-
-            // Write Markdown
-            MarkdownReportWriter.WriteReport(mdPath, _results, baseline);
-            _logger.Info($"  Markdown: {mdPath}");
-
-            // Also write latest
-            var latestJsonPath = Path.Combine(outputDir, "perf-results-latest.json");
-            var latestMdPath = Path.Combine(outputDir, "perf-results-latest.md");
-            JsonReportWriter.WriteReport(latestJsonPath, _results);
-            MarkdownReportWriter.WriteReport(latestMdPath, _results, baseline);
+            foreach (var format in formats)
+            {
+                if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
+                {
+                        var jsonPath = Path.Combine(outputDir, $"perf-results-{timestamp}.json");
+                        JsonReportWriter.WriteReport(jsonPath, _results);
+                        _logger.Info($"  JSON: {jsonPath}");
+                        
+                        // Also write latest
+                        var latestJsonPath = Path.Combine(outputDir, "perf-results-latest.json");
+                        JsonReportWriter.WriteReport(latestJsonPath, _results);
+                }
+                else if (format.Equals("markdown", StringComparison.OrdinalIgnoreCase) || 
+                         format.Equals("md", StringComparison.OrdinalIgnoreCase))
+                {
+                        var mdPath = Path.Combine(outputDir, $"perf-results-{timestamp}.md");
+                        
+                        // Try to load baseline (look in common locations)
+                        var baselinePath = Path.Combine(outputDir, "baseline.json");
+                        if (!File.Exists(baselinePath))
+                        {
+                            baselinePath = "/home/runner/work/SmallMind/SmallMind/perf/baselines/baseline.json";
+                        }
+                        
+                        var baseline = File.Exists(baselinePath) ? JsonReportWriter.ReadBaseline(baselinePath) : null;
+                        
+                        MarkdownReportWriter.WriteReport(mdPath, _results, baseline);
+                        _logger.Info($"  Markdown: {mdPath}");
+                        
+                        // Also write latest
+                        var latestMdPath = Path.Combine(outputDir, "perf-results-latest.md");
+                        MarkdownReportWriter.WriteReport(latestMdPath, _results, baseline);
+                        
+                        // Check for regressions if baseline exists
+                        if (baseline != null)
+                        {
+                            CheckRegressions(baseline);
+                        }
+                }
+            }
 
             _logger.Info("");
             _logger.Info("Benchmark complete!");
-
-            // Check for regressions if baseline exists
-            if (baseline != null)
-            {
-                CheckRegressions(baseline);
-            }
         }
 
         private void CheckRegressions(List<BenchmarkResult> baseline)

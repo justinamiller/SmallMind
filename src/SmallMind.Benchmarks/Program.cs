@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SmallMind.Benchmarks
 {
@@ -8,19 +9,29 @@ namespace SmallMind.Benchmarks
         {
             try
             {
+                var options = ParseArgs(args);
+
+                if (options.ShowHelp)
+                {
+                    ShowHelp();
+                    return 0;
+                }
+
                 // Check if user wants GEMM benchmark
-                if (args.Length > 0 && args[0].Equals("gemm", StringComparison.OrdinalIgnoreCase))
+                if (options.BenchmarkType == "gemm")
                 {
                     GemmBenchmark.Run();
                     return 0;
                 }
 
-                // Default: run existing Q4 benchmarks
+                // Default: run existing Q4 benchmarks (kernel-only)
                 var config = new BenchmarkConfig
                 {
-                    WarmupIterations = 5,
-                    MeasuredIterations = 20,
-                    Seed = 42
+                    WarmupIterations = options.WarmupIterations,
+                    MeasuredIterations = options.MeasuredIterations,
+                    Seed = options.Seed,
+                    OutputDirectory = options.OutputDir,
+                    OutputFormats = options.Formats
                 };
 
                 var runner = new BenchmarkRunner(config);
@@ -37,5 +48,111 @@ namespace SmallMind.Benchmarks
                 return 1;
             }
         }
+
+        private static BenchmarkOptions ParseArgs(string[] args)
+        {
+            var options = new BenchmarkOptions();
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                var arg = args[i];
+
+                if (arg.Equals("--help", StringComparison.OrdinalIgnoreCase) || 
+                    arg.Equals("-h", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.ShowHelp = true;
+                }
+                else if (arg.Equals("--warmup", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var warmup))
+                    {
+                        options.WarmupIterations = warmup;
+                        i++;
+                    }
+                }
+                else if (arg.Equals("--iterations", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var iters))
+                    {
+                        options.MeasuredIterations = iters;
+                        i++;
+                    }
+                }
+                else if (arg.Equals("--seed", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out var seed))
+                    {
+                        options.Seed = seed;
+                        i++;
+                    }
+                }
+                else if (arg.Equals("--output-dir", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        options.OutputDir = args[i + 1];
+                        i++;
+                    }
+                }
+                else if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (i + 1 < args.Length)
+                    {
+                        var formats = args[i + 1].Split(',');
+                        options.Formats = new List<string>();
+                        foreach (var fmt in formats)
+                        {
+                            var trimmed = fmt.Trim();
+                            if (!string.IsNullOrEmpty(trimmed))
+                                options.Formats.Add(trimmed);
+                        }
+                        i++;
+                    }
+                }
+                else if (arg.Equals("gemm", StringComparison.OrdinalIgnoreCase))
+                {
+                    options.BenchmarkType = "gemm";
+                }
+            }
+
+            return options;
+        }
+
+        private static void ShowHelp()
+        {
+            Console.WriteLine("SmallMind.Benchmarks - CPU LLM Performance Benchmark Suite");
+            Console.WriteLine();
+            Console.WriteLine("USAGE:");
+            Console.WriteLine("  dotnet run -- [OPTIONS]");
+            Console.WriteLine();
+            Console.WriteLine("OPTIONS:");
+            Console.WriteLine("  --help, -h              Show this help message");
+            Console.WriteLine("  --warmup <N>            Number of warmup iterations (default: 5)");
+            Console.WriteLine("  --iterations <N>        Number of measured iterations (default: 20)");
+            Console.WriteLine("  --seed <N>              Random seed for determinism (default: 42)");
+            Console.WriteLine("  --output-dir <path>     Output directory for results (default: .)");
+            Console.WriteLine("  --format <fmt>          Output formats: json,markdown (default: markdown)");
+            Console.WriteLine();
+            Console.WriteLine("BENCHMARK TYPES:");
+            Console.WriteLine("  (default)               Run kernel benchmarks (MatMul, Q4, etc.)");
+            Console.WriteLine("  gemm                    Run GEMM-specific benchmarks");
+            Console.WriteLine();
+            Console.WriteLine("EXAMPLES:");
+            Console.WriteLine("  dotnet run -- --warmup 10 --iterations 50");
+            Console.WriteLine("  dotnet run -- --output-dir ./results --format json,markdown");
+            Console.WriteLine("  dotnet run -- gemm");
+            Console.WriteLine();
+        }
+    }
+
+    internal class BenchmarkOptions
+    {
+        public bool ShowHelp { get; set; }
+        public string BenchmarkType { get; set; } = "kernel";
+        public int WarmupIterations { get; set; } = 5;
+        public int MeasuredIterations { get; set; } = 20;
+        public int Seed { get; set; } = 42;
+        public string OutputDir { get; set; } = ".";
+        public List<string> Formats { get; set; } = new List<string> { "markdown" };
     }
 }

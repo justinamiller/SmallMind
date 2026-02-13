@@ -1,0 +1,149 @@
+name: Publish NuGet Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Build and Publish NuGet Packages
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for GitVersion
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Determine Version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            IS_PRERELEASE="${{ inputs.prerelease }}"
+          else
+            # Extract version from tag (v1.2.3 -> 1.2.3)
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            # Determine if prerelease based on version string
+            if [[ "$VERSION" == *"-"* ]]; then
+              IS_PRERELEASE="true"
+            else
+              IS_PRERELEASE="false"
+            fi
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION (prerelease: $IS_PRERELEASE)"
+
+      - name: Restore dependencies
+        run: dotnet restore SmallMind.sln
+
+      - name: Build (Release)
+        run: dotnet build SmallMind.sln --no-restore --configuration Release -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Run Unit Tests
+        run: dotnet test tests/SmallMind.Tests/SmallMind.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Run Integration Tests
+        run: dotnet test tests/SmallMind.IntegrationTests/SmallMind.IntegrationTests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Pack NuGet Packages
+        run: |
+          dotnet pack src/SmallMind/SmallMind.csproj \
+            --configuration Release \
+            --no-build \
+            --output ./artifacts/packages \
+            -p:PackageVersion=${{ steps.version.outputs.version }} \
+            -p:IncludeSymbols=true \
+            -p:SymbolPackageFormat=snupkg
+          
+          dotnet pack src/SmallMind.Runtime/SmallMind.Runtime.csproj \
+            --configuration Release \
+            --no-build \
+            --output ./artifacts/packages \
+            -p:PackageVersion=${{ steps.version.outputs.version }} \
+            -p:IncludeSymbols=true \
+            -p:SymbolPackageFormat=snupkg
+
+      - name: Verify Package Contents
+        run: |
+          echo "=== Package Contents ==="
+          for pkg in ./artifacts/packages/*.nupkg; do
+            echo "Package: $pkg"
+            unzip -l "$pkg" | head -30
+            echo "---"
+          done
+
+      - name: Publish to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo "⚠️  NUGET_API_KEY not set. Skipping NuGet.org publish."
+            echo "To enable NuGet publishing, add NUGET_API_KEY secret to repository."
+            exit 0
+          fi
+          
+          dotnet nuget push "./artifacts/packages/*.nupkg" \
+            --api-key "$NUGET_API_KEY" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      - name: Publish to GitHub Packages
+        run: |
+          dotnet nuget push "./artifacts/packages/*.nupkg" \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --skip-duplicate
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-${{ steps.version.outputs.version }}
+          path: ./artifacts/packages/*.nupkg
+          retention-days: 90
+
+      - name: Create Release Summary
+        run: |
+          echo "## 📦 NuGet Packages Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Prerelease:** ${{ steps.version.outputs.is_prerelease }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Packages" >> $GITHUB_STEP_SUMMARY
+          echo "- SmallMind.${{ steps.version.outputs.version }}.nupkg" >> $GITHUB_STEP_SUMMARY
+          echo "- SmallMind.Runtime.${{ steps.version.outputs.version }}.nupkg" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### NuGet.org" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ secrets.NUGET_API_KEY }}" ]; then
+            echo "✅ Published to NuGet.org" >> $GITHUB_STEP_SUMMARY
+            echo "- https://www.nuget.org/packages/SmallMind/${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Skipped (NUGET_API_KEY not configured)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### GitHub Packages" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Published to GitHub Packages" >> $GITHUB_STEP_SUMMARY

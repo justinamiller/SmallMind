@@ -4,10 +4,25 @@
 [![CodeQL](https://github.com/justinamiller/SmallMind/actions/workflows/codeql.yml/badge.svg)](https://github.com/justinamiller/SmallMind/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET Version](https://img.shields.io/badge/.NET-10.0%2B-512BD4)](https://dotnet.microsoft.com/download)
+![NuGet](https://img.shields.io/badge/NuGet-Coming%20Soon-blue)
 
 **Production-ready LLM inference runtime for .NET with zero external dependencies.**
 
 SmallMind is a pure C# implementation of decoder-only transformer models (GPT-style) optimized for CPU inference. Built entirely in .NET 10+ with no third-party ML libraries, it provides a stable, documented API for running language models locally on any platform that supports .NET.
+
+## Production Readiness
+
+SmallMind is engineered for production deployment with enterprise-grade reliability:
+
+✅ **Multi-Platform CI**: Validated on Ubuntu, Windows, and macOS  
+✅ **Security Scanned**: CodeQL analysis with zero high/critical findings  
+✅ **Deterministic Tests**: Golden output regression tests ensure cross-platform consistency  
+✅ **Performance Monitored**: Automated benchmarks with regression detection  
+✅ **OpenAI-Compatible Server**: Production HTTP API with streaming, rate limiting, and backpressure  
+✅ **Comprehensive Testing**: 500+ unit tests, integration tests, negative tests for error handling  
+✅ **API Stability**: Semantic versioning with stable public contract (`SmallMind` namespace)
+
+See [Release Checklist](docs/release-checklist.md) for full production validation criteria.
 
 ## Quickstart
 
