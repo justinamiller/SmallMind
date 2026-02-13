@@ -254,5 +254,69 @@ namespace SmallMind.Tests
 
             Assert.Equal(expected, result, 5);
         }
+
+        [Fact]
+        public void PackedMatMul_ARM64_ProducesCorrectResults()
+        {
+            // Arrange: Test small matrix multiplication (ARM64 NR=8, MR=4)
+            const int M = 4, K = 8, N = 8;
+            float[] A = new float[M * K];
+            float[] B = new float[K * N];
+            float[] C = new float[M * N];
+            float[] expected = new float[M * N];
+            
+            // Initialize with simple values for easy verification
+            for (int i = 0; i < M * K; i++) A[i] = (i % 3) + 1;
+            for (int i = 0; i < K * N; i++) B[i] = (i % 2) + 1;
+            
+            // Compute reference result with naive matrix multiply
+            for (int m = 0; m < M; m++)
+            {
+                for (int n = 0; n < N; n++)
+                {
+                    float sum = 0f;
+                    for (int k = 0; k < K; k++)
+                    {
+                        sum += A[m * K + k] * B[k * N + n];
+                    }
+                    expected[m * N + n] = sum;
+                }
+            }
+            
+            // Act: Use PackedMatMul
+            var packed = PackedMatMul.Pack(B.AsSpan(), K, N);
+            PackedMatMul.Multiply(A, packed, C, M, K, N);
+            
+            // Assert
+            for (int i = 0; i < M * N; i++)
+            {
+                Assert.True(Math.Abs(C[i] - expected[i]) < Tolerance,
+                    $"Mismatch at index {i}: expected {expected[i]}, got {C[i]}");
+            }
+        }
+
+        [Fact]
+        public void PackedMatMul_Accumulate_ProducesCorrectResults()
+        {
+            // Test accumulate semantics
+            const int M = 2, K = 4, N = 4;
+            float[] A = { 1, 2, 3, 4, 5, 6, 7, 8 };
+            float[] B = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 }; // Identity matrix
+            float[] C = { 1, 1, 1, 1, 1, 1, 1, 1 }; // Pre-filled with 1s
+            
+            var packed = PackedMatMul.Pack(B.AsSpan(), K, N);
+            
+            // accumulate=true: C += A×B
+            PackedMatMul.Multiply(A, packed, C, M, K, N, accumulate: true);
+            
+            // Expected: C = original_C + A×I = original_C + A = [2,3,4,5, 6,7,8,9]
+            float[] expected = { 2, 3, 4, 5, 6, 7, 8, 9 };
+            
+            for (int i = 0; i < M * N; i++)
+            {
+                Assert.True(Math.Abs(C[i] - expected[i]) < Tolerance,
+                    $"Accumulate test failed at index {i}: expected {expected[i]}, got {C[i]}");
+            }
+        }
     }
 }

@@ -1,0 +1,79 @@
+name: Benchmark CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    name: Benchmark (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - name: "x64-linux"
+            os: ubuntu-latest
+          - name: "x64-windows"
+            os: windows-latest
+          - name: "x64-macos"
+            os: macos-13
+          - name: "arm64-macos"
+            os: macos-14
+      fail-fast: false
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Build
+        run: dotnet build bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -c Release --no-restore
+      
+      - name: Run CI Benchmarks
+        run: |
+          dotnet run -c Release --project bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -- \
+            --ci-only \
+            --contexts 256,512,1024 \
+            --threads 1,2,4 \
+            --tokens 128 \
+            --iterations 5
+      
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ matrix.name }}
+          path: bench/results/
+          retention-days: 30
+      
+      - name: Display Summary (Linux/macOS)
+        if: always() && (runner.os == 'Linux' || runner.os == 'macOS')
+        shell: bash
+        run: |
+          echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          if ls bench/results/*.md 1> /dev/null 2>&1; then
+            cat bench/results/*.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No results generated" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Display Summary (Windows)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Output "### Benchmark Results" >> $env:GITHUB_STEP_SUMMARY
+          if (Test-Path "bench/results/*.md") {
+            Get-Content bench/results/*.md >> $env:GITHUB_STEP_SUMMARY
+          } else {
+            Write-Output "No results generated" >> $env:GITHUB_STEP_SUMMARY
+          }
