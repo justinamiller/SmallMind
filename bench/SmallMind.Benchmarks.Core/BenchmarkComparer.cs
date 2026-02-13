@@ -170,7 +170,7 @@ public static class BenchmarkComparer
         md.AppendLine("## Environment");
         md.AppendLine();
         md.AppendLine($"- **Git Commit**: `{current.Environment.GitCommitSha}` " + 
-            (previous != null ? $"(was `{previous.Environment.GitCommitSha}`)": ""));
+            (previous != null ? $"(was `{previous.Environment.GitCommitSha}`)" : ""));
         md.AppendLine($"- **OS**: {current.Environment.OsDescription} ({current.Environment.OsArchitecture})");
         md.AppendLine($"- **CPU**: {current.Environment.CpuModel}");
         md.AppendLine($"- **Cores**: {current.Environment.LogicalCoreCount}");
