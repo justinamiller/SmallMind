@@ -62,59 +62,81 @@ namespace SmallMind.Core.Core
                     // OPTIMIZED: Use unsafe pointer arithmetic to eliminate Span.Slice() overhead
                     int vecSize = System.Numerics.Vector<float>.Count;
 
-                    unsafe
+                    // Validate offset is within bounds
+                    if (offset >= 0 && offset + features <= input.Length)
                     {
-                        fixed (float* pInput = input)
+                        unsafe
                         {
-                            // Pass 1a: Compute mean with SIMD
-                            var vSum = System.Numerics.Vector<float>.Zero;
-                            float* pRow = pInput + offset;
-                            int f1 = 0;
-
-                            for (; f1 <= features - vecSize; f1 += vecSize)
+                            fixed (float* pInput = input)
                             {
-                                var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f1);
-                                vSum += v;
+                                // Pass 1a: Compute mean with SIMD
+                                var vSum = System.Numerics.Vector<float>.Zero;
+                                float* pRow = pInput + offset;
+                                int f1 = 0;
+
+                                for (; f1 <= features - vecSize; f1 += vecSize)
+                                {
+                                    var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f1);
+                                    vSum += v;
+                                }
+
+                                // Horizontal sum reduction
+                                float sum = 0f;
+                                for (int vi = 0; vi < vecSize; vi++)
+                                    sum += vSum[vi];
+
+                                // Add scalar remainder
+                                for (; f1 < features; f1++)
+                                    sum += pRow[f1];
+
+                                mean = sum / features;
+
+                                // Pass 1b: Compute variance with SIMD
+                                var vMean = new System.Numerics.Vector<float>(mean);
+                                var vSqSum = System.Numerics.Vector<float>.Zero;
+                                int f2 = 0;
+
+                                for (; f2 <= features - vecSize; f2 += vecSize)
+                                {
+                                    var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f2);
+                                    var vDiff = v - vMean;
+                                    vSqSum += vDiff * vDiff;
+                                }
+
+                                // Horizontal sum reduction
+                                float sqSum = 0f;
+                                for (int vi = 0; vi < vecSize; vi++)
+                                    sqSum += vSqSum[vi];
+
+                                // Add scalar remainder
+                                for (; f2 < features; f2++)
+                                {
+                                    float diff = pRow[f2] - mean;
+                                    sqSum += diff * diff;
+                                }
+
+                                float variance = sqSum / features;
+                                invStd = 1f / MathF.Sqrt(variance + eps);
                             }
-
-                            // Horizontal sum reduction
-                            float sum = 0f;
-                            for (int vi = 0; vi < vecSize; vi++)
-                                sum += vSum[vi];
-
-                            // Add scalar remainder
-                            for (; f1 < features; f1++)
-                                sum += pRow[f1];
-
-                            mean = sum / features;
-
-                            // Pass 1b: Compute variance with SIMD
-                            var vMean = new System.Numerics.Vector<float>(mean);
-                            var vSqSum = System.Numerics.Vector<float>.Zero;
-                            int f2 = 0;
-
-                            for (; f2 <= features - vecSize; f2 += vecSize)
-                            {
-                                var v = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pRow + f2);
-                                var vDiff = v - vMean;
-                                vSqSum += vDiff * vDiff;
-                            }
-
-                            // Horizontal sum reduction
-                            float sqSum = 0f;
-                            for (int vi = 0; vi < vecSize; vi++)
-                                sqSum += vSqSum[vi];
-
-                            // Add scalar remainder
-                            for (; f2 < features; f2++)
-                            {
-                                float diff = pRow[f2] - mean;
-                                sqSum += diff * diff;
-                            }
-
-                            float variance = sqSum / features;
-                            invStd = 1f / MathF.Sqrt(variance + eps);
                         }
+                    }
+                    else
+                    {
+                        // Fallback to scalar path if validation fails
+                        mean = 0f;
+                        float m2 = 0f;
+
+                        for (int i = 0; i < features; i++)
+                        {
+                            float val = input[offset + i];
+                            float delta = val - mean;
+                            mean += delta / (i + 1);
+                            float delta2 = val - mean;
+                            m2 += delta * delta2;
+                        }
+
+                        float variance = m2 / features;
+                        invStd = 1f / MathF.Sqrt(variance + eps);
                     }
                 }
                 else
@@ -151,13 +173,18 @@ namespace SmallMind.Core.Core
                         {
                             for (; f <= features - 16; f += 16)
                             {
-                                var vInput = Avx512F.LoadVector512(pInput + offset + f);
-                                var vGamma = Avx512F.LoadVector512(pGamma + f);
-                                var vBeta = Avx512F.LoadVector512(pBeta + f);
+                                // Validate computed offset is within bounds
+                                if (offset + f >= 0 && offset + f + 16 <= input.Length && 
+                                    offset + f + 16 <= output.Length && f + 16 <= gamma.Length && f + 16 <= beta.Length)
+                                {
+                                    var vInput = Avx512F.LoadVector512(pInput + offset + f);
+                                    var vGamma = Avx512F.LoadVector512(pGamma + f);
+                                    var vBeta = Avx512F.LoadVector512(pBeta + f);
 
-                                var vNormalized = Avx512F.Multiply(Avx512F.Subtract(vInput, vMean512), vInvStd512);
-                                var vResult = Avx512F.FusedMultiplyAdd(vGamma, vNormalized, vBeta);
-                                Avx512F.Store(pOutput + offset + f, vResult);
+                                    var vNormalized = Avx512F.Multiply(Avx512F.Subtract(vInput, vMean512), vInvStd512);
+                                    var vResult = Avx512F.FusedMultiplyAdd(vGamma, vNormalized, vBeta);
+                                    Avx512F.Store(pOutput + offset + f, vResult);
+                                }
                             }
                         }
                     }
@@ -175,16 +202,21 @@ namespace SmallMind.Core.Core
                         {
                             for (; f <= features - 8; f += 8)
                             {
-                                var vInput = Avx.LoadVector256(pInput + offset + f);
-                                var vGamma = Avx.LoadVector256(pGamma + f);
-                                var vBeta = Avx.LoadVector256(pBeta + f);
+                                // Validate computed offset is within bounds
+                                if (offset + f >= 0 && offset + f + 8 <= input.Length && 
+                                    offset + f + 8 <= output.Length && f + 8 <= gamma.Length && f + 8 <= beta.Length)
+                                {
+                                    var vInput = Avx.LoadVector256(pInput + offset + f);
+                                    var vGamma = Avx.LoadVector256(pGamma + f);
+                                    var vBeta = Avx.LoadVector256(pBeta + f);
 
-                                // Normalize: (input - mean) * invStd using FMA
-                                var vNormalized = Avx.Multiply(Avx.Subtract(vInput, vMean256), vInvStd256);
+                                    // Normalize: (input - mean) * invStd using FMA
+                                    var vNormalized = Avx.Multiply(Avx.Subtract(vInput, vMean256), vInvStd256);
 
-                                // Affine: gamma * normalized + beta (FMA: a*b+c)
-                                var vResult = Fma.MultiplyAdd(vGamma, vNormalized, vBeta);
-                                Avx.Store(pOutput + offset + f, vResult);
+                                    // Affine: gamma * normalized + beta (FMA: a*b+c)
+                                    var vResult = Fma.MultiplyAdd(vGamma, vNormalized, vBeta);
+                                    Avx.Store(pOutput + offset + f, vResult);
+                                }
                             }
                         }
                     }
@@ -198,28 +230,36 @@ namespace SmallMind.Core.Core
                     var vMean = new System.Numerics.Vector<float>(mean);
                     var vInvStd = new System.Numerics.Vector<float>(invStd);
 
-                    unsafe
+                    // Validate offset is within bounds
+                    if (offset >= 0 && offset + features <= input.Length && offset + features <= output.Length)
                     {
-                        fixed (float* pInput = input, pGamma = gamma, pBeta = beta, pOutput = output)
+                        unsafe
                         {
-                            float* pInRow = pInput + offset;
-                            float* pOutRow = pOutput + offset;
-
-                            // SIMD loop for normalization and affine transform
-                            for (; f <= features - vectorSize; f += vectorSize)
+                            fixed (float* pInput = input, pGamma = gamma, pBeta = beta, pOutput = output)
                             {
-                                // Load input, gamma, beta using direct pointer reads
-                                var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f);
-                                var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f);
-                                var vBeta = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pBeta + f);
+                                float* pInRow = pInput + offset;
+                                float* pOutRow = pOutput + offset;
 
-                                // Normalize: (input - mean) * invStd
-                                var vNormalized = (vInput - vMean) * vInvStd;
+                                // SIMD loop for normalization and affine transform
+                                for (; f <= features - vectorSize; f += vectorSize)
+                                {
+                                    // Validate computed offset is within bounds
+                                    if (f >= 0 && f + vectorSize <= features && f + vectorSize <= gamma.Length && f + vectorSize <= beta.Length)
+                                    {
+                                        // Load input, gamma, beta using direct pointer reads
+                                        var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f);
+                                        var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f);
+                                        var vBeta = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pBeta + f);
 
-                                // Affine: gamma * normalized + beta
-                                var vResult = vGamma * vNormalized + vBeta;
+                                        // Normalize: (input - mean) * invStd
+                                        var vNormalized = (vInput - vMean) * vInvStd;
 
-                                System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f, vResult);
+                                        // Affine: gamma * normalized + beta
+                                        var vResult = vGamma * vNormalized + vBeta;
+
+                                        System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f, vResult);
+                                    }
+                                }
                             }
                         }
                     }
@@ -296,58 +336,78 @@ namespace SmallMind.Core.Core
                 {
                     int vectorSize = System.Numerics.Vector<float>.Count;
 
-                    // Pass 1a: Sum for mean (SIMD) - optimized to eliminate Span.Slice()
-                    var vSum = System.Numerics.Vector<float>.Zero;
-                    int f1 = 0;
-                    unsafe
+                    // Validate offset is within bounds
+                    if (offset >= 0 && offset + features <= input.Length && offset + features <= residual.Length)
                     {
-                        fixed (float* pInput = input, pResidual = residual)
+                        // Pass 1a: Sum for mean (SIMD) - optimized to eliminate Span.Slice()
+                        var vSum = System.Numerics.Vector<float>.Zero;
+                        int f1 = 0;
+                        unsafe
                         {
-                            float* pIn = pInput + offset;
-                            float* pRes = pResidual + offset;
-
-                            for (; f1 <= features - vectorSize; f1 += vectorSize)
+                            fixed (float* pInput = input, pResidual = residual)
                             {
-                                var vIn = Unsafe.Read<System.Numerics.Vector<float>>(pIn + f1);
-                                var vRes = Unsafe.Read<System.Numerics.Vector<float>>(pRes + f1);
-                                vSum += vIn + vRes;
+                                float* pIn = pInput + offset;
+                                float* pRes = pResidual + offset;
+
+                                for (; f1 <= features - vectorSize; f1 += vectorSize)
+                                {
+                                    var vIn = Unsafe.Read<System.Numerics.Vector<float>>(pIn + f1);
+                                    var vRes = Unsafe.Read<System.Numerics.Vector<float>>(pRes + f1);
+                                    vSum += vIn + vRes;
+                                }
                             }
                         }
-                    }
-                    float sum = 0f;
-                    for (int vi = 0; vi < vectorSize; vi++) sum += vSum[vi];
-                    for (; f1 < features; f1++) sum += input[offset + f1] + residual[offset + f1];
-                    mean = sum / features;
+                        float sum = 0f;
+                        for (int vi = 0; vi < vectorSize; vi++) sum += vSum[vi];
+                        for (; f1 < features; f1++) sum += input[offset + f1] + residual[offset + f1];
+                        mean = sum / features;
 
-                    // Pass 1b: Sum of squared deviations (SIMD) - optimized to eliminate Span.Slice()
-                    var vMeanTmp = new System.Numerics.Vector<float>(mean);
-                    var vSqSum = System.Numerics.Vector<float>.Zero;
-                    int f2 = 0;
-                    unsafe
-                    {
-                        fixed (float* pInput = input, pResidual = residual)
+                        // Pass 1b: Sum of squared deviations (SIMD) - optimized to eliminate Span.Slice()
+                        var vMeanTmp = new System.Numerics.Vector<float>(mean);
+                        var vSqSum = System.Numerics.Vector<float>.Zero;
+                        int f2 = 0;
+                        unsafe
                         {
-                            float* pIn = pInput + offset;
-                            float* pRes = pResidual + offset;
-
-                            for (; f2 <= features - vectorSize; f2 += vectorSize)
+                            fixed (float* pInput = input, pResidual = residual)
                             {
-                                var vIn = Unsafe.Read<System.Numerics.Vector<float>>(pIn + f2);
-                                var vRes = Unsafe.Read<System.Numerics.Vector<float>>(pRes + f2);
-                                var vDiff = vIn + vRes - vMeanTmp;
-                                vSqSum += vDiff * vDiff;
+                                float* pIn = pInput + offset;
+                                float* pRes = pResidual + offset;
+
+                                for (; f2 <= features - vectorSize; f2 += vectorSize)
+                                {
+                                    var vIn = Unsafe.Read<System.Numerics.Vector<float>>(pIn + f2);
+                                    var vRes = Unsafe.Read<System.Numerics.Vector<float>>(pRes + f2);
+                                    var vDiff = vIn + vRes - vMeanTmp;
+                                    vSqSum += vDiff * vDiff;
+                                }
                             }
                         }
+                        float sqSum = 0f;
+                        for (int vi = 0; vi < vectorSize; vi++) sqSum += vSqSum[vi];
+                        for (; f2 < features; f2++)
+                        {
+                            float diff = input[offset + f2] + residual[offset + f2] - mean;
+                            sqSum += diff * diff;
+                        }
+                        float variance = sqSum / features;
+                        invStd = 1f / MathF.Sqrt(variance + eps);
                     }
-                    float sqSum = 0f;
-                    for (int vi = 0; vi < vectorSize; vi++) sqSum += vSqSum[vi];
-                    for (; f2 < features; f2++)
+                    else
                     {
-                        float diff = input[offset + f2] + residual[offset + f2] - mean;
-                        sqSum += diff * diff;
+                        // Fallback to scalar path if validation fails
+                        mean = 0f;
+                        float m2 = 0f;
+                        for (int fi = 0; fi < features; fi++)
+                        {
+                            float val = input[offset + fi] + residual[offset + fi];
+                            float delta = val - mean;
+                            mean += delta / (fi + 1);
+                            float delta2 = val - mean;
+                            m2 += delta * delta2;
+                        }
+                        float variance = m2 / features;
+                        invStd = 1f / MathF.Sqrt(variance + eps);
                     }
-                    float variance = sqSum / features;
-                    invStd = 1f / MathF.Sqrt(variance + eps);
                 }
                 else
                 {
@@ -381,18 +441,24 @@ namespace SmallMind.Core.Core
                         {
                             for (; f <= features - 8; f += 8)
                             {
-                                var vInput = Avx.LoadVector256(pInput + offset + f);
-                                var vResidual = Avx.LoadVector256(pResidual + offset + f);
-                                var vGamma = Avx.LoadVector256(pGamma + f);
-                                var vBeta = Avx.LoadVector256(pBeta + f);
+                                // Validate computed offset is within bounds
+                                if (offset + f >= 0 && offset + f + 8 <= input.Length && 
+                                    offset + f + 8 <= residual.Length && offset + f + 8 <= output.Length && 
+                                    f + 8 <= gamma.Length && f + 8 <= beta.Length)
+                                {
+                                    var vInput = Avx.LoadVector256(pInput + offset + f);
+                                    var vResidual = Avx.LoadVector256(pResidual + offset + f);
+                                    var vGamma = Avx.LoadVector256(pGamma + f);
+                                    var vBeta = Avx.LoadVector256(pBeta + f);
 
-                                // Fused: gamma * ((input + residual - mean) * invStd) + beta
-                                var vCombined = Avx.Add(vInput, vResidual);
-                                var vNormalized = Avx.Multiply(Avx.Subtract(vCombined, vMean256), vInvStd256);
+                                    // Fused: gamma * ((input + residual - mean) * invStd) + beta
+                                    var vCombined = Avx.Add(vInput, vResidual);
+                                    var vNormalized = Avx.Multiply(Avx.Subtract(vCombined, vMean256), vInvStd256);
 
-                                // FMA: gamma * normalized + beta
-                                var vResult = Fma.MultiplyAdd(vGamma, vNormalized, vBeta);
-                                Avx.Store(pOutput + offset + f, vResult);
+                                    // FMA: gamma * normalized + beta
+                                    var vResult = Fma.MultiplyAdd(vGamma, vNormalized, vBeta);
+                                    Avx.Store(pOutput + offset + f, vResult);
+                                }
                             }
                         }
                     }
@@ -404,24 +470,33 @@ namespace SmallMind.Core.Core
                     var vMean = new System.Numerics.Vector<float>(mean);
                     var vInvStd = new System.Numerics.Vector<float>(invStd);
 
-                    for (; f <= features - vectorSize; f += vectorSize)
+                    // Validate offset is within bounds
+                    if (offset >= 0 && offset + features <= input.Length && 
+                        offset + features <= residual.Length && offset + features <= output.Length)
                     {
-                        // Load all 4 input vectors - optimized to eliminate Span.Slice()
-                        unsafe
+                        for (; f <= features - vectorSize; f += vectorSize)
                         {
-                            fixed (float* pInput = input, pResidual = residual, pGamma = gamma, pBeta = beta, pOutput = output)
+                            // Validate computed offset is within bounds
+                            if (f >= 0 && f + vectorSize <= features && f + vectorSize <= gamma.Length && f + vectorSize <= beta.Length)
                             {
-                                var vInput = Unsafe.Read<System.Numerics.Vector<float>>(pInput + offset + f);
-                                var vResidual = Unsafe.Read<System.Numerics.Vector<float>>(pResidual + offset + f);
-                                var vGamma = Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f);
-                                var vBeta = Unsafe.Read<System.Numerics.Vector<float>>(pBeta + f);
+                                // Load all 4 input vectors - optimized to eliminate Span.Slice()
+                                unsafe
+                                {
+                                    fixed (float* pInput = input, pResidual = residual, pGamma = gamma, pBeta = beta, pOutput = output)
+                                    {
+                                        var vInput = Unsafe.Read<System.Numerics.Vector<float>>(pInput + offset + f);
+                                        var vResidual = Unsafe.Read<System.Numerics.Vector<float>>(pResidual + offset + f);
+                                        var vGamma = Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f);
+                                        var vBeta = Unsafe.Read<System.Numerics.Vector<float>>(pBeta + f);
 
-                                // Fused: gamma * ((input + residual - mean) * invStd) + beta
-                                var vCombined = vInput + vResidual;
-                                var vNormalized = (vCombined - vMean) * vInvStd;
-                                var vResult = vGamma * vNormalized + vBeta;
+                                        // Fused: gamma * ((input + residual - mean) * invStd) + beta
+                                        var vCombined = vInput + vResidual;
+                                        var vNormalized = (vCombined - vMean) * vInvStd;
+                                        var vResult = vGamma * vNormalized + vBeta;
 
-                                Unsafe.Write(pOutput + offset + f, vResult);
+                                        Unsafe.Write(pOutput + offset + f, vResult);
+                                    }
+                                }
                             }
                         }
                     }
