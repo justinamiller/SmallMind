@@ -305,6 +305,91 @@ This document consolidates results from all performance runners executed on Smal
 
 ---
 
+## Benchmark Methodology
+
+### Test Environment
+
+**Hardware Requirements:**
+- CPU: x64 with AVX2 or ARM64 with NEON
+- RAM: Minimum 4 GB available
+- Storage: SSD recommended for model loading
+
+**Software Requirements:**
+- OS: Ubuntu 20.04+, Windows 10+, macOS 11+
+- Runtime: .NET 10.0+
+- Build Configuration: Release (Debug results not representative)
+
+### Benchmark Types
+
+#### 1. Kernel Benchmarks (Current)
+
+**Purpose:** Measure low-level matrix multiplication performance (proxy for model inference).
+
+**What's Measured:**
+- FP32 MatMul throughput (GFLOPS)
+- Q4/Q8 quantized MatMul performance
+- Memory allocations per operation
+- GC pressure (Gen0/Gen1/Gen2 collections)
+
+**Why Kernel Benchmarks:**
+- Matrix multiplication accounts for 93-97% of inference time
+- Kernel performance directly correlates with model throughput
+- Faster to run than full model benchmarks (~500ms vs minutes)
+- Deterministic and reproducible
+
+**Matrix Sizes:** 64×64 through 2048×2048 (representative of transformer hidden dimensions)
+
+**Goal:** 50-150 GFLOPS on modern CPUs (x64 AVX2)
+
+#### 2. Real-Model Benchmarks (Planned)
+
+**Status:** Not yet implemented. See [docs/benchmarking.md](docs/benchmarking.md) for future roadmap.
+
+**Planned Metrics:**
+- TTFT (Time to First Token)
+- Tokens/sec (decode throughput)
+- Per-token latency (p50, p95, p99)
+- Peak RSS, thread scaling
+
+**CI Strategy:** Synthetic tiny model (~10M params) for structural validation; kernel benchmarks as performance proxy.
+
+### Reproducibility
+
+**Determinism Checklist:**
+- ✅ Fixed random seed (`--seed 42`)
+- ✅ Single-threaded execution
+- ✅ Release build configuration
+- ✅ Disabled CPU frequency scaling (Linux: `performance` governor)
+
+**Running Deterministic Benchmarks:**
+
+```bash
+cd src/SmallMind.Benchmarks
+dotnet run -c Release -- --seed 42 --warmup 5 --iterations 20 --format json,markdown
+```
+
+**Cross-Platform:** Floating-point results may vary slightly between x64 and ARM64 due to CPU architecture.
+
+### Regression Detection
+
+**Baseline Comparison:** Benchmarks compare to `baseline.json` if available.
+
+**Thresholds (Current):**
+- Allocation increase: >10% → regression
+- Gen0 collections: Any increase → flagged
+- GFLOPS decrease: >15% → regression (future)
+
+**CI Integration:** Nightly benchmarks with JSON+Markdown artifacts (90-day retention).
+
+### Output Formats
+
+- **JSON**: Structured for CI integration (`perf-results-latest.json`)
+- **Markdown**: Human-readable tables (`perf-results-latest.md`)
+
+See [docs/benchmarking.md](docs/benchmarking.md) for complete CLI reference.
+
+---
+
 ## Conclusion
 
 SmallMind demonstrates **excellent infrastructure performance** with:
