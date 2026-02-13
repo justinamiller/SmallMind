@@ -360,6 +360,7 @@ namespace SmallMind.Runtime
 
                 _concurrencySemaphore?.Dispose();
                 _disposed = true;
+                GC.SuppressFinalize(this);
             }
         }
     }

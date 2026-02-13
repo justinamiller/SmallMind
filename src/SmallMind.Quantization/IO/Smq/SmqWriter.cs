@@ -298,6 +298,7 @@ namespace SmallMind.Quantization.IO.Smq
             {
                 _writer?.Dispose();
             }
+            GC.SuppressFinalize(this);
         }
     }
 }

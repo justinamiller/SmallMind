@@ -427,6 +427,7 @@ namespace SmallMind.Rag.Indexing
 
             _entries.Clear();
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

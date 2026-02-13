@@ -386,6 +386,7 @@ namespace SmallMind.Quantization.IO.Gguf
             {
                 _reader?.Dispose();
             }
+            GC.SuppressFinalize(this);
         }
     }
 }

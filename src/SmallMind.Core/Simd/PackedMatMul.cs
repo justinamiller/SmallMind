@@ -1,9 +1,7 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Runtime.Intrinsics.Arm;
-using System.Threading.Tasks;
 
 namespace SmallMind.Core.Simd
 {
@@ -128,7 +126,7 @@ namespace SmallMind.Core.Simd
             public void Dispose()
             {
                 if (_disposed) return;
-                // _data will be GC'd
+                // _data will be GC'd - no finalization needed
                 _disposed = true;
             }
         }

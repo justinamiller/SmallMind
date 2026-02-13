@@ -121,6 +121,7 @@ namespace SmallMind.Runtime.Cache
             }
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

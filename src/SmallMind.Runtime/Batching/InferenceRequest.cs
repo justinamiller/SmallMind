@@ -141,6 +141,7 @@ namespace SmallMind.Runtime.Batching
             {
                 MarkComplete();
                 _disposed = true;
+                GC.SuppressFinalize(this);
             }
         }
     }

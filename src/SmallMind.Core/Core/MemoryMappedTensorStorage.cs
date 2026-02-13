@@ -278,6 +278,7 @@ namespace SmallMind.Core.Core
             _accessor?.Dispose();
             _mmf?.Dispose();
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

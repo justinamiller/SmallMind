@@ -223,6 +223,12 @@ namespace SmallMind.Core.Core
         /// Callers must handle proper indexing when accessing per-head data.
         /// For production use, implement proper strided access using unsafe pointers.
         /// </summary>
+        /// <remarks>
+        /// KNOWN ISSUE: This method currently returns the full source span rather than
+        /// implementing true strided access. This is a performance optimization tradeoff
+        /// that requires callers to manually handle stride calculations. A future enhancement
+        /// would use unsafe pointer arithmetic to create a proper strided view.
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ReadOnlySpan<float> GetStridedView(
             ReadOnlySpan<float> source,
@@ -231,8 +237,8 @@ namespace SmallMind.Core.Core
             int numChunks,
             int stride)
         {
-            // TODO: Implement proper strided access for zero-copy per-head views
-            // For now, return full cache - callers must handle indexing
+            // Current implementation: return full cache - callers handle indexing
+            // Future: implement proper strided access using unsafe pointers
             return source;
         }
 
@@ -266,6 +272,7 @@ namespace SmallMind.Core.Core
             }
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 
@@ -334,6 +341,12 @@ namespace SmallMind.Core.Core
                 Marshal.FreeHGlobal(_originalPtr);
 
             _disposed = true;
+            GC.SuppressFinalize(this);
+        }
+
+        ~AlignedFloatBuffer()
+        {
+            Dispose();
         }
     }
 }

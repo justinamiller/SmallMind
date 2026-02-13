@@ -260,6 +260,7 @@ namespace SmallMind.Runtime.Cache
             Clear();
             _lock.Dispose();
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
 
         // LRU list operations (must be called within write lock)

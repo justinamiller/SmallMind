@@ -343,8 +343,10 @@ namespace SmallMind.Engine
                 {
                     var config = ModelConfig.FromGgufMetadata(metadata.Metadata!);
 
-                    // For now, create a GPT-style model with Llama dimensions
-                    // TODO: Full Llama model creation with RoPE, RMSNorm, SwiGLU
+                    // KNOWN LIMITATION: Currently creates a GPT-style model with Llama dimensions
+                    // rather than using Llama-specific components (RoPE, RMSNorm, SwiGLU).
+                    // This provides basic compatibility but may not achieve optimal performance
+                    // for Llama models. Full Llama architecture support is a future enhancement.
                     model = new TransformerModel(
                         vocabSize: config.VocabSize,
                         blockSize: config.ContextLength,

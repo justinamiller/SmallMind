@@ -77,6 +77,7 @@ namespace SmallMind.Runtime.Execution
             CacheHandle = null;
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

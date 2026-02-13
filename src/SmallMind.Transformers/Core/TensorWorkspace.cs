@@ -124,6 +124,7 @@ namespace SmallMind.Transformers
 
             _tensors.Clear();
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }
