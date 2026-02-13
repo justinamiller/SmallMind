@@ -9,17 +9,17 @@ namespace SmallMind.Benchmarks
     /// </summary>
     internal sealed class BenchmarkConfig
     {
-        public string ModelPath { get; init; } = string.Empty;
-        public int WarmupIterations { get; init; } = 5;
-        public int MeasuredIterations { get; init; } = 20;
-        public int ConcurrentStreams { get; init; } = 10;
-        public int MaxTokensPerRequest { get; init; } = 100;
-        public int ContextSize { get; init; } = 2048;
-        public bool EnableKVCache { get; init; } = true;
-        public TimeSpan SoakDuration { get; init; } = TimeSpan.FromMinutes(1);
-        public bool CIMode { get; init; } = false;
-        public string OutputPath { get; init; } = "./benchmark-results";
-        public BenchmarkOutputFormat OutputFormat { get; init; } = BenchmarkOutputFormat.All;
+        public string ModelPath { get; set; } = string.Empty;
+        public int WarmupIterations { get; set; } = 5;
+        public int MeasuredIterations { get; set; } = 20;
+        public int ConcurrentStreams { get; set; } = 10;
+        public int MaxTokensPerRequest { get; set; } = 100;
+        public int ContextSize { get; set; } = 2048;
+        public bool EnableKVCache { get; set; } = true;
+        public TimeSpan SoakDuration { get; set; } = TimeSpan.FromMinutes(1);
+        public bool CIMode { get; set; } = false;
+        public string OutputPath { get; set; } = "./benchmark-results";
+        public BenchmarkOutputFormat OutputFormat { get; set; } = BenchmarkOutputFormat.All;
     }
 
     /// <summary>

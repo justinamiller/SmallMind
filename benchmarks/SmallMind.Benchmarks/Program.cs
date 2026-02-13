@@ -83,57 +83,57 @@ namespace SmallMind.Benchmarks
                 {
                     case "--model":
                         if (i + 1 < args.Length)
-                            config = config with { ModelPath = args[++i] };
+                            config.ModelPath = args[++i];
                         break;
 
                     case "--warmup":
                         if (i + 1 < args.Length && int.TryParse(args[++i], out int warmup))
-                            config = config with { WarmupIterations = warmup };
+                            config.WarmupIterations = warmup;
                         break;
 
                     case "--iterations":
                         if (i + 1 < args.Length && int.TryParse(args[++i], out int iterations))
-                            config = config with { MeasuredIterations = iterations };
+                            config.MeasuredIterations = iterations;
                         break;
 
                     case "--concurrent":
                         if (i + 1 < args.Length && int.TryParse(args[++i], out int concurrent))
-                            config = config with { ConcurrentStreams = concurrent };
+                            config.ConcurrentStreams = concurrent;
                         break;
 
                     case "--max-tokens":
                         if (i + 1 < args.Length && int.TryParse(args[++i], out int maxTokens))
-                            config = config with { MaxTokensPerRequest = maxTokens };
+                            config.MaxTokensPerRequest = maxTokens;
                         break;
 
                     case "--context-size":
                         if (i + 1 < args.Length && int.TryParse(args[++i], out int contextSize))
-                            config = config with { ContextSize = contextSize };
+                            config.ContextSize = contextSize;
                         break;
 
                     case "--no-kv-cache":
-                        config = config with { EnableKVCache = false };
+                        config.EnableKVCache = false;
                         break;
 
                     case "--soak-duration":
                         if (i + 1 < args.Length && int.TryParse(args[++i], out int minutes))
-                            config = config with { SoakDuration = TimeSpan.FromMinutes(minutes) };
+                            config.SoakDuration = TimeSpan.FromMinutes(minutes);
                         break;
 
                     case "--ci":
-                        config = config with { CIMode = true };
+                        config.CIMode = true;
                         break;
 
                     case "--output":
                         if (i + 1 < args.Length)
-                            config = config with { OutputPath = args[++i] };
+                            config.OutputPath = args[++i];
                         break;
 
                     case "--format":
                         if (i + 1 < args.Length)
                         {
                             var format = ParseOutputFormat(args[++i]);
-                            config = config with { OutputFormat = format };
+                            config.OutputFormat = format;
                         }
                         break;
 

@@ -103,7 +103,7 @@ namespace SmallMind.Benchmarks.Utils
         /// <summary>
         /// Calculate elapsed milliseconds between two timestamps.
         /// </summary>
-        public static double ElapsedMilliseconds(long startTicks, long endTicks)
+        public static double CalculateElapsedMilliseconds(long startTicks, long endTicks)
         {
             return (endTicks - startTicks) * s_ticksToMilliseconds;
         }
