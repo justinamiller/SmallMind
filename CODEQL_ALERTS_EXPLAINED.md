@@ -4,7 +4,7 @@
 
 ### How CodeQL Alerts are Created and Resolved
 
-CodeQL alerts on GitHub **do NOT go away automatically** just by fixing the code and pushing to the main branch. Here's how the lifecycle works:
+CodeQL alerts on GitHub **do go away automatically** when you fix the code, but not instantly - they close on the **next successful scan** after your fix is merged. Here's how the lifecycle works:
 
 #### 1. **Alert Creation**
 - CodeQL scans run on every push to `main` (or on a schedule)
