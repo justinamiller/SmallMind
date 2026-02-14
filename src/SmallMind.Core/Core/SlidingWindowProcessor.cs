@@ -171,6 +171,12 @@ namespace SmallMind.Core.Core
 
             int countsSize = batchSize * originalSeqLength * outputDim;
             float[] counts = ArrayPool<float>.Shared.Rent(countsSize);
+            if (counts.Length < countsSize)
+            {
+                // Defensive check: ensure rented buffer is large enough for subsequent indexing
+                ArrayPool<float>.Shared.Return(counts);
+                throw new InvalidOperationException("ArrayPool provided a buffer smaller than the requested size.");
+            }
             try
             {
                 // Clear the rented array (ArrayPool may return larger array with stale data)
