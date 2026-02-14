@@ -51,6 +51,11 @@ namespace SmallMind.ModelRegistry
             {
                 modelId = GenerateModelId(source);
             }
+            else
+            {
+                // Validate user-provided model ID to prevent path traversal
+                modelId = Guard.SafeFileName(modelId, nameof(modelId));
+            }
 
             // Use model ID as display name if not provided
             if (string.IsNullOrWhiteSpace(displayName))
@@ -165,6 +170,7 @@ namespace SmallMind.ModelRegistry
         /// <returns>Verification result.</returns>
         public ModelVerificationResult VerifyModel(string modelId)
         {
+            modelId = Guard.SafeFileName(modelId, nameof(modelId));
             var result = new ModelVerificationResult { ModelId = modelId };
 
             string manifestPath = CachePathResolver.GetManifestPath(_cacheRoot, modelId);
@@ -231,6 +237,7 @@ namespace SmallMind.ModelRegistry
         /// <returns>Model manifest, or null if not found.</returns>
         public ModelManifest? GetManifest(string modelId)
         {
+            modelId = Guard.SafeFileName(modelId, nameof(modelId));
             return LoadManifest(modelId);
         }
 
@@ -241,6 +248,7 @@ namespace SmallMind.ModelRegistry
         /// <returns>Full path to the primary model file, or null if not found.</returns>
         public string? GetModelFilePath(string modelId)
         {
+            modelId = Guard.SafeFileName(modelId, nameof(modelId));
             var manifest = LoadManifest(modelId);
             if (manifest == null || manifest.Files.Count == 0)
             {
