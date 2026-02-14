@@ -115,7 +115,7 @@ namespace SmallMind.Benchmarks
             var percentChange = (change / baselineValue.Value) * 100.0;
 
             var sign = change >= 0 ? "+" : "";
-            var emoji = "";
+            string emoji;
 
             if (Math.Abs(percentChange) < 1.0)
             {
@@ -140,7 +140,7 @@ namespace SmallMind.Benchmarks
             if (change == 0)
                 return "≈";
 
-            var emoji = "";
+            string emoji;
             var isImprovement = lowerIsBetter ? change < 0 : change > 0;
             emoji = isImprovement ? "✅" : "❌";
 
