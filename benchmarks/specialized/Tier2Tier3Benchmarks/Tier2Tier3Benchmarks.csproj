@@ -11,8 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SmallMind.Core\SmallMind.Core.csproj" />
-    <ProjectReference Include="..\..\src\SmallMind.Transformers\SmallMind.Transformers.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Core\SmallMind.Core.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Transformers\SmallMind.Transformers.csproj" />
   </ItemGroup>
 
 </Project>

@@ -9,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SmallMind.Quantization\SmallMind.Quantization.csproj" />
-    <ProjectReference Include="..\..\src\SmallMind.Core\SmallMind.Core.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Quantization/SmallMind.Quantization.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Core/SmallMind.Core.csproj" />
   </ItemGroup>
 
 </Project>
