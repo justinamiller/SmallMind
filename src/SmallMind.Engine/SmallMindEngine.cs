@@ -6,6 +6,7 @@ using SmallMind.Core.Validation;
 using SmallMind.Quantization.IO.Gguf;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Quantization;
+using SmallMind.Runtime.Telemetry;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
 
@@ -299,77 +300,38 @@ namespace SmallMind.Engine
             ModelLoadRequest request,
             CancellationToken cancellationToken)
         {
-            // Load SMQ metadata
-            var metadata = QuantizedModelLoader.LoadQuantizedModelMetadata(request.Path);
+            // Load SMQ metadata first
+            var metadataInfo = QuantizedModelLoader.LoadQuantizedModelMetadata(request.Path);
 
             // Validate metadata sanity
-            ModelValidator.ValidateMetadata(metadata.Metadata, request.Path, _options.Logger);
-
-            // Try to extract tokenizer from GGUF metadata (if present)
-            ITokenizer tokenizer;
-            try
-            {
-                var extractedTokenizer = GgufTokenizerExtractor.ExtractTokenizer(metadata.Metadata);
-                if (extractedTokenizer != null)
-                {
-                    tokenizer = extractedTokenizer;
-                }
-                else
-                {
-                    // Fallback to default tokenizer
-                    int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
-                                    GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
-                    tokenizer = CreateDefaultTokenizer(vocabSize);
-                }
-            }
-            catch
-            {
-                // If extraction fails, use default
-                int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "llama.vocab_size",
-                                GgufMetadataHelpers.ExtractMetadataInt(metadata.Metadata, "vocab_size", 50257));
-                tokenizer = CreateDefaultTokenizer(vocabSize);
-            }
+            ModelValidator.ValidateMetadata(metadataInfo.Metadata, request.Path, _options.Logger);
 
             // Check if this is a Llama model (from GGUF)
-            bool isLlamaModel = metadata.Metadata != null &&
-                              metadata.Metadata.TryGetValue("general.architecture", out var arch) &&
+            bool isLlamaModel = metadataInfo.Metadata != null &&
+                              metadataInfo.Metadata.TryGetValue("general.architecture", out var arch) &&
                               arch?.ToString() == "llama";
 
-            TransformerModel model;
-
+            // Determine model configuration
+            ModelConfig config;
             if (isLlamaModel)
             {
-                // Try to load as Llama model with proper configuration
                 try
                 {
-                    var config = ModelConfig.FromGgufMetadata(metadata.Metadata!);
-
-                    // KNOWN LIMITATION: Currently creates a GPT-style model with Llama dimensions
-                    // rather than using Llama-specific components (RoPE, RMSNorm, SwiGLU).
-                    // This provides basic compatibility but may not achieve optimal performance
-                    // for Llama models. Full Llama architecture support is a future enhancement.
-                    model = new TransformerModel(
-                        vocabSize: config.VocabSize,
-                        blockSize: config.ContextLength,
-                        nEmbd: config.EmbeddingLength,
-                        nLayer: config.BlockCount,
-                        nHead: config.HeadCount,
-                        dropout: 0.0,
-                        seed: 42);
+                    config = ModelConfig.FromGgufMetadata(metadataInfo.Metadata!);
                 }
                 catch
                 {
                     // If Llama config fails, fall back to legacy GPT loading
-                    model = CreateLegacyGptModel(metadata.Metadata);
+                    config = CreateLegacyGptConfig(metadataInfo.Metadata);
                 }
             }
             else
             {
                 // Legacy GPT model loading
-                model = CreateLegacyGptModel(metadata.Metadata);
+                config = CreateLegacyGptConfig(metadataInfo.Metadata);
             }
 
-            // Memory budget check (if specified)
+            // Memory budget check (if specified) - check BEFORE loading weights
             if (request.MaxMemoryBytes.HasValue)
             {
                 var memoryConfig = new MemoryConfiguration(
@@ -386,12 +348,12 @@ namespace SmallMind.Engine
                         : null);
 
                 var checkResult = memoryConfig.CheckBeforeRun(
-                    vocabSize: model.VocabSize,
-                    embeddingDim: model.EmbedDim,
-                    numLayers: model.NumLayers,
-                    numHeads: model.NumHeads,
+                    vocabSize: config.VocabSize,
+                    embeddingDim: config.EmbeddingLength,
+                    numLayers: config.BlockCount,
+                    numHeads: config.HeadCount,
                     batchSize: 1,
-                    seqLength: model.BlockSize);
+                    seqLength: config.ContextLength);
 
                 if (!checkResult.CanProceed)
                 {
@@ -402,13 +364,34 @@ namespace SmallMind.Engine
                 }
             }
 
+            // Load model with weights from SMQ file using SmqModelLoader
+            var (model, extractedTokenizer, metadata) = SmqModelLoader.LoadFromSmq(
+                request.Path,
+                config,
+                seed: 42,
+                logger: new RuntimeLoggerAdapter(_options.Logger));
+
+            // Use extracted tokenizer or fall back to default
+            ITokenizer tokenizer;
+            if (extractedTokenizer != null)
+            {
+                tokenizer = extractedTokenizer;
+            }
+            else
+            {
+                // Fallback to default tokenizer
+                int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata, "llama.vocab_size",
+                                GgufMetadataHelpers.ExtractMetadataInt(metadata, "vocab_size", 50257));
+                tokenizer = CreateDefaultTokenizer(vocabSize);
+            }
+
             await Task.CompletedTask; // Satisfy async signature
             cancellationToken.ThrowIfCancellationRequested();
 
-            return new ModelHandle(model, tokenizer, request.Path, metadata);
+            return new ModelHandle(model, tokenizer, request.Path, metadataInfo);
         }
 
-        private TransformerModel CreateLegacyGptModel(Dictionary<string, object>? metadata)
+        private ModelConfig CreateLegacyGptConfig(Dictionary<string, object>? metadata)
         {
             // Extract model dimensions from legacy metadata
             int vocabSize = GgufMetadataHelpers.ExtractMetadataInt(metadata, "vocab_size", 50257);
@@ -417,14 +400,18 @@ namespace SmallMind.Engine
             int numLayers = GgufMetadataHelpers.ExtractMetadataInt(metadata, "num_layers", 12);
             int numHeads = GgufMetadataHelpers.ExtractMetadataInt(metadata, "num_heads", 12);
 
-            return new TransformerModel(
-                vocabSize: vocabSize,
-                blockSize: blockSize,
-                nEmbd: embedDim,
-                nLayer: numLayers,
-                nHead: numHeads,
-                dropout: 0.0,
-                seed: 42);
+            return new ModelConfig
+            {
+                VocabSize = vocabSize,
+                ContextLength = blockSize,
+                EmbeddingLength = embedDim,
+                BlockCount = numLayers,
+                HeadCount = numHeads,
+                HeadCountKv = numHeads,
+                Architecture = "gpt",
+                NormEps = 1e-5f,
+                RopeFreqBase = 10000.0f
+            };
         }
 
         private async ValueTask<IModelHandle> LoadGgufModelAsync(
