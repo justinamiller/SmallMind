@@ -1602,6 +1602,7 @@ namespace SmallMind.Engine
                 _cachedTokenCount = 0;
                 _lastPromptTokenIds = null;
 
+                // Invalidate persistent session (Phase 2.1)
                 if (_persistentInferenceSession != null)
                 {
                     _persistentInferenceSession.Dispose();
@@ -1623,6 +1624,7 @@ namespace SmallMind.Engine
                 _cachedTokenCount = 0;
                 _lastPromptTokenIds = null;
 
+                // Invalidate persistent session (Phase 2.1)
                 if (_persistentInferenceSession != null)
                 {
                     _persistentInferenceSession.Dispose();
@@ -1638,7 +1640,7 @@ namespace SmallMind.Engine
         private void RecordTruncationForOldestStrategy(int removedCount, ref List<string>? warnings)
         {
             _lastTurnWasTruncated = true;
-            _truncatedTurns++; // Track for diagnostics
+            _truncatedTurns++; // Increment counter for truncation statistics (exposed via GetDiagnostics)
 
             if (warnings == null)
             {
