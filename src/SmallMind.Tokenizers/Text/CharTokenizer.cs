@@ -135,8 +135,7 @@ namespace SmallMind.Tokenizers
                     }
                 }
 
-                int bytesWritten = Encoding.UTF8.GetBytes(chars.Slice(0, charCount), utf8Out);
-                return bytesWritten;
+                return Encoding.UTF8.GetBytes(chars.Slice(0, charCount), utf8Out);
             }
             finally
             {

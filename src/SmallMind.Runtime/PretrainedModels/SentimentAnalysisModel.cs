@@ -122,9 +122,7 @@ namespace SmallMind.Runtime.PretrainedModels
             // Map to sentiment scores
             // Use simple heuristic: average probability distribution over vocab
             // In a real pre-trained model, this would use specific output heads
-            var scores = ComputeSentimentScores(probs);
-
-            return scores;
+            return ComputeSentimentScores(probs);
         }
 
         private float[] ExtractFinalLogits(Tensor logits, int seqLen)

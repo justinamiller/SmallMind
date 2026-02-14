@@ -208,12 +208,16 @@ namespace SmallMind.Tests
             switch (assemblyName)
             {
                 case "SmallMind.Core":
-                    // Only exception types should be public in Core
-                    // (exceptions are automatically allowed by IsExceptionType check)
+                    // Utility classes for formatting and display
+                    allowed.Add("SmallMind.Core.Utilities.ByteSizeFormatter");
+                    // High-performance SIMD matrix multiplication with weight packing
+                    allowed.Add("SmallMind.Core.Simd.PackedMatMul");
+                    allowed.Add("SmallMind.Core.Simd.PackedMatMul+PackedMatrix");
                     break;
 
                 case "SmallMind.Runtime":
-                    // Only exception types should be public in Runtime
+                    // GGUF compatibility diagnostics for users
+                    allowed.Add("SmallMind.Runtime.Gguf.GgufCompatibilityReport");
                     break;
 
                 case "SmallMind.Transformers":

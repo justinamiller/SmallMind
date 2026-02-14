@@ -115,44 +115,16 @@ namespace SmallMind.Core.Simd
                     max = input[offset + i];
             }
 
-            // Step 2: Compute exp(x - max) and sum (fused for cache efficiency)
-            // OPTIMIZATION: Use vectorized exp approximation for better performance
+            // Step 2: Compute exp(x - max) and sum (scalar for accuracy)
+            // Note: SIMD exp approximations have too much error for softmax
             float sum = 0f;
-            i = 0;
-
-            // Vectorized exp computation using fast approximation
-            int vectorSize = Vector<float>.Count;
-            if (Vector.IsHardwareAccelerated && length >= vectorSize)
+            for (int j = 0; j < length; j++)
             {
-                var vMax = new Vector<float>(max);
-                var vSum = Vector<float>.Zero;
-
-                unsafe
-                {
-                    fixed (float* pInput = input, pOutput = output)
-                    {
-                        for (; i <= length - vectorSize; i += vectorSize)
-                        {
-                            var vx = Unsafe.Read<Vector<float>>(pInput + offset + i);
-                            var vDiff = vx - vMax;
-
-                            // Fast exp approximation: e^x ≈ (1 + x/256)^256 for |x| < 10
-                            // More accurate for softmax range: use Padé approximation
-                            // exp(x) ≈ (2 + x) / (2 - x) for small x, scaled
-                            var vExp = FastExpVec(vDiff);
-
-                            Unsafe.Write(pOutput + offset + i, vExp);
-                            vSum += vExp;
-                        }
-                    }
-                }
-
-                // Sum the vector lanes
-                for (int j = 0; j < vectorSize; j++)
-                {
-                    sum += vSum[j];
-                }
+                float exp = MathF.Exp(input[offset + j] - max);
+                output[offset + j] = exp;
+                sum += exp;
             }
+            i = length; // Set i to length to skip the scalar remainder below
 
             // Scalar remainder
             for (; i < length; i++)
@@ -211,42 +183,10 @@ namespace SmallMind.Core.Simd
             // Step 1: Find max (SIMD accelerated)
             float max = FindMax(input);
 
-            // Step 2: Compute exp(x - max) and sum (vectorized for better performance)
+            // Step 2: Compute exp(x - max) and sum (scalar for accuracy)
+            // Note: SIMD exp approximations have too much error for softmax
             float sum = 0f;
-            int i = 0;
-
-            // Vectorized exp computation
-            int vectorSize = Vector<float>.Count;
-            if (Vector.IsHardwareAccelerated && length >= vectorSize)
-            {
-                var vMax = new Vector<float>(max);
-                var vSum = Vector<float>.Zero;
-
-                unsafe
-                {
-                    fixed (float* pInput = input, pOutput = output)
-                    {
-                        for (; i <= length - vectorSize; i += vectorSize)
-                        {
-                            var vx = Unsafe.Read<Vector<float>>(pInput + i);
-                            var vDiff = vx - vMax;
-                            var vExp = FastExpVec(vDiff);
-
-                            Unsafe.Write(pOutput + i, vExp);
-                            vSum += vExp;
-                        }
-                    }
-                }
-
-                // Sum vector lanes
-                for (int j = 0; j < vectorSize; j++)
-                {
-                    sum += vSum[j];
-                }
-            }
-
-            // Scalar remainder
-            for (; i < length; i++)
+            for (int i = 0; i < length; i++)
             {
                 float exp = MathF.Exp(input[i] - max);
                 output[i] = exp;

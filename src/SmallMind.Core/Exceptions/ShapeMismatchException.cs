@@ -37,8 +37,10 @@ namespace SmallMind.Core.Exceptions
         /// <returns>A new <see cref="ShapeMismatchException"/> instance.</returns>
         public static ShapeMismatchException Create(string operation, int[] expectedShape, int[] actualShape)
         {
-            var message = $"{operation}: Expected shape [{string.Join(", ", expectedShape)}] but got [{string.Join(", ", actualShape)}]";
-            return new ShapeMismatchException(message, expectedShape, actualShape);
+            return new ShapeMismatchException(
+                $"{operation}: Expected shape [{string.Join(", ", expectedShape)}] but got [{string.Join(", ", actualShape)}]",
+                expectedShape,
+                actualShape);
         }
     }
 }

@@ -55,8 +55,7 @@ namespace SmallMind.Transformers
             var fc2Out = _workspace.GetOrCreate("fc2Out", fc2Shape, _isTraining);
             _fc2.Forward(geluOut, fc2Out);
 
-            var dropoutOut = _dropout.Forward(fc2Out);
-            return dropoutOut;
+            return _dropout.Forward(fc2Out);
         }
 
         public void Train()

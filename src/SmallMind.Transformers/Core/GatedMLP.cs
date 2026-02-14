@@ -89,8 +89,7 @@ namespace SmallMind.Transformers
             _downProj.Forward(hidden, downOut);
 
             // Dropout
-            var dropoutOut = _dropout.Forward(downOut);
-            return dropoutOut;
+            return _dropout.Forward(downOut);
         }
 
         private Tensor ElementwiseMultiply(Tensor a, Tensor b, Tensor? dest = null)
