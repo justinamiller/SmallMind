@@ -96,7 +96,7 @@ namespace SmallMind.Engine
                 // Clean up temp file on error
                 if (File.Exists(tempPath))
                 {
-                    try { File.Delete(tempPath); } catch { /* ignore */ }
+                    try { File.Delete(tempPath); } catch { /* ignore cleanup errors during exception handling */ }
                 }
                 throw;
             }
@@ -152,55 +152,4 @@ namespace SmallMind.Engine
         }
     }
 
-    /// <summary>
-    /// Enhanced chat session data with schema version.
-    /// This is V2 of the schema.
-    /// </summary>
-    internal sealed class ChatSessionDataV2
-    {
-        /// <summary>
-        /// Schema version for migration support.
-        /// </summary>
-        public int SchemaVersion { get; set; } = 2;
-
-        /// <summary>
-        /// Unique session identifier.
-        /// </summary>
-        public string SessionId { get; set; } = string.Empty;
-
-        /// <summary>
-        /// When the session was created.
-        /// </summary>
-        public DateTime CreatedAt { get; set; }
-
-        /// <summary>
-        /// When the session was last updated.
-        /// </summary>
-        public DateTime LastUpdatedAt { get; set; }
-
-        /// <summary>
-        /// Ordered list of conversation turns.
-        /// </summary>
-        public List<ChatTurnData> Turns { get; set; } = new List<ChatTurnData>();
-
-        /// <summary>
-        /// Optional session metadata.
-        /// </summary>
-        public Dictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>();
-
-        /// <summary>
-        /// Model identifier used for this session.
-        /// </summary>
-        public string? ModelId { get; set; }
-
-        /// <summary>
-        /// Maximum context tokens for this session.
-        /// </summary>
-        public int? MaxContextTokens { get; set; }
-
-        /// <summary>
-        /// Current KV cache size in tokens.
-        /// </summary>
-        public int? KvCacheTokens { get; set; }
-    }
 }
