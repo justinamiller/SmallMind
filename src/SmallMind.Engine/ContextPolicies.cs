@@ -33,7 +33,8 @@ namespace SmallMind.Engine
 
             // Separate system messages from conversation messages
             // Pre-allocate capacity to minimize resize operations (performance optimization, avoiding LINQ overhead)
-            var systemMessages = new List<ChatMessageV3>(messages.Count / 4);
+            // Using conservative estimates: system messages are typically few (4-8), most are conversation
+            var systemMessages = new List<ChatMessageV3>(Math.Min(8, messages.Count));
             var conversationMessages = new List<ChatMessageV3>(messages.Count);
 
             foreach (var msg in messages)
@@ -169,7 +170,8 @@ namespace SmallMind.Engine
 
             // Separate system messages from conversation messages
             // Pre-allocate capacity to minimize resize operations (performance optimization, avoiding LINQ overhead)
-            var systemMessages = new List<ChatMessageV3>(messages.Count / 4);
+            // Using conservative estimates: system messages are typically few (4-8), most are conversation
+            var systemMessages = new List<ChatMessageV3>(Math.Min(8, messages.Count));
             var conversationMessages = new List<ChatMessageV3>(messages.Count);
 
             foreach (var msg in messages)

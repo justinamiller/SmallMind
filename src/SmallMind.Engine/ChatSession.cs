@@ -213,7 +213,8 @@ namespace SmallMind.Engine
 
                     // Build RAG prompt
                     // Using manual loop with dictionary lookup for deduplication (performance optimization, avoiding LINQ overhead)
-                    var chunkStore = new Dictionary<string, Chunk>(topK);
+                    // Pre-allocate with smaller capacity since duplicates are expected and will be filtered out
+                    var chunkStore = new Dictionary<string, Chunk>(Math.Max(4, topK / 2));
                     foreach (var chunk in chunks)
                     {
                         if (!chunkStore.ContainsKey(chunk.ChunkId))
