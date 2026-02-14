@@ -124,15 +124,6 @@ namespace SmallMind.Core.Simd
                 output[offset + j] = exp;
                 sum += exp;
             }
-            i = length; // Set i to length to skip the scalar remainder below
-
-            // Scalar remainder
-            for (; i < length; i++)
-            {
-                float exp = MathF.Exp(input[offset + i] - max);
-                output[offset + i] = exp;
-                sum += exp;
-            }
 
             // Step 3: Normalize by sum with SIMD
             float invSum = 1f / sum;

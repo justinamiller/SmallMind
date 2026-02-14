@@ -174,19 +174,6 @@ namespace SmallMind.Runtime.PretrainedModels
             // This is a placeholder - in a real model, you'd have specific output heads
 
             // Calculate basic statistics
-            float mean = 0f;
-            for (int i = 0; i < probs.Length; i++)
-            {
-                mean += probs[i];
-            }
-            mean /= probs.Length;
-
-            for (int i = 0; i < probs.Length; i++)
-            {
-                float diff = probs[i] - mean;
-                _ = diff * diff;
-            }
-
             float entropy = 0f;
             for (int i = 0; i < probs.Length; i++)
             {
