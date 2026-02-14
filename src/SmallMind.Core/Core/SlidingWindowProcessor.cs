@@ -171,10 +171,11 @@ namespace SmallMind.Core.Core
 
             int countsSize = batchSize * originalSeqLength * outputDim;
             float[] counts = ArrayPool<float>.Shared.Rent(countsSize);
+            int maxCounts = Math.Min(countsSize, counts.Length);
             try
             {
                 // Clear the rented array (ArrayPool may return larger array with stale data)
-                counts.AsSpan(0, countsSize).Clear();
+                counts.AsSpan(0, maxCounts).Clear();
 
                 // Accumulate all window outputs using indexed for-loop instead of foreach
                 int position = 0;
@@ -230,7 +231,8 @@ namespace SmallMind.Core.Core
                     fixed (float* pCombined = combined.Data)
                     fixed (float* pCounts = counts)
                     {
-                        for (int i = 0; i < combined.Size; i++)
+                        int limit = Math.Min(combined.Size, maxCounts);
+                        for (int i = 0; i < limit; i++)
                         {
                             if (pCounts[i] > 0)
                             {
