@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using SmallMind.Abstractions;
 using SmallMind.Core.Core;
 using SmallMind.Core.Utilities;
+using SmallMind.Core.Validation;
 using SmallMind.Quantization.IO.Gguf;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Quantization;
@@ -438,8 +439,9 @@ namespace SmallMind.Engine
 
             Directory.CreateDirectory(cacheDir);
 
-            // Generate cached SMQ file path
+            // Generate cached SMQ file path with validation
             var fileName = Path.GetFileNameWithoutExtension(request.Path);
+            fileName = Guard.SafeFileName(fileName, nameof(request.Path));
             var smqPath = Path.Combine(cacheDir, $"{fileName}.smq");
 
             // Import GGUF to SMQ if not already cached

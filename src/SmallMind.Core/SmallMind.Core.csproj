@@ -43,6 +43,7 @@
     <InternalsVisibleTo Include="SmallMind.Quantization" />
     <InternalsVisibleTo Include="SmallMind.Tokenizers" />
     <InternalsVisibleTo Include="SmallMind.Rag" />
+    <InternalsVisibleTo Include="SmallMind.ModelRegistry" />
     <InternalsVisibleTo Include="SmallMind.Benchmarks" />
     <InternalsVisibleTo Include="SmallMind.Perf" />
     <InternalsVisibleTo Include="SmallMind.Console" />

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.ModelRegistry
 {
@@ -73,6 +74,9 @@ namespace SmallMind.ModelRegistry
                     fileName = "model.bin";
                 }
             }
+
+            // Validate filename to prevent path traversal
+            fileName = Guard.SafeFileName(fileName, nameof(source));
 
             string targetPath = Path.Combine(modelDir, fileName);
 
@@ -192,7 +196,8 @@ namespace SmallMind.ModelRegistry
             string modelDir = CachePathResolver.GetModelDirectory(_cacheRoot, modelId);
             foreach (var fileEntry in manifest.Files)
             {
-                string filePath = Path.Combine(modelDir, fileEntry.Path);
+                // Validate path to prevent directory traversal
+                string filePath = Guard.PathWithinDirectory(modelDir, fileEntry.Path, nameof(fileEntry.Path));
 
                 if (!File.Exists(filePath))
                 {
@@ -243,7 +248,8 @@ namespace SmallMind.ModelRegistry
             }
 
             string modelDir = CachePathResolver.GetModelDirectory(_cacheRoot, modelId);
-            return Path.Combine(modelDir, manifest.Files[0].Path);
+            // Validate path to prevent directory traversal
+            return Guard.PathWithinDirectory(modelDir, manifest.Files[0].Path, "manifest.Files[0].Path");
         }
 
         private ModelManifest? LoadManifest(string modelId)
