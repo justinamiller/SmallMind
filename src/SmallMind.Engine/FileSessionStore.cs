@@ -96,7 +96,7 @@ namespace SmallMind.Engine
                 // Clean up temp file on error
                 if (File.Exists(tempPath))
                 {
-                    try { File.Delete(tempPath); } catch { /* ignore */ }
+                    try { File.Delete(tempPath); } catch (Exception) { /* Ignore cleanup failures */ }
                 }
                 throw;
             }

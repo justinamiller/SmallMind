@@ -55,13 +55,18 @@ internal class PerfRunner
             switch (args[i])
             {
                 case "--warmup" when i + 1 < args.Length:
-                    _warmupIters = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int warmup))
+                        _warmupIters = warmup;
                     break;
                 case "--iters" when i + 1 < args.Length:
-                    _measureIters = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int iters))
+                        _measureIters = iters;
                     break;
                 case "--bench" when i + 1 < args.Length:
-                    _benchName = args[++i];
+                    i++;
+                    _benchName = args[i];
                     break;
                 case "--json":
                     _jsonOutput = true;
@@ -72,19 +77,25 @@ internal class PerfRunner
                     _measureIters = 100;
                     break;
                 case "--prompt" when i + 1 < args.Length:
-                    _prompt = args[++i];
+                    i++;
+                    _prompt = args[i];
                     break;
                 case "--prompt-file" when i + 1 < args.Length:
-                    _promptFile = args[++i];
+                    i++;
+                    _promptFile = args[i];
                     break;
                 case "--max-new-tokens" when i + 1 < args.Length:
-                    _maxNewTokens = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int maxTokens))
+                        _maxNewTokens = maxTokens;
                     break;
                 case "--deterministic":
                     _deterministicMode = true;
                     break;
                 case "--seed" when i + 1 < args.Length:
-                    _seed = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int seed))
+                        _seed = seed;
                     break;
                 case "--help":
                     PrintHelp();

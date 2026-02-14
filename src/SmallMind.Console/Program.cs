@@ -168,13 +168,18 @@ namespace SmallMind.ConsoleApp
                 bool interactiveMode = HasArg(args, "--interactive");
                 bool listPresets = HasArg(args, "--list-presets");
                 string prompt = GetArgValue(args, "--prompt", "Once upon a time");
-                int generateSteps = int.Parse(GetArgValue(args, "--steps", "200"));
-                double temperature = double.Parse(GetArgValue(args, "--temperature", "1.0"));
-                int topK = int.Parse(GetArgValue(args, "--top-k", "0"));
+                
+                if (!int.TryParse(GetArgValue(args, "--steps", "200"), out int generateSteps))
+                    generateSteps = 200;
+                if (!double.TryParse(GetArgValue(args, "--temperature", "1.0"), out double temperature))
+                    temperature = 1.0;
+                if (!int.TryParse(GetArgValue(args, "--top-k", "0"), out int topK))
+                    topK = 0;
 
                 // Tokenizer selection
                 string tokenizerType = GetArgValue(args, "--tokenizer", "char").ToLower();
-                int vocabSize = int.Parse(GetArgValue(args, "--vocab-size", "1024"));
+                if (!int.TryParse(GetArgValue(args, "--vocab-size", "1024"), out int vocabSize))
+                    vocabSize = 1024;
 
                 // List available model presets and exit if requested
                 if (listPresets)
@@ -209,16 +214,21 @@ namespace SmallMind.ConsoleApp
                 Console.WriteLine($"Configuration: {selectedPreset.NEmbedding} embedding dim, {selectedPreset.NLayers} layers, {selectedPreset.NHeads} heads\n");
 
                 // Enhanced training parameters
-                int gradAccumSteps = int.Parse(GetArgValue(args, "--grad-accum", "1"));
-                int warmupSteps = int.Parse(GetArgValue(args, "--warmup", "100"));
+                if (!int.TryParse(GetArgValue(args, "--grad-accum", "1"), out int gradAccumSteps))
+                    gradAccumSteps = 1;
+                if (!int.TryParse(GetArgValue(args, "--warmup", "100"), out int warmupSteps))
+                    warmupSteps = 100;
 
                 // Get max block size override if provided
                 string maxBlockSizeArg = GetArgValue(args, "--max-block-size", "");
                 int maxBlockSize = MAX_BLOCK_SIZE;
                 if (!string.IsNullOrEmpty(maxBlockSizeArg))
                 {
-                    maxBlockSize = int.Parse(maxBlockSizeArg);
-                    Console.WriteLine($"Maximum block size override: {maxBlockSize}");
+                    if (int.TryParse(maxBlockSizeArg, out int parsedMaxBlockSize))
+                    {
+                        maxBlockSize = parsedMaxBlockSize;
+                        Console.WriteLine($"Maximum block size override: {maxBlockSize}");
+                    }
                 }
 
                 // Determine block size (priority: command-line > auto-config > preset default)
@@ -228,13 +238,16 @@ namespace SmallMind.ConsoleApp
                 if (!string.IsNullOrEmpty(blockSizeArg))
                 {
                     // User specified block size
-                    blockSize = int.Parse(blockSizeArg);
-                    if (blockSize > maxBlockSize)
+                    if (int.TryParse(blockSizeArg, out int parsedBlockSize))
                     {
-                        Console.WriteLine($"Warning: Requested block size {blockSize} exceeds maximum {maxBlockSize}. Using {maxBlockSize}.");
-                        blockSize = maxBlockSize;
+                        blockSize = parsedBlockSize;
+                        if (blockSize > maxBlockSize)
+                        {
+                            Console.WriteLine($"Warning: Requested block size {blockSize} exceeds maximum {maxBlockSize}. Using {maxBlockSize}.");
+                            blockSize = maxBlockSize;
+                        }
+                        Console.WriteLine($"Using user-specified block size: {blockSize}");
                     }
-                    Console.WriteLine($"Using user-specified block size: {blockSize}");
                 }
                 else if (autoConfig)
                 {
@@ -253,8 +266,11 @@ namespace SmallMind.ConsoleApp
 
                 if (!string.IsNullOrEmpty(batchSizeArg))
                 {
-                    batchSize = int.Parse(batchSizeArg);
-                    Console.WriteLine($"Using user-specified batch size: {batchSize}");
+                    if (int.TryParse(batchSizeArg, out int parsedBatchSize))
+                    {
+                        batchSize = parsedBatchSize;
+                        Console.WriteLine($"Using user-specified batch size: {batchSize}");
+                    }
                 }
                 else if (autoConfig)
                 {
