@@ -219,5 +219,176 @@ namespace SmallMind.Tests
         #endregion
 
 
+        #region SafeFileName Tests
+
+        [Theory]
+        [InlineData("validfile.txt")]
+        [InlineData("file123.bin")]
+        [InlineData("my-file_name.smq")]
+        public void SafeFileName_WithValidFileName_ReturnsValue(string fileName)
+        {
+            // Act
+            var result = Guard.SafeFileName(fileName);
+
+            // Assert
+            Assert.Equal(fileName, result);
+        }
+
+        [Theory]
+        [InlineData("path/to/file.txt")]
+        [InlineData("path\\to\\file.txt")]
+        [InlineData("../file.txt")]
+        [InlineData("..\\file.txt")]
+        [InlineData("/etc/passwd")]
+        [InlineData("C:\\Windows\\System32\\config")]
+        public void SafeFileName_WithPathSeparators_ThrowsValidationException(string fileName)
+        {
+            // Act & Assert
+            var ex = Assert.Throws<ValidationException>(() => Guard.SafeFileName(fileName));
+            Assert.Contains("cannot contain path separators", ex.Message);
+        }
+
+        [Theory]
+        [InlineData(".")]
+        [InlineData("..")]
+        public void SafeFileName_WithRelativePathComponent_ThrowsValidationException(string fileName)
+        {
+            // Act & Assert
+            var ex = Assert.Throws<ValidationException>(() => Guard.SafeFileName(fileName));
+            Assert.Contains("cannot be a relative path component", ex.Message);
+        }
+
+        [Fact]
+        public void SafeFileName_WithInvalidCharacters_ThrowsValidationException()
+        {
+            // Arrange - Get a character that is actually invalid on this platform
+            var invalidChars = Path.GetInvalidFileNameChars();
+            if (invalidChars.Length == 0)
+            {
+                // Skip test if no invalid characters on this platform
+                return;
+            }
+            
+            // Use the first invalid character that's not a path separator
+            var invalidChar = invalidChars.FirstOrDefault(c => c != '/' && c != '\\' && c != Path.DirectorySeparatorChar && c != Path.AltDirectorySeparatorChar);
+            if (invalidChar == '\0')
+            {
+                // Skip if no suitable invalid character found
+                return;
+            }
+            
+            var fileName = $"file{invalidChar}name.txt";
+
+            // Act & Assert
+            var ex = Assert.Throws<ValidationException>(() => Guard.SafeFileName(fileName));
+            Assert.Contains("contains invalid file name characters", ex.Message);
+        }
+
+        [Fact]
+        public void SafeFileName_WithNull_ThrowsValidationException()
+        {
+            // Act & Assert
+            Assert.Throws<ValidationException>(() => Guard.SafeFileName(null!));
+        }
+
+        #endregion
+
+        #region PathWithinDirectory Tests
+
+        [Fact]
+        public void PathWithinDirectory_WithValidRelativePath_ReturnsFullPath()
+        {
+            // Arrange
+            var tempDir = Path.GetTempPath();
+            var relativePath = "subfolder/file.txt";
+
+            // Act
+            var result = Guard.PathWithinDirectory(tempDir, relativePath);
+
+            // Assert
+            Assert.StartsWith(Path.GetFullPath(tempDir), result);
+            Assert.Contains("subfolder", result);
+        }
+
+        [Fact]
+        public void PathWithinDirectory_WithPathTraversal_ThrowsValidationException()
+        {
+            // Arrange
+            var tempDir = Path.GetTempPath();
+            var maliciousPath = "../../../etc/passwd";
+
+            // Act & Assert
+            var ex = Assert.Throws<ValidationException>(() => Guard.PathWithinDirectory(tempDir, maliciousPath));
+            Assert.Contains("would result in a path outside the base directory", ex.Message);
+        }
+
+        [Fact]
+        public void PathWithinDirectory_WithAbsolutePath_ThrowsValidationException()
+        {
+            // Arrange
+            var tempDir = Path.Combine(Path.GetTempPath(), "base");
+            Directory.CreateDirectory(tempDir);
+            
+            try
+            {
+                // Use a different absolute path (root or temp's parent)
+                var absolutePath = Path.GetPathRoot(tempDir) ?? "/";
+
+                // Act & Assert
+                var ex = Assert.Throws<ValidationException>(() => Guard.PathWithinDirectory(tempDir, absolutePath));
+                Assert.Contains("would result in a path outside the base directory", ex.Message);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
+            }
+        }
+
+        [Fact]
+        public void PathWithinDirectory_WithMultipleTraversals_ThrowsValidationException()
+        {
+            // Arrange
+            var baseDir = Path.Combine(Path.GetTempPath(), "base");
+            Directory.CreateDirectory(baseDir);
+            
+            try
+            {
+                var maliciousPath = Path.Combine("..", "..", "..", "etc", "passwd");
+
+                // Act & Assert
+                var ex = Assert.Throws<ValidationException>(() => Guard.PathWithinDirectory(baseDir, maliciousPath));
+                Assert.Contains("would result in a path outside the base directory", ex.Message);
+            }
+            finally
+            {
+                if (Directory.Exists(baseDir))
+                {
+                    Directory.Delete(baseDir, true);
+                }
+            }
+        }
+
+        [Fact]
+        public void PathWithinDirectory_WithNullBasePath_ThrowsValidationException()
+        {
+            // Act & Assert
+            Assert.Throws<ValidationException>(() => Guard.PathWithinDirectory(null!, "relative"));
+        }
+
+        [Fact]
+        public void PathWithinDirectory_WithNullRelativePath_ThrowsValidationException()
+        {
+            // Arrange
+            var tempDir = Path.GetTempPath();
+
+            // Act & Assert
+            Assert.Throws<ValidationException>(() => Guard.PathWithinDirectory(tempDir, null!));
+        }
+
+        #endregion
+
     }
 }

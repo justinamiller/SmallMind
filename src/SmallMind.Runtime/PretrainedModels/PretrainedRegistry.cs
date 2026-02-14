@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Runtime.PretrainedModels
 {
@@ -145,7 +146,8 @@ namespace SmallMind.Runtime.PretrainedModels
         /// <returns>Full path to pack directory</returns>
         public string GetPackFullPath(string packPath)
         {
-            return System.IO.Path.Combine(BasePath, packPath);
+            // Validate that the combined path stays within the base directory to prevent path traversal
+            return Guard.PathWithinDirectory(BasePath, packPath, nameof(packPath));
         }
 
         /// <summary>
