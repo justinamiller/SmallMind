@@ -10,12 +10,12 @@ namespace SmallMind.Engine
     internal sealed class ChatSessionBuilder
     {
         private readonly ModelHandle _modelHandle;
-        private readonly SmallMindOptions _engineOptions;
+        private readonly EngineOptions _engineOptions;
         private ChatSessionOptions _sessionOptions;
         private IKvCacheStore? _kvCacheStore;
         private RagPipeline? _ragPipeline;
 
-        internal ChatSessionBuilder(ModelHandle modelHandle, SmallMindOptions engineOptions)
+        internal ChatSessionBuilder(ModelHandle modelHandle, EngineOptions engineOptions)
         {
             _modelHandle = modelHandle ?? throw new ArgumentNullException(nameof(modelHandle));
             _engineOptions = engineOptions ?? throw new ArgumentNullException(nameof(engineOptions));

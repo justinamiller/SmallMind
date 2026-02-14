@@ -13,9 +13,9 @@ namespace SmallMind.Engine
         /// </summary>
         /// <param name="options">Engine options. If null, uses defaults.</param>
         /// <returns>A SmallMind engine instance.</returns>
-        public static ISmallMindEngine Create(SmallMindOptions? options = null)
+        public static ISmallMindEngine Create(EngineOptions? options = null)
         {
-            return new SmallMindEngine(options ?? new SmallMindOptions());
+            return new SmallMindEngine(options ?? new EngineOptions());
         }
     }
 }

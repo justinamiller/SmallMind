@@ -3,9 +3,11 @@ using SmallMind.Abstractions.Telemetry;
 namespace SmallMind.Abstractions
 {
     /// <summary>
-    /// Options for creating the SmallMind engine.
+    /// Options for configuring the SmallMind inference engine behavior.
+    /// This configures internal engine settings like threading, batching, and RAG.
+    /// For model-specific options, see the public SmallMind.SmallMindOptions class.
     /// </summary>
-    public sealed class SmallMindOptions
+    public sealed class EngineOptions
     {
         /// <summary>
         /// Gets or sets the default number of threads for inference.
