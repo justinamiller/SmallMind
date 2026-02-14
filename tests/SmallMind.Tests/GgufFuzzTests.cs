@@ -338,22 +338,11 @@ namespace SmallMind.Tests
                     writer.Write((ulong)0); // Empty value string
                 }
 
-                // Act & Assert
-                if (nullByteCount == 0)
+                // Act & Assert - All null byte counts should throw
+                Assert.ThrowsAny<Exception>(() =>
                 {
-                    // Empty key should be handled
-                    Assert.ThrowsAny<Exception>(() =>
-                    {
-                        GgufModelLoader.LoadFromGguf(tempPath);
-                    });
-                }
-                else
-                {
-                    Assert.ThrowsAny<Exception>(() =>
-                    {
-                        GgufModelLoader.LoadFromGguf(tempPath);
-                    });
-                }
+                    GgufModelLoader.LoadFromGguf(tempPath);
+                });
             }
             finally
             {
@@ -421,8 +410,8 @@ namespace SmallMind.Tests
                     writer.Write((ulong)1); // 1 metadata entry
 
                     // Write metadata with array type
-                    writer.Write((ulong)4); // Key length
-                    writer.Write(new byte[] { (byte)'a', (byte)'r', (byte)'r', (byte)'y' }); // "arry"
+                    writer.Write((ulong)5); // Key length
+                    writer.Write(new byte[] { (byte)'a', (byte)'r', (byte)'r', (byte)'a', (byte)'y' }); // "array"
                     writer.Write((uint)9); // Array type
                     writer.Write((uint)0); // Element type (uint8)
                     writer.Write(ulong.MaxValue); // Claim max elements
