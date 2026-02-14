@@ -1,5 +1,5 @@
 using SmallMind.Abstractions;
-using EngineSmallMindOptions = SmallMind.Abstractions.SmallMindOptions;
+using EngineSmallMindOptions = SmallMind.SmallMindOptions;
 
 namespace SmallMind.Tests
 {

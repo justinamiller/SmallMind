@@ -30,18 +30,18 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Specifies the desired response format for structured output.
     /// </summary>
-    public sealed class ResponseFormat
+    public readonly struct ResponseFormat : IEquatable<ResponseFormat>
     {
         /// <summary>
         /// Gets or sets the response format type.
         /// </summary>
-        public ResponseFormatType Type { get; set; } = ResponseFormatType.Text;
+        public required ResponseFormatType Type { get; init; }
 
         /// <summary>
         /// Gets or sets the JSON schema definition (required when Type is JsonSchema).
         /// Schema must be a valid JSON Schema subset supported by SmallMind.
         /// </summary>
-        public string? Schema { get; set; }
+        public string? Schema { get; init; }
 
         /// <summary>
         /// Creates a text format (default).
@@ -61,6 +61,35 @@ namespace SmallMind.Abstractions
             Type = ResponseFormatType.JsonSchema,
             Schema = schema
         };
+
+        /// <summary>
+        /// Determines whether the specified ResponseFormat is equal to the current ResponseFormat.
+        /// </summary>
+        public bool Equals(ResponseFormat other) =>
+            Type == other.Type &&
+            Schema == other.Schema;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current ResponseFormat.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is ResponseFormat other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this ResponseFormat.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(Type, Schema);
+
+        /// <summary>
+        /// Determines whether two specified ResponseFormat instances are equal.
+        /// </summary>
+        public static bool operator ==(ResponseFormat left, ResponseFormat right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified ResponseFormat instances are not equal.
+        /// </summary>
+        public static bool operator !=(ResponseFormat left, ResponseFormat right) => !left.Equals(right);
     }
 
     /// <summary>
@@ -88,43 +117,103 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Represents a tool call request from the model.
     /// </summary>
-    public sealed class ToolCall
+    public readonly struct ToolCall : IEquatable<ToolCall>
     {
         /// <summary>
         /// Gets or sets the unique ID for this tool call (for correlation).
         /// </summary>
-        public string Id { get; set; } = string.Empty;
+        public required string Id { get; init; }
 
         /// <summary>
         /// Gets or sets the tool name to call.
         /// </summary>
-        public string Name { get; set; } = string.Empty;
+        public required string Name { get; init; }
 
         /// <summary>
         /// Gets or sets the arguments as a JSON string.
         /// </summary>
-        public string ArgumentsJson { get; set; } = string.Empty;
+        public required string ArgumentsJson { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified ToolCall is equal to the current ToolCall.
+        /// </summary>
+        public bool Equals(ToolCall other) =>
+            Id == other.Id &&
+            Name == other.Name &&
+            ArgumentsJson == other.ArgumentsJson;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current ToolCall.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is ToolCall other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this ToolCall.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(Id, Name, ArgumentsJson);
+
+        /// <summary>
+        /// Determines whether two specified ToolCall instances are equal.
+        /// </summary>
+        public static bool operator ==(ToolCall left, ToolCall right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified ToolCall instances are not equal.
+        /// </summary>
+        public static bool operator !=(ToolCall left, ToolCall right) => !left.Equals(right);
     }
 
     /// <summary>
     /// Represents the result of a tool execution.
     /// </summary>
-    public sealed class ToolResult
+    public readonly struct ToolResult : IEquatable<ToolResult>
     {
         /// <summary>
         /// Gets or sets the tool call ID this result corresponds to.
         /// </summary>
-        public string ToolCallId { get; set; } = string.Empty;
+        public required string ToolCallId { get; init; }
 
         /// <summary>
         /// Gets or sets the result content (can be text, JSON, etc).
         /// </summary>
-        public string Content { get; set; } = string.Empty;
+        public required string Content { get; init; }
 
         /// <summary>
         /// Gets or sets whether the tool execution resulted in an error.
         /// </summary>
-        public bool IsError { get; set; }
+        public required bool IsError { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified ToolResult is equal to the current ToolResult.
+        /// </summary>
+        public bool Equals(ToolResult other) =>
+            ToolCallId == other.ToolCallId &&
+            Content == other.Content &&
+            IsError == other.IsError;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current ToolResult.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is ToolResult other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this ToolResult.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(ToolCallId, Content, IsError);
+
+        /// <summary>
+        /// Determines whether two specified ToolResult instances are equal.
+        /// </summary>
+        public static bool operator ==(ToolResult left, ToolResult right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified ToolResult instances are not equal.
+        /// </summary>
+        public static bool operator !=(ToolResult left, ToolResult right) => !left.Equals(right);
     }
 
     /// <summary>
@@ -225,7 +314,7 @@ namespace SmallMind.Abstractions
         /// <summary>
         /// Gets the usage statistics.
         /// </summary>
-        public UsageStats Usage { get; init; } = new UsageStats();
+        public required UsageStats Usage { get; init; }
 
         /// <summary>
         /// Gets citations (for RAG responses).
@@ -241,17 +330,17 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Token usage statistics for a chat completion.
     /// </summary>
-    public sealed class UsageStats
+    public readonly struct UsageStats : IEquatable<UsageStats>
     {
         /// <summary>
         /// Gets the number of tokens in the prompt.
         /// </summary>
-        public int PromptTokens { get; init; }
+        public required int PromptTokens { get; init; }
 
         /// <summary>
         /// Gets the number of tokens generated.
         /// </summary>
-        public int CompletionTokens { get; init; }
+        public required int CompletionTokens { get; init; }
 
         /// <summary>
         /// Gets the total tokens (prompt + completion).
@@ -261,38 +350,124 @@ namespace SmallMind.Abstractions
         /// <summary>
         /// Gets the time to first token in milliseconds (TTFT).
         /// </summary>
-        public double TimeToFirstTokenMs { get; init; }
+        public required double TimeToFirstTokenMs { get; init; }
 
         /// <summary>
         /// Gets the tokens per second rate.
         /// </summary>
-        public double TokensPerSecond { get; init; }
+        public required double TokensPerSecond { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified UsageStats is equal to the current UsageStats.
+        /// </summary>
+        public bool Equals(UsageStats other) =>
+            PromptTokens == other.PromptTokens &&
+            CompletionTokens == other.CompletionTokens &&
+            TimeToFirstTokenMs == other.TimeToFirstTokenMs &&
+            TokensPerSecond == other.TokensPerSecond;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current UsageStats.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is UsageStats other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this UsageStats.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(PromptTokens, CompletionTokens, TimeToFirstTokenMs, TokensPerSecond);
+
+        /// <summary>
+        /// Determines whether two specified UsageStats instances are equal.
+        /// </summary>
+        public static bool operator ==(UsageStats left, UsageStats right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified UsageStats instances are not equal.
+        /// </summary>
+        public static bool operator !=(UsageStats left, UsageStats right) => !left.Equals(right);
     }
 
     /// <summary>
     /// Retrieved context chunk for RAG.
     /// </summary>
-    public sealed class RetrievedChunk
+    public readonly struct RetrievedChunk : IEquatable<RetrievedChunk>
     {
         /// <summary>
         /// Gets or sets the chunk content.
         /// </summary>
-        public string Content { get; set; } = string.Empty;
+        public required string Content { get; init; }
 
         /// <summary>
         /// Gets or sets the source identifier.
         /// </summary>
-        public string Source { get; set; } = string.Empty;
+        public required string Source { get; init; }
 
         /// <summary>
         /// Gets or sets the relevance score (0.0 to 1.0).
         /// </summary>
-        public float Score { get; set; }
+        public required float Score { get; init; }
 
         /// <summary>
         /// Gets or sets optional metadata.
         /// </summary>
-        public IReadOnlyDictionary<string, string>? Metadata { get; set; }
+        public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified RetrievedChunk is equal to the current RetrievedChunk.
+        /// </summary>
+        public bool Equals(RetrievedChunk other)
+        {
+            if (Content != other.Content || Source != other.Source || Score != other.Score)
+                return false;
+
+            // Compare metadata dictionaries
+            if (Metadata == null && other.Metadata == null)
+                return true;
+            if (Metadata == null || other.Metadata == null)
+                return false;
+            if (Metadata.Count != other.Metadata.Count)
+                return false;
+
+            foreach (var kvp in Metadata)
+            {
+                if (!other.Metadata.TryGetValue(kvp.Key, out var otherValue) || kvp.Value != otherValue)
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current RetrievedChunk.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is RetrievedChunk other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this RetrievedChunk.
+        /// </summary>
+        public override int GetHashCode()
+        {
+            var hash = HashCode.Combine(Content, Source, Score);
+            if (Metadata != null)
+            {
+                // Use count only to avoid non-deterministic ordering issues
+                hash = HashCode.Combine(hash, Metadata.Count);
+            }
+            return hash;
+        }
+
+        /// <summary>
+        /// Determines whether two specified RetrievedChunk instances are equal.
+        /// </summary>
+        public static bool operator ==(RetrievedChunk left, RetrievedChunk right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified RetrievedChunk instances are not equal.
+        /// </summary>
+        public static bool operator !=(RetrievedChunk left, RetrievedChunk right) => !left.Equals(right);
     }
 
     // ============================================================================

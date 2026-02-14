@@ -267,7 +267,7 @@ namespace SmallMind
     /// <summary>
     /// Streaming token result.
     /// </summary>
-    public sealed class TokenResult
+    public readonly struct TokenResult : IEquatable<TokenResult>
     {
         /// <summary>
         /// The token text.
@@ -293,12 +293,44 @@ namespace SmallMind
         /// Partial timing statistics.
         /// </summary>
         public required GenerationTimingsPartial Timings { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified TokenResult is equal to the current TokenResult.
+        /// </summary>
+        public bool Equals(TokenResult other) =>
+            TokenText == other.TokenText &&
+            TokenId == other.TokenId &&
+            IsSpecial == other.IsSpecial &&
+            Usage.Equals(other.Usage) &&
+            Timings.Equals(other.Timings);
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current TokenResult.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is TokenResult other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this TokenResult.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(TokenText, TokenId, IsSpecial, Usage, Timings);
+
+        /// <summary>
+        /// Determines whether two specified TokenResult instances are equal.
+        /// </summary>
+        public static bool operator ==(TokenResult left, TokenResult right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified TokenResult instances are not equal.
+        /// </summary>
+        public static bool operator !=(TokenResult left, TokenResult right) => !left.Equals(right);
     }
 
     /// <summary>
     /// Token usage statistics.
     /// </summary>
-    public sealed class Usage
+    public readonly struct Usage : IEquatable<Usage>
     {
         /// <summary>
         /// Number of prompt tokens.
@@ -314,12 +346,41 @@ namespace SmallMind
         /// Total tokens (prompt + completion).
         /// </summary>
         public int TotalTokens => PromptTokens + CompletionTokens;
+
+        /// <summary>
+        /// Determines whether the specified Usage is equal to the current Usage.
+        /// </summary>
+        public bool Equals(Usage other) =>
+            PromptTokens == other.PromptTokens &&
+            CompletionTokens == other.CompletionTokens;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current Usage.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is Usage other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this Usage.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(PromptTokens, CompletionTokens);
+
+        /// <summary>
+        /// Determines whether two specified Usage instances are equal.
+        /// </summary>
+        public static bool operator ==(Usage left, Usage right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified Usage instances are not equal.
+        /// </summary>
+        public static bool operator !=(Usage left, Usage right) => !left.Equals(right);
     }
 
     /// <summary>
     /// Partial usage statistics for streaming.
     /// </summary>
-    public sealed class UsagePartial
+    public readonly struct UsagePartial : IEquatable<UsagePartial>
     {
         /// <summary>
         /// Number of prompt tokens (may not be available during streaming).
@@ -330,12 +391,41 @@ namespace SmallMind
         /// Number of completion tokens generated so far.
         /// </summary>
         public required int CompletionTokensSoFar { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified UsagePartial is equal to the current UsagePartial.
+        /// </summary>
+        public bool Equals(UsagePartial other) =>
+            PromptTokens == other.PromptTokens &&
+            CompletionTokensSoFar == other.CompletionTokensSoFar;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current UsagePartial.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is UsagePartial other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this UsagePartial.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(PromptTokens, CompletionTokensSoFar);
+
+        /// <summary>
+        /// Determines whether two specified UsagePartial instances are equal.
+        /// </summary>
+        public static bool operator ==(UsagePartial left, UsagePartial right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified UsagePartial instances are not equal.
+        /// </summary>
+        public static bool operator !=(UsagePartial left, UsagePartial right) => !left.Equals(right);
     }
 
     /// <summary>
     /// Generation timing statistics.
     /// </summary>
-    public sealed class GenerationTimings
+    public readonly struct GenerationTimings : IEquatable<GenerationTimings>
     {
         /// <summary>
         /// Time to first token in milliseconds.
@@ -363,22 +453,81 @@ namespace SmallMind
             TotalMs = totalMs;
             TokensPerSecond = totalMs > 0 ? tokenCount / (totalMs / 1000.0) : 0;
         }
+
+        /// <summary>
+        /// Determines whether the specified GenerationTimings is equal to the current GenerationTimings.
+        /// </summary>
+        public bool Equals(GenerationTimings other) =>
+            TimeToFirstTokenMs == other.TimeToFirstTokenMs &&
+            TotalMs == other.TotalMs &&
+            TokensPerSecond == other.TokensPerSecond;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current GenerationTimings.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is GenerationTimings other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this GenerationTimings.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(TimeToFirstTokenMs, TotalMs, TokensPerSecond);
+
+        /// <summary>
+        /// Determines whether two specified GenerationTimings instances are equal.
+        /// </summary>
+        public static bool operator ==(GenerationTimings left, GenerationTimings right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified GenerationTimings instances are not equal.
+        /// </summary>
+        public static bool operator !=(GenerationTimings left, GenerationTimings right) => !left.Equals(right);
     }
 
     /// <summary>
     /// Partial timing statistics for streaming.
     /// </summary>
-    public sealed class GenerationTimingsPartial
+    public readonly struct GenerationTimingsPartial : IEquatable<GenerationTimingsPartial>
     {
         /// <summary>
         /// Time to first token in milliseconds (null until first token).
         /// </summary>
-        public double? TimeToFirstTokenMs { get; init; }
+        public required double? TimeToFirstTokenMs { get; init; }
 
         /// <summary>
         /// Elapsed time so far in milliseconds.
         /// </summary>
-        public double ElapsedMs { get; init; }
+        public required double ElapsedMs { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified GenerationTimingsPartial is equal to the current GenerationTimingsPartial.
+        /// </summary>
+        public bool Equals(GenerationTimingsPartial other) =>
+            TimeToFirstTokenMs == other.TimeToFirstTokenMs &&
+            ElapsedMs == other.ElapsedMs;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current GenerationTimingsPartial.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is GenerationTimingsPartial other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this GenerationTimingsPartial.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(TimeToFirstTokenMs, ElapsedMs);
+
+        /// <summary>
+        /// Determines whether two specified GenerationTimingsPartial instances are equal.
+        /// </summary>
+        public static bool operator ==(GenerationTimingsPartial left, GenerationTimingsPartial right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified GenerationTimingsPartial instances are not equal.
+        /// </summary>
+        public static bool operator !=(GenerationTimingsPartial left, GenerationTimingsPartial right) => !left.Equals(right);
     }
 
     /// <summary>
