@@ -648,6 +648,10 @@ namespace SmallMind.Runtime
             ReadOnlySpan<byte> src = rawData;
             int srcOffset = 0;
 
+            // Allocate once outside loop to avoid CA2014 warning
+            Span<byte> scales = stackalloc byte[SubBlockCount];
+            Span<byte> mins = stackalloc byte[SubBlockCount];
+
             for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
                 // Read super-block scale and min (fp16)
@@ -658,10 +662,6 @@ namespace SmallMind.Runtime
 
                 // Read 12 bytes containing 8 6-bit scales and 8 6-bit mins (packed)
                 ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 4, 12);
-
-                // Allocate on stack to avoid heap allocations in hot path
-                Span<byte> scales = stackalloc byte[SubBlockCount];
-                Span<byte> mins = stackalloc byte[SubBlockCount];
 
                 // Unpack scales (first 6 bytes -> 8 6-bit values)
                 // Per llama.cpp Q4_K spec: each group of 3 bytes holds 4 6-bit values
@@ -738,6 +738,10 @@ namespace SmallMind.Runtime
             ReadOnlySpan<byte> src = rawData;
             int srcOffset = 0;
 
+            // Allocate once outside loop
+            Span<byte> scales = stackalloc byte[SubBlockCount];
+            Span<byte> mins = stackalloc byte[SubBlockCount];
+
             for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
                 // Read super-block scale and min (fp16)
@@ -748,9 +752,6 @@ namespace SmallMind.Runtime
 
                 // Read 12 bytes containing 8 6-bit scales and 8 6-bit mins
                 ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 4, 12);
-
-                Span<byte> scales = stackalloc byte[SubBlockCount];
-                Span<byte> mins = stackalloc byte[SubBlockCount];
 
                 // Unpack scales (same as Q4_K)
                 scales[0] = (byte)(scalesBytes[0] & 0x3F);
