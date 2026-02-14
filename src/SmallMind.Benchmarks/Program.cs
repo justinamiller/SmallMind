@@ -96,7 +96,8 @@ namespace SmallMind.Benchmarks
                     if (i + 1 < args.Length)
                     {
                         var formats = args[i + 1].Split(',');
-                        options.Formats = new List<string>();
+                        // Pre-allocate with capacity to minimize resize operations (performance optimization, avoiding LINQ overhead)
+                        options.Formats = new List<string>(formats.Length);
                         foreach (var fmt in formats)
                         {
                             var trimmed = fmt.Trim();

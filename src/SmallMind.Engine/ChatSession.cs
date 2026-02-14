@@ -212,7 +212,8 @@ namespace SmallMind.Engine
                     var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
 
                     // Build RAG prompt
-                    var chunkStore = new Dictionary<string, Chunk>();
+                    // Using manual loop with dictionary lookup for deduplication (performance optimization, avoiding LINQ overhead)
+                    var chunkStore = new Dictionary<string, Chunk>(topK);
                     foreach (var chunk in chunks)
                     {
                         if (!chunkStore.ContainsKey(chunk.ChunkId))
@@ -469,7 +470,8 @@ namespace SmallMind.Engine
                     var chunks = _ragPipeline.Retrieve(message.Content, userContext: null, topK);
 
                     // Build RAG prompt
-                    var chunkStore = new Dictionary<string, Chunk>();
+                    // Using manual loop with dictionary lookup for deduplication (performance optimization, avoiding LINQ overhead)
+                    var chunkStore = new Dictionary<string, Chunk>(topK);
                     foreach (var chunk in chunks)
                     {
                         if (!chunkStore.ContainsKey(chunk.ChunkId))

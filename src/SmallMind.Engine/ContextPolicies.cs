@@ -32,8 +32,9 @@ namespace SmallMind.Engine
                 return Array.Empty<ChatMessageV3>();
 
             // Separate system messages from conversation messages
-            var systemMessages = new List<ChatMessageV3>();
-            var conversationMessages = new List<ChatMessageV3>();
+            // Pre-allocate capacity to minimize resize operations (performance optimization, avoiding LINQ overhead)
+            var systemMessages = new List<ChatMessageV3>(messages.Count / 4);
+            var conversationMessages = new List<ChatMessageV3>(messages.Count);
 
             foreach (var msg in messages)
             {
@@ -167,8 +168,9 @@ namespace SmallMind.Engine
                 return Array.Empty<ChatMessageV3>();
 
             // Separate system messages from conversation messages
-            var systemMessages = new List<ChatMessageV3>();
-            var conversationMessages = new List<ChatMessageV3>();
+            // Pre-allocate capacity to minimize resize operations (performance optimization, avoiding LINQ overhead)
+            var systemMessages = new List<ChatMessageV3>(messages.Count / 4);
+            var conversationMessages = new List<ChatMessageV3>(messages.Count);
 
             foreach (var msg in messages)
             {
