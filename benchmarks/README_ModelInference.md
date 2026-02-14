@@ -19,7 +19,7 @@ This benchmarking system provides reproducible, CI-friendly performance measurem
 
 ```bash
 cd /path/to/SmallMind
-dotnet run -c Release --project bench/SmallMind.Benchmarks -- --ci-only
+dotnet run -c Release --project benchmarks/ModelInference/SmallMind.Benchmarks -- --ci-only
 ```
 
 This runs only small models suitable for CI environments.
@@ -27,7 +27,7 @@ This runs only small models suitable for CI environments.
 ### Run Full Benchmarks
 
 ```bash
-dotnet run -c Release --project bench/SmallMind.Benchmarks
+dotnet run -c Release --project benchmarks/ModelInference/SmallMind.Benchmarks
 ```
 
 Runs all models in the manifest (CI + optional larger models).
@@ -36,18 +36,18 @@ Runs all models in the manifest (CI + optional larger models).
 
 ```bash
 # Specify context sizes and thread counts
-dotnet run -c Release --project bench/SmallMind.Benchmarks -- \
+dotnet run -c Release --project benchmarks/ModelInference/SmallMind.Benchmarks -- \
     --contexts 256,1024,4096 \
     --threads 1,2,4,8 \
     --tokens 256 \
     --iterations 10
 
 # Use custom manifest
-dotnet run -c Release --project bench/SmallMind.Benchmarks -- \
+dotnet run -c Release --project benchmarks/ModelInference/SmallMind.Benchmarks -- \
     --manifest /path/to/custom-manifest.json
 
 # Save results to custom directory
-dotnet run -c Release --project bench/SmallMind.Benchmarks -- \
+dotnet run -c Release --project benchmarks/ModelInference/SmallMind.Benchmarks -- \
     --output /path/to/results
 ```
 
@@ -56,12 +56,12 @@ dotnet run -c Release --project bench/SmallMind.Benchmarks -- \
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--ci-only` | Run only CI models (small, fast) | false |
-| `--manifest <path>` | Path to model manifest JSON | `bench/models/models.manifest.json` |
+| `--manifest <path>` | Path to model manifest JSON | `benchmarks/models/models.manifest.json` |
 | `--contexts <list>` | Comma-separated context sizes | `256,1024` |
 | `--threads <list>` | Comma-separated thread counts | `1,4` |
 | `--tokens <n>` | Number of tokens to generate | `128` |
 | `--iterations <n>` | Number of measurement iterations | `5` |
-| `--output <dir>` | Output directory for results | `bench/results` |
+| `--output <dir>` | Output directory for results | `benchmarks/results` |
 
 ## Output Formats
 
@@ -69,25 +69,25 @@ Benchmarks produce three output formats per model:
 
 ### JSON (Machine-Readable)
 ```
-bench/results/<timestamp>_<gitsha>_<os>_<model>.json
+benchmarks/results/<timestamp>_<gitsha>_<os>_<model>.json
 ```
 Complete results with full statistics and environment metadata.
 
 ### Markdown (README-Friendly)
 ```
-bench/results/<timestamp>_<gitsha>_<os>_<model>.md
+benchmarks/results/<timestamp>_<gitsha>_<os>_<model>.md
 ```
 Human-readable summary tables suitable for documentation.
 
 ### CSV (Charting)
 ```
-bench/results/<timestamp>_<gitsha>_<os>_<model>.csv
+benchmarks/results/<timestamp>_<gitsha>_<os>_<model>.csv
 ```
 Tabular data for Excel, plotting tools, or time-series analysis.
 
 ## Model Manifest
 
-Models are defined in `bench/models/models.manifest.json`:
+Models are defined in `benchmarks/models/models.manifest.json`:
 
 ```json
 {
@@ -130,7 +130,7 @@ Models are cached to avoid re-downloading:
 **Custom cache**:
 ```bash
 export SMALLMIND_BENCH_MODEL_CACHE=/path/to/cache
-dotnet run -c Release --project bench/SmallMind.Benchmarks
+dotnet run -c Release --project benchmarks/ModelInference/SmallMind.Benchmarks
 ```
 
 Models are verified with SHA256 checksums. Invalid cached files are re-downloaded.
@@ -200,7 +200,7 @@ CI runs:
 ## Merge Results (Future)
 
 ```bash
-dotnet run --project bench/SmallMind.Benchmarks -- merge \
+dotnet run --project benchmarks/ModelInference/SmallMind.Benchmarks -- merge \
     --input results/run1.json \
     --input results/run2.json \
     --output merged.md
