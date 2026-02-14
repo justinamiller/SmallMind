@@ -82,7 +82,7 @@ namespace SmallMind.Engine
         private int _truncatedTurns;
         private int _kvCacheHits;
         private int _kvCacheMisses;
-        private int _nanRecoveries;
+        private readonly int _nanRecoveries;
         private int _degenerateOutputRecoveries;
         private long _totalTokensGenerated;
         private long _totalTokensFromCache;
