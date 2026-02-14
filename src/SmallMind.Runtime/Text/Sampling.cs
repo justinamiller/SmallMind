@@ -33,7 +33,7 @@ namespace SmallMind.Runtime
 
         // Reusable decode tensor for single-token generation
         private float[] _decodeData = new float[1];
-        private int[] _decodeShape = new int[] { 1, 1 };
+        private readonly int[] _decodeShape = new int[] { 1, 1 };
         private Tensor? _decodeTensor;
 
         public Sampling(TransformerModel model, ITokenizer tokenizer, int blockSize)

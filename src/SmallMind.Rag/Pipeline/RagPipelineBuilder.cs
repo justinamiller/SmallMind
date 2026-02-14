@@ -9,7 +9,7 @@ namespace SmallMind.Rag.Pipeline
     /// </summary>
     internal sealed class RagPipelineBuilder
     {
-        private RagOptions _options = new RagOptions();
+        private readonly RagOptions _options = new RagOptions();
         private IAuthorizer? _authorizer;
         private IRagLogger? _logger;
         private IRagMetrics? _metrics;
