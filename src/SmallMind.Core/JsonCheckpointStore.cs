@@ -93,10 +93,10 @@ namespace SmallMind.Core
             }
 
             // Read parameters
-            if (!data.ContainsKey("parameters"))
+            if (!data.TryGetValue("parameters", out var parametersElement))
                 throw new InvalidDataException("Checkpoint missing 'parameters' field");
 
-            var parametersJson = data["parameters"].GetRawText();
+            var parametersJson = parametersElement.GetRawText();
             var parameters = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(parametersJson);
 
             if (parameters == null)
