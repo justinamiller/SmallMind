@@ -123,15 +123,15 @@ jobs:
 
       - name: Run SIMD Benchmarks
         run: |
-          cd benchmarks
-          dotnet run --configuration Release
+          cd benchmarks/KernelBenchmarks
+          dotnet run --configuration Release --project SimdBenchmarks.csproj
 
       - name: Run SmallMind Performance Benchmarks
         continue-on-error: true
         run: |
           mkdir -p artifacts/perf
-          cd src/SmallMind.Benchmarks
-          dotnet run --configuration Release -- --output-dir ../../artifacts/perf --format json,markdown
+          cd benchmarks/KernelBenchmarks/SmallMind.KernelBenchmarks
+          dotnet run --configuration Release -- --output-dir ../../../artifacts/perf --format json,markdown
 
       - name: Upload Perf Smoke Results (JSON + Markdown)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
