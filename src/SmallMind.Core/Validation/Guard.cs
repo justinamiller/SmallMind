@@ -226,5 +226,72 @@ namespace SmallMind.Core.Validation
                 throw new SmallMindObjectDisposedException(objectName);
             }
         }
+
+        /// <summary>
+        /// Validates and returns a safe file name without any path components.
+        /// Throws <see cref="ValidationException"/> if the input contains invalid characters or path separators.
+        /// </summary>
+        /// <param name="fileName">The file name to validate.</param>
+        /// <param name="parameterName">The name of the parameter being validated.</param>
+        /// <returns>The validated file name.</returns>
+        /// <exception cref="ValidationException">Thrown when the file name contains path separators or invalid characters.</exception>
+        public static string SafeFileName([NotNull] string? fileName, [CallerArgumentExpression(nameof(fileName))] string? parameterName = null)
+        {
+            NotNullOrWhiteSpace(fileName, parameterName);
+
+            // Check for path separators (both forward and back slashes)
+            if (fileName.Contains(Path.DirectorySeparatorChar) || 
+                fileName.Contains(Path.AltDirectorySeparatorChar) ||
+                fileName.Contains('/') || 
+                fileName.Contains('\\'))
+            {
+                throw new ValidationException($"Parameter '{parameterName}' cannot contain path separators. Value: '{fileName}'", parameterName);
+            }
+
+            // Check for path traversal attempts
+            if (fileName == "." || fileName == "..")
+            {
+                throw new ValidationException($"Parameter '{parameterName}' cannot be a relative path component ('.' or '..'). Value: '{fileName}'", parameterName);
+            }
+
+            // Check for invalid file name characters
+            var invalidChars = Path.GetInvalidFileNameChars();
+            if (fileName.IndexOfAny(invalidChars) >= 0)
+            {
+                throw new ValidationException($"Parameter '{parameterName}' contains invalid file name characters. Value: '{fileName}'", parameterName);
+            }
+
+            return fileName;
+        }
+
+        /// <summary>
+        /// Ensures that a combined path is within the base directory and doesn't escape via path traversal.
+        /// Throws <see cref="ValidationException"/> if the combined path would escape the base directory.
+        /// </summary>
+        /// <param name="basePath">The base directory path that should contain the result.</param>
+        /// <param name="relativePath">The relative path to combine with basePath.</param>
+        /// <param name="parameterName">The name of the parameter being validated.</param>
+        /// <returns>The validated full path within the base directory.</returns>
+        /// <exception cref="ValidationException">Thrown when the combined path would escape the base directory.</exception>
+        public static string PathWithinDirectory([NotNull] string? basePath, [NotNull] string? relativePath, [CallerArgumentExpression(nameof(relativePath))] string? parameterName = null)
+        {
+            NotNullOrWhiteSpace(basePath, nameof(basePath));
+            NotNullOrWhiteSpace(relativePath, parameterName);
+
+            // Get the full base path
+            string fullBasePath = Path.GetFullPath(basePath);
+
+            // Combine and get the full combined path
+            string combinedPath = Path.Combine(basePath, relativePath);
+            string fullCombinedPath = Path.GetFullPath(combinedPath);
+
+            // Ensure the combined path starts with the base path (preventing path traversal)
+            if (!fullCombinedPath.StartsWith(fullBasePath, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ValidationException($"Parameter '{parameterName}' would result in a path outside the base directory. Base: '{fullBasePath}', Combined: '{fullCombinedPath}'", parameterName);
+            }
+
+            return fullCombinedPath;
+        }
     }
 }
