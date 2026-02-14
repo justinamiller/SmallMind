@@ -352,7 +352,7 @@ namespace SmallMind.Engine
                 Seed = seed.HasValue ? (uint)seed.Value : 42
             };
 
-            var engineOptions = new SmallMindOptions();
+            var engineOptions = new EngineOptions();
             var session = _modelHandle.CreateInferenceSession(options, engineOptions);
 
             try
@@ -382,7 +382,7 @@ namespace SmallMind.Engine
                 Seed = options.Seed.HasValue ? (uint)options.Seed.Value : 42
             };
 
-            var engineOptions = new SmallMindOptions();
+            var engineOptions = new EngineOptions();
             var session = _modelHandle.CreateInferenceSession(publicOptions, engineOptions);
 
             try
@@ -420,7 +420,7 @@ namespace SmallMind.Engine
             string prompt,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var engineOptions = new SmallMindOptions();
+            var engineOptions = new EngineOptions();
             var session = _modelHandle.CreateInferenceSession(_options, engineOptions);
 
             try

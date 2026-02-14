@@ -237,9 +237,9 @@ namespace SmallMind.Internal
             }
         }
 
-        private static Abstractions.SmallMindOptions MapToInternalOptions(SmallMindOptions publicOptions)
+        private static Abstractions.EngineOptions MapToInternalOptions(SmallMindOptions publicOptions)
         {
-            return new Abstractions.SmallMindOptions
+            return new Abstractions.EngineOptions
             {
                 DefaultThreads = publicOptions.ThreadCount ?? 0,
                 EnableKvCache = publicOptions.EnableKvCache,

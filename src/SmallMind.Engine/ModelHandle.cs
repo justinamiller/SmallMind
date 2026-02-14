@@ -49,7 +49,7 @@ namespace SmallMind.Engine
         /// </summary>
         internal InferenceSession CreateInferenceSession(
             PublicGenerationOptions options,
-            SmallMindOptions engineOptions)
+            EngineOptions engineOptions)
         {
             ThrowIfDisposed();
 

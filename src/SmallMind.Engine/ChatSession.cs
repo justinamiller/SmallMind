@@ -56,7 +56,7 @@ namespace SmallMind.Engine
     {
         private readonly ModelHandle _modelHandle;
         private readonly ChatSessionOptions _options;
-        private readonly SmallMindOptions _engineOptions;
+        private readonly EngineOptions _engineOptions;
         private readonly ITokenizer _tokenizer;
         private readonly List<ChatMessage> _conversationHistory;
         private readonly string _sessionId;
@@ -91,7 +91,7 @@ namespace SmallMind.Engine
         public ChatSession(
             ModelHandle modelHandle,
             ChatSessionOptions options,
-            SmallMindOptions engineOptions,
+            EngineOptions engineOptions,
             RagPipeline? ragPipeline = null)
         {
             _modelHandle = modelHandle ?? throw new ArgumentNullException(nameof(modelHandle));

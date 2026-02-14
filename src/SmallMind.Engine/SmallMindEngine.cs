@@ -17,11 +17,11 @@ namespace SmallMind.Engine
     /// </summary>
     internal sealed class SmallMindEngine : ISmallMindEngine
     {
-        private readonly SmallMindOptions _options;
+        private readonly EngineOptions _options;
         private readonly IRagEngine? _ragEngine;
         private bool _disposed;
 
-        public SmallMindEngine(SmallMindOptions options)
+        public SmallMindEngine(EngineOptions options)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
 
