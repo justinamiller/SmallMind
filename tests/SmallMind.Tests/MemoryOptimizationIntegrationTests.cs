@@ -239,12 +239,7 @@ namespace SmallMind.Tests
                 enableMemoryMapping: false,
                 checkpointInterval: 2);
 
-            // 2. Create checkpoint manager
-            _ = new CheckpointManager(
-                checkpointInterval: config.CheckpointInterval,
-                enabled: config.EnableGradientCheckpointing);
-
-            // 3. Set up window processor
+            // 2. Set up window processor
             var windowProcessor = new SlidingWindowProcessor(
                 windowSize: 4096,
                 stride: 2048);

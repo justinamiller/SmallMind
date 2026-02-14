@@ -16,7 +16,6 @@ public static class NormalizationCalculator
 
         var tokPerSec = scenario.TokensPerSecond.Median;
         var threads = scenario.Threads;
-        _ = env.LogicalCoreCount;
         var baseCpuGHz = env.BaseCpuFrequencyGHz;
         var maxCpuGHz = env.MaxCpuFrequencyGHz;
         var allocPerToken = scenario.SteadyAllocBytesPerToken.Median;
