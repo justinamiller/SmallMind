@@ -475,13 +475,14 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
         var vocabDict = new Dictionary<string, int>();
 
         // Build vocabulary: tokenId -> string representation
+        var sb = new StringBuilder();
         foreach (var kvp in _tokenToBytes)
         {
             int tokenId = kvp.Key;
             byte[] bytes = kvp.Value;
 
             // Convert bytes to display string using byte-to-unicode mapping - optimized for loop
-            var sb = new StringBuilder();
+            sb.Clear();
             for (int i = 0; i < bytes.Length; i++)
             {
                 int unicodePoint = _byteToUnicode[bytes[i]];
