@@ -823,21 +823,7 @@ namespace SmallMind.Engine
                 throw new ArgumentOutOfRangeException(nameof(maxTurns), "maxTurns must be non-negative");
             }
 
-            // Separate system messages from conversation turns
-            var systemMessages = new List<ChatMessage>();
-            var conversationTurns = new List<ChatMessage>();
-
-            foreach (var msg in _conversationHistory)
-            {
-                if (msg.Role == ChatRole.System)
-                {
-                    systemMessages.Add(msg);
-                }
-                else
-                {
-                    conversationTurns.Add(msg);
-                }
-            }
+            SeparateSystemAndConversationMessages(out var systemMessages, out var conversationTurns);
 
             // If we have more turns than maxTurns, remove oldest
             if (conversationTurns.Count > maxTurns)
@@ -851,21 +837,7 @@ namespace SmallMind.Engine
                 _conversationHistory.AddRange(conversationTurns);
 
                 // Invalidate KV cache since we modified history
-                if (_options.EnableKvCache)
-                {
-                    SessionId sessionId = new SessionId(_sessionId);
-                    _kvCacheStore.Remove(sessionId);
-                    _cachedTokenCount = 0;
-                    _lastPromptTokenIds = null;
-
-                    // Invalidate persistent session (Phase 2.1)
-                    if (_persistentInferenceSession != null)
-                    {
-                        _persistentInferenceSession.Dispose();
-                        _persistentInferenceSession = null;
-                        _persistentSessionPosition = 0;
-                    }
-                }
+                InvalidateCache();
             }
         }
 
@@ -898,21 +870,7 @@ namespace SmallMind.Engine
         /// </summary>
         private string ApplyTruncateOldestStrategy(int maxAllowedPromptTokens, ref List<string>? warnings)
         {
-            // Separate system messages from conversation turns
-            var systemMessages = new List<ChatMessage>();
-            var conversationTurns = new List<ChatMessage>();
-
-            foreach (var msg in _conversationHistory)
-            {
-                if (msg.Role == ChatRole.System)
-                {
-                    systemMessages.Add(msg);
-                }
-                else
-                {
-                    conversationTurns.Add(msg);
-                }
-            }
+            SeparateSystemAndConversationMessages(out var systemMessages, out var conversationTurns);
 
             // Try full conversation first
             var workingHistory = new List<ChatMessage>(_conversationHistory);
@@ -921,11 +879,9 @@ namespace SmallMind.Engine
 
             int removedCount = 0;
 
-            // Remove oldest turns until we fit
-            // Note: Keep at least 1 turn (the current user message at the end)
+            // Remove oldest turns until we fit (keep at least 1 turn - the current user message)
             while (tokenCount > maxAllowedPromptTokens && conversationTurns.Count > 1)
             {
-                // Remove oldest conversation turn (preserve last turn which is the current user message)
                 conversationTurns.RemoveAt(0);
                 removedCount++;
 
@@ -940,48 +896,13 @@ namespace SmallMind.Engine
             // If still doesn't fit with only system + current message, throw exception
             if (tokenCount > maxAllowedPromptTokens)
             {
-                // Calculate breakdown
-                var systemPrompt = BuildPromptFromMessages(systemMessages);
-                int systemTokens = systemMessages.Count > 0 ? _tokenizer.Encode(systemPrompt).Count : 0;
-                int messageTokens = tokenCount - systemTokens;
-
-                throw new ContextLimitExceededException(
-                    message: $"System prompt ({systemTokens} tokens) + current message ({messageTokens} tokens) exceeds context window ({_modelHandle.Model.BlockSize} tokens). Reduce your system prompt or message length.",
-                    totalTokens: tokenCount,
-                    contextLimit: _modelHandle.Model.BlockSize,
-                    systemTokens: systemTokens,
-                    messageTokens: messageTokens
-                );
+                ThrowContextLimitExceeded(systemMessages, tokenCount, maxAllowedPromptTokens);
             }
 
-            // If we removed turns, record warning and invalidate cache
+            // Handle truncation if needed
             if (removedCount > 0)
             {
-                _lastTurnWasTruncated = true;
-                _truncatedTurns++; // Track for diagnostics
-
-                if (warnings == null)
-                {
-                    warnings = new List<string>();
-                }
-                warnings.Add($"Context truncated: removed {removedCount} oldest turns to fit within {_modelHandle.Model.BlockSize} token limit");
-
-                // Invalidate KV cache if truncation affected cached content
-                if (_options.EnableKvCache && _cachedTokenCount > 0)
-                {
-                    SessionId sessionId = new SessionId(_sessionId);
-                    _kvCacheStore.Remove(sessionId);
-                    _cachedTokenCount = 0;
-                    _lastPromptTokenIds = null;
-
-                    // Invalidate persistent session (Phase 2.1)
-                    if (_persistentInferenceSession != null)
-                    {
-                        _persistentInferenceSession.Dispose();
-                        _persistentInferenceSession = null;
-                        _persistentSessionPosition = 0;
-                    }
-                }
+                RecordTruncationForOldestStrategy(removedCount, ref warnings);
             }
             else
             {
@@ -996,21 +917,7 @@ namespace SmallMind.Engine
         /// </summary>
         private string ApplySlidingWindowStrategy(int maxAllowedPromptTokens, ref List<string>? warnings)
         {
-            // Separate system messages from conversation turns
-            var systemMessages = new List<ChatMessage>();
-            var conversationTurns = new List<ChatMessage>();
-
-            foreach (var msg in _conversationHistory)
-            {
-                if (msg.Role == ChatRole.System)
-                {
-                    systemMessages.Add(msg);
-                }
-                else
-                {
-                    conversationTurns.Add(msg);
-                }
-            }
+            SeparateSystemAndConversationMessages(out var systemMessages, out var conversationTurns);
 
             // Binary search for optimal number of recent turns to keep
             int left = 1; // Must keep at least current message
@@ -1049,30 +956,7 @@ namespace SmallMind.Engine
 
             if (removedCount > 0)
             {
-                _lastTurnWasTruncated = true;
-
-                if (warnings == null)
-                {
-                    warnings = new List<string>();
-                }
-                warnings.Add($"Context truncated: removed {removedCount} oldest turns to fit within {_modelHandle.Model.BlockSize} token limit");
-
-                // Invalidate KV cache
-                if (_options.EnableKvCache && _cachedTokenCount > 0)
-                {
-                    SessionId sessionId = new SessionId(_sessionId);
-                    _kvCacheStore.Remove(sessionId);
-                    _cachedTokenCount = 0;
-                    _lastPromptTokenIds = null;
-
-                    // Invalidate persistent session (Phase 2.1)
-                    if (_persistentInferenceSession != null)
-                    {
-                        _persistentInferenceSession.Dispose();
-                        _persistentInferenceSession = null;
-                        _persistentSessionPosition = 0;
-                    }
-                }
+                RecordTruncationForSlidingWindow(removedCount, ref warnings);
             }
             else
             {
@@ -1082,33 +966,36 @@ namespace SmallMind.Engine
             // Verify the best prompt still fits (edge case: even 1 turn is too large)
             if (bestN == 0 || string.IsNullOrEmpty(bestPrompt))
             {
-                // Even the current message alone doesn't fit - need to validate
-                var minimalHistory = new List<ChatMessage>();
-                minimalHistory.AddRange(systemMessages);
-                if (conversationTurns.Count > 0)
-                {
-                    minimalHistory.Add(conversationTurns[conversationTurns.Count - 1]);
-                }
-                bestPrompt = BuildPromptFromMessages(minimalHistory);
-
-                int tokenCount = _tokenizer.Encode(bestPrompt).Count;
-                if (tokenCount > maxAllowedPromptTokens)
-                {
-                    var systemPrompt = BuildPromptFromMessages(systemMessages);
-                    int systemTokens = systemMessages.Count > 0 ? _tokenizer.Encode(systemPrompt).Count : 0;
-                    int messageTokens = tokenCount - systemTokens;
-
-                    throw new ContextLimitExceededException(
-                        message: $"System prompt ({systemTokens} tokens) + current message ({messageTokens} tokens) exceeds context window ({_modelHandle.Model.BlockSize} tokens). Reduce your system prompt or message length.",
-                        totalTokens: tokenCount,
-                        contextLimit: _modelHandle.Model.BlockSize,
-                        systemTokens: systemTokens,
-                        messageTokens: messageTokens
-                    );
-                }
+                bestPrompt = ValidateMinimalPromptFits(systemMessages, conversationTurns, maxAllowedPromptTokens);
             }
 
             return bestPrompt;
+        }
+
+        /// <summary>
+        /// Validates that even a minimal prompt (system + current message) fits within limits.
+        /// </summary>
+        private string ValidateMinimalPromptFits(
+            List<ChatMessage> systemMessages,
+            List<ChatMessage> conversationTurns,
+            int maxAllowedPromptTokens)
+        {
+            var minimalHistory = new List<ChatMessage>();
+            minimalHistory.AddRange(systemMessages);
+            if (conversationTurns.Count > 0)
+            {
+                minimalHistory.Add(conversationTurns[conversationTurns.Count - 1]);
+            }
+            
+            string prompt = BuildPromptFromMessages(minimalHistory);
+            int tokenCount = _tokenizer.Encode(prompt).Count;
+            
+            if (tokenCount > maxAllowedPromptTokens)
+            {
+                ThrowContextLimitExceeded(systemMessages, tokenCount, maxAllowedPromptTokens);
+            }
+
+            return prompt;
         }
 
         /// <summary>
@@ -1682,6 +1569,127 @@ namespace SmallMind.Engine
                 total += tokenizer.CountTokens(msg.Content);
             }
             return total;
+        }
+
+        /// <summary>
+        /// Separates system messages from conversation turns.
+        /// </summary>
+        private void SeparateSystemAndConversationMessages(
+            out List<ChatMessage> systemMessages, 
+            out List<ChatMessage> conversationTurns)
+        {
+            systemMessages = new List<ChatMessage>();
+            conversationTurns = new List<ChatMessage>();
+
+            foreach (var msg in _conversationHistory)
+            {
+                if (msg.Role == ChatRole.System)
+                {
+                    systemMessages.Add(msg);
+                }
+                else
+                {
+                    conversationTurns.Add(msg);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Invalidates KV cache and persistent session.
+        /// </summary>
+        private void InvalidateCache()
+        {
+            if (_options.EnableKvCache)
+            {
+                SessionId sessionId = new SessionId(_sessionId);
+                _kvCacheStore.Remove(sessionId);
+                _cachedTokenCount = 0;
+                _lastPromptTokenIds = null;
+
+                // Invalidate persistent session (Phase 2.1)
+                if (_persistentInferenceSession != null)
+                {
+                    _persistentInferenceSession.Dispose();
+                    _persistentInferenceSession = null;
+                    _persistentSessionPosition = 0;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Invalidates KV cache if there is cached content.
+        /// </summary>
+        private void InvalidateCacheIfPopulated()
+        {
+            if (_options.EnableKvCache && _cachedTokenCount > 0)
+            {
+                SessionId sessionId = new SessionId(_sessionId);
+                _kvCacheStore.Remove(sessionId);
+                _cachedTokenCount = 0;
+                _lastPromptTokenIds = null;
+
+                // Invalidate persistent session (Phase 2.1)
+                if (_persistentInferenceSession != null)
+                {
+                    _persistentInferenceSession.Dispose();
+                    _persistentInferenceSession = null;
+                    _persistentSessionPosition = 0;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Records truncation warning and invalidates cache for TruncateOldest strategy.
+        /// </summary>
+        private void RecordTruncationForOldestStrategy(int removedCount, ref List<string>? warnings)
+        {
+            _lastTurnWasTruncated = true;
+            _truncatedTurns++; // Increment counter for truncation statistics (exposed via GetDiagnostics)
+
+            if (warnings == null)
+            {
+                warnings = new List<string>();
+            }
+            warnings.Add($"Context truncated: removed {removedCount} oldest turns to fit within {_modelHandle.Model.BlockSize} token limit");
+
+            InvalidateCacheIfPopulated();
+        }
+
+        /// <summary>
+        /// Records truncation warning and invalidates cache for SlidingWindow strategy.
+        /// </summary>
+        private void RecordTruncationForSlidingWindow(int removedCount, ref List<string>? warnings)
+        {
+            _lastTurnWasTruncated = true;
+
+            if (warnings == null)
+            {
+                warnings = new List<string>();
+            }
+            warnings.Add($"Context truncated: removed {removedCount} oldest turns to fit within {_modelHandle.Model.BlockSize} token limit");
+
+            InvalidateCacheIfPopulated();
+        }
+
+        /// <summary>
+        /// Throws ContextLimitExceededException when system + current message exceeds limit.
+        /// </summary>
+        private void ThrowContextLimitExceeded(
+            List<ChatMessage> systemMessages,
+            int tokenCount,
+            int maxAllowedPromptTokens)
+        {
+            var systemPrompt = BuildPromptFromMessages(systemMessages);
+            int systemTokens = systemMessages.Count > 0 ? _tokenizer.Encode(systemPrompt).Count : 0;
+            int messageTokens = tokenCount - systemTokens;
+
+            throw new ContextLimitExceededException(
+                message: $"System prompt ({systemTokens} tokens) + current message ({messageTokens} tokens) exceeds context window ({_modelHandle.Model.BlockSize} tokens). Reduce your system prompt or message length.",
+                totalTokens: tokenCount,
+                contextLimit: _modelHandle.Model.BlockSize,
+                systemTokens: systemTokens,
+                messageTokens: messageTokens
+            );
         }
 
         private void ThrowIfDisposed()
