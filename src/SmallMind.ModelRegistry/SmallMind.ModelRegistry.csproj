@@ -8,4 +8,8 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
+  </ItemGroup>
+
 </Project>
