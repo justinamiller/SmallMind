@@ -127,18 +127,13 @@ namespace SmallMind.Core.Core
                         {
                             for (; f2 <= features - 16; f2 += 16)
                             {
-                                // Validate computed offset is within bounds
-                                if (offset + f2 >= 0 && offset + f2 + 16 <= input.Length && 
-                                    offset + f2 + 16 <= output.Length && f2 + 16 <= gamma.Length)
-                                {
-                                    var vInput = Avx512F.LoadVector512(pInput + offset + f2);
-                                    var vGamma = Avx512F.LoadVector512(pGamma + f2);
+                                var vInput = Avx512F.LoadVector512(pInput + offset + f2);
+                                var vGamma = Avx512F.LoadVector512(pGamma + f2);
 
-                                    // gamma * (input * invRms)
-                                    var vNormalized = Avx512F.Multiply(vInput, vInvRms512);
-                                    var vResult = Avx512F.Multiply(vGamma, vNormalized);
-                                    Avx512F.Store(pOutput + offset + f2, vResult);
-                                }
+                                // gamma * (input * invRms)
+                                var vNormalized = Avx512F.Multiply(vInput, vInvRms512);
+                                var vResult = Avx512F.Multiply(vGamma, vNormalized);
+                                Avx512F.Store(pOutput + offset + f2, vResult);
                             }
                         }
                     }
@@ -155,18 +150,13 @@ namespace SmallMind.Core.Core
                         {
                             for (; f2 <= features - 8; f2 += 8)
                             {
-                                // Validate computed offset is within bounds
-                                if (offset + f2 >= 0 && offset + f2 + 8 <= input.Length && 
-                                    offset + f2 + 8 <= output.Length && f2 + 8 <= gamma.Length)
-                                {
-                                    var vInput = Avx.LoadVector256(pInput + offset + f2);
-                                    var vGamma = Avx.LoadVector256(pGamma + f2);
+                                var vInput = Avx.LoadVector256(pInput + offset + f2);
+                                var vGamma = Avx.LoadVector256(pGamma + f2);
 
-                                    // gamma * (input * invRms)
-                                    var vNormalized = Avx.Multiply(vInput, vInvRms256);
-                                    var vResult = Avx.Multiply(vGamma, vNormalized);
-                                    Avx.Store(pOutput + offset + f2, vResult);
-                                }
+                                // gamma * (input * invRms)
+                                var vNormalized = Avx.Multiply(vInput, vInvRms256);
+                                var vResult = Avx.Multiply(vGamma, vNormalized);
+                                Avx.Store(pOutput + offset + f2, vResult);
                             }
                         }
                     }
@@ -191,18 +181,14 @@ namespace SmallMind.Core.Core
 
                                 for (; f2 <= features - vectorSize; f2 += vectorSize)
                                 {
-                                    // Validate computed offset is within bounds
-                                    if (f2 >= 0 && f2 + vectorSize <= features && f2 + vectorSize <= gamma.Length)
-                                    {
-                                        var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f2);
-                                        var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f2);
+                                    var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f2);
+                                    var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f2);
 
-                                        // gamma * (input * invRms)
-                                        var vNormalized = vInput * vInvRms;
-                                        var vResult = vGamma * vNormalized;
+                                    // gamma * (input * invRms)
+                                    var vNormalized = vInput * vInvRms;
+                                    var vResult = vGamma * vNormalized;
 
-                                        System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f2, vResult);
-                                    }
+                                    System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f2, vResult);
                                 }
                             }
                         }
@@ -399,20 +385,16 @@ namespace SmallMind.Core.Core
 
                                 for (; f2 <= features - vectorSize; f2 += vectorSize)
                                 {
-                                    // Validate computed offset is within bounds
-                                    if (f2 >= 0 && f2 + vectorSize <= features && f2 + vectorSize <= gamma.Length)
-                                    {
-                                        var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f2);
-                                        var vResidual = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pResRow + f2);
-                                        var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f2);
+                                    var vInput = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pInRow + f2);
+                                    var vResidual = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pResRow + f2);
+                                    var vGamma = System.Runtime.CompilerServices.Unsafe.Read<System.Numerics.Vector<float>>(pGamma + f2);
 
-                                        // gamma * ((input + residual) * invRms)
-                                        var vCombined = vInput + vResidual;
-                                        var vNormalized = vCombined * vInvRms;
-                                        var vResult = vGamma * vNormalized;
+                                    // gamma * ((input + residual) * invRms)
+                                    var vCombined = vInput + vResidual;
+                                    var vNormalized = vCombined * vInvRms;
+                                    var vResult = vGamma * vNormalized;
 
-                                        System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f2, vResult);
-                                    }
+                                    System.Runtime.CompilerServices.Unsafe.Write(pOutRow + f2, vResult);
                                 }
                             }
                         }
