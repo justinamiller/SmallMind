@@ -705,8 +705,7 @@ namespace SmallMind.Core.Core
         /// </summary>
         public Tensor Clone()
         {
-            var result = new Tensor((float[])Data.Clone(), (int[])Shape.Clone(), RequiresGrad);
-            return result;
+            return new Tensor((float[])Data.Clone(), (int[])Shape.Clone(), RequiresGrad);
         }
 
         /// <summary>

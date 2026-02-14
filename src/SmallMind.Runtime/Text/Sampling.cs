@@ -302,8 +302,7 @@ namespace SmallMind.Runtime
             }
 
             // Decode and return
-            var generated = _tokenizer.Decode(context);
-            return generated;
+            return _tokenizer.Decode(context);
         }
 
         /// <summary>

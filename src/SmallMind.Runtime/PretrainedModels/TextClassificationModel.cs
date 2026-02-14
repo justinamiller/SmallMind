@@ -130,9 +130,7 @@ namespace SmallMind.Runtime.PretrainedModels
             var probs = Softmax(finalLogits);
 
             // Map probabilities to labels
-            var labelProbs = MapToLabels(probs);
-
-            return labelProbs;
+            return MapToLabels(probs);
         }
 
         private float[] ExtractFinalLogits(Tensor logits, int seqLen)

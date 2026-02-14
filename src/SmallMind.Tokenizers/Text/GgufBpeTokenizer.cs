@@ -369,8 +369,7 @@ namespace SmallMind.Tokenizers.Text
             }
 
             string text = Decode(tokenList);
-            int bytesWritten = Encoding.UTF8.GetBytes(text.AsSpan(), utf8Out);
-            return bytesWritten;
+            return Encoding.UTF8.GetBytes(text.AsSpan(), utf8Out);
         }
 
         /// <summary>

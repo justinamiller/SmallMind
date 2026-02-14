@@ -340,9 +340,7 @@ namespace SmallMind.Transformers
                 _lnFinalLayerNorm!.Forward(x, lnFinalOut);
 
             // Language model head: (B, T, n_embd) -> (B, T, vocab_size)
-            var logits = _lmHead.Forward(lnFinalOut);
-
-            return logits;
+            return _lmHead.Forward(lnFinalOut);
         }
 
         /// <summary>

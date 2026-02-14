@@ -98,8 +98,7 @@ namespace SmallMind.Quantization.IO.Smq
                 WriteTensorData(kvp.Value);
             }
 
-            long totalBytes = _stream.Position - startPosition;
-            return totalBytes;
+            return _stream.Position - startPosition;
         }
 
         private void WriteHeader(uint tensorCount, uint metadataJsonLength)

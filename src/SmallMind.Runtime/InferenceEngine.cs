@@ -305,8 +305,7 @@ namespace SmallMind.Runtime
                     "Close existing sessions before creating new ones.");
             }
 
-            var session = CreateSession(options, sessionId);
-            return session;
+            return CreateSession(options, sessionId);
         }
 
         /// <summary>
