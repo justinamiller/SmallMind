@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using SmallMind.Core.Numerics;
 using SmallMind.Quantization.Tensors;
 
 namespace SmallMind.Quantization.Kernels
@@ -66,7 +67,9 @@ namespace SmallMind.Quantization.Kernels
             for (int row = 0; row < k; row++)
             {
                 float aVal = a[row];
-                if (aVal == 0f) continue;
+                // Sparsity optimization: Skip zero activations (common after ReLU).
+                // This is an exact zero check, which is safe because zeros are explicitly set.
+                if (FloatComparison.IsExactZero(aVal)) continue;
 
                 int bRowOffset = row * n;
 
@@ -104,7 +107,9 @@ namespace SmallMind.Quantization.Kernels
             for (int row = 0; row < k; row++)
             {
                 float aVal = a[row];
-                if (aVal == 0f) continue;
+                // Sparsity optimization: Skip zero activations (common after ReLU).
+                // This is an exact zero check, which is safe because zeros are explicitly set.
+                if (FloatComparison.IsExactZero(aVal)) continue;
 
                 int bRowOffset = row * n;
 

@@ -769,6 +769,7 @@ namespace SmallMind.Runtime
         private void ApplyRepetitionPenalties(float[] logits, List<int> context)
         {
             // Early exit if no penalties enabled
+            // Note: Exact float comparison is safe here - these are user-provided config values, not computed results
             if (_options.RepetitionPenalty == 1.0f &&
                 _options.PresencePenalty == 0.0f &&
                 _options.FrequencyPenalty == 0.0f)

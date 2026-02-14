@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using SmallMind.Core.Numerics;
 using SmallMind.Core.Validation;
 
 namespace SmallMind.Core.Simd
@@ -213,7 +214,9 @@ namespace SmallMind.Core.Simd
                     for (int j = 0; j < seqLen; j++)
                     {
                         float attnWeight = scoreRow[j];
-                        if (attnWeight == 0f) continue;
+                        // Sparsity optimization: Skip zero attention weights.
+                        // This is an exact zero check, which is safe because zeros are explicitly set after softmax.
+                        if (FloatComparison.IsExactZero(attnWeight)) continue;
 
                         float* vRow = pV + j * headDim;
 
@@ -358,7 +361,9 @@ namespace SmallMind.Core.Simd
                             {
                                 int globalKj = kBlock + kj;
                                 float attnWeight = scoreRow[kj];
-                                if (attnWeight == 0f) continue;
+                                // Sparsity optimization: Skip zero attention weights.
+                                // This is an exact zero check, which is safe because zeros are explicitly set after softmax.
+                                if (FloatComparison.IsExactZero(attnWeight)) continue;
 
                                 float* vRow = pV + globalKj * headDim;
 

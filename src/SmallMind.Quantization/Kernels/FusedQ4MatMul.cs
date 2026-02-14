@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using SmallMind.Core.Numerics;
 using SmallMind.Quantization.Tensors;
 
 namespace SmallMind.Quantization.Kernels
@@ -491,7 +492,9 @@ namespace SmallMind.Quantization.Kernels
                     for (int k = 0; k < K; k++)
                     {
                         float aik = pA[i * K + k];
-                        if (aik == 0f) continue;
+                        // Sparsity optimization: Skip zero activations (common after ReLU).
+                        // This is an exact zero check, which is safe because zeros are explicitly set.
+                        if (FloatComparison.IsExactZero(aik)) continue;
 
                         float* cRow = pC + i * N;
 
@@ -567,7 +570,9 @@ namespace SmallMind.Quantization.Kernels
                 for (int k = 0; k < K; k++)
                 {
                     float aik = A[i * ldA + k];
-                    if (aik == 0f) continue;
+                    // Sparsity optimization: Skip zero activations (common after ReLU).
+                    // This is an exact zero check, which is safe because zeros are explicitly set.
+                    if (FloatComparison.IsExactZero(aik)) continue;
 
                     int globalK = kOffset + k;
 

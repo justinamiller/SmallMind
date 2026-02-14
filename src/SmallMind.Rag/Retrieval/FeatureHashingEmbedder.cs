@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using SmallMind.Core.Numerics;
 using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Retrieval;
@@ -95,7 +96,7 @@ internal sealed class FeatureHashingEmbedder : IEmbedder
             sumSquares += vector[i] * vector[i];
         }
 
-        if (sumSquares == 0f)
+        if (FloatComparison.IsNearZero(sumSquares))
             return;
 
         float norm = MathF.Sqrt(sumSquares);
