@@ -85,7 +85,7 @@ namespace SmallMind.Tokenizers.Gguf
                 if (bestPair == null)
                     break;
 
-                var (left, right, rank) = bestPair.Value;
+                var (left, right, _) = bestPair.Value;
                 string merged = left + right;
 
                 // Only merge if the result is in vocabulary

@@ -165,7 +165,7 @@ internal class Program
         var inputTensor = new Tensor(inputData, new int[] { 1, tokens.Count });
 
         // Run forward pass
-        var output = model.Forward(inputTensor);
+        _ = model.Forward(inputTensor);
     }
 
     static BenchmarkResult BenchmarkGeneration()

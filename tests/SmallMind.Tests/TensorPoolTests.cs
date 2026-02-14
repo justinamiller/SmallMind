@@ -182,8 +182,6 @@ namespace SmallMind.Tests
             _pool.Return(array1);
             _pool.Return(array2);
 
-            var statsBefore = _pool.GetStats();
-
             // Act - Clear resets statistics (but can't clear ArrayPool.Shared memory)
             _pool.Clear();
             var statsAfter = _pool.GetStats();
@@ -201,7 +199,7 @@ namespace SmallMind.Tests
         {
             // Arrange
             var array1 = _pool.Rent(256);
-            var array2 = _pool.Rent(512);
+            _ = _pool.Rent(512);
             _pool.Return(array1);
 
             // Act

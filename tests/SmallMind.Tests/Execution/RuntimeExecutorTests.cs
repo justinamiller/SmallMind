@@ -67,7 +67,7 @@ namespace SmallMind.Tests.Execution
             var promptTokens = new int[] { 0, 1, 2, 3, 4 };
 
             // Prefill first
-            var prefillResult = _executor.Prefill(promptTokens, context);
+            _ = _executor.Prefill(promptTokens, context);
 
             // Act - Decode next token
             var decodeResult = _executor.Decode(5, context);

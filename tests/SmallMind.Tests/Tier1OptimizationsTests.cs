@@ -235,7 +235,7 @@ namespace SmallMind.Tests
             }
 
             // Act - Warm up (allocates workspaces)
-            var warmup = model.Forward(input);
+            _ = model.Forward(input);
 
             // Force GC to stabilize memory before measurement
             GC.Collect();

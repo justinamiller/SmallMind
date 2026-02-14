@@ -105,7 +105,7 @@ namespace SmallMind.Tokenizers.Gguf
             var specialTokens = ExtractSpecialTokens(metadata, vocab, logger);
 
             // Determine which tokenizer to create
-            ITokenizer? tokenizer = null;
+            ITokenizer? tokenizer;
 
             if (tokenizerModel == "gpt2" || tokenizerModel == "llama")
             {

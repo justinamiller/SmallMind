@@ -85,7 +85,6 @@ namespace SmallMind.Engine
 
             // Keep last N turns - optimized to avoid Skip().ToList() allocation
             int startIndex = turns.Count > maxTurns ? turns.Count - maxTurns : 0;
-            int turnCount = turns.Count - startIndex;
 
             // Flatten back to message list - pre-calculate capacity to avoid resizes
             int messageCapacity = 0;

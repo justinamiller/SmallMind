@@ -37,8 +37,6 @@ namespace SmallMind.Runtime
 
             options?.Validate();
 
-            long totalBytes = 0;
-
             // Model parameters (shared across sessions, counted once)
             long modelBytes = modelParams * FloatSize;
 
@@ -65,7 +63,7 @@ namespace SmallMind.Runtime
             // Context token buffer
             long contextBuffer = (long)maxContext * IntSize;
 
-            totalBytes = modelBytes + totalKvCache + workingMemory + logitsBuffer + probsBuffer + contextBuffer;
+            long totalBytes = modelBytes + totalKvCache + workingMemory + logitsBuffer + probsBuffer + contextBuffer;
 
             return totalBytes;
         }

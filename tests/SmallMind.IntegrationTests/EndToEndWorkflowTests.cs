@@ -322,9 +322,7 @@ Time flies like an arrow.";
                 // Expected
             }
 
-            // Assert - Check if cancelled checkpoint was saved
-            var cancelledCheckpoint = Path.Combine(_testOutputDir, "model_cancelled.json");
-            // Cancelled checkpoint might or might not exist depending on timing
+            // Assert - Cancelled checkpoint might or might not exist depending on timing
             // This test just verifies cancellation doesn't crash
             Assert.True(true, "Cancellation handled gracefully");
         }

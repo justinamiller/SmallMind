@@ -95,7 +95,8 @@ namespace SmallMind.Quantization.IO.Gguf
             }
             if (padTokenId == -1)
             {
-                padTokenId = FindTokenId(vocab, "<pad>", "[PAD]");
+                // Attempt to find pad token, but it's optional for many models
+                // and not currently used by GgufBpeTokenizer constructor
             }
 
             // Determine if this is byte-level BPE by checking token format

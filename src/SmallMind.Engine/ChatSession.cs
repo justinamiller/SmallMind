@@ -1476,8 +1476,8 @@ namespace SmallMind.Engine
                 _persistentInferenceSession = _modelHandle.CreateInferenceSession(options, _engineOptions);
             }
 
-            double? ttftMs = null;
-            int completionTokens = 0;
+            double? ttftMs;
+            int completionTokens;
 
             try
             {

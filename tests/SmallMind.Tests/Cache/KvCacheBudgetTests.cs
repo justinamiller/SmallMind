@@ -106,8 +106,8 @@ namespace SmallMind.Tests.Cache
             var session2 = new SessionId("session-2");
             var session3 = new SessionId("session-3");
 
-            var entry1 = store.GetOrCreate(session1, modelShape, maxTokens: 512);
-            var entry2 = store.GetOrCreate(session2, modelShape, maxTokens: 512);
+            _ = store.GetOrCreate(session1, modelShape, maxTokens: 512);
+            _ = store.GetOrCreate(session2, modelShape, maxTokens: 512);
             var entry3 = store.GetOrCreate(session3, modelShape, maxTokens: 512); // Should evict session-1
 
             // Assert
@@ -238,8 +238,8 @@ namespace SmallMind.Tests.Cache
             var session1 = new SessionId("session-1");
             var session2 = new SessionId("session-2");
 
-            var entry1 = store.GetOrCreate(session1, modelShape, maxTokens: 128);
-            var entry2 = store.GetOrCreate(session2, modelShape, maxTokens: 128);
+            _ = store.GetOrCreate(session1, modelShape, maxTokens: 128);
+            _ = store.GetOrCreate(session2, modelShape, maxTokens: 128);
 
             var statsAtPeak = store.GetStats();
             long peakBytes = statsAtPeak.CurrentBytes;
