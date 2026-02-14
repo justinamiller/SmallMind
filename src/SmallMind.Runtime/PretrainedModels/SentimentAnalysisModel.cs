@@ -181,12 +181,6 @@ namespace SmallMind.Runtime.PretrainedModels
             }
             mean /= probs.Length;
 
-            for (int i = 0; i < probs.Length; i++)
-            {
-                float diff = probs[i] - mean;
-                _ = diff * diff;
-            }
-
             float entropy = 0f;
             for (int i = 0; i < probs.Length; i++)
             {
