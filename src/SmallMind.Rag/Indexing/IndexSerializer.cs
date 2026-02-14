@@ -1,3 +1,4 @@
+using SmallMind.Core.Validation;
 using SmallMind.Rag.Indexing.Sparse;
 
 namespace SmallMind.Rag.Indexing;
@@ -40,6 +41,11 @@ internal static class IndexSerializer
             Directory.CreateDirectory(indexDir);
         }
 
+        // Validate file names are safe (literal constants, but CodeQL may still flag them)
+        Guard.SafeFileName(ManifestFileName, nameof(ManifestFileName));
+        Guard.SafeFileName(ChunksFileName, nameof(ChunksFileName));
+        Guard.SafeFileName(SparseIndexFileName, nameof(SparseIndexFileName));
+
         string manifestPath = Path.Combine(indexDir, ManifestFileName);
         string chunksPath = Path.Combine(indexDir, ChunksFileName);
         string sparsePath = Path.Combine(indexDir, SparseIndexFileName);
@@ -71,6 +77,11 @@ internal static class IndexSerializer
         {
             return (new InvertedIndex(), new Dictionary<string, Chunk>(), new IndexManifest());
         }
+
+        // Validate file names are safe (literal constants, but CodeQL may still flag them)
+        Guard.SafeFileName(ManifestFileName, nameof(ManifestFileName));
+        Guard.SafeFileName(ChunksFileName, nameof(ChunksFileName));
+        Guard.SafeFileName(SparseIndexFileName, nameof(SparseIndexFileName));
 
         string manifestPath = Path.Combine(indexDir, ManifestFileName);
         string chunksPath = Path.Combine(indexDir, ChunksFileName);

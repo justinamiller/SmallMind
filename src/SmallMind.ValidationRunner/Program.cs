@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SmallMind.Core.Validation;
 using SmallMind.Runtime;
 using SmallMind.Tokenizers;
 using SmallMind.Transformers;
@@ -50,6 +51,8 @@ internal class Program
                 {
                     // Download from URL
                     var fileName = Path.GetFileName(uri.LocalPath);
+                    // Validate filename to prevent path traversal
+                    fileName = Guard.SafeFileName(fileName, nameof(uri.LocalPath));
                     modelPath = Path.Combine(_cacheDir, fileName);
                     await DownloadModelAsync(_modelPath, modelPath);
                 }
@@ -62,7 +65,9 @@ internal class Program
             else
             {
                 // Use default TinyLlama model
-                modelPath = Path.Combine(_cacheDir, DefaultModelFileName);
+                // Validate filename even though it's a constant
+                var defaultFileName = Guard.SafeFileName(DefaultModelFileName, nameof(DefaultModelFileName));
+                modelPath = Path.Combine(_cacheDir, defaultFileName);
                 if (!File.Exists(modelPath) || new FileInfo(modelPath).Length == 0)
                 {
                     await DownloadModelAsync(DefaultModelUrl, modelPath);

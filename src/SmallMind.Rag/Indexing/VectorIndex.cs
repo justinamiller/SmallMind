@@ -37,6 +37,9 @@ namespace SmallMind.Rag.Indexing
             Guard.NotNull(embeddingProvider);
             Guard.NotNullOrWhiteSpace(indexDirectory);
             Guard.NotNullOrWhiteSpace(indexFileName);
+            
+            // Validate indexFileName to prevent path traversal
+            indexFileName = Guard.SafeFileName(indexFileName, nameof(indexFileName));
 
             _embeddingProvider = embeddingProvider;
             _indexDirectory = indexDirectory;

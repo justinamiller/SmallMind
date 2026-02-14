@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.BenchmarkRunner;
 
@@ -206,9 +207,10 @@ class BenchmarkRunner
         var results = new BenchmarkResults();
         
         // Create output directory
+        // Validate output directory path to prevent issues
         var outputDir = Path.IsPathRooted(config.OutputDir) 
             ? config.OutputDir 
-            : Path.Combine(_repoRoot, config.OutputDir);
+            : Guard.PathWithinDirectory(_repoRoot, config.OutputDir, nameof(config.OutputDir));
         Directory.CreateDirectory(outputDir);
         
         Console.WriteLine($"Output directory: {outputDir}");
@@ -295,7 +297,7 @@ class BenchmarkRunner
         var benchmarkDir = Path.Combine(_repoRoot, "tools", "SmallMind.Benchmarks");
         var modelPath = Path.IsPathRooted(config.ModelPath) 
             ? config.ModelPath 
-            : Path.Combine(_repoRoot, config.ModelPath);
+            : Guard.PathWithinDirectory(_repoRoot, config.ModelPath, nameof(config.ModelPath));
         
         // Check if model exists
         if (!File.Exists(modelPath))
@@ -591,7 +593,7 @@ class BenchmarkRunner
     {
         var outputDir = Path.IsPathRooted(config.OutputDir) 
             ? config.OutputDir 
-            : Path.Combine(_repoRoot, config.OutputDir);
+            : Guard.PathWithinDirectory(_repoRoot, config.OutputDir, nameof(config.OutputDir));
         
         var reportPath = Path.Combine(outputDir, "CONSOLIDATED_BENCHMARK_REPORT.md");
         
