@@ -238,7 +238,7 @@ var options = new SmallMindOptions
 ### Advanced Topics
 - [Large Model Support](docs/LARGE_MODEL_SUPPORT.md) - Billion-parameter models
 - [Quantization Guide](docs/Q4K_Q6K_IMPLEMENTATION_SUMMARY.md) - Q4/Q6/Q8 details
-- [Performance Tuning](docs/PERFORMANCE_OPTIMIZATION_SUMMARY.md) - Optimization techniques
+- [Performance Tuning](docs/reports/_internal/PERFORMANCE_OPTIMIZATION_SUMMARY.md) - Optimization techniques
 - [Concurrency](docs/CONCURRENCY.md) - Thread-safety and multi-user scenarios
 
 ### Model Support

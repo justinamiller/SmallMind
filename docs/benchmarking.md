@@ -318,9 +318,9 @@ dotnet trace collect --format speedscope -- \
 
 ## Related Documentation
 
-- [Performance Results Summary](../PERFORMANCE_RESULTS_SUMMARY.md) - Historical results
-- [CI Build Optimizations](../docs/CI_BUILD_OPTIMIZATIONS.md) - CI performance
-- [Optimization Summary](../FINAL_OPTIMIZATION_SUMMARY.md) - Code optimizations
+- [Performance Results Summary](reports/_internal/PERFORMANCE_RESULTS_SUMMARY.md) - Historical results
+- [CI Build Optimizations](CI_BUILD_OPTIMIZATIONS.md) - CI performance
+- [Optimization Summary](reports/_internal/FINAL_OPTIMIZATION_SUMMARY.md) - Code optimizations
 
 ## Support
 
