@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SmallMind.Core\SmallMind.Core.csproj" />
+    <ProjectReference Include="..\..\src\SmallMind.Transformers\SmallMind.Transformers.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\BenchmarkResult.cs" Link="BenchmarkResult.cs" />
+    <Compile Include="..\SystemInfo.cs" Link="SystemInfo.cs" />
+    <Compile Include="..\SystemInfoCollector.cs" Link="SystemInfoCollector.cs" />
+    <Compile Include="..\MarkdownReportWriter.cs" Link="MarkdownReportWriter.cs" />
+    <Compile Include="..\JsonReportWriter.cs" Link="JsonReportWriter.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="8.0.0" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+  </ItemGroup>
+
+</Project>
