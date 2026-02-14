@@ -1678,9 +1678,9 @@ namespace SmallMind.Engine
             int messageTokens = tokenCount - systemTokens;
 
             throw new ContextLimitExceededException(
-                message: $"System prompt ({systemTokens} tokens) + current message ({messageTokens} tokens) exceeds allowed limit ({maxAllowedPromptTokens} tokens). Reduce your system prompt or message length.",
+                message: $"System prompt ({systemTokens} tokens) + current message ({messageTokens} tokens) exceeds context window ({_modelHandle.Model.BlockSize} tokens). Reduce your system prompt or message length.",
                 totalTokens: tokenCount,
-                contextLimit: maxAllowedPromptTokens,
+                contextLimit: _modelHandle.Model.BlockSize,
                 systemTokens: systemTokens,
                 messageTokens: messageTokens
             );
