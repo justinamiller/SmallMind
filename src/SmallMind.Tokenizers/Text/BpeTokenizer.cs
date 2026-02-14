@@ -372,12 +372,11 @@ namespace SmallMind.Tokenizers
         /// </summary>
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
         {
-            // Use existing Decode to get string, then encode to UTF-8 - optimized for loop
+            // Use existing Decode to get string, then encode to UTF-8
+            // Note: Single ToArray() allocation needed to convert Span to List for Decode method
+            // Future optimization: Refactor Decode to accept ReadOnlySpan<int> directly
             var tokenList = new List<int>(tokens.Length);
-            for (int i = 0; i < tokens.Length; i++)
-            {
-                tokenList.Add(tokens[i]);
-            }
+            tokenList.AddRange(tokens.ToArray());
 
             string text = Decode(tokenList);
             return Encoding.UTF8.GetBytes(text.AsSpan(), utf8Out);
@@ -388,11 +387,10 @@ namespace SmallMind.Tokenizers
         /// </summary>
         public string DecodeToString(ReadOnlySpan<int> tokens)
         {
+            // Note: Single ToArray() allocation needed to convert Span to List for Decode method
+            // Future optimization: Refactor Decode to accept ReadOnlySpan<int> directly
             var tokenList = new List<int>(tokens.Length);
-            for (int i = 0; i < tokens.Length; i++)
-            {
-                tokenList.Add(tokens[i]);
-            }
+            tokenList.AddRange(tokens.ToArray());
             return Decode(tokenList);
         }
 
