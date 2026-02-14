@@ -629,238 +629,267 @@ namespace SmallMind.Runtime
         }
 
         /// <summary>
-        /// Q4_K: K-quant 4-bit with 2-bit scale quantization per super-block.
-        /// Super-block size: 256. Uses 6 scales and 4 mins per super-block.
+        /// Q4_K: K-quant 4-bit with 6-bit scale quantization per super-block.
+        /// Super-block size: 256. Uses 8 scales and 8 mins per super-block.
+        /// Block structure: d (fp16), dmin (fp16), scales (12 bytes), qs (128 bytes).
+        /// Total: 144 bytes per super-block.
         /// </summary>
         private static float[] ConvertQ4_KTensor(byte[] rawData, ulong[] dimensions)
         {
             const int SuperBlockSize = 256;
-            const int BlockSize = 32; // Sub-block size
-            const int NumScales = 6;
+            const int SubBlockSize = 32;  // 8 sub-blocks of 32 values each
+            const int SubBlockCount = 8;
+            const int BytesPerBlock = 144;  // 2 + 2 + 12 + 128
 
             int totalElements = CalculateTotalElements(dimensions);
             int numSuperBlocks = (totalElements + SuperBlockSize - 1) / SuperBlockSize;
             var floatData = new float[totalElements];
 
-            using (var ms = new MemoryStream(rawData))
-            using (var br = new BinaryReader(ms))
+            ReadOnlySpan<byte> src = rawData;
+            int srcOffset = 0;
+
+            for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
-                for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
+                // Read super-block scale and min (fp16)
+                ushort dBits = BitConverter.ToUInt16(src.Slice(srcOffset, 2));
+                ushort dminBits = BitConverter.ToUInt16(src.Slice(srcOffset + 2, 2));
+                float d = HalfToFloat(dBits);
+                float dmin = HalfToFloat(dminBits);
+
+                // Read 12 bytes containing 8 6-bit scales and 8 6-bit mins (packed)
+                ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 4, 12);
+
+                // Allocate on stack to avoid heap allocations in hot path
+                Span<byte> scales = stackalloc byte[SubBlockCount];
+                Span<byte> mins = stackalloc byte[SubBlockCount];
+
+                // Unpack scales (first 6 bytes -> 8 6-bit values)
+                // Per llama.cpp Q4_K spec: each group of 3 bytes holds 4 6-bit values
+                scales[0] = (byte)(scalesBytes[0] & 0x3F);
+                scales[1] = (byte)((scalesBytes[0] >> 6) | ((scalesBytes[1] & 0x0F) << 2));
+                scales[2] = (byte)((scalesBytes[1] >> 4) | ((scalesBytes[2] & 0x03) << 4));
+                scales[3] = (byte)((scalesBytes[2] >> 2) & 0x3F);
+                scales[4] = (byte)(scalesBytes[3] & 0x3F);
+                scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
+                scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
+                scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
+
+                // Unpack mins (last 6 bytes -> 8 6-bit values)
+                mins[0] = (byte)(scalesBytes[6] & 0x3F);
+                mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));
+                mins[2] = (byte)((scalesBytes[7] >> 4) | ((scalesBytes[8] & 0x03) << 4));
+                mins[3] = (byte)((scalesBytes[8] >> 2) & 0x3F);
+                mins[4] = (byte)(scalesBytes[9] & 0x3F);
+                mins[5] = (byte)((scalesBytes[9] >> 6) | ((scalesBytes[10] & 0x0F) << 2));
+                mins[6] = (byte)((scalesBytes[10] >> 4) | ((scalesBytes[11] & 0x03) << 4));
+                mins[7] = (byte)((scalesBytes[11] >> 2) & 0x3F);
+
+                // Read quantized values (128 bytes, 2 values per byte)
+                ReadOnlySpan<byte> qs = src.Slice(srcOffset + 16, 128);
+
+                // Decode each sub-block
+                int sbStart = sbIdx * SuperBlockSize;
+                int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
+
+                for (int subBlock = 0; subBlock < SubBlockCount; subBlock++)
                 {
-                    // Read scales and mins (quantized as 6-bit values)
-                    var scales = new float[NumScales];
-                    var mins = new float[NumScales];
+                    float sc = d * scales[subBlock];
+                    float m = dmin * mins[subBlock];
 
-                    // Read fp16 scale for scales
-                    ushort dHalf = br.ReadUInt16();
-                    float d = HalfToFloat(dHalf);
+                    int subBlockStart = sbStart + subBlock * SubBlockSize;
+                    int subBlockEnd = Math.Min(subBlockStart + SubBlockSize, sbEnd);
+                    int qsOffset = subBlock * (SubBlockSize / 2); // 16 bytes per sub-block
 
-                    // Read fp16 min for mins
-                    ushort dminHalf = br.ReadUInt16();
-                    float dmin = HalfToFloat(dminHalf);
-
-                    // Read quantized scales (6-bit, packed)
-                    byte[] scaleBytes = br.ReadBytes(NumScales * 3 / 4 + 1); // Packed 6-bit values
-
-                    for (int i = 0; i < NumScales; i++)
+                    for (int i = 0; i < (subBlockEnd - subBlockStart) / 2; i++)
                     {
-                        // Unpack 6-bit scale values (simplified)
-                        int scaleQ = scaleBytes[i] & 0x3F; // Use lower 6 bits as approximation
-                        scales[i] = scaleQ * d;
-                    }
+                        byte packed = qs[qsOffset + i];
+                        int q0 = packed & 0xF;
+                        int q1 = (packed >> 4) & 0xF;
 
-                    // Read quantized mins (similar to scales)
-                    byte[] minBytes = br.ReadBytes(NumScales * 3 / 4 + 1);
-                    for (int i = 0; i < NumScales; i++)
-                    {
-                        int minQ = minBytes[i] & 0x3F;
-                        mins[i] = minQ * dmin;
-                    }
-
-                    // Read quantized values (4-bit)
-                    int sbStart = sbIdx * SuperBlockSize;
-                    int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
-
-                    for (int i = sbStart; i < sbEnd; i++)
-                    {
-                        int localIdx = i - sbStart;
-                        int scaleIdx = localIdx / BlockSize;
-
-                        if (scaleIdx >= NumScales) scaleIdx = NumScales - 1;
-
-                        // Read packed 4-bit value
-                        byte packedByte = br.ReadByte();
-                        int nibble;
-                        if (localIdx % 2 == 0)
+                        floatData[subBlockStart + i * 2] = sc * q0 - m;
+                        if (subBlockStart + i * 2 + 1 < subBlockEnd)
                         {
-                            nibble = packedByte & 0xF;
+                            floatData[subBlockStart + i * 2 + 1] = sc * q1 - m;
                         }
-                        else
-                        {
-                            nibble = (packedByte >> 4) & 0xF;
-                            if (i + 1 < sbEnd) continue;
-                        }
-
-                        int q4 = Q4Tensor.DecodeNibble((byte)nibble);
-                        floatData[i] = scales[scaleIdx] * q4 - mins[scaleIdx];
                     }
                 }
+
+                srcOffset += BytesPerBlock;
             }
 
             return floatData;
         }
 
         /// <summary>
-        /// Q5_K: K-quant 5-bit (similar structure to Q4_K but with 5-bit values).
+        /// Q5_K: K-quant 5-bit with 6-bit scale quantization per super-block.
+        /// Super-block size: 256. Uses 8 scales and 8 mins per super-block.
+        /// NOTE: This is a simplified dequantization. For production use, keep weights quantized.
         /// </summary>
         private static float[] ConvertQ5_KTensor(byte[] rawData, ulong[] dimensions)
         {
             const int SuperBlockSize = 256;
-            const int BlockSize = 32;
-            const int NumScales = 6;
+            const int SubBlockSize = 32;
+            const int SubBlockCount = 8;
 
             int totalElements = CalculateTotalElements(dimensions);
             int numSuperBlocks = (totalElements + SuperBlockSize - 1) / SuperBlockSize;
             var floatData = new float[totalElements];
 
-            using (var ms = new MemoryStream(rawData))
-            using (var br = new BinaryReader(ms))
+            ReadOnlySpan<byte> src = rawData;
+            int srcOffset = 0;
+
+            for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
-                for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
+                // Read super-block scale and min (fp16)
+                ushort dBits = BitConverter.ToUInt16(src.Slice(srcOffset, 2));
+                ushort dminBits = BitConverter.ToUInt16(src.Slice(srcOffset + 2, 2));
+                float d = HalfToFloat(dBits);
+                float dmin = HalfToFloat(dminBits);
+
+                // Read 12 bytes containing 8 6-bit scales and 8 6-bit mins
+                ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 4, 12);
+
+                Span<byte> scales = stackalloc byte[SubBlockCount];
+                Span<byte> mins = stackalloc byte[SubBlockCount];
+
+                // Unpack scales (same as Q4_K)
+                scales[0] = (byte)(scalesBytes[0] & 0x3F);
+                scales[1] = (byte)((scalesBytes[0] >> 6) | ((scalesBytes[1] & 0x0F) << 2));
+                scales[2] = (byte)((scalesBytes[1] >> 4) | ((scalesBytes[2] & 0x03) << 4));
+                scales[3] = (byte)((scalesBytes[2] >> 2) & 0x3F);
+                scales[4] = (byte)(scalesBytes[3] & 0x3F);
+                scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
+                scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
+                scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
+
+                // Unpack mins
+                mins[0] = (byte)(scalesBytes[6] & 0x3F);
+                mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));
+                mins[2] = (byte)((scalesBytes[7] >> 4) | ((scalesBytes[8] & 0x03) << 4));
+                mins[3] = (byte)((scalesBytes[8] >> 2) & 0x3F);
+                mins[4] = (byte)(scalesBytes[9] & 0x3F);
+                mins[5] = (byte)((scalesBytes[9] >> 6) | ((scalesBytes[10] & 0x0F) << 2));
+                mins[6] = (byte)((scalesBytes[10] >> 4) | ((scalesBytes[11] & 0x03) << 4));
+                mins[7] = (byte)((scalesBytes[11] >> 2) & 0x3F);
+
+                // Read high bits (32 bytes = 256 bits, one per value)
+                ReadOnlySpan<byte> highBits = src.Slice(srcOffset + 16, 32);
+
+                // Read low nibbles (128 bytes, 2 values per byte)
+                ReadOnlySpan<byte> ql = src.Slice(srcOffset + 48, 128);
+
+                // Decode each sub-block
+                int sbStart = sbIdx * SuperBlockSize;
+                int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
+
+                for (int subBlock = 0; subBlock < SubBlockCount; subBlock++)
                 {
-                    var scales = new float[NumScales];
-                    var mins = new float[NumScales];
+                    float sc = d * scales[subBlock];
+                    float m = dmin * mins[subBlock];
 
-                    // Read scales
-                    ushort dHalf = br.ReadUInt16();
-                    float d = HalfToFloat(dHalf);
-                    ushort dminHalf = br.ReadUInt16();
-                    float dmin = HalfToFloat(dminHalf);
+                    int subBlockStart = sbStart + subBlock * SubBlockSize;
+                    int subBlockEnd = Math.Min(subBlockStart + SubBlockSize, sbEnd);
 
-                    // Read and unpack scales
-                    byte[] scaleBytes = br.ReadBytes(NumScales);
-                    for (int i = 0; i < NumScales; i++)
+                    for (int i = 0; i < (subBlockEnd - subBlockStart); i++)
                     {
-                        scales[i] = scaleBytes[i] * d;
-                    }
+                        int valueIdx = subBlock * SubBlockSize + i;
+                        
+                        // Extract high bit (1 bit per value)
+                        int highBitByteIdx = valueIdx / 8;
+                        int highBitShift = valueIdx % 8;
+                        int highBit = ((highBits[highBitByteIdx] >> highBitShift) & 1) << 4;
 
-                    // Read and unpack mins
-                    byte[] minBytes = br.ReadBytes(NumScales);
-                    for (int i = 0; i < NumScales; i++)
-                    {
-                        mins[i] = minBytes[i] * dmin;
-                    }
+                        // Extract low nibble
+                        int qlIdx = valueIdx / 2;
+                        byte low4 = (valueIdx % 2 == 0) 
+                            ? (byte)(ql[qlIdx] & 0xF) 
+                            : (byte)((ql[qlIdx] >> 4) & 0xF);
 
-                    // Read high bits
-                    uint highBits = br.ReadUInt32();
-
-                    // Read 4-bit low values
-                    int sbStart = sbIdx * SuperBlockSize;
-                    int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
-
-                    byte[] lowBits = br.ReadBytes((sbEnd - sbStart + 1) / 2);
-
-                    for (int i = sbStart; i < sbEnd; i++)
-                    {
-                        int localIdx = i - sbStart;
-                        int scaleIdx = localIdx / BlockSize;
-                        if (scaleIdx >= NumScales) scaleIdx = NumScales - 1;
-
-                        // Extract high bit
-                        int highBit = (int)(((highBits >> localIdx) & 1) << 4);
-
-                        // Extract low 4 bits
-                        int byteIdx = localIdx / 2;
-                        int lowNibble;
-                        if (localIdx % 2 == 0)
-                        {
-                            lowNibble = lowBits[byteIdx] & 0xF;
-                        }
-                        else
-                        {
-                            lowNibble = (lowBits[byteIdx] >> 4) & 0xF;
-                        }
-
-                        // Combine to get 5-bit value
-                        int q5 = (highBit | lowNibble) - 16;
-                        floatData[i] = scales[scaleIdx] * q5;
+                        // Combine to get 5-bit value (0-31), then center around 0
+                        int q = (highBit | low4) - 16;
+                        floatData[subBlockStart + i] = sc * q - m;
                     }
                 }
+
+                // Q5_K block size varies, approximating with typical size
+                srcOffset += 176; // 2 + 2 + 12 + 32 + 128
             }
 
             return floatData;
         }
 
         /// <summary>
-        /// Q6_K: K-quant 6-bit with per-block scales.
+        /// Q6_K: K-quant 6-bit with per-sub-block scales.
+        /// Super-block size: 256. Uses 16 sub-blocks of 16 values each.
+        /// Block structure: ql (128 bytes), qh (64 bytes), scales (16 bytes int8), d (fp16).
+        /// Total: 210 bytes per super-block.
+        /// NOTE: This is a simplified dequantization. For production use, keep weights quantized.
         /// </summary>
         private static float[] ConvertQ6_KTensor(byte[] rawData, ulong[] dimensions)
         {
             const int SuperBlockSize = 256;
-            const int BlockSize = 16; // Smaller blocks for Q6_K
-            const int NumScales = 16;
+            const int SubBlockSize = 16;
+            const int SubBlockCount = 16;
+            const int BytesPerBlock = 210;  // 128 + 64 + 16 + 2
 
             int totalElements = CalculateTotalElements(dimensions);
             int numSuperBlocks = (totalElements + SuperBlockSize - 1) / SuperBlockSize;
             var floatData = new float[totalElements];
 
-            using (var ms = new MemoryStream(rawData))
-            using (var br = new BinaryReader(ms))
+            ReadOnlySpan<byte> src = rawData;
+            int srcOffset = 0;
+
+            for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
-                for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
+                // Read ql (128 bytes - low 4 bits of 6-bit values)
+                ReadOnlySpan<byte> ql = src.Slice(srcOffset, 128);
+
+                // Read qh (64 bytes - high 2 bits of 6-bit values)
+                ReadOnlySpan<byte> qh = src.Slice(srcOffset + 128, 64);
+
+                // Read scales (16 bytes - int8 per sub-block)
+                ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 192, 16);
+
+                // Read super-block scale d (fp16)
+                ushort dBits = BitConverter.ToUInt16(src.Slice(srcOffset + 208, 2));
+                float d = HalfToFloat(dBits);
+
+                // Decode each sub-block
+                int sbStart = sbIdx * SuperBlockSize;
+                int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
+
+                for (int subBlock = 0; subBlock < SubBlockCount; subBlock++)
                 {
-                    // Read master scale
-                    ushort dHalf = br.ReadUInt16();
-                    float d = HalfToFloat(dHalf);
+                    sbyte scaleQ = (sbyte)scalesBytes[subBlock];
+                    float sc = d * scaleQ;
 
-                    // Read per-block scales (8-bit signed)
-                    var scales = new float[NumScales];
-                    for (int i = 0; i < NumScales; i++)
+                    int subBlockStart = sbStart + subBlock * SubBlockSize;
+                    int subBlockEnd = Math.Min(subBlockStart + SubBlockSize, sbEnd);
+
+                    // Decode values in this sub-block
+                    for (int i = 0; i < (subBlockEnd - subBlockStart); i++)
                     {
-                        sbyte scaleQ = br.ReadSByte();
-                        scales[i] = scaleQ * d;
-                    }
+                        int valueIdx = subBlock * SubBlockSize + i;
 
-                    // Read 6-bit quantized values (packed)
-                    int sbStart = sbIdx * SuperBlockSize;
-                    int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
+                        // Reconstruct 6-bit value from low 4 bits (ql) and high 2 bits (qh)
+                        // ql packs 2 values per byte: even values in low nibble, odd in high nibble
+                        int qlIdx = valueIdx / 2;
+                        byte low4 = (valueIdx % 2 == 0) 
+                            ? (byte)(ql[qlIdx] & 0xF) 
+                            : (byte)((ql[qlIdx] >> 4) & 0xF);
 
-                    // 6-bit values require 3 bytes for every 4 values
-                    int numBytes = ((sbEnd - sbStart) * 6 + 7) / 8;
-                    byte[] qData = br.ReadBytes(numBytes);
+                        // Extract high 2 bits from qh (4 values per byte)
+                        int qhIdx = valueIdx / 4;
+                        int qhShift = (valueIdx % 4) * 2;
+                        byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
 
-                    int bitOffset = 0;
-                    for (int i = sbStart; i < sbEnd; i++)
-                    {
-                        int localIdx = i - sbStart;
-                        int scaleIdx = localIdx / BlockSize;
-                        if (scaleIdx >= NumScales) scaleIdx = NumScales - 1;
-
-                        // Extract 6-bit value from bit stream
-                        int byteIdx = bitOffset / 8;
-                        int bitIdx = bitOffset % 8;
-
-                        int q6;
-                        if (bitIdx <= 2)
-                        {
-                            // Can fit in current byte + next byte
-                            q6 = (qData[byteIdx] >> bitIdx) & 0x3F;
-                        }
-                        else
-                        {
-                            // Spans two bytes
-                            int lowBits = (qData[byteIdx] >> bitIdx) & 0xFF;
-                            int highBits = (byteIdx + 1 < qData.Length) ? (qData[byteIdx + 1] << (8 - bitIdx)) : 0;
-                            q6 = (lowBits | highBits) & 0x3F;
-                        }
-
-                        bitOffset += 6;
-
-                        // Center the 6-bit value (range -32 to 31)
-                        int centered = q6 - 32;
-                        floatData[i] = scales[scaleIdx] * centered;
+                        // Combine to form 6-bit value (range 0-63), then center around 0
+                        int q = low4 | (high2 << 4);
+                        floatData[subBlockStart + i] = sc * (q - 32);
                     }
                 }
+
+                srcOffset += BytesPerBlock;
             }
 
             return floatData;
