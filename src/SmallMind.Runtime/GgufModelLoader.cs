@@ -14,6 +14,11 @@ namespace SmallMind.Runtime
     /// Extracts ModelConfig and tokenizer from GGUF metadata.
     /// Constructs TransformerModel with appropriate architecture (Llama, Mistral, Phi, GPT-2).
     /// Phase 3 implementation: loads actual weights from GGUF into model.
+    /// 
+    /// NOTE: This loader dequantizes all weights to FP32 for compatibility with TransformerModel.
+    /// For production quantized inference that keeps weights in compressed format and uses
+    /// fused kernels, use SmallMind.Quantization.IO.Gguf.GgufImporter instead, which preserves
+    /// quantized formats (Q4_K, Q6_K, etc.) and enables memory-efficient inference via IWeightTensor.
     /// </summary>
     internal sealed class GgufModelLoader
     {
@@ -22,6 +27,9 @@ namespace SmallMind.Runtime
         /// <summary>
         /// Load a model from a GGUF file with full weight loading.
         /// Reads metadata, extracts config and tokenizer, builds TransformerModel, and loads weights.
+        /// 
+        /// NOTE: This method dequantizes all weights to FP32. For memory-efficient quantized inference,
+        /// consider using GgufImporter from SmallMind.Quantization which preserves quantized formats.
         /// </summary>
         /// <param name="ggufPath">Path to GGUF file</param>
         /// <param name="seed">Random seed for model initialization</param>
@@ -185,6 +193,9 @@ namespace SmallMind.Runtime
             Dictionary<string, string> tensorMapping, Dictionary<string, Tensor> namedParams,
             HashSet<string> loadedParams, ref int mainLoopReads, ref int qkvSkipped, ref int qkvReads, IInternalRuntimeLogger logger)
         {
+            bool hasQuantizedTensors = false;
+            bool loggedQuantWarning = false;
+
             foreach (var tensorInfo in modelInfo.Tensors)
             {
                 string ggufName = tensorInfo.Name;
@@ -194,6 +205,15 @@ namespace SmallMind.Runtime
                 {
                     logger.LogDebug($"  Skipping unmapped tensor: {ggufName}");
                     continue;
+                }
+
+                // Track quantized tensors and log warning once
+                if (!loggedQuantWarning && IsQuantizedType(tensorInfo.Type))
+                {
+                    hasQuantizedTensors = true;
+                    loggedQuantWarning = true;
+                    logger.LogWarning("Loading quantized GGUF model - weights will be dequantized to FP32.");
+                    logger.LogWarning("For memory-efficient quantized inference, consider using GgufImporter from SmallMind.Quantization.");
                 }
 
                 // Handle special cases BEFORE reading/dequantizing to avoid double-read
@@ -1135,6 +1155,14 @@ namespace SmallMind.Runtime
                    paramName.Contains("attn_qkv") ||
                    paramName.Contains("attn_output") ||
                    paramName.Contains("ffn");
+        }
+
+        /// <summary>
+        /// Check if a GGUF tensor type is quantized (not FP32/FP16).
+        /// </summary>
+        private static bool IsQuantizedType(GgufTensorType type)
+        {
+            return type != GgufTensorType.F32 && type != GgufTensorType.F16;
         }
 
         /// <summary>
