@@ -1,12 +1,49 @@
 # SmallMind Benchmarks
 
-Comprehensive runtime/engine performance benchmarking for SmallMind. This benchmarking harness measures **runtime metrics** (not model intelligence metrics) including throughput, latency, memory usage, and stability.
+This directory contains all benchmark projects for the SmallMind LLM implementation, consolidated into a single organized structure. The benchmarks measure **runtime metrics** (not model intelligence metrics) including throughput, latency, memory usage, and stability.
 
 ## Quick Links
 
 📊 **[Latest Benchmark Results](BENCHMARK_RESULTS.md)** - Current performance metrics and analysis  
 📈 **[Framework Comparison](../docs/BENCHMARK_COMPARISON.md)** - Compare SmallMind vs llama.cpp, vLLM, TGI, etc.  
 📚 **Usage Guide** - See below for detailed instructions
+
+## Directory Structure
+
+```
+benchmarks/
+├── SmallMind.Benchmarks.Core         # Production multi-model benchmarking suite
+├── SmallMind.Benchmarks.Runtime      # Runtime/engine performance metrics
+├── SmallMind.Benchmarks.Metrics      # General performance metrics collection
+├── SmallMind.Benchmarks.CpuComparison # CPU comparison benchmarks
+├── infrastructure/
+│   └── SmallMind.Benchmarks.Infrastructure # Shared benchmark infrastructure
+└── specialized/                      # Specialized benchmark tools (16 projects)
+    ├── AllocationProfiler            # Memory allocation profiling
+    ├── ProfilerBenchmarks            # Comprehensive profiler with SIMD metrics
+    ├── MatMulBenchmark               # Matrix multiplication performance
+    ├── SimdBenchmarks                # SIMD operation benchmarks
+    ├── MemoryBenchmark               # Memory usage and optimization
+    ├── TrainingBenchmark             # Training performance metrics
+    ├── TokenizerPerf                 # Tokenizer throughput
+    └── ... (9 more specialized tools)
+```
+
+## Main Benchmark Projects
+
+### SmallMind.Benchmarks.Core
+**Production-focused multi-model benchmarking suite with CI support**
+
+Key features:
+- Thread scaling (1, 2, 4, 8, 16 threads)
+- Context scaling (256, 1k, 4k, 8k tokens)
+- Frequency-normalized metrics (tok/s/GHz/core)
+- CI-friendly quick mode
+
+### SmallMind.Benchmarks.Runtime
+**High-level inference engine performance metrics**
+
+This is the original comprehensive benchmarking harness that measures runtime/engine performance including throughput, latency, memory usage, and stability.
 
 ## Features
 

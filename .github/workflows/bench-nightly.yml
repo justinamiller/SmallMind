@@ -31,11 +31,11 @@ jobs:
         run: dotnet restore
       
       - name: Build
-        run: dotnet build bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -c Release --no-restore
+        run: dotnet build benchmarks/SmallMind.Benchmarks.Core/SmallMind.Benchmarks.Core.csproj -c Release --no-restore
       
       - name: Run Full Benchmarks
         run: |
-          dotnet run -c Release --project bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -- \
+          dotnet run -c Release --project benchmarks/SmallMind.Benchmarks.Core/SmallMind.Benchmarks.Core.csproj -- \
             --contexts 256,1024,4096 \
             --threads 1,2,4,8 \
             --tokens 256 \
@@ -46,7 +46,7 @@ jobs:
         if: always()
         with:
           name: benchmark-results-nightly-${{ matrix.os }}
-          path: bench/results/
+          path: benchmarks/results/
           retention-days: 90
       
       - name: Display Summary
@@ -54,8 +54,8 @@ jobs:
         shell: bash
         run: |
           echo "### Nightly Benchmark Results" >> $GITHUB_STEP_SUMMARY
-          if ls bench/results/*.md 1> /dev/null 2>&1; then
-            cat bench/results/*.md >> $GITHUB_STEP_SUMMARY
+          if ls benchmarks/results/*.md 1> /dev/null 2>&1; then
+            cat benchmarks/results/*.md >> $GITHUB_STEP_SUMMARY
           else
             echo "No results generated" >> $GITHUB_STEP_SUMMARY
           fi

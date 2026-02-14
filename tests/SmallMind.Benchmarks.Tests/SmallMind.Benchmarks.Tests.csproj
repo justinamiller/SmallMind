@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\bench\SmallMind.Benchmarks.Core\SmallMind.Benchmarks.Core.csproj" />
+    <ProjectReference Include="..\..\benchmarks\infrastructure\SmallMind.Benchmarks.Infrastructure\SmallMind.Benchmarks.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

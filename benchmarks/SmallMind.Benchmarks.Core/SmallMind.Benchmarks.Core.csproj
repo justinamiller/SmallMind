@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\infrastructure\SmallMind.Benchmarks.Infrastructure\SmallMind.Benchmarks.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\SmallMind.Runtime\SmallMind.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\SmallMind.Abstractions\SmallMind.Abstractions.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

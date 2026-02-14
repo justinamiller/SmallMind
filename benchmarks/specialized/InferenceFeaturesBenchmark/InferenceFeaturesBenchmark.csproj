@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/SmallMind.Core/SmallMind.Core.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Transformers/SmallMind.Transformers.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Runtime/SmallMind.Runtime.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Tokenizers/SmallMind.Tokenizers.csproj" />
+  </ItemGroup>
+
+</Project>

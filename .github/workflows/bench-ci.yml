@@ -40,11 +40,11 @@ jobs:
         run: dotnet restore
       
       - name: Build
-        run: dotnet build bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -c Release --no-restore
+        run: dotnet build benchmarks/SmallMind.Benchmarks.Core/SmallMind.Benchmarks.Core.csproj -c Release --no-restore
       
       - name: Run CI Benchmarks
         run: |
-          dotnet run -c Release --project bench/SmallMind.Benchmarks/SmallMind.Benchmarks.csproj -- \
+          dotnet run -c Release --project benchmarks/SmallMind.Benchmarks.Core/SmallMind.Benchmarks.Core.csproj -- \
             --ci-only \
             --contexts 256,512,1024 \
             --threads 1,2,4 \
@@ -56,7 +56,7 @@ jobs:
         if: always()
         with:
           name: benchmark-results-${{ matrix.name }}
-          path: bench/results/
+          path: benchmarks/results/
           retention-days: 30
       
       - name: Display Summary (Linux/macOS)
@@ -64,8 +64,8 @@ jobs:
         shell: bash
         run: |
           echo "### Benchmark Results" >> $GITHUB_STEP_SUMMARY
-          if ls bench/results/*.md 1> /dev/null 2>&1; then
-            cat bench/results/*.md >> $GITHUB_STEP_SUMMARY
+          if ls benchmarks/results/*.md 1> /dev/null 2>&1; then
+            cat benchmarks/results/*.md >> $GITHUB_STEP_SUMMARY
           else
             echo "No results generated" >> $GITHUB_STEP_SUMMARY
           fi
@@ -75,8 +75,8 @@ jobs:
         shell: pwsh
         run: |
           Write-Output "### Benchmark Results" >> $env:GITHUB_STEP_SUMMARY
-          if (Test-Path "bench/results/*.md") {
-            Get-Content bench/results/*.md >> $env:GITHUB_STEP_SUMMARY
+          if (Test-Path "benchmarks/results/*.md") {
+            Get-Content benchmarks/results/*.md >> $env:GITHUB_STEP_SUMMARY
           } else {
             Write-Output "No results generated" >> $env:GITHUB_STEP_SUMMARY
           }

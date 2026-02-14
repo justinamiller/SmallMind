@@ -7,7 +7,7 @@ echo ""
 # Navigate to benchmark directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-BENCHMARK_DIR="$REPO_ROOT/src/SmallMind.Benchmarks"
+BENCHMARK_DIR="$REPO_ROOT/benchmarks/SmallMind.Benchmarks.Metrics"
 
 cd "$BENCHMARK_DIR"
 
