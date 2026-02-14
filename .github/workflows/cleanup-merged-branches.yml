@@ -9,11 +9,14 @@ on:
 
 # Required permissions for GITHUB_TOKEN to delete branches
 permissions:
-  contents: write  # Required to delete branches
+  contents: read  # Minimal top-level permission
 
 jobs:
   cleanup-merged-branches:
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # Required to delete branches via GitHub API
     
     steps:
       # Checkout the repository with full history to analyze branches

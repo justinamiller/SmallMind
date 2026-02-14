@@ -17,13 +17,16 @@ on:
       - 'v*'
 
 permissions:
-  contents: read
-  packages: write
+  contents: read  # Minimal top-level permission
 
 jobs:
   publish:
     name: Build and Publish NuGet Packages
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read  # Required to checkout code
+      packages: write  # Required to publish to GitHub Packages
     
     steps:
       - name: Checkout
