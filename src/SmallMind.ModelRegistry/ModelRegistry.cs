@@ -76,7 +76,7 @@ namespace SmallMind.ModelRegistry
             }
 
             // Validate filename to prevent path traversal
-            fileName = Guard.SafeFileName(fileName, nameof(source));
+            fileName = Guard.SafeFileName(fileName, nameof(fileName));
 
             string targetPath = Path.Combine(modelDir, fileName);
 

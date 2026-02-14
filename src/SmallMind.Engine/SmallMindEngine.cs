@@ -441,7 +441,7 @@ namespace SmallMind.Engine
 
             // Generate cached SMQ file path with validation
             var fileName = Path.GetFileNameWithoutExtension(request.Path);
-            fileName = Guard.SafeFileName(fileName, nameof(request.Path));
+            fileName = Guard.SafeFileName(fileName, nameof(fileName));
             var smqPath = Path.Combine(cacheDir, $"{fileName}.smq");
 
             // Import GGUF to SMQ if not already cached
