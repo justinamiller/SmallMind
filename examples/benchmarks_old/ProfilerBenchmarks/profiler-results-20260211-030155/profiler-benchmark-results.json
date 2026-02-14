@@ -1,0 +1,319 @@
+{
+  "systemInfo": {
+    "machine": {
+      "cpuArchitecture": "X64",
+      "logicalCores": 4,
+      "cpuModel": "AMD EPYC 7763 64-Core Processor",
+      "simdVectorSize": 8,
+      "simdCapabilities": {
+        "Vector_IsHardwareAccelerated": true,
+        "SSE": true,
+        "SSE2": true,
+        "SSE3": true,
+        "SSSE3": true,
+        "SSE4.1": true,
+        "SSE4.2": true,
+        "AVX": true,
+        "AVX2": true,
+        "AVX-512F": false,
+        "AVX-512BW": false,
+        "FMA": true,
+        "ARM_AdvSimd": false,
+        "ARM_Aes": false,
+        "ARM_Crc32": false,
+        "ARM_Dp": false,
+        "ARM_Rdm": false,
+        "ARM_Sha1": false,
+        "ARM_Sha256": false
+      },
+      "endianness": "Little",
+      "numaAware": false
+    },
+    "memory": {
+      "totalMemoryBytes": 16767533056,
+      "availableMemoryBytes": 16767533056,
+      "totalMemoryFormatted": "15.6 GB",
+      "availableMemoryFormatted": "15.6 GB"
+    },
+    "operatingSystem": {
+      "platform": "Linux",
+      "osName": "Ubuntu 24.04.3 LTS",
+      "osVersion": "6.11.0.1018",
+      "kernelVersion": "Unix 6.11.0.1018"
+    },
+    "runtime": {
+      "dotNetVersion": "10.0.2",
+      "runtimeIdentifier": "linux-x64",
+      "frameworkDescription": ".NET 10.0.2",
+      "gcMode": "Workstation",
+      "gcLatencyMode": "Interactive",
+      "tieredCompilation": true,
+      "readyToRun": false
+    },
+    "process": {
+      "bitness": "64-bit",
+      "priorityClass": "Normal"
+    },
+    "build": {
+      "configuration": "Release",
+      "targetFramework": ".NETCoreApp,Version=v10.0",
+      "compilationTimestamp": "2026-02-11 02:59:42 UTC",
+      "gitCommitHash": "75f10eee1a418650ce9ec7767a37b049afc2714f",
+      "isReleaseBuild": true
+    }
+  },
+  "results": [
+    {
+      "name": "MatMul 256\u00D7256",
+      "parameters": {
+        "M": 256,
+        "K": 256,
+        "N": 256,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 2.0285,
+        "Min (ms)": 1.7475,
+        "Max (ms)": 2.2738,
+        "Performance (GFLOPS)": 16.541499630268667,
+        "Allocated (bytes)": 35384,
+        "Allocated (bytes/op)": 1769.2,
+        "Checksum": 5987.9504470825195
+      },
+      "timestamp": "2026-02-11T03:01:50.8256816Z"
+    },
+    {
+      "name": "MatMul 512\u00D7512",
+      "parameters": {
+        "M": 512,
+        "K": 512,
+        "N": 512,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 11.1072,
+        "Min (ms)": 7.0977,
+        "Max (ms)": 17.3508,
+        "Performance (GFLOPS)": 24.16769806972054,
+        "Allocated (bytes)": 36152,
+        "Allocated (bytes/op)": 1807.6,
+        "Checksum": 12679.763191223145
+      },
+      "timestamp": "2026-02-11T03:01:51.1117862Z"
+    },
+    {
+      "name": "MatMul 1024\u00D71024",
+      "parameters": {
+        "M": 1024,
+        "K": 1024,
+        "N": 1024,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 82.0827,
+        "Min (ms)": 75.3864,
+        "Max (ms)": 99.2007,
+        "Performance (GFLOPS)": 26.16243919851564,
+        "Allocated (bytes)": 36088,
+        "Allocated (bytes/op)": 1804.4,
+        "Checksum": 25223.181594848633
+      },
+      "timestamp": "2026-02-11T03:01:53.3039519Z"
+    },
+    {
+      "name": "MatMul 512\u00D72048\u00D7512 (rectangular)",
+      "parameters": {
+        "M": 512,
+        "K": 2048,
+        "N": 512,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 30.8747,
+        "Min (ms)": 27.701,
+        "Max (ms)": 63.1604,
+        "Performance (GFLOPS)": 34.777401043572894,
+        "Allocated (bytes)": 36280,
+        "Allocated (bytes/op)": 1814,
+        "Checksum": 49991.626373291016
+      },
+      "timestamp": "2026-02-11T03:01:54.1335208Z"
+    },
+    {
+      "name": "Attention Score (T=256, headSize=64)",
+      "parameters": {
+        "T": 256,
+        "headSize": 64,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 1.162,
+        "Min (ms)": 1.1157,
+        "Max (ms)": 1.3005,
+        "Performance (GFLOPS)": 7.219111876075732,
+        "Allocated (bytes)": 40424,
+        "Allocated (bytes/op)": 2021.2,
+        "Checksum": 1307.7978820800781
+      },
+      "timestamp": "2026-02-11T03:01:54.181907Z"
+    },
+    {
+      "name": "Attention Score (T=256, headSize=128)",
+      "parameters": {
+        "T": 256,
+        "headSize": 128,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 1.9069,
+        "Min (ms)": 1.825,
+        "Max (ms)": 3.0851,
+        "Performance (GFLOPS)": 8.798162462635691,
+        "Allocated (bytes)": 40824,
+        "Allocated (bytes/op)": 2041.2,
+        "Checksum": 2704.5499877929688
+      },
+      "timestamp": "2026-02-11T03:01:54.2345903Z"
+    },
+    {
+      "name": "Attention Score (T=1024, headSize=64)",
+      "parameters": {
+        "T": 1024,
+        "headSize": 64,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 2.5102,
+        "Min (ms)": 2.3452,
+        "Max (ms)": 12.7111,
+        "Performance (GFLOPS)": 53.468937933232404,
+        "Allocated (bytes)": 40896,
+        "Allocated (bytes/op)": 2044.8,
+        "Checksum": 1281.1664609909058
+      },
+      "timestamp": "2026-02-11T03:01:54.4074343Z"
+    },
+    {
+      "name": "Attention Score (T=1024, headSize=128)",
+      "parameters": {
+        "T": 1024,
+        "headSize": 128,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 5.8987,
+        "Min (ms)": 5.5857,
+        "Max (ms)": 7.4343,
+        "Performance (GFLOPS)": 45.50756200518759,
+        "Allocated (bytes)": 41448,
+        "Allocated (bytes/op)": 2072.4,
+        "Checksum": 2693.4842987060547
+      },
+      "timestamp": "2026-02-11T03:01:54.5607034Z"
+    },
+    {
+      "name": "Attention Score (T=2048, headSize=64)",
+      "parameters": {
+        "T": 2048,
+        "headSize": 64,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 10.9995,
+        "Min (ms)": 9.8111,
+        "Max (ms)": 12.5224,
+        "Performance (GFLOPS)": 48.80866512114188,
+        "Allocated (bytes)": 41696,
+        "Allocated (bytes/op)": 2084.8,
+        "Checksum": 1277.1951999664307
+      },
+      "timestamp": "2026-02-11T03:01:54.8477726Z"
+    },
+    {
+      "name": "Attention Score (T=2048, headSize=128)",
+      "parameters": {
+        "T": 2048,
+        "headSize": 128,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 22.836,
+        "Min (ms)": 19.7092,
+        "Max (ms)": 28.5408,
+        "Performance (GFLOPS)": 47.01969802066912,
+        "Allocated (bytes)": 41760,
+        "Allocated (bytes/op)": 2088,
+        "Checksum": 2718.1042518615723
+      },
+      "timestamp": "2026-02-11T03:01:55.430677Z"
+    },
+    {
+      "name": "Softmax (rows=256, cols=256)",
+      "parameters": {
+        "Rows": 256,
+        "Cols": 256,
+        "Scale": 0.0625,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 0.2253,
+        "Min (ms)": 0.2247,
+        "Max (ms)": 0.2385,
+        "Allocated (bytes)": 216,
+        "Allocated (bytes/op)": 10.8,
+        "Checksum": 1
+      },
+      "timestamp": "2026-02-11T03:01:55.452232Z"
+    },
+    {
+      "name": "Softmax (rows=1024, cols=1024)",
+      "parameters": {
+        "Rows": 1024,
+        "Cols": 1024,
+        "Scale": 0.03125,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 3.5068,
+        "Min (ms)": 3.4889,
+        "Max (ms)": 3.9614,
+        "Allocated (bytes)": 216,
+        "Allocated (bytes/op)": 10.8,
+        "Checksum": 1
+      },
+      "timestamp": "2026-02-11T03:01:55.5499087Z"
+    },
+    {
+      "name": "Softmax (rows=2048, cols=2048)",
+      "parameters": {
+        "Rows": 2048,
+        "Cols": 2048,
+        "Scale": 0.022097087,
+        "Iterations": 20,
+        "Warmup": 5
+      },
+      "metrics": {
+        "Median (ms/op)": 13.8372,
+        "Min (ms)": 13.2195,
+        "Max (ms)": 14.0035,
+        "Allocated (bytes)": 216,
+        "Allocated (bytes/op)": 10.8,
+        "Checksum": 1
+      },
+      "timestamp": "2026-02-11T03:01:55.9344165Z"
+    }
+  ],
+  "reportTimestamp": "2026-02-11T03:01:50.7342453Z"
+}
