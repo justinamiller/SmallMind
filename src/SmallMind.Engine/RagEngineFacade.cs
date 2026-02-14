@@ -281,11 +281,18 @@ namespace SmallMind.Engine
                 // Load index metadata
                 var (_, chunks, metadata) = IndexSerializer.LoadIndex(_indexDirectory);
 
+                // Optimize document count - avoid LINQ Select().Distinct().Count() allocation
+                var uniqueUris = new HashSet<string>();
+                foreach (var chunk in chunks.Values)
+                {
+                    uniqueUris.Add(chunk.SourceUri);
+                }
+
                 return new RagIndexInfo
                 {
                     IndexDirectory = _indexDirectory,
                     ChunkCount = chunks.Count,
-                    DocumentCount = chunks.Values.Select(c => c.SourceUri).Distinct().Count(),
+                    DocumentCount = uniqueUris.Count,
                     UsesDenseRetrieval = false, // Currently only BM25 is supported
                     CreatedAt = Directory.GetCreationTimeUtc(_indexDirectory)
                 };

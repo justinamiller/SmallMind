@@ -151,10 +151,14 @@ namespace SmallMind.Engine
             if (value == null)
                 return;
 
-            // Validate enum
+            // Validate enum - optimized to avoid LINQ allocation
             if (schema.TryGetProperty("enum", out var enumArray))
             {
-                var validValues = enumArray.EnumerateArray().Select(e => e.GetString()).ToList();
+                var validValues = new List<string?>();
+                foreach (var e in enumArray.EnumerateArray())
+                {
+                    validValues.Add(e.GetString());
+                }
                 if (!validValues.Contains(value))
                 {
                     errors.Add($"{path}: Value '{value}' is not in enum: [{string.Join(", ", validValues)}]");

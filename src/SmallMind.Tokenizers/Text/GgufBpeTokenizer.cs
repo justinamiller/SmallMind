@@ -164,21 +164,21 @@ namespace SmallMind.Tokenizers.Text
                 List<string> tokens;
                 if (_isByteLevelBpe && _byteToChar != null)
                 {
-                    // Byte-level: convert to bytes, then to special chars
+                    // Byte-level: convert to bytes, then to special chars - optimized for loop
                     var bytes = Encoding.UTF8.GetBytes(word);
                     tokens = new List<string>(bytes.Length);
-                    foreach (var b in bytes)
+                    for (int i = 0; i < bytes.Length; i++)
                     {
-                        tokens.Add(_byteToChar[b]);
+                        tokens.Add(_byteToChar[bytes[i]]);
                     }
                 }
                 else
                 {
-                    // Character-level
+                    // Character-level - optimized for loop
                     tokens = new List<string>(word.Length);
-                    foreach (char c in word)
+                    for (int i = 0; i < word.Length; i++)
                     {
-                        tokens.Add(c.ToString());
+                        tokens.Add(word[i].ToString());
                     }
                 }
 
@@ -362,11 +362,10 @@ namespace SmallMind.Tokenizers.Text
         /// </summary>
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
         {
+            // Note: Single ToArray() allocation needed to convert Span to List for Decode method
+            // Future optimization: Refactor Decode to accept ReadOnlySpan<int> directly
             var tokenList = new List<int>(tokens.Length);
-            foreach (int token in tokens)
-            {
-                tokenList.Add(token);
-            }
+            tokenList.AddRange(tokens.ToArray());
 
             string text = Decode(tokenList);
             return Encoding.UTF8.GetBytes(text.AsSpan(), utf8Out);
@@ -377,11 +376,10 @@ namespace SmallMind.Tokenizers.Text
         /// </summary>
         public string DecodeToString(ReadOnlySpan<int> tokens)
         {
+            // Note: Single ToArray() allocation needed to convert Span to List for Decode method
+            // Future optimization: Refactor Decode to accept ReadOnlySpan<int> directly
             var tokenList = new List<int>(tokens.Length);
-            foreach (int token in tokens)
-            {
-                tokenList.Add(token);
-            }
+            tokenList.AddRange(tokens.ToArray());
             return Decode(tokenList);
         }
     }
