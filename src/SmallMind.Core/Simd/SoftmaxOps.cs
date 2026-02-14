@@ -151,7 +151,16 @@ namespace SmallMind.Core.Simd
             // Scalar remainder
             for (; i < length; i++)
             {
-                float exp = MathF.Exp(input[offset + i] - max);
+                float diff = input[offset + i] - max;
+                // Use same approximation as vectorized path for consistency
+                diff = Math.Clamp(diff, -88.0f, 0.0f);
+                
+                // Padé [2/2] approximation for e^x (matching FastExpVec)
+                float x2 = diff * diff;
+                float numerator = 2.0f + diff + x2 / 6.0f;
+                float denominator = 2.0f - diff + x2 / 6.0f;
+                float exp = numerator / denominator;
+                
                 output[offset + i] = exp;
                 sum += exp;
             }
@@ -242,7 +251,16 @@ namespace SmallMind.Core.Simd
             // Scalar remainder
             for (; i < length; i++)
             {
-                float exp = MathF.Exp(input[i] - max);
+                float diff = input[i] - max;
+                // Use same approximation as vectorized path for consistency
+                diff = Math.Clamp(diff, -88.0f, 0.0f);
+                
+                // Padé [2/2] approximation for e^x (matching FastExpVec)
+                float x2 = diff * diff;
+                float numerator = 2.0f + diff + x2 / 6.0f;
+                float denominator = 2.0f - diff + x2 / 6.0f;
+                float exp = numerator / denominator;
+                
                 output[i] = exp;
                 sum += exp;
             }
