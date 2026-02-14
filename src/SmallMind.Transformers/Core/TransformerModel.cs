@@ -36,7 +36,10 @@ namespace SmallMind.Transformers
         private readonly List<TransformerBlock> _blocks;
 
         // Final layer norm and linear head
-        private readonly Module _lnFinal;  // LayerNorm or RMSNorm
+        // Union type pattern to avoid virtual dispatch overhead
+        private readonly LayerNorm? _lnFinalLayerNorm;
+        private readonly RMSNorm? _lnFinalRMSNorm;
+        private readonly bool _lnFinalIsRMSNorm;
         private readonly Linear _lmHead;
 
         // RoPE configuration
@@ -120,7 +123,9 @@ namespace SmallMind.Transformers
             }
 
             // Final layer norm and language model head
-            _lnFinal = new LayerNorm(_nEmbd);
+            _lnFinalLayerNorm = new LayerNorm(_nEmbd);
+            _lnFinalRMSNorm = null;
+            _lnFinalIsRMSNorm = false;
             _lmHead = new Linear(_nEmbd, _vocabSize, useBias: false, _random);
 
             // Collect all parameters
@@ -131,7 +136,11 @@ namespace SmallMind.Transformers
             {
                 Parameters.AddRange(_blocks[i].Parameters);
             }
-            Parameters.AddRange(_lnFinal.Parameters);
+            // Add final norm parameters based on type
+            if (_lnFinalIsRMSNorm)
+                Parameters.AddRange(_lnFinalRMSNorm!.Parameters);
+            else
+                Parameters.AddRange(_lnFinalLayerNorm!.Parameters);
             Parameters.AddRange(_lmHead.Parameters);
 
             long totalParams = GetTotalParameterCount();
@@ -203,11 +212,15 @@ namespace SmallMind.Transformers
             // Final layer norm
             if (config.UseRmsNorm)
             {
-                _lnFinal = new RMSNorm(_nEmbd, (float)config.NormEps);
+                _lnFinalLayerNorm = null;
+                _lnFinalRMSNorm = new RMSNorm(_nEmbd, (float)config.NormEps);
+                _lnFinalIsRMSNorm = true;
             }
             else
             {
-                _lnFinal = new LayerNorm(_nEmbd);
+                _lnFinalLayerNorm = new LayerNorm(_nEmbd);
+                _lnFinalRMSNorm = null;
+                _lnFinalIsRMSNorm = false;
             }
 
             // Language model head
@@ -224,7 +237,11 @@ namespace SmallMind.Transformers
             {
                 Parameters.AddRange(_blocks[i].Parameters);
             }
-            Parameters.AddRange(_lnFinal.Parameters);
+            // Add final norm parameters based on type
+            if (_lnFinalIsRMSNorm)
+                Parameters.AddRange(_lnFinalRMSNorm!.Parameters);
+            else
+                Parameters.AddRange(_lnFinalLayerNorm!.Parameters);
             Parameters.AddRange(_lmHead.Parameters);
 
             long totalParams = GetTotalParameterCount();
@@ -315,8 +332,12 @@ namespace SmallMind.Transformers
             }
 
             // Final layer norm: (B, T, n_embd)
+            // Direct dispatch to avoid virtual call overhead
             var lnFinalOut = _workspace.GetOrCreate("lnFinalOut", x.Shape, _isTraining);
-            ForwardNorm(_lnFinal, x, lnFinalOut);
+            if (_lnFinalIsRMSNorm)
+                _lnFinalRMSNorm!.Forward(x, lnFinalOut);
+            else
+                _lnFinalLayerNorm!.Forward(x, lnFinalOut);
 
             // Language model head: (B, T, n_embd) -> (B, T, vocab_size)
             var logits = _lmHead.Forward(lnFinalOut);
@@ -420,7 +441,11 @@ namespace SmallMind.Transformers
             _tokenEmbedding.Train();
             _positionEmbedding?.Train();
             _embDropout.Train();
-            _lnFinal.Train();
+            // Set final norm to training mode
+            if (_lnFinalIsRMSNorm)
+                _lnFinalRMSNorm!.Train();
+            else
+                _lnFinalLayerNorm!.Train();
             _lmHead.Train();
             for (int i = 0; i < _blocks.Count; i++)
             {
@@ -434,7 +459,11 @@ namespace SmallMind.Transformers
             _tokenEmbedding.Eval();
             _positionEmbedding?.Eval();
             _embDropout.Eval();
-            _lnFinal.Eval();
+            // Set final norm to eval mode
+            if (_lnFinalIsRMSNorm)
+                _lnFinalRMSNorm!.Eval();
+            else
+                _lnFinalLayerNorm!.Eval();
             _lmHead.Eval();
             for (int i = 0; i < _blocks.Count; i++)
             {
@@ -539,7 +568,11 @@ namespace SmallMind.Transformers
             }
 
             // Final layer norm
-            var finalNormParams = GetNormNamedParameters(_lnFinal, "output_norm");
+            Dictionary<string, Tensor> finalNormParams;
+            if (_lnFinalIsRMSNorm)
+                finalNormParams = GetNormNamedParameters(_lnFinalRMSNorm!, "output_norm");
+            else
+                finalNormParams = GetNormNamedParameters(_lnFinalLayerNorm!, "output_norm");
             foreach (var kvp in finalNormParams)
             {
                 namedParams[kvp.Key] = kvp.Value;
@@ -561,7 +594,11 @@ namespace SmallMind.Transformers
             string prefix = $"blk.{layerIndex}.";
 
             // Attention norm
-            var attnNormParams = GetNormNamedParameters(block._ln1, $"{prefix}attn_norm");
+            Dictionary<string, Tensor> attnNormParams;
+            if (block._ln1IsRMSNorm)
+                attnNormParams = GetNormNamedParameters(block._ln1RMSNorm!, $"{prefix}attn_norm");
+            else
+                attnNormParams = GetNormNamedParameters(block._ln1LayerNorm!, $"{prefix}attn_norm");
             foreach (var kvp in attnNormParams)
             {
                 namedParams[kvp.Key] = kvp.Value;
@@ -575,7 +612,11 @@ namespace SmallMind.Transformers
             }
 
             // FFN norm
-            var ffnNormParams = GetNormNamedParameters(block._ln2, $"{prefix}ffn_norm");
+            Dictionary<string, Tensor> ffnNormParams;
+            if (block._ln2IsRMSNorm)
+                ffnNormParams = GetNormNamedParameters(block._ln2RMSNorm!, $"{prefix}ffn_norm");
+            else
+                ffnNormParams = GetNormNamedParameters(block._ln2LayerNorm!, $"{prefix}ffn_norm");
             foreach (var kvp in ffnNormParams)
             {
                 namedParams[kvp.Key] = kvp.Value;
@@ -588,6 +629,23 @@ namespace SmallMind.Transformers
                 namedParams[kvp.Key] = kvp.Value;
             }
 
+            return namedParams;
+        }
+
+        // Overload for LayerNorm to avoid virtual dispatch
+        private Dictionary<string, Tensor> GetNormNamedParameters(LayerNorm norm, string baseName)
+        {
+            var namedParams = new Dictionary<string, Tensor>();
+            namedParams[$"{baseName}.weight"] = norm.Gamma;
+            namedParams[$"{baseName}.bias"] = norm.Beta;
+            return namedParams;
+        }
+
+        // Overload for RMSNorm to avoid virtual dispatch
+        private Dictionary<string, Tensor> GetNormNamedParameters(RMSNorm norm, string baseName)
+        {
+            var namedParams = new Dictionary<string, Tensor>();
+            namedParams[$"{baseName}.weight"] = norm.Gamma;
             return namedParams;
         }
 

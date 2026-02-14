@@ -9,9 +9,17 @@ namespace SmallMind.Transformers
     /// </summary>
     internal sealed class TransformerBlock
     {
-        internal readonly Module _ln1;
+        // Union type pattern to avoid virtual dispatch overhead
+        internal readonly LayerNorm? _ln1LayerNorm;
+        internal readonly RMSNorm? _ln1RMSNorm;
+        internal readonly bool _ln1IsRMSNorm;
+        
         internal readonly MultiHeadAttention _attn;
-        internal readonly Module _ln2;
+        
+        internal readonly LayerNorm? _ln2LayerNorm;
+        internal readonly RMSNorm? _ln2RMSNorm;
+        internal readonly bool _ln2IsRMSNorm;
+        
         private readonly MLP? _mlp;
         private readonly GatedMLP? _gatedMlp;
 
@@ -36,18 +44,31 @@ namespace SmallMind.Transformers
         /// </summary>
         public TransformerBlock(int nEmbd, int nHead, int blockSize, float dropout, Random random)
         {
-            _ln1 = new LayerNorm(nEmbd);
+            _ln1LayerNorm = new LayerNorm(nEmbd);
+            _ln1RMSNorm = null;
+            _ln1IsRMSNorm = false;
+            
             _attn = new MultiHeadAttention(nEmbd, nHead, blockSize, dropout, random);
-            _ln2 = new LayerNorm(nEmbd);
+            
+            _ln2LayerNorm = new LayerNorm(nEmbd);
+            _ln2RMSNorm = null;
+            _ln2IsRMSNorm = false;
+            
             _mlp = new MLP(nEmbd, dropout, random);
             _gatedMlp = null;
 
             _workspace = new TensorWorkspace();
 
             Parameters = new List<Tensor>();
-            Parameters.AddRange(_ln1.Parameters);
+            if (_ln1IsRMSNorm)
+                Parameters.AddRange(_ln1RMSNorm!.Parameters);
+            else
+                Parameters.AddRange(_ln1LayerNorm!.Parameters);
             Parameters.AddRange(_attn.Parameters);
-            Parameters.AddRange(_ln2.Parameters);
+            if (_ln2IsRMSNorm)
+                Parameters.AddRange(_ln2RMSNorm!.Parameters);
+            else
+                Parameters.AddRange(_ln2LayerNorm!.Parameters);
             Parameters.AddRange(_mlp.Parameters);
         }
 
@@ -69,13 +90,23 @@ namespace SmallMind.Transformers
             // Create normalization layers based on config
             if (config.UseRmsNorm)
             {
-                _ln1 = new RMSNorm(nEmbd, (float)config.NormEps);
-                _ln2 = new RMSNorm(nEmbd, (float)config.NormEps);
+                _ln1LayerNorm = null;
+                _ln1RMSNorm = new RMSNorm(nEmbd, (float)config.NormEps);
+                _ln1IsRMSNorm = true;
+                
+                _ln2LayerNorm = null;
+                _ln2RMSNorm = new RMSNorm(nEmbd, (float)config.NormEps);
+                _ln2IsRMSNorm = true;
             }
             else
             {
-                _ln1 = new LayerNorm(nEmbd);
-                _ln2 = new LayerNorm(nEmbd);
+                _ln1LayerNorm = new LayerNorm(nEmbd);
+                _ln1RMSNorm = null;
+                _ln1IsRMSNorm = false;
+                
+                _ln2LayerNorm = new LayerNorm(nEmbd);
+                _ln2RMSNorm = null;
+                _ln2IsRMSNorm = false;
             }
 
             // Create attention layer with optional RoPE and GQA
@@ -104,9 +135,15 @@ namespace SmallMind.Transformers
             _workspace = new TensorWorkspace();
 
             Parameters = new List<Tensor>();
-            Parameters.AddRange(_ln1.Parameters);
+            if (_ln1IsRMSNorm)
+                Parameters.AddRange(_ln1RMSNorm!.Parameters);
+            else
+                Parameters.AddRange(_ln1LayerNorm!.Parameters);
             Parameters.AddRange(_attn.Parameters);
-            Parameters.AddRange(_ln2.Parameters);
+            if (_ln2IsRMSNorm)
+                Parameters.AddRange(_ln2RMSNorm!.Parameters);
+            else
+                Parameters.AddRange(_ln2LayerNorm!.Parameters);
             if (_mlp != null)
                 Parameters.AddRange(_mlp.Parameters);
             if (_gatedMlp != null)
@@ -120,7 +157,11 @@ namespace SmallMind.Transformers
 
             // Use workspace tensors for LayerNorm outputs and residual connections
             var ln1Out = _workspace.GetOrCreate("ln1Out", x.Shape, _isTraining);
-            ForwardNorm(_ln1, x, ln1Out);
+            // Direct dispatch to avoid virtual call overhead
+            if (_ln1IsRMSNorm)
+                _ln1RMSNorm!.Forward(x, ln1Out);
+            else
+                _ln1LayerNorm!.Forward(x, ln1Out);
 
             var attnOut = _attn.Forward(ln1Out);
 
@@ -130,7 +171,11 @@ namespace SmallMind.Transformers
 
             // Second residual connection
             var ln2Out = _workspace.GetOrCreate("ln2Out", x.Shape, _isTraining);
-            ForwardNorm(_ln2, x, ln2Out);
+            // Direct dispatch to avoid virtual call overhead
+            if (_ln2IsRMSNorm)
+                _ln2RMSNorm!.Forward(x, ln2Out);
+            else
+                _ln2LayerNorm!.Forward(x, ln2Out);
 
             // MLP forward (handles both MLP and GatedMLP)
             var mlpOut = _mlp != null ? _mlp.Forward(ln2Out) : _gatedMlp!.Forward(ln2Out);
@@ -210,9 +255,17 @@ namespace SmallMind.Transformers
         public void Train()
         {
             _isTraining = true;
-            _ln1.Train();
+            // Set ln1 to training mode
+            if (_ln1IsRMSNorm)
+                _ln1RMSNorm!.Train();
+            else
+                _ln1LayerNorm!.Train();
             _attn.Train();
-            _ln2.Train();
+            // Set ln2 to training mode
+            if (_ln2IsRMSNorm)
+                _ln2RMSNorm!.Train();
+            else
+                _ln2LayerNorm!.Train();
             _mlp?.Train();
             _gatedMlp?.Train();
         }
@@ -220,9 +273,17 @@ namespace SmallMind.Transformers
         public void Eval()
         {
             _isTraining = false;
-            _ln1.Eval();
+            // Set ln1 to eval mode
+            if (_ln1IsRMSNorm)
+                _ln1RMSNorm!.Eval();
+            else
+                _ln1LayerNorm!.Eval();
             _attn.Eval();
-            _ln2.Eval();
+            // Set ln2 to eval mode
+            if (_ln2IsRMSNorm)
+                _ln2RMSNorm!.Eval();
+            else
+                _ln2LayerNorm!.Eval();
             _mlp?.Eval();
             _gatedMlp?.Eval();
         }

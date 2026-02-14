@@ -269,7 +269,8 @@ namespace SmallMind.Core.Simd
                 // Process queries in blocks
                 for (int qBlock = 0; qBlock < seqLen; qBlock += BLOCK_SIZE_Q)
                 {
-                    int qBlockSize = Math.Min(BLOCK_SIZE_Q, seqLen - qBlock);
+                    int qBlockSize = BLOCK_SIZE_Q;
+                    if (qBlockSize > seqLen - qBlock) qBlockSize = seqLen - qBlock;
 
                     // Stack-allocate block scores
                     float* blockScores = stackalloc float[qBlockSize * BLOCK_SIZE_K];
@@ -277,7 +278,8 @@ namespace SmallMind.Core.Simd
                     // Process keys in blocks
                     for (int kBlock = 0; kBlock < seqLen; kBlock += BLOCK_SIZE_K)
                     {
-                        int kBlockSize = Math.Min(BLOCK_SIZE_K, seqLen - kBlock);
+                        int kBlockSize = BLOCK_SIZE_K;
+                        if (kBlockSize > seqLen - kBlock) kBlockSize = seqLen - kBlock;
 
                         // Skip this K block if it's entirely masked (for causal attention)
                         if (isCausal && kBlock > qBlock + qBlockSize - 1)
@@ -290,9 +292,12 @@ namespace SmallMind.Core.Simd
                             float* qRow = pQ + globalQi * headDim;
                             float* scoreRow = blockScores + qi * kBlockSize;
 
-                            int maxKj = isCausal
-                                ? Math.Min(kBlockSize, globalQi - kBlock + 1)
-                                : kBlockSize;
+                            int maxKj = kBlockSize;
+                            if (isCausal)
+                            {
+                                int maxCausal = globalQi - kBlock + 1;
+                                if (maxKj > maxCausal) maxKj = maxCausal;
+                            }
 
                             for (int kj = 0; kj < maxKj; kj++)
                             {

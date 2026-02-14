@@ -246,15 +246,21 @@ namespace SmallMind.Core.Simd
                         fixed (float* pA = A, pB = B, pC = C)
                         {
                             int i0 = i0Tile * TILE_SIZE;
-                            int iMax = Math.Min(i0 + TILE_SIZE, M);
+                            int iMax = i0 + TILE_SIZE;
+
+                            if (iMax > M) iMax = M;
 
                             for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                             {
-                                int kMax = Math.Min(k0 + TILE_SIZE, K);
+                                int kMax = k0 + TILE_SIZE;
+
+                                if (kMax > K) kMax = K;
 
                                 for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                                 {
-                                    int jMax = Math.Min(j0 + TILE_SIZE, N);
+                                    int jMax = j0 + TILE_SIZE;
+
+                                    if (jMax > N) jMax = N;
 
                                     // Process this tile
                                     for (int i = i0; i < iMax; i++)
@@ -315,15 +321,21 @@ namespace SmallMind.Core.Simd
                     {
                         for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
                         {
-                            int iMax = Math.Min(i0 + TILE_SIZE, M);
+                            int iMax = i0 + TILE_SIZE;
+
+                            if (iMax > M) iMax = M;
 
                             for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                             {
-                                int kMax = Math.Min(k0 + TILE_SIZE, K);
+                                int kMax = k0 + TILE_SIZE;
+
+                                if (kMax > K) kMax = K;
 
                                 for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                                 {
-                                    int jMax = Math.Min(j0 + TILE_SIZE, N);
+                                    int jMax = j0 + TILE_SIZE;
+
+                                    if (jMax > N) jMax = N;
 
                                     // Process this tile
                                     for (int i = i0; i < iMax; i++)
@@ -398,15 +410,21 @@ namespace SmallMind.Core.Simd
                         fixed (float* pA = A, pB = B, pC = C)
                         {
                             int i0 = i0Tile * TILE_SIZE;
-                            int iMax = Math.Min(i0 + TILE_SIZE, M);
+                            int iMax = i0 + TILE_SIZE;
+
+                            if (iMax > M) iMax = M;
 
                             for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                             {
-                                int kMax = Math.Min(k0 + TILE_SIZE, K);
+                                int kMax = k0 + TILE_SIZE;
+
+                                if (kMax > K) kMax = K;
 
                                 for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                                 {
-                                    int jMax = Math.Min(j0 + TILE_SIZE, N);
+                                    int jMax = j0 + TILE_SIZE;
+
+                                    if (jMax > N) jMax = N;
 
                                     // Process this tile
                                     for (int i = i0; i < iMax; i++)
@@ -453,15 +471,21 @@ namespace SmallMind.Core.Simd
                     {
                         for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
                         {
-                            int iMax = Math.Min(i0 + TILE_SIZE, M);
+                            int iMax = i0 + TILE_SIZE;
+
+                            if (iMax > M) iMax = M;
 
                             for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                             {
-                                int kMax = Math.Min(k0 + TILE_SIZE, K);
+                                int kMax = k0 + TILE_SIZE;
+
+                                if (kMax > K) kMax = K;
 
                                 for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                                 {
-                                    int jMax = Math.Min(j0 + TILE_SIZE, N);
+                                    int jMax = j0 + TILE_SIZE;
+
+                                    if (jMax > N) jMax = N;
 
                                     // Process this tile
                                     for (int i = i0; i < iMax; i++)
@@ -752,15 +776,21 @@ namespace SmallMind.Core.Simd
                     Span<float> CSpanLocal = C;
 
                     int i0 = i0Tile * TILE_SIZE;
-                    int iMax = Math.Min(i0 + TILE_SIZE, M);
+                    int iMax = i0 + TILE_SIZE;
+
+                    if (iMax > M) iMax = M;
 
                     for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                     {
-                        int kMax = Math.Min(k0 + TILE_SIZE, K);
+                        int kMax = k0 + TILE_SIZE;
+
+                        if (kMax > K) kMax = K;
 
                         for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                         {
-                            int jMax = Math.Min(j0 + TILE_SIZE, N);
+                            int jMax = j0 + TILE_SIZE;
+
+                            if (jMax > N) jMax = N;
 
                             // Process this tile
                             for (int i = i0; i < iMax; i++)
@@ -813,15 +843,21 @@ namespace SmallMind.Core.Simd
 
                 for (int i0 = 0; i0 < M; i0 += TILE_SIZE)
                 {
-                    int iMax = Math.Min(i0 + TILE_SIZE, M);
+                    int iMax = i0 + TILE_SIZE;
+
+                    if (iMax > M) iMax = M;
 
                     for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                     {
-                        int kMax = Math.Min(k0 + TILE_SIZE, K);
+                        int kMax = k0 + TILE_SIZE;
+
+                        if (kMax > K) kMax = K;
 
                         for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                         {
-                            int jMax = Math.Min(j0 + TILE_SIZE, N);
+                            int jMax = j0 + TILE_SIZE;
+
+                            if (jMax > N) jMax = N;
 
                             // Process this tile
                             for (int i = i0; i < iMax; i++)
@@ -940,7 +976,8 @@ namespace SmallMind.Core.Simd
                 Parallel.For(0, numMTiles, iTile =>
                 {
                     int i0 = iTile * TILE_M;
-                    int iMax = Math.Min(i0 + TILE_M, M);
+                    int iMax = i0 + TILE_M;
+                    if (iMax > M) iMax = M;
                     MatMulAvx512TileKernel(pA, pB, pC, i0, iMax, K, N);
                 });
             }
@@ -1042,7 +1079,8 @@ namespace SmallMind.Core.Simd
                 Parallel.For(0, numMTiles, iTile =>
                 {
                     int i0 = iTile * TILE_M;
-                    int iMax = Math.Min(i0 + TILE_M, M);
+                    int iMax = i0 + TILE_M;
+                    if (iMax > M) iMax = M;
                     MatMulAvx2TileKernel(pA, pB, pC, i0, iMax, K, N);
                 });
             }
@@ -1599,7 +1637,8 @@ namespace SmallMind.Core.Simd
 
             for (int j0 = 0; j0 < N; j0 += TILE_J)
             {
-                int jMax = Math.Min(j0 + TILE_J, N);
+                int jMax = j0 + TILE_J;
+                if (jMax > N) jMax = N;
 
                 // Process tile of output elements
                 for (int j = j0; j < jMax; j++)
@@ -1701,7 +1740,9 @@ namespace SmallMind.Core.Simd
                 Parallel.For(0, numRowTiles, i0Idx =>
                 {
                     int i0 = i0Idx * TILE_SIZE;
-                    int iMax = Math.Min(i0 + TILE_SIZE, M);
+                    int iMax = i0 + TILE_SIZE;
+
+                    if (iMax > M) iMax = M;
                     MatMulNeonTileKernel(A, B, C, i0, iMax, K, N, vecSize);
                 });
             }
@@ -1720,11 +1761,15 @@ namespace SmallMind.Core.Simd
             {
                 for (int k0 = 0; k0 < K; k0 += TILE_SIZE)
                 {
-                    int kMax = Math.Min(k0 + TILE_SIZE, K);
+                    int kMax = k0 + TILE_SIZE;
+
+                    if (kMax > K) kMax = K;
 
                     for (int j0 = 0; j0 < N; j0 += TILE_SIZE)
                     {
-                        int jMax = Math.Min(j0 + TILE_SIZE, N);
+                        int jMax = j0 + TILE_SIZE;
+
+                        if (jMax > N) jMax = N;
 
                         // Process this tile
                         for (int i = i0; i < iMax; i++)
