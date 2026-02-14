@@ -152,16 +152,19 @@ namespace SmallMind.Runtime.Gguf
                 if (isSupportedFunc(tensor.Type))
                 {
                     supportedCount++;
-                    if (!supportedByType.ContainsKey(typeStr))
-                        supportedByType[typeStr] = 0;
-                    supportedByType[typeStr]++;
+                    if (!supportedByType.TryGetValue(typeStr, out int count))
+                        count = 0;
+                    supportedByType[typeStr] = count + 1;
                 }
                 else
                 {
                     unsupportedCount++;
-                    if (!unsupportedByType.ContainsKey(typeStr))
-                        unsupportedByType[typeStr] = new List<string>();
-                    unsupportedByType[typeStr].Add(tensor.Name);
+                    if (!unsupportedByType.TryGetValue(typeStr, out var list))
+                    {
+                        list = new List<string>();
+                        unsupportedByType[typeStr] = list;
+                    }
+                    list.Add(tensor.Name);
                 }
             }
 

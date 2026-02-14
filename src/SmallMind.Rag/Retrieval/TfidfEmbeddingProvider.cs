@@ -97,7 +97,7 @@ namespace SmallMind.Rag.Retrieval
             int totalDocs = documents.Count;
             foreach (var kvp in documentFrequency)
             {
-                if (_vocabulary.ContainsKey(kvp.Key))
+                if (_vocabulary.TryGetValue(kvp.Key, out _))
                 {
                     double idf = Math.Log((totalDocs + 1.0) / (kvp.Value + 1.0));
                     _idfScores[kvp.Key] = idf;
@@ -127,14 +127,11 @@ namespace SmallMind.Rag.Retrieval
             for (int i = 0; i < terms.Count; i++)
             {
                 var term = terms[i];
-                if (termCounts.ContainsKey(term))
+                if (!termCounts.TryGetValue(term, out int count))
                 {
-                    termCounts[term]++;
+                    count = 0;
                 }
-                else
-                {
-                    termCounts[term] = 1;
-                }
+                termCounts[term] = count + 1;
             }
 
             // Calculate TF-IDF values

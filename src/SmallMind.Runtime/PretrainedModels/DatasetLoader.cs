@@ -325,14 +325,11 @@ namespace SmallMind.Runtime.PretrainedModels
             for (int i = 0; i < samples.Count; i++)
             {
                 string label = samples[i].Label;
-                if (counts.ContainsKey(label))
+                if (!counts.TryGetValue(label, out int count))
                 {
-                    counts[label]++;
+                    count = 0;
                 }
-                else
-                {
-                    counts[label] = 1;
-                }
+                counts[label] = count + 1;
             }
 
             return counts;
