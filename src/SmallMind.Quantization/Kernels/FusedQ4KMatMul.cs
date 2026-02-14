@@ -103,8 +103,16 @@ namespace SmallMind.Quantization.Kernels
                             for (int mr = 0; mr < mb; mr++)
                             {
                                 int m_idx = mc + mr;
-                                float* pA_row = pA + m_idx * K + kc;
-                                float* pC_row = pC + m_idx * N + nc;
+                                int offsetA = m_idx * K + kc;
+                                int offsetC = m_idx * N + nc;
+
+                                // Validate pointer arithmetic offsets
+                                if (offsetA < 0 || offsetA >= A.Length ||
+                                    offsetC < 0 || offsetC >= C.Length)
+                                    continue;
+
+                                float* pA_row = pA + offsetA;
+                                float* pC_row = pC + offsetC;
 
                                 // Process K dimension in Q4_K blocks
                                 int num_blocks = kb / Q4K_BLOCK_SIZE;

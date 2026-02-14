@@ -37,8 +37,12 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var v = Avx512F.LoadVector512(pInput + i);
-                            Avx512F.Store(pOutput + i, Avx512F.Max(v, zero512));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var v = Avx512F.LoadVector512(pInput + i);
+                                Avx512F.Store(pOutput + i, Avx512F.Max(v, zero512));
+                            }
                         }
                     }
                 }
@@ -53,8 +57,12 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 4; i += 4)
                         {
-                            var v = AdvSimd.LoadVector128(pInput + i);
-                            AdvSimd.Store(pOutput + i, AdvSimd.Max(v, zero128));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 4 <= length)
+                            {
+                                var v = AdvSimd.LoadVector128(pInput + i);
+                                AdvSimd.Store(pOutput + i, AdvSimd.Max(v, zero128));
+                            }
                         }
                     }
                 }
@@ -73,8 +81,12 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var v = Unsafe.Read<Vector<float>>(pInput + i);
-                            Unsafe.Write(pOutput + i, Vector.Max(v, zero));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var v = Unsafe.Read<Vector<float>>(pInput + i);
+                                Unsafe.Write(pOutput + i, Vector.Max(v, zero));
+                            }
                         }
                     }
                 }
@@ -111,16 +123,20 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var vInput = Avx512F.LoadVector512(pInput + i);
-                            var vOutputGrad = Avx512F.LoadVector512(pOutputGrad + i);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var vInput = Avx512F.LoadVector512(pInput + i);
+                                var vOutputGrad = Avx512F.LoadVector512(pOutputGrad + i);
 
-                            // Mask: input > 0
-                            var mask = Avx512F.CompareGreaterThan(vInput, zero512);
+                                // Mask: input > 0
+                                var mask = Avx512F.CompareGreaterThan(vInput, zero512);
 
-                            // Apply mask: outputGrad where input > 0, else 0
-                            // Use bitwise AND to apply mask
-                            var result = Avx512F.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
-                            Avx512F.Store(pInputGrad + i, result);
+                                // Apply mask: outputGrad where input > 0, else 0
+                                // Use bitwise AND to apply mask
+                                var result = Avx512F.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
+                                Avx512F.Store(pInputGrad + i, result);
+                            }
                         }
                     }
                 }
@@ -135,15 +151,19 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 4; i += 4)
                         {
-                            var vInput = AdvSimd.LoadVector128(pInput + i);
-                            var vOutputGrad = AdvSimd.LoadVector128(pOutputGrad + i);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 4 <= length)
+                            {
+                                var vInput = AdvSimd.LoadVector128(pInput + i);
+                                var vOutputGrad = AdvSimd.LoadVector128(pOutputGrad + i);
 
-                            // Mask: input > 0
-                            var mask = AdvSimd.CompareGreaterThan(vInput, zero128);
+                                // Mask: input > 0
+                                var mask = AdvSimd.CompareGreaterThan(vInput, zero128);
 
-                            // Apply mask: outputGrad where input > 0, else 0
-                            var result = AdvSimd.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
-                            AdvSimd.Store(pInputGrad + i, result);
+                                // Apply mask: outputGrad where input > 0, else 0
+                                var result = AdvSimd.And(vOutputGrad.AsUInt32(), mask.AsUInt32()).AsSingle();
+                                AdvSimd.Store(pInputGrad + i, result);
+                            }
                         }
                     }
                 }
@@ -162,15 +182,19 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var vInput = Unsafe.Read<Vector<float>>(pInput + i);
-                            var vOutputGrad = Unsafe.Read<Vector<float>>(pOutputGrad + i);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var vInput = Unsafe.Read<Vector<float>>(pInput + i);
+                                var vOutputGrad = Unsafe.Read<Vector<float>>(pOutputGrad + i);
 
-                            // Mask: input > 0
-                            var mask = Vector.GreaterThan(vInput, zero);
+                                // Mask: input > 0
+                                var mask = Vector.GreaterThan(vInput, zero);
 
-                            // Apply mask: outputGrad where input > 0, else 0
-                            var result = Vector.ConditionalSelect(mask, vOutputGrad, zero);
-                            Unsafe.Write(pInputGrad + i, result);
+                                // Apply mask: outputGrad where input > 0, else 0
+                                var result = Vector.ConditionalSelect(mask, vOutputGrad, zero);
+                                Unsafe.Write(pInputGrad + i, result);
+                            }
                         }
                     }
                 }
@@ -229,26 +253,30 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var vx = Unsafe.Read<Vector<float>>(pInput + i);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var vx = Unsafe.Read<Vector<float>>(pInput + i);
 
-                            // inner = sqrt(2/π) * (x + 0.044715 * x³)
-                            var vx2 = vx * vx;
-                            var vx3 = vx2 * vx;
-                            var vInner = vSqrt2OverPi * (vx + vCoeff * vx3);
+                                // inner = sqrt(2/π) * (x + 0.044715 * x³)
+                                var vx2 = vx * vx;
+                                var vx3 = vx2 * vx;
+                                var vInner = vSqrt2OverPi * (vx + vCoeff * vx3);
 
-                            // Clamp inner to [-10, 10] to keep Padé accurate
-                            vInner = Vector.Max(vClampMin, Vector.Min(vClampMax, vInner));
+                                // Clamp inner to [-10, 10] to keep Padé accurate
+                                vInner = Vector.Max(vClampMin, Vector.Min(vClampMax, vInner));
 
-                            // Padé tanh: tanh(z) ≈ z * (27 + z²) / (27 + 9 * z²)
-                            var vInner2 = vInner * vInner;
-                            var vNum = vInner * (vPadeA + vInner2);
-                            var vDen = vPadeA + vPadeB * vInner2;
-                            var vTanh = vNum / vDen;
+                                // Padé tanh: tanh(z) ≈ z * (27 + z²) / (27 + 9 * z²)
+                                var vInner2 = vInner * vInner;
+                                var vNum = vInner * (vPadeA + vInner2);
+                                var vDen = vPadeA + vPadeB * vInner2;
+                                var vTanh = vNum / vDen;
 
-                            // GELU = 0.5 * x * (1 + tanh)
-                            var vResult = vHalf * vx * (vOne + vTanh);
+                                // GELU = 0.5 * x * (1 + tanh)
+                                var vResult = vHalf * vx * (vOne + vTanh);
 
-                            Unsafe.Write(pOutput + i, vResult);
+                                Unsafe.Write(pOutput + i, vResult);
+                            }
                         }
                     }
                 }
@@ -322,29 +350,33 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var vx = Unsafe.Read<Vector<float>>(pInput + i);
-                            var vGrad = Unsafe.Read<Vector<float>>(pGrad + i);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var vx = Unsafe.Read<Vector<float>>(pInput + i);
+                                var vGrad = Unsafe.Read<Vector<float>>(pGrad + i);
 
-                            var vx2 = vx * vx;
-                            var vInner = vSqrt2OverPi * (vx + vCoeff * vx2 * vx);
-                            vInner = Vector.Max(vClampMin, Vector.Min(vClampMax, vInner));
+                                var vx2 = vx * vx;
+                                var vInner = vSqrt2OverPi * (vx + vCoeff * vx2 * vx);
+                                vInner = Vector.Max(vClampMin, Vector.Min(vClampMax, vInner));
 
-                            // Padé tanh
-                            var vInner2 = vInner * vInner;
-                            var vNum = vInner * (vPadeA + vInner2);
-                            var vDen = vPadeA + vPadeB * vInner2;
-                            var vTanh = vNum / vDen;
+                                // Padé tanh
+                                var vInner2 = vInner * vInner;
+                                var vNum = vInner * (vPadeA + vInner2);
+                                var vDen = vPadeA + vPadeB * vInner2;
+                                var vTanh = vNum / vDen;
 
-                            // sech²(z) = 1 - tanh²(z)
-                            var vSech2 = vOne - vTanh * vTanh;
+                                // sech²(z) = 1 - tanh²(z)
+                                var vSech2 = vOne - vTanh * vTanh;
 
-                            // dz/dx = sqrt(2/π) * (1 + 3 * 0.044715 * x²)
-                            var vDzDx = vSqrt2OverPi * (vOne + vCoeff3 * vx2);
+                                // dz/dx = sqrt(2/π) * (1 + 3 * 0.044715 * x²)
+                                var vDzDx = vSqrt2OverPi * (vOne + vCoeff3 * vx2);
 
-                            // d/dx GELU = 0.5 * (1 + tanh) + 0.5 * x * sech² * dz/dx
-                            var vDerivative = vHalf * (vOne + vTanh) + vHalf * vx * vSech2 * vDzDx;
+                                // d/dx GELU = 0.5 * (1 + tanh) + 0.5 * x * sech² * dz/dx
+                                var vDerivative = vHalf * (vOne + vTanh) + vHalf * vx * vSech2 * vDzDx;
 
-                            Unsafe.Write(pInputGrad + i, vDerivative * vGrad);
+                                Unsafe.Write(pInputGrad + i, vDerivative * vGrad);
+                            }
                         }
                     }
                 }
@@ -393,13 +425,17 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var v = Avx512F.LoadVector512(pInput + i);
-                            var mask = Avx512F.CompareGreaterThan(v, zero512);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var v = Avx512F.LoadVector512(pInput + i);
+                                var mask = Avx512F.CompareGreaterThan(v, zero512);
 
-                            // input > 0 ? input : alpha * input
-                            var scaled = Avx512F.Multiply(v, vAlpha512);
-                            var result = Avx512F.BlendVariable(scaled, v, mask.AsSingle());
-                            Avx512F.Store(pOutput + i, result);
+                                // input > 0 ? input : alpha * input
+                                var scaled = Avx512F.Multiply(v, vAlpha512);
+                                var result = Avx512F.BlendVariable(scaled, v, mask.AsSingle());
+                                Avx512F.Store(pOutput + i, result);
+                            }
                         }
                     }
                 }
@@ -484,24 +520,28 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var vx = Unsafe.Read<Vector<float>>(pInput + i);
-
-                            // Clamp to avoid overflow in exp
-                            var vClamped = Vector.Max(vClampMin, Vector.Min(vClampMax, vx));
-
-                            // Compute sigmoid: 1 / (1 + exp(-x))
-                            // Note: Vector<T> doesn't have Exp, so we fall back to scalar per element
-                            // This is still faster than pure scalar due to fewer bounds checks
-                            Span<float> temp = stackalloc float[vectorSize];
-                            for (int j = 0; j < vectorSize; j++)
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
                             {
-                                float x = vClamped[j];
-                                float sigmoid = 1f / (1f + MathF.Exp(-x));
-                                temp[j] = vClamped[j] * sigmoid;
-                            }
+                                var vx = Unsafe.Read<Vector<float>>(pInput + i);
 
-                            var vResult = new Vector<float>(temp);
-                            Unsafe.Write(pOutput + i, vResult);
+                                // Clamp to avoid overflow in exp
+                                var vClamped = Vector.Max(vClampMin, Vector.Min(vClampMax, vx));
+
+                                // Compute sigmoid: 1 / (1 + exp(-x))
+                                // Note: Vector<T> doesn't have Exp, so we fall back to scalar per element
+                                // This is still faster than pure scalar due to fewer bounds checks
+                                Span<float> temp = stackalloc float[vectorSize];
+                                for (int j = 0; j < vectorSize; j++)
+                                {
+                                    float x = vClamped[j];
+                                    float sigmoid = 1f / (1f + MathF.Exp(-x));
+                                    temp[j] = vClamped[j] * sigmoid;
+                                }
+
+                                var vResult = new Vector<float>(temp);
+                                Unsafe.Write(pOutput + i, vResult);
+                            }
                         }
                     }
                 }

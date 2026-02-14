@@ -37,9 +37,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var va = Avx512F.LoadVector512(pA + i);
-                            var vb = Avx512F.LoadVector512(pB + i);
-                            Avx512F.Store(pR + i, Avx512F.Add(va, vb));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var va = Avx512F.LoadVector512(pA + i);
+                                var vb = Avx512F.LoadVector512(pB + i);
+                                Avx512F.Store(pR + i, Avx512F.Add(va, vb));
+                            }
                         }
                     }
                 }
@@ -53,9 +57,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 4; i += 4)
                         {
-                            var va = AdvSimd.LoadVector128(pA + i);
-                            var vb = AdvSimd.LoadVector128(pB + i);
-                            AdvSimd.Store(pR + i, AdvSimd.Add(va, vb));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 4 <= length)
+                            {
+                                var va = AdvSimd.LoadVector128(pA + i);
+                                var vb = AdvSimd.LoadVector128(pB + i);
+                                AdvSimd.Store(pR + i, AdvSimd.Add(va, vb));
+                            }
                         }
                     }
                 }
@@ -72,9 +80,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var va = Unsafe.Read<Vector<float>>(pA + i);
-                            var vb = Unsafe.Read<Vector<float>>(pB + i);
-                            Unsafe.Write(pR + i, va + vb);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var va = Unsafe.Read<Vector<float>>(pA + i);
+                                var vb = Unsafe.Read<Vector<float>>(pB + i);
+                                Unsafe.Write(pR + i, va + vb);
+                            }
                         }
                     }
                 }
@@ -109,9 +121,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var va = Avx512F.LoadVector512(pA + i);
-                            var vb = Avx512F.LoadVector512(pB + i);
-                            Avx512F.Store(pR + i, Avx512F.Subtract(va, vb));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var va = Avx512F.LoadVector512(pA + i);
+                                var vb = Avx512F.LoadVector512(pB + i);
+                                Avx512F.Store(pR + i, Avx512F.Subtract(va, vb));
+                            }
                         }
                     }
                 }
@@ -128,9 +144,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var va = Unsafe.Read<Vector<float>>(pA + i);
-                            var vb = Unsafe.Read<Vector<float>>(pB + i);
-                            Unsafe.Write(pR + i, va - vb);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var va = Unsafe.Read<Vector<float>>(pA + i);
+                                var vb = Unsafe.Read<Vector<float>>(pB + i);
+                                Unsafe.Write(pR + i, va - vb);
+                            }
                         }
                     }
                 }
@@ -165,9 +185,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var va = Avx512F.LoadVector512(pA + i);
-                            var vb = Avx512F.LoadVector512(pB + i);
-                            Avx512F.Store(pR + i, Avx512F.Multiply(va, vb));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var va = Avx512F.LoadVector512(pA + i);
+                                var vb = Avx512F.LoadVector512(pB + i);
+                                Avx512F.Store(pR + i, Avx512F.Multiply(va, vb));
+                            }
                         }
                     }
                 }
@@ -181,9 +205,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 4; i += 4)
                         {
-                            var va = AdvSimd.LoadVector128(pA + i);
-                            var vb = AdvSimd.LoadVector128(pB + i);
-                            AdvSimd.Store(pR + i, AdvSimd.Multiply(va, vb));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 4 <= length)
+                            {
+                                var va = AdvSimd.LoadVector128(pA + i);
+                                var vb = AdvSimd.LoadVector128(pB + i);
+                                AdvSimd.Store(pR + i, AdvSimd.Multiply(va, vb));
+                            }
                         }
                     }
                 }
@@ -200,9 +228,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var va = Unsafe.Read<Vector<float>>(pA + i);
-                            var vb = Unsafe.Read<Vector<float>>(pB + i);
-                            Unsafe.Write(pR + i, va * vb);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var va = Unsafe.Read<Vector<float>>(pA + i);
+                                var vb = Unsafe.Read<Vector<float>>(pB + i);
+                                Unsafe.Write(pR + i, va * vb);
+                            }
                         }
                     }
                 }
@@ -257,10 +289,14 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            Vector512<float> va = Avx512F.LoadVector512(pA + i);
-                            Vector512<float> vb = Avx512F.LoadVector512(pB + i);
-                            Vector512<float> vc = Avx512F.LoadVector512(pC + i);
-                            Avx512F.Store(pResult + i, Avx512F.FusedMultiplyAdd(va, vb, vc));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                Vector512<float> va = Avx512F.LoadVector512(pA + i);
+                                Vector512<float> vb = Avx512F.LoadVector512(pB + i);
+                                Vector512<float> vc = Avx512F.LoadVector512(pC + i);
+                                Avx512F.Store(pResult + i, Avx512F.FusedMultiplyAdd(va, vb, vc));
+                            }
                         }
                     }
 
@@ -268,13 +304,17 @@ namespace SmallMind.Core.Simd
                     int vectorSize = Vector256<float>.Count; // 8 floats
                     for (; i <= length - vectorSize; i += vectorSize)
                     {
-                        Vector256<float> va = Avx.LoadVector256(pA + i);
-                        Vector256<float> vb = Avx.LoadVector256(pB + i);
-                        Vector256<float> vc = Avx.LoadVector256(pC + i);
+                        // Validate offset is within bounds
+                        if (i >= 0 && i + 8 <= length)
+                        {
+                            Vector256<float> va = Avx.LoadVector256(pA + i);
+                            Vector256<float> vb = Avx.LoadVector256(pB + i);
+                            Vector256<float> vc = Avx.LoadVector256(pC + i);
 
-                        // FMA: va * vb + vc
-                        Vector256<float> vResult = Fma.MultiplyAdd(va, vb, vc);
-                        Avx.Store(pResult + i, vResult);
+                            // FMA: va * vb + vc
+                            Vector256<float> vResult = Fma.MultiplyAdd(va, vb, vc);
+                            Avx.Store(pResult + i, vResult);
+                        }
                     }
                 }
             }
@@ -335,8 +375,12 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var va = Avx512F.LoadVector512(pA + i);
-                            Avx512F.Store(pR + i, Avx512F.Multiply(va, vScalar512));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var va = Avx512F.LoadVector512(pA + i);
+                                Avx512F.Store(pR + i, Avx512F.Multiply(va, vScalar512));
+                            }
                         }
                     }
                 }
@@ -378,8 +422,12 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var va = Avx512F.LoadVector512(pA + i);
-                            Avx512F.Store(pA + i, Avx512F.Add(va, vScalar512));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var va = Avx512F.LoadVector512(pA + i);
+                                Avx512F.Store(pA + i, Avx512F.Add(va, vScalar512));
+                            }
                         }
                     }
                 }
@@ -397,8 +445,12 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var va = Unsafe.Read<Vector<float>>(pA + i);
-                            Unsafe.Write(pA + i, va + vScalar);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var va = Unsafe.Read<Vector<float>>(pA + i);
+                                Unsafe.Write(pA + i, va + vScalar);
+                            }
                         }
                     }
                 }
@@ -433,9 +485,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - 16; i += 16)
                         {
-                            var va = Avx512F.LoadVector512(pA + i);
-                            var vb = Avx512F.LoadVector512(pB + i);
-                            Avx512F.Store(pA + i, Avx512F.Add(va, vb));
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + 16 <= length)
+                            {
+                                var va = Avx512F.LoadVector512(pA + i);
+                                var vb = Avx512F.LoadVector512(pB + i);
+                                Avx512F.Store(pA + i, Avx512F.Add(va, vb));
+                            }
                         }
                     }
                 }
@@ -452,9 +508,13 @@ namespace SmallMind.Core.Simd
                     {
                         for (; i <= length - vectorSize; i += vectorSize)
                         {
-                            var va = Unsafe.Read<Vector<float>>(pA + i);
-                            var vb = Unsafe.Read<Vector<float>>(pB + i);
-                            Unsafe.Write(pA + i, va + vb);
+                            // Validate offset is within bounds
+                            if (i >= 0 && i + vectorSize <= length)
+                            {
+                                var va = Unsafe.Read<Vector<float>>(pA + i);
+                                var vb = Unsafe.Read<Vector<float>>(pB + i);
+                                Unsafe.Write(pA + i, va + vb);
+                            }
                         }
                     }
                 }

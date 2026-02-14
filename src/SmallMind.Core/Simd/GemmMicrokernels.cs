@@ -111,12 +111,22 @@ namespace SmallMind.Core.Simd
                         {
                             int kb = Math.Min(L2_BLOCK_K, K - kc);
                             
-                            // L1 blocking within L2 blocks
-                            GemmL1BlockedAvx512(
-                                pA + mc * K + kc, 
-                                pB + kc * N + nc,
-                                pC + mc * N + nc,
-                                mb, kb, nb, K, N, N);
+                            // Validate computed offsets are within bounds
+                            int offsetA = mc * K + kc;
+                            int offsetB = kc * N + nc;
+                            int offsetC = mc * N + nc;
+                            
+                            if (offsetA >= 0 && offsetA < A.Length &&
+                                offsetB >= 0 && offsetB < B.Length &&
+                                offsetC >= 0 && offsetC < C.Length)
+                            {
+                                // L1 blocking within L2 blocks
+                                GemmL1BlockedAvx512(
+                                    pA + offsetA, 
+                                    pB + offsetB,
+                                    pC + offsetC,
+                                    mb, kb, nb, K, N, N);
+                            }
                         }
                     }
                 }
