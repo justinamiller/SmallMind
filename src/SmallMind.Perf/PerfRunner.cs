@@ -65,7 +65,8 @@ internal class PerfRunner
                         _measureIters = iters;
                     break;
                 case "--bench" when i + 1 < args.Length:
-                    _benchName = args[++i];
+                    i++;
+                    _benchName = args[i];
                     break;
                 case "--json":
                     _jsonOutput = true;
@@ -76,10 +77,12 @@ internal class PerfRunner
                     _measureIters = 100;
                     break;
                 case "--prompt" when i + 1 < args.Length:
-                    _prompt = args[++i];
+                    i++;
+                    _prompt = args[i];
                     break;
                 case "--prompt-file" when i + 1 < args.Length:
-                    _promptFile = args[++i];
+                    i++;
+                    _promptFile = args[i];
                     break;
                 case "--max-new-tokens" when i + 1 < args.Length:
                     i++;
