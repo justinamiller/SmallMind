@@ -76,9 +76,9 @@ namespace SmallMind.Core
             var checkpoint = new ModelCheckpoint();
 
             // Try to read format version (may not exist in old checkpoints)
-            if (data.ContainsKey("formatVersion"))
+            if (data.TryGetValue("formatVersion", out var formatVersionElement))
             {
-                checkpoint.FormatVersion = data["formatVersion"].GetInt32();
+                checkpoint.FormatVersion = formatVersionElement.GetInt32();
             }
             else
             {
@@ -86,17 +86,17 @@ namespace SmallMind.Core
             }
 
             // Try to read metadata (may not exist in old checkpoints)
-            if (data.ContainsKey("metadata"))
+            if (data.TryGetValue("metadata", out var metadataElement))
             {
                 checkpoint.Metadata = JsonSerializer.Deserialize<ModelMetadata>(
-                    data["metadata"].GetRawText()) ?? new ModelMetadata();
+                    metadataElement.GetRawText()) ?? new ModelMetadata();
             }
 
             // Read parameters
-            if (!data.ContainsKey("parameters"))
+            if (!data.TryGetValue("parameters", out var parametersElement))
                 throw new InvalidDataException("Checkpoint missing 'parameters' field");
 
-            var parametersJson = data["parameters"].GetRawText();
+            var parametersJson = parametersElement.GetRawText();
             var parameters = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(parametersJson);
 
             if (parameters == null)
@@ -104,12 +104,12 @@ namespace SmallMind.Core
 
             foreach (var param in parameters)
             {
-                if (!param.ContainsKey("shape") || !param.ContainsKey("data"))
+                if (!param.TryGetValue("shape", out var shapeElement) || !param.TryGetValue("data", out var dataElement))
                     throw new InvalidDataException("Parameter missing 'shape' or 'data' field");
 
-                var shape = JsonSerializer.Deserialize<int[]>(param["shape"].GetRawText())
+                var shape = JsonSerializer.Deserialize<int[]>(shapeElement.GetRawText())
                     ?? Array.Empty<int>();
-                var floatData = JsonSerializer.Deserialize<float[]>(param["data"].GetRawText())
+                var floatData = JsonSerializer.Deserialize<float[]>(dataElement.GetRawText())
                     ?? Array.Empty<float>();
 
                 checkpoint.Parameters.Add(new TensorData

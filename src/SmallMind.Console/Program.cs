@@ -196,7 +196,7 @@ namespace SmallMind.ConsoleApp
 
                 // Select model preset (default to "default")
                 string presetName = GetArgValue(args, "--model-preset", "default").ToLower();
-                if (!MODEL_PRESETS.ContainsKey(presetName))
+                if (!MODEL_PRESETS.TryGetValue(presetName, out var selectedPreset))
                 {
                     Console.WriteLine($"Error: Unknown model preset '{presetName}'");
                     Console.WriteLine("Available presets: " + string.Join(", ", MODEL_PRESETS.Keys));
@@ -204,7 +204,6 @@ namespace SmallMind.ConsoleApp
                     Environment.Exit(1);
                 }
 
-                ModelConfig selectedPreset = MODEL_PRESETS[presetName];
                 Console.WriteLine($"\n=== Using Model Preset: {selectedPreset.Name} ===");
                 Console.WriteLine($"Description: {selectedPreset.Description}");
                 Console.WriteLine($"Configuration: {selectedPreset.NEmbedding} embedding dim, {selectedPreset.NLayers} layers, {selectedPreset.NHeads} heads\n");

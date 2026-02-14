@@ -190,13 +190,11 @@ namespace SmallMind.Runtime
                 string ggufName = tensorInfo.Name;
 
                 // Skip if this tensor isn't in our mapping
-                if (!tensorMapping.ContainsKey(ggufName))
+                if (!tensorMapping.TryGetValue(ggufName, out var smName))
                 {
                     logger.LogDebug($"  Skipping unmapped tensor: {ggufName}");
                     continue;
                 }
-
-                string smName = tensorMapping[ggufName];
 
                 // Handle special cases BEFORE reading/dequantizing to avoid double-read
                 if (smName == "MERGE_QKV")
@@ -1079,12 +1077,11 @@ namespace SmallMind.Runtime
             HashSet<string> loadedParams, ModelConfig config, IInternalRuntimeLogger logger)
         {
             // Check if output.weight is loaded
-            if (!loadedParams.Contains("output.weight") && namedParams.ContainsKey("output.weight"))
+            if (!loadedParams.Contains("output.weight") && 
+                namedParams.TryGetValue("output.weight", out var outputWeight) &&
+                namedParams.TryGetValue("token_embd.weight", out var tokenEmbed))
             {
                 logger.LogInfo("  Applying weight tying: copying token_embd.weight to output.weight");
-
-                var tokenEmbed = namedParams["token_embd.weight"];
-                var outputWeight = namedParams["output.weight"];
 
                 if (tokenEmbed.Size != outputWeight.Size)
                 {
