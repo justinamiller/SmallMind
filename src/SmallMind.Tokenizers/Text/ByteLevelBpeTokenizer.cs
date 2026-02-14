@@ -371,8 +371,9 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
 
         int bytePos = 0;
 
-        foreach (int tokenId in tokens)
+        for (int i = 0; i < tokens.Length; i++)
         {
+            int tokenId = tokens[i];
             // Skip special tokens (except for the base byte tokens)
             if (tokenId >= PadTokenIdValue && tokenId < FirstMergeTokenId)
                 continue;
@@ -479,11 +480,11 @@ internal sealed class ByteLevelBpeTokenizer : ITokenizer
             int tokenId = kvp.Key;
             byte[] bytes = kvp.Value;
 
-            // Convert bytes to display string using byte-to-unicode mapping
+            // Convert bytes to display string using byte-to-unicode mapping - optimized for loop
             var sb = new StringBuilder();
-            foreach (byte b in bytes)
+            for (int i = 0; i < bytes.Length; i++)
             {
-                int unicodePoint = _byteToUnicode[b];
+                int unicodePoint = _byteToUnicode[bytes[i]];
                 sb.Append((char)unicodePoint);
             }
 
