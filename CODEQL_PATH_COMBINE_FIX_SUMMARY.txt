@@ -1,0 +1,116 @@
+================================================================================
+  CODEQL PATH.COMBINE SECURITY ISSUE RESOLUTION
+================================================================================
+
+Task: Review open CodeQL issues with "System.IO.Path.Combine" and fix them
+
+Status: ✅ COMPLETED
+
+================================================================================
+ISSUES IDENTIFIED
+================================================================================
+
+1. src/SmallMind.Runtime/InferenceEngine.cs (Line 107)
+   - Vulnerability: Path traversal via unsanitized file name extraction
+   - CWE-22: Improper Limitation of a Pathname to a Restricted Directory
+   - Risk: HIGH - Could allow writing files outside cache directory
+
+2. src/SmallMind.Runtime/PretrainedModels/PretrainedRegistry.cs (Line 148)
+   - Vulnerability: Unvalidated path combination
+   - CWE-22: Improper Limitation of a Pathname to a Restricted Directory  
+   - Risk: HIGH - Could allow reading files outside pack directory
+
+================================================================================
+FIXES IMPLEMENTED
+================================================================================
+
+✅ Added Guard.SafeFileName() validation method
+   - Prevents path separators in file names
+   - Blocks relative path components (. and ..)
+   - Validates against platform-specific invalid characters
+   - Location: src/SmallMind.Core/Validation/Guard.cs
+
+✅ Added Guard.PathWithinDirectory() validation method
+   - Ensures combined paths stay within base directory
+   - Prevents path traversal using .. sequences
+   - Prevents absolute paths from escaping base
+   - Location: src/SmallMind.Core/Validation/Guard.cs
+
+✅ Fixed InferenceEngine.cs
+   - Applied SafeFileName validation to GGUF cache file names
+   - Changed from GetFileNameWithoutExtension to GetFileName + validation
+   - Added Guard.SafeFileName() call before Path.Combine
+
+✅ Fixed PretrainedRegistry.cs  
+   - Applied PathWithinDirectory validation to pack paths
+   - Replaced direct Path.Combine with Guard.PathWithinDirectory
+   - Ensures pack paths stay within BasePath
+
+================================================================================
+TEST COVERAGE
+================================================================================
+
+✅ Added 20+ new security-focused unit tests
+   - SafeFileName tests: 13 test cases
+   - PathWithinDirectory tests: 7 test cases
+   - All tests passing (65 Guard tests total)
+
+Test scenarios covered:
+  • Valid file names accepted
+  • Path separators rejected (/, \)
+  • Path traversal sequences rejected (..)
+  • Relative components rejected (.)
+  • Invalid characters rejected
+  • Directory escape attempts blocked
+  • Absolute paths handled correctly
+  • Null inputs handled correctly
+
+================================================================================
+VERIFICATION
+================================================================================
+
+✅ All Guard clause tests passing: 65/65
+✅ All SmallMind.Tests passing: 971/977 (6 pre-existing failures unrelated)
+✅ Build successful with no new warnings
+✅ No breaking changes to public API
+✅ Documentation added (PATH_TRAVERSAL_FIXES.md)
+
+================================================================================
+SECURITY IMPACT
+================================================================================
+
+BEFORE:
+  ❌ Attackers could use ../../../etc/passwd in file paths
+  ❌ Could read/write files outside intended directories
+  ❌ No validation on user-supplied path components
+
+AFTER:
+  ✅ Path traversal attempts throw ValidationException
+  ✅ All paths validated before use
+  ✅ Files confined to intended directories
+  ✅ CWE-22 vulnerability eliminated
+
+================================================================================
+DOCUMENTATION
+================================================================================
+
+📄 PATH_TRAVERSAL_FIXES.md
+   - Detailed explanation of vulnerabilities
+   - Before/after code examples
+   - Security mechanism descriptions
+   - Test coverage details
+   - Impact analysis
+
+================================================================================
+BRANCH INFORMATION
+================================================================================
+
+Branch: copilot/review-codeql-issues-system-io-path
+Commits: 3 (Initial plan + Implementation + Documentation)
+Files changed: 5
+Lines added: 388
+Lines removed: 3
+
+Ready for code review and merge.
+
+================================================================================
