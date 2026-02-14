@@ -228,7 +228,6 @@ namespace SmallMind.Benchmarks
             float scaledTolerance = baseTolerance * MathF.Sqrt(K / 128f);
 
             int errorCount = 0;
-            const int MAX_ERRORS_TO_SHOW = 5;
 
             for (int i = 0; i < length; i++)
             {
