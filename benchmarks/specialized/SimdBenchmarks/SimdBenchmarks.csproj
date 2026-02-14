@@ -7,8 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../src/SmallMind/SmallMind.csproj" />
-    <ProjectReference Include="../src/SmallMind.Core/SmallMind.Core.csproj" />
+    <ProjectReference Include="../../../src/SmallMind/SmallMind.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Core/SmallMind.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../BenchmarkResult.cs" Link="BenchmarkResult.cs" />
+    <Compile Include="../SystemInfo.cs" Link="SystemInfo.cs" />
+    <Compile Include="../SystemInfoCollector.cs" Link="SystemInfoCollector.cs" />
+    <Compile Include="../MarkdownReportWriter.cs" Link="MarkdownReportWriter.cs" />
+    <Compile Include="../JsonReportWriter.cs" Link="JsonReportWriter.cs" />
   </ItemGroup>
 
   <ItemGroup>

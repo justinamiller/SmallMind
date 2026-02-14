@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/SmallMind.Tokenizers/SmallMind.Tokenizers.csproj" />
-    <ProjectReference Include="../../src/SmallMind.Core/SmallMind.Core.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Tokenizers/SmallMind.Tokenizers.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Core/SmallMind.Core.csproj" />
   </ItemGroup>
 
 </Project>

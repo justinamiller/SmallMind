@@ -12,8 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/SmallMind.Abstractions/SmallMind.Abstractions.csproj" />
-    <ProjectReference Include="../../src/SmallMind.Engine/SmallMind.Engine.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Abstractions/SmallMind.Abstractions.csproj" />
+    <ProjectReference Include="../../../src/SmallMind.Engine/SmallMind.Engine.csproj" />
   </ItemGroup>
 
 </Project>
