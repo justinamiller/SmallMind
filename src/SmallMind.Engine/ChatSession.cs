@@ -756,9 +756,13 @@ namespace SmallMind.Engine
 
                 if (isRepetitive)
                 {
-                    // Truncate to remove repetition
+                    // Truncate to remove repetition - optimized to avoid Take().ToList() allocation
                     int truncateAt = tokens.Length - checkLength;
-                    var cleanedTokens = tokens.Take(truncateAt).ToList();
+                    var cleanedTokens = new List<int>(truncateAt);
+                    for (int i = 0; i < truncateAt; i++)
+                    {
+                        cleanedTokens.Add(tokens[i]);
+                    }
                     return (_tokenizer.Decode(cleanedTokens), "degenerate_repetition");
                 }
             }

@@ -164,21 +164,21 @@ namespace SmallMind.Tokenizers.Text
                 List<string> tokens;
                 if (_isByteLevelBpe && _byteToChar != null)
                 {
-                    // Byte-level: convert to bytes, then to special chars
+                    // Byte-level: convert to bytes, then to special chars - optimized for loop
                     var bytes = Encoding.UTF8.GetBytes(word);
                     tokens = new List<string>(bytes.Length);
-                    foreach (var b in bytes)
+                    for (int i = 0; i < bytes.Length; i++)
                     {
-                        tokens.Add(_byteToChar[b]);
+                        tokens.Add(_byteToChar[bytes[i]]);
                     }
                 }
                 else
                 {
-                    // Character-level
+                    // Character-level - optimized for loop
                     tokens = new List<string>(word.Length);
-                    foreach (char c in word)
+                    for (int i = 0; i < word.Length; i++)
                     {
-                        tokens.Add(c.ToString());
+                        tokens.Add(word[i].ToString());
                     }
                 }
 
@@ -363,9 +363,9 @@ namespace SmallMind.Tokenizers.Text
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
         {
             var tokenList = new List<int>(tokens.Length);
-            foreach (int token in tokens)
+            for (int i = 0; i < tokens.Length; i++)
             {
-                tokenList.Add(token);
+                tokenList.Add(tokens[i]);
             }
 
             string text = Decode(tokenList);
@@ -378,9 +378,9 @@ namespace SmallMind.Tokenizers.Text
         public string DecodeToString(ReadOnlySpan<int> tokens)
         {
             var tokenList = new List<int>(tokens.Length);
-            foreach (int token in tokens)
+            for (int i = 0; i < tokens.Length; i++)
             {
-                tokenList.Add(token);
+                tokenList.Add(tokens[i]);
             }
             return Decode(tokenList);
         }

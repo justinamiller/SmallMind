@@ -83,16 +83,21 @@ namespace SmallMind.Engine
                 // else: orphaned assistant/tool message, skip (shouldn't happen)
             }
 
-            // Keep last N turns
-            var turnsToKeep = turns.Count > maxTurns
-                ? turns.Skip(turns.Count - maxTurns).ToList()
-                : turns;
+            // Keep last N turns - optimized to avoid Skip().ToList() allocation
+            int startIndex = turns.Count > maxTurns ? turns.Count - maxTurns : 0;
+            int turnCount = turns.Count - startIndex;
 
-            // Flatten back to message list
-            var result = new List<ChatMessageV3>();
-            foreach (var turn in turnsToKeep)
+            // Flatten back to message list - pre-calculate capacity to avoid resizes
+            int messageCapacity = 0;
+            for (int i = startIndex; i < turns.Count; i++)
             {
-                result.AddRange(turn);
+                messageCapacity += turns[i].Count;
+            }
+
+            var result = new List<ChatMessageV3>(messageCapacity);
+            for (int i = startIndex; i < turns.Count; i++)
+            {
+                result.AddRange(turns[i]);
             }
 
             return result;
@@ -114,8 +119,17 @@ namespace SmallMind.Engine
                 return messages;
 
             // Need to truncate - keep system messages first
-            var systemMessages = messages.Where(m => m.Role == ChatRole.System).ToList();
-            var conversationMessages = messages.Where(m => m.Role != ChatRole.System).ToList();
+            // Replace LINQ with manual loops to avoid Where().ToList() allocation
+            var systemMessages = new List<ChatMessageV3>(Math.Min(8, messages.Count));
+            var conversationMessages = new List<ChatMessageV3>(messages.Count);
+            
+            for (int i = 0; i < messages.Count; i++)
+            {
+                if (messages[i].Role == ChatRole.System)
+                    systemMessages.Add(messages[i]);
+                else
+                    conversationMessages.Add(messages[i]);
+            }
 
             int systemTokens = 0;
             foreach (var msg in systemMessages)

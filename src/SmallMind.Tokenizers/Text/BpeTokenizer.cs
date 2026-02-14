@@ -251,9 +251,10 @@ namespace SmallMind.Tokenizers
                     }
                 }
 
-                // Convert word to character tokens - use cached strings for ASCII
-                foreach (char c in word)
+                // Convert word to character tokens - use cached strings for ASCII - optimized for loop
+                for (int i = 0; i < word.Length; i++)
                 {
+                    char c = word[i];
                     string charStr;
                     if (c < 128)
                     {
@@ -371,11 +372,11 @@ namespace SmallMind.Tokenizers
         /// </summary>
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)
         {
-            // Use existing Decode to get string, then encode to UTF-8
+            // Use existing Decode to get string, then encode to UTF-8 - optimized for loop
             var tokenList = new List<int>(tokens.Length);
-            foreach (int token in tokens)
+            for (int i = 0; i < tokens.Length; i++)
             {
-                tokenList.Add(token);
+                tokenList.Add(tokens[i]);
             }
 
             string text = Decode(tokenList);
@@ -388,9 +389,9 @@ namespace SmallMind.Tokenizers
         public string DecodeToString(ReadOnlySpan<int> tokens)
         {
             var tokenList = new List<int>(tokens.Length);
-            foreach (int token in tokens)
+            for (int i = 0; i < tokens.Length; i++)
             {
-                tokenList.Add(token);
+                tokenList.Add(tokens[i]);
             }
             return Decode(tokenList);
         }
