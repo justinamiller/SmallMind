@@ -29,6 +29,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SmallMind.Core\SmallMind.Core.csproj" />
     <ProjectReference Include="..\SmallMind.Abstractions\SmallMind.Abstractions.csproj" />
+    <ProjectReference Include="..\SmallMind.Quantization\SmallMind.Quantization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

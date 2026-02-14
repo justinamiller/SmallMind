@@ -1,6 +1,7 @@
 using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Core;
 using SmallMind.Core.Simd;
+using SmallMind.Quantization.Abstractions;
 
 namespace SmallMind.Transformers
 {
@@ -39,12 +40,20 @@ namespace SmallMind.Transformers
 
     /// <summary>
     /// Linear (fully connected) layer
+    /// Supports both FP32 weights (Tensor) and quantized weights (IWeightTensor) for efficient inference.
     /// </summary>
     internal sealed class Linear : Module
     {
-        public Tensor Weight { get; private set; }
+        public Tensor? Weight { get; private set; }
         public Tensor? Bias { get; private set; }
         private Random _random;
+
+        // Quantized weight support for memory-efficient inference
+        private IWeightTensor? _quantWeight;
+        
+        // Track weight dimensions for quantized weights (since they don't expose Tensor.Shape)
+        private int _outFeatures;
+        private int _inFeatures;
 
         // Cached transposed weight for inference (Tier-0 optimization: eliminate per-call transpose allocation)
         private Tensor? _weightTransposeCache;
@@ -52,6 +61,8 @@ namespace SmallMind.Transformers
         public Linear(int inFeatures, int outFeatures, bool useBias = true, Random? random = null)
         {
             _random = random ?? new Random(42);
+            _inFeatures = inFeatures;
+            _outFeatures = outFeatures;
 
             // Weight: (outFeatures, inFeatures)
             Weight = new Tensor(new int[] { outFeatures, inFeatures }, requiresGrad: true);
@@ -65,6 +76,46 @@ namespace SmallMind.Transformers
             }
         }
 
+        /// <summary>
+        /// Set quantized weight for this layer. Replaces FP32 weight.
+        /// Used during model loading to inject quantized weights from SMQ files.
+        /// </summary>
+        /// <param name="quantWeight">Quantized weight tensor (Q4_K, Q6_K, etc.)</param>
+        public void SetQuantizedWeight(IWeightTensor quantWeight)
+        {
+            if (quantWeight == null) throw new ArgumentNullException(nameof(quantWeight));
+            
+            // Validate dimensions match
+            if (quantWeight.Rows != _outFeatures || quantWeight.Cols != _inFeatures)
+            {
+                throw new ArgumentException(
+                    $"Quantized weight dimensions ({quantWeight.Rows}x{quantWeight.Cols}) " +
+                    $"don't match layer dimensions ({_outFeatures}x{_inFeatures})");
+            }
+
+            _quantWeight = quantWeight;
+            
+            // Clear FP32 weight to save memory (keep reference in Parameters list for GetNamedParameters)
+            // The Weight tensor still exists but data can be cleared
+            if (Weight != null)
+            {
+                Array.Clear(Weight.Data, 0, Weight.Data.Length);
+            }
+            
+            // Invalidate transpose cache
+            _weightTransposeCache = null;
+        }
+
+        /// <summary>
+        /// Check if this layer uses quantized weights.
+        /// </summary>
+        public bool HasQuantizedWeight => _quantWeight != null;
+
+        /// <summary>
+        /// Get quantization scheme if using quantized weights.
+        /// </summary>
+        public QuantScheme? QuantizationScheme => _quantWeight?.Scheme;
+
         public override Tensor Forward(Tensor input)
         {
             return Forward(input, dest: null);
@@ -77,9 +128,116 @@ namespace SmallMind.Transformers
         /// </summary>
         public Tensor Forward(Tensor input, Tensor? dest)
         {
+            // Route to appropriate implementation based on weight type
+            if (_quantWeight != null)
+            {
+                return ForwardQuantized(input, dest);
+            }
+            else
+            {
+                return ForwardFP32(input, dest);
+            }
+        }
+
+        /// <summary>
+        /// Forward pass using quantized weights with fused kernels.
+        /// </summary>
+        private Tensor ForwardQuantized(Tensor input, Tensor? dest)
+        {
+            // input: (batch, inFeatures) or (batch, seq, inFeatures)
+            // quantWeight: (outFeatures, inFeatures) quantized
+            // output: (batch, outFeatures) or (batch, seq, outFeatures)
+
+            if (input.Shape.Length == 2)
+            {
+                // (batch, in) × weight^T = (batch, out)
+                int batch = input.Shape[0];
+                int inFeat = input.Shape[1];
+                
+                if (inFeat != _inFeatures)
+                    throw new ArgumentException($"Input features {inFeat} don't match layer input {_inFeatures}");
+
+                // Allocate output if not provided
+                if (dest == null)
+                {
+                    dest = new Tensor(new int[] { batch, _outFeatures }, requiresGrad: IsTraining);
+                }
+
+                // Use fused quantized matmul: activations × weights^T
+                // IWeightTensor.MatMul handles the transpose internally
+                _quantWeight.MatMul(
+                    input.Data.AsSpan(),
+                    dest.Data.AsSpan(),
+                    m: batch,
+                    k: _inFeatures,
+                    n: _outFeatures);
+
+                if (Bias != null)
+                {
+                    // Add bias in-place to output
+                    dest = Tensor.Add(dest, Bias, dest, requiresGrad: IsTraining);
+                }
+                
+                return dest;
+            }
+            else if (input.Shape.Length == 3)
+            {
+                // (batch, seq, in) - reshape to (batch*seq, in), apply linear, reshape back
+                int batch = input.Shape[0];
+                int seq = input.Shape[1];
+                int inFeat = input.Shape[2];
+                
+                if (inFeat != _inFeatures)
+                    throw new ArgumentException($"Input features {inFeat} don't match layer input {_inFeatures}");
+
+                int batchSeq = batch * seq;
+
+                // Allocate output if not provided
+                Tensor output;
+                if (dest == null)
+                {
+                    output = new Tensor(new int[] { batchSeq, _outFeatures }, requiresGrad: IsTraining);
+                }
+                else
+                {
+                    // Use dest as backing storage via view
+                    output = dest.ReshapeView(new int[] { batchSeq, _outFeatures });
+                }
+
+                // Use ReshapeView to avoid copying data
+                var reshapedInput = input.ReshapeView(new int[] { batchSeq, inFeat });
+
+                // Fused quantized matmul
+                _quantWeight.MatMul(
+                    reshapedInput.Data.AsSpan(),
+                    output.Data.AsSpan(),
+                    m: batchSeq,
+                    k: _inFeatures,
+                    n: _outFeatures);
+
+                if (Bias != null)
+                {
+                    output = Tensor.Add(output, Bias, output, requiresGrad: IsTraining);
+                }
+
+                // Reshape back to (batch, seq, outFeatures)
+                return output.ReshapeView(new int[] { batch, seq, _outFeatures });
+            }
+
+            throw new ArgumentException($"Unsupported input shape: {string.Join(",", input.Shape)}");
+        }
+
+        /// <summary>
+        /// Forward pass using FP32 weights (original implementation).
+        /// </summary>
+        private Tensor ForwardFP32(Tensor input, Tensor? dest)
+        {
             // input: (batch, inFeatures) or (batch, seq, inFeatures)
             // weight: (outFeatures, inFeatures)
             // output: (batch, outFeatures) or (batch, seq, outFeatures)
+
+            if (Weight == null)
+                throw new InvalidOperationException("No FP32 weight available for this layer");
 
             // TIER-3 OPTIMIZATION: Use precomputed transpose cache in inference
             // Cache is precomputed in Eval(), no lazy allocation during forward pass
@@ -149,15 +307,22 @@ namespace SmallMind.Transformers
         /// <summary>
         /// TIER-3 OPTIMIZATION: Precompute transpose cache at Eval() time
         /// Ensures transpose is computed once when entering inference mode,
-        /// not lazily on first forward pass
+        /// not lazily on first forward pass.
+        /// Note: Only applicable for FP32 weights; quantized weights don't need transpose cache.
         /// </summary>
         public override void Eval()
         {
             base.Eval();
-            // Precompute transpose cache for inference
-            if (_weightTransposeCache == null)
+            
+            // Only precompute transpose for FP32 weights
+            // Quantized weights handle transpose internally via IWeightTensor.MatMul
+            if (_quantWeight == null && Weight != null)
             {
-                _weightTransposeCache = Weight.Transpose();
+                // Precompute transpose cache for inference
+                if (_weightTransposeCache == null)
+                {
+                    _weightTransposeCache = Weight.Transpose();
+                }
             }
         }
     }
