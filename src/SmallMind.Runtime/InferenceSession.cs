@@ -770,8 +770,8 @@ namespace SmallMind.Runtime
         {
             // Early exit if no penalties enabled
             if (_options.RepetitionPenalty == 1.0f &&
-                _options.PresencePenalty == 0.0f &&
-                _options.FrequencyPenalty == 0.0f)
+                MathF.Abs(_options.PresencePenalty) < 1e-9f &&
+                MathF.Abs(_options.FrequencyPenalty) < 1e-9f)
             {
                 return;
             }
@@ -840,13 +840,13 @@ namespace SmallMind.Runtime
                 }
 
                 // Apply presence penalty
-                if (_options.PresencePenalty != 0.0f)
+                if (MathF.Abs(_options.PresencePenalty) > 1e-9f)
                 {
                     logits[tokenId] -= _options.PresencePenalty;
                 }
 
                 // Apply frequency penalty
-                if (_options.FrequencyPenalty != 0.0f)
+                if (MathF.Abs(_options.FrequencyPenalty) > 1e-9f)
                 {
                     logits[tokenId] -= count * _options.FrequencyPenalty;
                 }

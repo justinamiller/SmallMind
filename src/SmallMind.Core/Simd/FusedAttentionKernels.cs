@@ -213,7 +213,7 @@ namespace SmallMind.Core.Simd
                     for (int j = 0; j < seqLen; j++)
                     {
                         float attnWeight = scoreRow[j];
-                        if (attnWeight == 0f) continue;
+                        if (MathF.Abs(attnWeight) < 1e-9f) continue;
 
                         float* vRow = pV + j * headDim;
 
@@ -358,7 +358,7 @@ namespace SmallMind.Core.Simd
                             {
                                 int globalKj = kBlock + kj;
                                 float attnWeight = scoreRow[kj];
-                                if (attnWeight == 0f) continue;
+                                if (MathF.Abs(attnWeight) < 1e-9f) continue;
 
                                 float* vRow = pV + globalKj * headDim;
 

@@ -491,7 +491,7 @@ namespace SmallMind.Quantization.Kernels
                     for (int k = 0; k < K; k++)
                     {
                         float aik = pA[i * K + k];
-                        if (aik == 0f) continue;
+                        if (MathF.Abs(aik) < 1e-9f) continue;
 
                         float* cRow = pC + i * N;
 
@@ -567,7 +567,7 @@ namespace SmallMind.Quantization.Kernels
                 for (int k = 0; k < K; k++)
                 {
                     float aik = A[i * ldA + k];
-                    if (aik == 0f) continue;
+                    if (MathF.Abs(aik) < 1e-9f) continue;
 
                     int globalK = kOffset + k;
 

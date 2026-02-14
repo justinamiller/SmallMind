@@ -73,7 +73,7 @@ internal sealed class VectorStoreFlat : IVectorStore
             return new List<(string, float)>();
 
         float queryNorm = ComputeNorm(queryVector);
-        if (queryNorm == 0f)
+        if (queryNorm < 1e-9f)
             return new List<(string, float)>();
 
         var results = new List<(string chunkId, float score)>(_vectors.Count);
@@ -166,7 +166,7 @@ internal sealed class VectorStoreFlat : IVectorStore
         float dotProduct = MatMulOps.DotProduct(a.AsSpan(), b.AsSpan());
         float normB = ComputeNorm(b);
 
-        if (normB == 0f)
+        if (normB < 1e-9f)
             return 0f;
 
         return dotProduct / (normA * normB);

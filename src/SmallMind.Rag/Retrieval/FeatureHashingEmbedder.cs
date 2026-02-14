@@ -95,7 +95,7 @@ internal sealed class FeatureHashingEmbedder : IEmbedder
             sumSquares += vector[i] * vector[i];
         }
 
-        if (sumSquares == 0f)
+        if (sumSquares < 1e-9f)
             return;
 
         float norm = MathF.Sqrt(sumSquares);

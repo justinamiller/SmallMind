@@ -66,7 +66,7 @@ namespace SmallMind.Quantization.Kernels
             for (int row = 0; row < k; row++)
             {
                 float aVal = a[row];
-                if (aVal == 0f) continue;
+                if (MathF.Abs(aVal) < 1e-9f) continue;
 
                 int bRowOffset = row * n;
 
@@ -104,7 +104,7 @@ namespace SmallMind.Quantization.Kernels
             for (int row = 0; row < k; row++)
             {
                 float aVal = a[row];
-                if (aVal == 0f) continue;
+                if (MathF.Abs(aVal) < 1e-9f) continue;
 
                 int bRowOffset = row * n;
 
