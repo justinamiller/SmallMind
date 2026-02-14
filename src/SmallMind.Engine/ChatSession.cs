@@ -898,7 +898,7 @@ namespace SmallMind.Engine
             // Handle truncation if needed
             if (removedCount > 0)
             {
-                RecordTruncation(removedCount, ref warnings);
+                RecordTruncationForOldestStrategy(removedCount, ref warnings);
             }
             else
             {
@@ -952,7 +952,7 @@ namespace SmallMind.Engine
 
             if (removedCount > 0)
             {
-                RecordTruncation(removedCount, ref warnings);
+                RecordTruncationForSlidingWindow(removedCount, ref warnings);
             }
             else
             {
@@ -1595,6 +1595,27 @@ namespace SmallMind.Engine
         /// </summary>
         private void InvalidateCache()
         {
+            if (_options.EnableKvCache)
+            {
+                SessionId sessionId = new SessionId(_sessionId);
+                _kvCacheStore.Remove(sessionId);
+                _cachedTokenCount = 0;
+                _lastPromptTokenIds = null;
+
+                if (_persistentInferenceSession != null)
+                {
+                    _persistentInferenceSession.Dispose();
+                    _persistentInferenceSession = null;
+                    _persistentSessionPosition = 0;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Invalidates KV cache if there is cached content.
+        /// </summary>
+        private void InvalidateCacheIfPopulated()
+        {
             if (_options.EnableKvCache && _cachedTokenCount > 0)
             {
                 SessionId sessionId = new SessionId(_sessionId);
@@ -1612,12 +1633,12 @@ namespace SmallMind.Engine
         }
 
         /// <summary>
-        /// Records truncation warning and invalidates cache.
+        /// Records truncation warning and invalidates cache for TruncateOldest strategy.
         /// </summary>
-        private void RecordTruncation(int removedCount, ref List<string>? warnings)
+        private void RecordTruncationForOldestStrategy(int removedCount, ref List<string>? warnings)
         {
             _lastTurnWasTruncated = true;
-            _truncatedTurns++;
+            _truncatedTurns++; // Track for diagnostics
 
             if (warnings == null)
             {
@@ -1625,7 +1646,23 @@ namespace SmallMind.Engine
             }
             warnings.Add($"Context truncated: removed {removedCount} oldest turns to fit within {_modelHandle.Model.BlockSize} token limit");
 
-            InvalidateCache();
+            InvalidateCacheIfPopulated();
+        }
+
+        /// <summary>
+        /// Records truncation warning and invalidates cache for SlidingWindow strategy.
+        /// </summary>
+        private void RecordTruncationForSlidingWindow(int removedCount, ref List<string>? warnings)
+        {
+            _lastTurnWasTruncated = true;
+
+            if (warnings == null)
+            {
+                warnings = new List<string>();
+            }
+            warnings.Add($"Context truncated: removed {removedCount} oldest turns to fit within {_modelHandle.Model.BlockSize} token limit");
+
+            InvalidateCacheIfPopulated();
         }
 
         /// <summary>
