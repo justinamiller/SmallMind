@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using SmallMind.Abstractions;
+using SmallMind.Core.Validation;
 using SmallMind.Rag.Common;
 using SmallMind.Rag.Indexing;
 using SmallMind.Rag.Pipeline;
@@ -309,6 +310,8 @@ namespace SmallMind.Engine
                 foreach (var file in Directory.GetFiles(_indexDirectory))
                 {
                     var fileName = Path.GetFileName(file);
+                    // Validate filename to prevent path traversal
+                    fileName = Guard.SafeFileName(fileName, nameof(file));
                     var destFile = Path.Combine(directory, fileName);
                     File.Copy(file, destFile, overwrite: true);
                 }

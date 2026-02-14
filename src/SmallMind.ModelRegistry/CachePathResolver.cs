@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.ModelRegistry
 {
@@ -58,6 +59,8 @@ namespace SmallMind.ModelRegistry
         /// </summary>
         public static string GetModelDirectory(string cacheRoot, string modelId)
         {
+            // Validate modelId to prevent path traversal
+            modelId = Guard.SafeFileName(modelId, nameof(modelId));
             return Path.Combine(cacheRoot, modelId);
         }
 
@@ -66,6 +69,8 @@ namespace SmallMind.ModelRegistry
         /// </summary>
         public static string GetManifestPath(string cacheRoot, string modelId)
         {
+            // Validate modelId to prevent path traversal
+            modelId = Guard.SafeFileName(modelId, nameof(modelId));
             return Path.Combine(cacheRoot, modelId, "manifest.json");
         }
     }

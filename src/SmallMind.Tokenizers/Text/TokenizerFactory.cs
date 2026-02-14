@@ -1,4 +1,5 @@
 using SmallMind.Abstractions.Telemetry;
+using SmallMind.Core.Validation;
 
 namespace SmallMind.Tokenizers
 {
@@ -148,8 +149,12 @@ namespace SmallMind.Tokenizers
         /// </summary>
         private static bool HasTokenizerAssets(string path)
         {
-            string vocabPath = Path.Combine(path, "vocab.json");
-            string mergesPath = Path.Combine(path, "merges.txt");
+            // Validate constant file names to prevent path traversal
+            var vocabFileName = Guard.SafeFileName("vocab.json", "vocabFileName");
+            var mergesFileName = Guard.SafeFileName("merges.txt", "mergesFileName");
+            
+            string vocabPath = Path.Combine(path, vocabFileName);
+            string mergesPath = Path.Combine(path, mergesFileName);
             return File.Exists(vocabPath) && File.Exists(mergesPath);
         }
 

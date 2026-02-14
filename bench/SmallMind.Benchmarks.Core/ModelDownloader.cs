@@ -127,12 +127,28 @@ public sealed class ModelDownloader : IDisposable
 
     private static string GetSafeFileName(string name)
     {
+        // Remove any path components first (handle both / and \)
+        // This prevents path traversal attacks
+        var nameOnly = Path.GetFileName(name);
+        if (string.IsNullOrWhiteSpace(nameOnly))
+        {
+            throw new ArgumentException("Invalid file name", nameof(name));
+        }
+        
+        // Replace invalid characters with underscores
         var invalidChars = Path.GetInvalidFileNameChars();
-        var safeName = name;
+        var safeName = nameOnly;
         foreach (var c in invalidChars)
         {
             safeName = safeName.Replace(c, '_');
         }
+        
+        // Prevent relative path components
+        if (safeName == "." || safeName == "..")
+        {
+            throw new ArgumentException("File name cannot be '.' or '..'", nameof(name));
+        }
+        
         return safeName + ".gguf";
     }
 
