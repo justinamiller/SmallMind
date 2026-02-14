@@ -56,12 +56,15 @@ namespace SmallMind.Runtime.Quantization
             reader.ReadHeader();
             var metadata = reader.GetMetadata();
             var tensorNames = reader.GetTensorNames();
+            
+            // Optimize: convert IEnumerable to array once, avoiding double enumeration
+            var tensorNamesArray = tensorNames.ToArray();
 
             return new SmqModelInfo
             {
-                TensorCount = tensorNames.Count(),
+                TensorCount = tensorNamesArray.Length,
                 Metadata = metadata,
-                TensorNames = tensorNames.ToArray()
+                TensorNames = tensorNamesArray
             };
         }
 
