@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using SmallMind.Abstractions.Telemetry;
+using SmallMind.Core.Numerics;
 using SmallMind.Core.Validation;
 using SmallMind.Rag.Retrieval;
 
@@ -284,7 +285,7 @@ namespace SmallMind.Rag.Indexing
                 normB += b[i] * b[i];
             }
 
-            if (normA == 0f || normB == 0f)
+            if (FloatComparison.IsNearZero(normA) || FloatComparison.IsNearZero(normB))
             {
                 return 0f;
             }

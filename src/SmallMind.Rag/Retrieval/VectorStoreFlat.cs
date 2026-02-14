@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using SmallMind.Core.Numerics;
 using SmallMind.Core.Simd;
 
 namespace SmallMind.Rag.Retrieval;
@@ -73,7 +74,7 @@ internal sealed class VectorStoreFlat : IVectorStore
             return new List<(string, float)>();
 
         float queryNorm = ComputeNorm(queryVector);
-        if (queryNorm == 0f)
+        if (FloatComparison.IsNearZero(queryNorm))
             return new List<(string, float)>();
 
         var results = new List<(string chunkId, float score)>(_vectors.Count);
@@ -166,7 +167,7 @@ internal sealed class VectorStoreFlat : IVectorStore
         float dotProduct = MatMulOps.DotProduct(a.AsSpan(), b.AsSpan());
         float normB = ComputeNorm(b);
 
-        if (normB == 0f)
+        if (FloatComparison.IsNearZero(normB))
             return 0f;
 
         return dotProduct / (normA * normB);

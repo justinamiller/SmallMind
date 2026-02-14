@@ -1,3 +1,4 @@
+using SmallMind.Core.Numerics;
 using SmallMind.Rag.Common;
 using SmallMind.Rag.Indexing.Sparse;
 
@@ -33,7 +34,7 @@ internal sealed class HybridRetriever
             throw new ArgumentException("Weights must be non-negative");
 
         float totalWeight = sparseWeight + denseWeight;
-        if (totalWeight == 0f)
+        if (FloatComparison.IsNearZero(totalWeight))
             throw new ArgumentException("At least one weight must be positive");
 
         _sparseWeight = sparseWeight / totalWeight;
