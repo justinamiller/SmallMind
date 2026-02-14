@@ -47,7 +47,7 @@ internal sealed class InvertedIndex
             throw new ArgumentNullException(nameof(text));
 
         // Remove existing chunk if present
-        if (_docLengths.ContainsKey(chunkId))
+        if (_docLengths.TryGetValue(chunkId, out _))
         {
             RemoveChunk(chunkId);
         }
@@ -63,10 +63,9 @@ internal sealed class InvertedIndex
         for (int i = 0; i < tokens.Count; i++)
         {
             string term = tokens[i];
-            if (termFreqs.ContainsKey(term))
-                termFreqs[term]++;
-            else
-                termFreqs[term] = 1;
+            if (!termFreqs.TryGetValue(term, out int count))
+                count = 0;
+            termFreqs[term] = count + 1;
         }
 
         // Add postings for each unique term
@@ -75,12 +74,13 @@ internal sealed class InvertedIndex
             string term = kvp.Key;
             int tf = kvp.Value;
 
-            if (!_index.ContainsKey(term))
+            if (!_index.TryGetValue(term, out var postingsList))
             {
-                _index[term] = new PostingsList();
+                postingsList = new PostingsList();
+                _index[term] = postingsList;
             }
 
-            _index[term].Add(chunkId, tf);
+            postingsList.Add(chunkId, tf);
         }
 
         // Update document length
@@ -101,7 +101,7 @@ internal sealed class InvertedIndex
         if (string.IsNullOrEmpty(chunkId))
             throw new ArgumentNullException(nameof(chunkId));
 
-        if (!_docLengths.ContainsKey(chunkId))
+        if (!_docLengths.TryGetValue(chunkId, out _))
             return;
 
         // Remove from all postings lists
@@ -270,11 +270,12 @@ internal sealed class InvertedIndex
     /// </summary>
     internal void AddPosting(string term, string chunkId, int termFrequency)
     {
-        if (!_index.ContainsKey(term))
+        if (!_index.TryGetValue(term, out var postingsList))
         {
-            _index[term] = new PostingsList();
+            postingsList = new PostingsList();
+            _index[term] = postingsList;
         }
-        _index[term].Add(chunkId, termFrequency);
+        postingsList.Add(chunkId, termFrequency);
     }
 
     /// <summary>

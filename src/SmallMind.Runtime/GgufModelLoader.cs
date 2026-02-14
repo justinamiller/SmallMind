@@ -992,23 +992,23 @@ namespace SmallMind.Runtime
                 if (name.Contains(".attn_q.weight"))
                 {
                     int layer = ExtractLayerIndex(name);
-                    if (!qkvGroups.ContainsKey(layer))
-                        qkvGroups[layer] = (null, null, null);
-                    qkvGroups[layer] = (tensorInfo, qkvGroups[layer].k, qkvGroups[layer].v);
+                    if (!qkvGroups.TryGetValue(layer, out var group))
+                        group = (null, null, null);
+                    qkvGroups[layer] = (tensorInfo, group.k, group.v);
                 }
                 else if (name.Contains(".attn_k.weight"))
                 {
                     int layer = ExtractLayerIndex(name);
-                    if (!qkvGroups.ContainsKey(layer))
-                        qkvGroups[layer] = (null, null, null);
-                    qkvGroups[layer] = (qkvGroups[layer].q, tensorInfo, qkvGroups[layer].v);
+                    if (!qkvGroups.TryGetValue(layer, out var group))
+                        group = (null, null, null);
+                    qkvGroups[layer] = (group.q, tensorInfo, group.v);
                 }
                 else if (name.Contains(".attn_v.weight"))
                 {
                     int layer = ExtractLayerIndex(name);
-                    if (!qkvGroups.ContainsKey(layer))
-                        qkvGroups[layer] = (null, null, null);
-                    qkvGroups[layer] = (qkvGroups[layer].q, qkvGroups[layer].k, tensorInfo);
+                    if (!qkvGroups.TryGetValue(layer, out var group))
+                        group = (null, null, null);
+                    qkvGroups[layer] = (group.q, group.k, tensorInfo);
                 }
             }
 

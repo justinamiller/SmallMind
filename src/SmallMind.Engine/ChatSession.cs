@@ -217,7 +217,7 @@ namespace SmallMind.Engine
                     var chunkStore = new Dictionary<string, Chunk>(Math.Max(4, topK / 2));
                     foreach (var chunk in chunks)
                     {
-                        if (!chunkStore.ContainsKey(chunk.ChunkId))
+                        if (!chunkStore.TryGetValue(chunk.ChunkId, out _))
                         {
                             chunkStore[chunk.ChunkId] = new Chunk
                             {
@@ -475,7 +475,7 @@ namespace SmallMind.Engine
                     var chunkStore = new Dictionary<string, Chunk>(topK);
                     foreach (var chunk in chunks)
                     {
-                        if (!chunkStore.ContainsKey(chunk.ChunkId))
+                        if (!chunkStore.TryGetValue(chunk.ChunkId, out _))
                         {
                             chunkStore[chunk.ChunkId] = new Chunk
                             {

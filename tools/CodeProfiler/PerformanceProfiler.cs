@@ -33,7 +33,7 @@ public sealed class PerformanceProfiler : IDisposable
 
         lock (_lock)
         {
-            if (!_profiles.ContainsKey(name))
+            if (!_profiles.TryGetValue(name, out _))
             {
                 _profiles[name] = new MethodProfile { Name = name };
             }
@@ -78,11 +78,11 @@ public sealed class PerformanceProfiler : IDisposable
                 if (_callStack.Count > 0)
                 {
                     var parent = _callStack.Peek();
-                    if (!profile.CalledBy.ContainsKey(parent.Name))
+                    if (!profile.CalledBy.TryGetValue(parent.Name, out long count))
                     {
-                        profile.CalledBy[parent.Name] = 0;
+                        count = 0;
                     }
-                    profile.CalledBy[parent.Name]++;
+                    profile.CalledBy[parent.Name] = count + 1;
                 }
             }
         }
