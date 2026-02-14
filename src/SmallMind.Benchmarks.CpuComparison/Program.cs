@@ -185,8 +185,7 @@ internal class Program
         // Warmup
         for (int i = 0; i < WARMUP_RUNS; i++)
         {
-            double ttftTemp;
-            RunGeneration(model, tokenizer, GENERATION_TOKENS, out ttftTemp);
+            RunGeneration(model, tokenizer, GENERATION_TOKENS, out _);
         }
 
         // Benchmark runs
