@@ -218,6 +218,11 @@ namespace SmallMind.Core.Core
                                             int combIdx = combRowStart + d;
                                             int windowIdx = windowRowStart + d;
 
+                                            if ((uint)combIdx >= (uint)countsSize)
+                                            {
+                                                throw new InvalidOperationException("Computed index for combined output is outside of the allocated counts buffer.");
+                                            }
+
                                             pCombined[combIdx] += pWindow[windowIdx];
                                             pCounts[combIdx] += 1.0f;
                                         }
@@ -236,7 +241,15 @@ namespace SmallMind.Core.Core
                     fixed (float* pCombined = combined.Data)
                     fixed (float* pCounts = counts)
                     {
-                        for (int i = 0; i < combined.Size; i++)
+                        int maxIndex = countsSize;
+                        if (counts.Length < maxIndex)
+                        {
+                            maxIndex = counts.Length;
+                        }
+
+                        int limit = combined.Size < maxIndex ? combined.Size : maxIndex;
+
+                        for (int i = 0; i < limit; i++)
                         {
                             if (pCounts[i] > 0)
                             {
