@@ -123,7 +123,9 @@ namespace SmallMind.Runtime.Scheduling
         {
             lock (_lock)
             {
-                return _scheduleHistory.Keys;
+                // Return array to avoid allocation of List, while ensuring thread-safety
+                // by materializing the keys within the lock
+                return _scheduleHistory.Keys.ToArray();
             }
         }
 

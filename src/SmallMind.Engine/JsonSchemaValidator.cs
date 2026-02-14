@@ -155,6 +155,9 @@ namespace SmallMind.Engine
             if (schema.TryGetProperty("enum", out var enumArray))
             {
                 // Use HashSet for O(1) lookup instead of List.Contains() which is O(n)
+                // Note: Error message path (line below) enumerates the HashSet, but that only
+                // occurs when validation fails (exceptional case). The happy path benefits from
+                // O(1) lookup, and HashSet allocation is minimal for typical enum sizes.
                 var validValues = new HashSet<string?>();
                 foreach (var e in enumArray.EnumerateArray())
                 {
