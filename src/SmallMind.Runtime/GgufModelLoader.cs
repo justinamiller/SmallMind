@@ -1077,11 +1077,11 @@ namespace SmallMind.Runtime
             HashSet<string> loadedParams, ModelConfig config, IInternalRuntimeLogger logger)
         {
             // Check if output.weight is loaded
-            if (!loadedParams.Contains("output.weight") && namedParams.TryGetValue("output.weight", out var outputWeight))
+            if (!loadedParams.Contains("output.weight") && 
+                namedParams.TryGetValue("output.weight", out var outputWeight) &&
+                namedParams.TryGetValue("token_embd.weight", out var tokenEmbed))
             {
                 logger.LogInfo("  Applying weight tying: copying token_embd.weight to output.weight");
-
-                var tokenEmbed = namedParams["token_embd.weight"];
 
                 if (tokenEmbed.Size != outputWeight.Size)
                 {
