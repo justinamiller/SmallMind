@@ -294,7 +294,7 @@ class BenchmarkRunner
 
     private async Task<ComprehensiveResults> RunComprehensiveBenchmarksAsync(RunnerConfig config, string outputDir)
     {
-        var benchmarkDir = Path.Combine(_repoRoot, "tools", "SmallMind.Benchmarks");
+        var benchmarkDir = Path.Combine(_repoRoot, "benchmarks", "SmallMind.Benchmarks.Metrics");
         var modelPath = Path.IsPathRooted(config.ModelPath) 
             ? config.ModelPath 
             : Guard.PathWithinDirectory(_repoRoot, config.ModelPath, nameof(config.ModelPath));
@@ -326,7 +326,7 @@ class BenchmarkRunner
 
     private async Task<SimdResults> RunSimdBenchmarksAsync(RunnerConfig config, string outputDir)
     {
-        var simdDir = Path.Combine(_repoRoot, "benchmarks");
+        var simdDir = Path.Combine(_repoRoot, "benchmarks", "specialized", "ProfilerBenchmarks");
         var outputFile = Path.Combine(outputDir, "simd-benchmark-results.md");
         
         var result = await RunProcessAsync("dotnet", "run -c Release", simdDir, config.Verbose);
@@ -356,7 +356,7 @@ class BenchmarkRunner
 
     private async Task<AllocationResults> RunAllocationProfilerAsync(RunnerConfig config, string outputDir)
     {
-        var allocDir = Path.Combine(_repoRoot, "benchmarks", "AllocationProfiler");
+        var allocDir = Path.Combine(_repoRoot, "benchmarks", "specialized", "AllocationProfiler");
         var outputFile = Path.Combine(outputDir, "allocation-profile.txt");
         
         var result = await RunProcessAsync("dotnet", "run -c Release", allocDir, config.Verbose);
