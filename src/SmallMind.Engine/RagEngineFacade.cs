@@ -221,13 +221,12 @@ namespace SmallMind.Engine
 
             // Stream tokens from generator
             int tokenCount = 0;
-            bool isLast = false;
             await foreach (var token in textGenerator.GenerateStreamingAsync(
                 request.Query,
                 cancellationToken: cancellationToken))
             {
                 tokenCount++;
-                isLast = (tokenCount >= request.GenerationOptions.MaxNewTokens);
+                bool isLast = (tokenCount >= request.GenerationOptions.MaxNewTokens);
 
                 yield return new TokenEvent(
                     kind: TokenEventKind.Token,
@@ -274,7 +273,7 @@ namespace SmallMind.Engine
             get
             {
                 // Load index metadata
-                var (_, chunks, metadata) = IndexSerializer.LoadIndex(_indexDirectory);
+                var (_, chunks, _) = IndexSerializer.LoadIndex(_indexDirectory);
 
                 // Optimize document count - avoid LINQ Select().Distinct().Count() allocation
                 var uniqueUris = new HashSet<string>();

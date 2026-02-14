@@ -236,7 +236,6 @@ namespace SmallMind.Quantization.IO.Smq
         {
             if (tensor is Q8Tensor q8)
             {
-                int totalElements = q8.Rows * q8.Cols;
                 return new SmqFormat.TensorEntry
                 {
                     Name = name,
@@ -250,7 +249,6 @@ namespace SmallMind.Quantization.IO.Smq
             }
             else if (tensor is Q4Tensor q4)
             {
-                int totalElements = q4.Rows * q4.Cols;
                 return new SmqFormat.TensorEntry
                 {
                     Name = name,

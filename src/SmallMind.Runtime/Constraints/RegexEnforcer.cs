@@ -42,7 +42,7 @@ namespace SmallMind.Runtime.Constraints
             if (string.IsNullOrEmpty(candidateTokenText))
                 return false;
 
-            string combined = generatedSoFar + candidateTokenText;
+            _ = generatedSoFar + candidateTokenText;
 
             // Check if the combined text could still lead to a match
             // This is a simplified check - we allow it if it's either:

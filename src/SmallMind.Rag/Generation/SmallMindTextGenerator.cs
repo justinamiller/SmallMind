@@ -84,7 +84,7 @@ namespace SmallMind.Rag.Generation
             // For production use, consider using InferenceEngine/InferenceSession directly,
             // which provide full streaming support via IAsyncEnumerable<GeneratedToken>.
 
-            var result = _sampling.Generate(
+            _ = _sampling.Generate(
                 prompt: prompt,
                 maxNewTokens: options.MaxTokens,
                 temperature: options.Temperature,

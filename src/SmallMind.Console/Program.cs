@@ -476,7 +476,7 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
         /// </summary>
         private static int DetermineOptimalBlockSize(int maxBlockSize = MAX_BLOCK_SIZE)
         {
-            var (totalMemoryGB, availableMemoryGB, cpuCores) = GetSystemInfo();
+            var (_, availableMemoryGB, cpuCores) = GetSystemInfo();
 
             Console.WriteLine($"System resources: {availableMemoryGB:F1}GB available RAM, {cpuCores} CPU cores");
 
@@ -553,7 +553,7 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
         /// </summary>
         private static int DetermineOptimalBatchSize(int blockSize)
         {
-            var (totalMemoryGB, availableMemoryGB, cpuCores) = GetSystemInfo();
+            var (_, availableMemoryGB, _) = GetSystemInfo();
 
             // Scale batch size inversely with block size to maintain memory usage
             // Larger block sizes need smaller batches to fit in memory
@@ -604,8 +604,8 @@ Autumn arrived with golden leaves falling gently to the earth, reminding everyon
             // Get memory information
             // On Linux, we can read from /proc/meminfo
             // On Windows, we use GC.GetGCMemoryInfo (available in .NET Core 3.0+)
-            double totalMemoryGB = 0;
-            double availableMemoryGB = 0;
+            double totalMemoryGB;
+            double availableMemoryGB;
 
             try
             {

@@ -148,7 +148,7 @@ namespace SmallMind.Tests
             tracker.Snapshot("Start");
 
             // Allocate some memory
-            var dummy = new float[10000];
+            _ = new float[10000];
 
             tracker.Snapshot("AfterAllocation");
 
@@ -166,7 +166,7 @@ namespace SmallMind.Tests
             // Act & Assert - Should not throw
             GradientDiagnostics.CheckGradients("TestGrads", gradients, verbose: true);
 
-            var (norm, hasIssue) = GradientDiagnostics.GetGradientNorm(gradients);
+            var (_, hasIssue) = GradientDiagnostics.GetGradientNorm(gradients);
             Assert.True(hasIssue);
         }
 

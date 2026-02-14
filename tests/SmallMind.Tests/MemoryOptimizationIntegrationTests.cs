@@ -240,7 +240,7 @@ namespace SmallMind.Tests
                 checkpointInterval: 2);
 
             // 2. Create checkpoint manager
-            var checkpointMgr = new CheckpointManager(
+            _ = new CheckpointManager(
                 checkpointInterval: config.CheckpointInterval,
                 enabled: config.EnableGradientCheckpointing);
 

@@ -99,7 +99,7 @@ internal static class ModelValidator
         }
 
         // Validate vocab size
-        if (metadata.TryGetValue("vocab_size", out var vocabObj))
+        if (metadata.TryGetValue("vocab_size", out _))
         {
             var vocabSize = GetMetadataInt(metadata, "vocab_size", 0);
             if (vocabSize <= 0 || vocabSize > MaxVocabSize)
@@ -113,7 +113,7 @@ internal static class ModelValidator
         }
 
         // Validate context length (block_size)
-        if (metadata.TryGetValue("block_size", out var blockSizeObj))
+        if (metadata.TryGetValue("block_size", out _))
         {
             var blockSize = GetMetadataInt(metadata, "block_size", 0);
             if (blockSize <= 0 || blockSize > MaxBlockSize)
@@ -127,7 +127,7 @@ internal static class ModelValidator
         }
 
         // Validate embedding dimension
-        if (metadata.TryGetValue("embed_dim", out var embedDimObj))
+        if (metadata.TryGetValue("embed_dim", out _))
         {
             var embedDim = GetMetadataInt(metadata, "embed_dim", 0);
             if (embedDim <= 0 || embedDim > MaxEmbedDim)
@@ -141,7 +141,7 @@ internal static class ModelValidator
         }
 
         // Validate number of layers
-        if (metadata.TryGetValue("num_layers", out var numLayersObj))
+        if (metadata.TryGetValue("num_layers", out _))
         {
             var numLayers = GetMetadataInt(metadata, "num_layers", 0);
             if (numLayers <= 0 || numLayers > MaxNumLayers)
@@ -155,7 +155,7 @@ internal static class ModelValidator
         }
 
         // Validate number of attention heads
-        if (metadata.TryGetValue("num_heads", out var numHeadsObj))
+        if (metadata.TryGetValue("num_heads", out _))
         {
             var numHeads = GetMetadataInt(metadata, "num_heads", 0);
             if (numHeads <= 0 || numHeads > MaxNumHeads)
@@ -168,7 +168,7 @@ internal static class ModelValidator
             }
 
             // Validate that embed_dim is divisible by num_heads
-            if (metadata.TryGetValue("embed_dim", out var embedDimObj2))
+            if (metadata.TryGetValue("embed_dim", out _))
             {
                 var embedDim = GetMetadataInt(metadata, "embed_dim", 0);
                 if (embedDim % numHeads != 0)
@@ -291,7 +291,7 @@ internal static class ModelValidator
             return 0; // Can't estimate without metadata
         }
 
-        long totalParams = 0;
+        long totalParams;
 
         // Try to get parameter count directly
         if (metadata.TryGetValue("num_params", out var numParamsObj))

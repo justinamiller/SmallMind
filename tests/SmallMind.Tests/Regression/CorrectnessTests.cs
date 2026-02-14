@@ -110,7 +110,7 @@ namespace SmallMind.Tests.Regression
             var tokenizer = _fixture.CreateTokenizer();
             var prompts = _fixture.GetKnownPrompts();
 
-            foreach (var (key, promptInfo) in prompts)
+            foreach (var (_, promptInfo) in prompts)
             {
                 // Act
                 var tokens = tokenizer.Encode(promptInfo.Prompt);
@@ -154,7 +154,6 @@ namespace SmallMind.Tests.Regression
         private float[] GetLastTokenLogits(Tensor logits)
         {
             // Assuming logits shape is [batch, seq_len, vocab_size]
-            int batchSize = logits.Shape[0];
             int seqLen = logits.Shape[1];
             int vocabSize = logits.Shape[2];
 

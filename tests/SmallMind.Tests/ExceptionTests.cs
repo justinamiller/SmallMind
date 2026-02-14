@@ -145,7 +145,6 @@ namespace SmallMind.Tests
             // Arrange
             const string message = "Loss explosion detected";
             const int step = 100;
-            const float loss = float.PositiveInfinity;
 
             // Act
             var exception = new TrainingException(message, step);

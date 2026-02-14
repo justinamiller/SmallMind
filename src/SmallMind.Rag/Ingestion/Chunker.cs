@@ -220,7 +220,6 @@ internal sealed class Chunker
                 {
                     chunks.Add(JoinParagraphs(currentChunk));
                     currentChunk.Clear();
-                    currentSize = 0;
                 }
 
                 // Start new chunk with this paragraph

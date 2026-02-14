@@ -66,7 +66,6 @@ namespace SmallMind.Tests
             // Arrange
             var data = new float[] { 1f, 2f, 3f, 4f, 5f, 6f }; // 2 batches x 3 features
             var gamma = new float[] { 1f, 1f, 1f };
-            var originalData = (float[])data.Clone();
 
             // Act
             RMSNormOps.RMSNormInPlace(data, gamma, batch: 2, features: 3);

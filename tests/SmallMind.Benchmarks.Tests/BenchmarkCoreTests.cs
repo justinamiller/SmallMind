@@ -146,7 +146,7 @@ public class EnvironmentInfoTests
         // Assert
         Assert.NotNull(simd);
         // At least one SIMD should be supported on modern hardware
-        var hasSimd = simd.Sse2 || simd.Avx || simd.Avx2 || simd.Avx512F || simd.AdvSimd;
+        _ = simd.Sse2 || simd.Avx || simd.Avx2 || simd.Avx512F || simd.AdvSimd;
         // We can't assert this is true because it depends on the runner
         // Just verify the detection ran without errors
     }

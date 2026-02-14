@@ -203,7 +203,7 @@ namespace SmallMind.Runtime.Batching
                     // Shutdown requested
                     break;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     // Track error in metrics to maintain observability
                     // Scheduler must remain resilient and not crash on individual errors
@@ -266,7 +266,7 @@ namespace SmallMind.Runtime.Batching
             // Use the first request's prompt tokens as representative for scheduling
             var representativeRequest = batch[0];
 
-            var schedule = _deterministicScheduler.Schedule(
+            _ = _deterministicScheduler.Schedule(
                 representativeRequest.PromptTokens,
                 maxNewTokens: representativeRequest.Options.MaxNewTokens,
                 _options.SchedulingPolicy,
