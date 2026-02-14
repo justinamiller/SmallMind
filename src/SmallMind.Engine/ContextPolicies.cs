@@ -84,9 +84,21 @@ namespace SmallMind.Engine
             }
 
             // Keep last N turns
-            var turnsToKeep = turns.Count > maxTurns
-                ? turns.Skip(turns.Count - maxTurns).ToList()
-                : turns;
+            List<List<ChatMessageV3>> turnsToKeep;
+            if (turns.Count > maxTurns)
+            {
+                // Manually copy the last N turns to avoid Skip().ToList() allocation
+                int skipCount = turns.Count - maxTurns;
+                turnsToKeep = new List<List<ChatMessageV3>>(maxTurns);
+                for (int i = skipCount; i < turns.Count; i++)
+                {
+                    turnsToKeep.Add(turns[i]);
+                }
+            }
+            else
+            {
+                turnsToKeep = turns;
+            }
 
             // Flatten back to message list
             var result = new List<ChatMessageV3>();
@@ -114,8 +126,17 @@ namespace SmallMind.Engine
                 return messages;
 
             // Need to truncate - keep system messages first
-            var systemMessages = messages.Where(m => m.Role == ChatRole.System).ToList();
-            var conversationMessages = messages.Where(m => m.Role != ChatRole.System).ToList();
+            // Use manual loops to avoid LINQ allocations
+            var systemMessages = new List<ChatMessageV3>();
+            var conversationMessages = new List<ChatMessageV3>();
+            
+            for (int i = 0; i < messages.Count; i++)
+            {
+                if (messages[i].Role == ChatRole.System)
+                    systemMessages.Add(messages[i]);
+                else
+                    conversationMessages.Add(messages[i]);
+            }
 
             int systemTokens = 0;
             foreach (var msg in systemMessages)

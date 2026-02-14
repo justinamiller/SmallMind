@@ -119,11 +119,11 @@ namespace SmallMind.Runtime.Scheduling
         /// <summary>
         /// Get all schedule IDs in history.
         /// </summary>
-        public IReadOnlyList<string> GetScheduleIds()
+        public IReadOnlyCollection<string> GetScheduleIds()
         {
             lock (_lock)
             {
-                return _scheduleHistory.Keys.ToList();
+                return _scheduleHistory.Keys;
             }
         }
 

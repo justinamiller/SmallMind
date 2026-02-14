@@ -154,7 +154,13 @@ namespace SmallMind.Engine
             // Validate enum
             if (schema.TryGetProperty("enum", out var enumArray))
             {
-                var validValues = enumArray.EnumerateArray().Select(e => e.GetString()).ToList();
+                // Use HashSet for O(1) lookup instead of List.Contains() which is O(n)
+                var validValues = new HashSet<string?>();
+                foreach (var e in enumArray.EnumerateArray())
+                {
+                    validValues.Add(e.GetString());
+                }
+                
                 if (!validValues.Contains(value))
                 {
                     errors.Add($"{path}: Value '{value}' is not in enum: [{string.Join(", ", validValues)}]");

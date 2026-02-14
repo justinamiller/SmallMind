@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using SmallMind.Abstractions.Telemetry;
 
 namespace SmallMind.Core.Simd
 {
@@ -122,27 +123,31 @@ namespace SmallMind.Core.Simd
         }
 
         /// <summary>
-        /// Prints kernel dispatch information to console.
+        /// Logs kernel dispatch information.
         /// Useful for diagnostics and performance analysis.
         /// </summary>
-        public static void PrintKernelInfo()
+        /// <param name="logger">Optional logger instance. If null, no logging occurs.</param>
+        public static void PrintKernelInfo(IRuntimeLogger? logger = null)
         {
-            Console.WriteLine("=== SmallMind Kernel Dispatch ===");
-            Console.WriteLine($"Platform: {Info.Platform}");
-            Console.WriteLine($"Best Instruction Set: {Info.BestInstructionSet}");
-            Console.WriteLine($"Vector Width: {Info.VectorWidthBits} bits ({Info.FloatsPerVector} floats)");
-            Console.WriteLine();
-            Console.WriteLine("CPU Capabilities:");
-            Console.WriteLine($"  AVX-512: {Info.IsAvx512Supported}");
-            Console.WriteLine($"  AVX2: {Info.IsAvx2Supported}");
-            Console.WriteLine($"  FMA: {Info.IsFmaSupported}");
-            Console.WriteLine($"  ARM NEON: {Info.IsNeonSupported}");
-            Console.WriteLine();
-            Console.WriteLine("Selected Kernels:");
-            Console.WriteLine($"  MatMul: {Info.MatMulKernel}");
-            Console.WriteLine($"  Softmax: {Info.SoftmaxKernel}");
-            Console.WriteLine($"  Activation: {Info.ActivationKernel}");
-            Console.WriteLine("=================================");
+            if (logger == null)
+                return;
+
+            logger.Info("=== SmallMind Kernel Dispatch ===");
+            logger.Info($"Platform: {Info.Platform}");
+            logger.Info($"Best Instruction Set: {Info.BestInstructionSet}");
+            logger.Info($"Vector Width: {Info.VectorWidthBits} bits ({Info.FloatsPerVector} floats)");
+            logger.Info("");
+            logger.Info("CPU Capabilities:");
+            logger.Info($"  AVX-512: {Info.IsAvx512Supported}");
+            logger.Info($"  AVX2: {Info.IsAvx2Supported}");
+            logger.Info($"  FMA: {Info.IsFmaSupported}");
+            logger.Info($"  ARM NEON: {Info.IsNeonSupported}");
+            logger.Info("");
+            logger.Info("Selected Kernels:");
+            logger.Info($"  MatMul: {Info.MatMulKernel}");
+            logger.Info($"  Softmax: {Info.SoftmaxKernel}");
+            logger.Info($"  Activation: {Info.ActivationKernel}");
+            logger.Info("=================================");
         }
     }
 }
