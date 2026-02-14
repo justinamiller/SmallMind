@@ -13,21 +13,6 @@ using Tensor = SmallMind.Core.Core.Tensor;
 namespace SmallMind.Training
 {
     /// <summary>
-    /// Training configuration options for Phase 2 optimizations
-    /// </summary>
-    internal class TrainingConfig
-    {
-        public bool UseMixedPrecision { get; set; } = false;
-        public bool UseGradientCheckpointing { get; set; } = false;
-        public CheckpointStrategy CheckpointStrategy { get; set; } = CheckpointStrategy.SqrtLayers;
-        public bool EnableDiagnostics { get; set; } = false;
-        public bool CheckGradientHealth { get; set; } = false;
-        public int DiagnosticInterval { get; set; } = 100;
-        public bool TrackModelMetrics { get; set; } = true;
-        public bool ComputeTokenAccuracy { get; set; } = false;
-    }
-
-    /// <summary>
     /// Handles dataset preparation, mini-batching, and the training loop with pure C#.
     /// </summary>
     [Obsolete("SmallMind.Training is experimental and not part of the stable inference API.")]
