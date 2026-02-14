@@ -453,10 +453,8 @@ namespace SmallMind.Abstractions
             var hash = HashCode.Combine(Content, Source, Score);
             if (Metadata != null)
             {
-                foreach (var kvp in Metadata)
-                {
-                    hash = HashCode.Combine(hash, kvp.Key, kvp.Value);
-                }
+                // Use count only to avoid non-deterministic ordering issues
+                hash = HashCode.Combine(hash, Metadata.Count);
             }
             return hash;
         }
