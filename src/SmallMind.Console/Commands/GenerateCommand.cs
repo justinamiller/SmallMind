@@ -129,7 +129,9 @@ namespace SmallMind.ConsoleApp.Commands
 
                 await foreach (var token in session.GenerateStreaming(request))
                 {
-                    System.Console.Write(token.TokenText);
+                    // Use format string with {0} to prevent uncontrolled format string vulnerability
+                    // This ensures token.TokenText is treated as data, not as a format specifier
+                    System.Console.Write("{0}", token.TokenText);
                 }
 
                 System.Console.WriteLine();
