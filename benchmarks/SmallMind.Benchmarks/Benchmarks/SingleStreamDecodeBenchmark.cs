@@ -152,7 +152,7 @@ namespace SmallMind.Benchmarks.Benchmarks
 
             double totalMs = timer.ElapsedMilliseconds;
             double tokensPerSec = result.Usage.CompletionTokens / (totalMs / 1000.0);
-            double ttftMs = result.Timings?.TimeToFirstTokenMs ?? 0;
+            double ttftMs = result.Timings.TimeToFirstTokenMs ?? 0;
 
             await Task.CompletedTask;
             return (tokensPerSec, ttftMs);

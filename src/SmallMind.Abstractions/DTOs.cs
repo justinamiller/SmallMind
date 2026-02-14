@@ -244,28 +244,57 @@ namespace SmallMind.Abstractions
     /// <summary>
     /// Output constraints for structured generation.
     /// </summary>
-    public sealed class OutputConstraints
+    public readonly struct OutputConstraints : IEquatable<OutputConstraints>
     {
         /// <summary>
         /// Gets or sets the JSON schema for output validation.
         /// </summary>
-        public string? JsonSchema { get; set; }
+        public string? JsonSchema { get; init; }
 
         /// <summary>
         /// Gets or sets the regex pattern for output validation.
         /// </summary>
-        public string? RegexPattern { get; set; }
+        public string? RegexPattern { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified OutputConstraints is equal to the current OutputConstraints.
+        /// </summary>
+        public bool Equals(OutputConstraints other) =>
+            JsonSchema == other.JsonSchema &&
+            RegexPattern == other.RegexPattern;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current OutputConstraints.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is OutputConstraints other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this OutputConstraints.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(JsonSchema, RegexPattern);
+
+        /// <summary>
+        /// Determines whether two specified OutputConstraints instances are equal.
+        /// </summary>
+        public static bool operator ==(OutputConstraints left, OutputConstraints right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified OutputConstraints instances are not equal.
+        /// </summary>
+        public static bool operator !=(OutputConstraints left, OutputConstraints right) => !left.Equals(right);
     }
 
     /// <summary>
     /// Represents a source citation in RAG responses.
     /// </summary>
-    public sealed class Citation
+    public readonly struct Citation : IEquatable<Citation>
     {
         /// <summary>
         /// Gets the source identifier or URI.
         /// </summary>
-        public string Source { get; init; } = string.Empty;
+        public required string Source { get; init; }
 
         /// <summary>
         /// Gets the optional title of the source document.
@@ -280,7 +309,38 @@ namespace SmallMind.Abstractions
         /// <summary>
         /// Gets the relevance score (0.0 to 1.0).
         /// </summary>
-        public float RelevanceScore { get; init; }
+        public required float RelevanceScore { get; init; }
+
+        /// <summary>
+        /// Determines whether the specified Citation is equal to the current Citation.
+        /// </summary>
+        public bool Equals(Citation other) =>
+            Source == other.Source &&
+            Title == other.Title &&
+            Snippet == other.Snippet &&
+            RelevanceScore == other.RelevanceScore;
+
+        /// <summary>
+        /// Determines whether the specified object is equal to the current Citation.
+        /// </summary>
+        public override bool Equals(object? obj) =>
+            obj is Citation other && Equals(other);
+
+        /// <summary>
+        /// Returns the hash code for this Citation.
+        /// </summary>
+        public override int GetHashCode() =>
+            HashCode.Combine(Source, Title, Snippet, RelevanceScore);
+
+        /// <summary>
+        /// Determines whether two specified Citation instances are equal.
+        /// </summary>
+        public static bool operator ==(Citation left, Citation right) => left.Equals(right);
+
+        /// <summary>
+        /// Determines whether two specified Citation instances are not equal.
+        /// </summary>
+        public static bool operator !=(Citation left, Citation right) => !left.Equals(right);
     }
 
     /// <summary>
