@@ -67,7 +67,6 @@ namespace SmallMind.Engine
                 {
                     // For single files, ingest parent directory with filter
                     var directory = Path.GetDirectoryName(sourcePath);
-                    var fileName = Path.GetFileName(sourcePath);
                     var extension = Path.GetExtension(sourcePath);
 
                     if (!string.IsNullOrEmpty(directory))
@@ -102,10 +101,6 @@ namespace SmallMind.Engine
             {
                 throw new ArgumentException("Index must be created by this RAG engine", nameof(request));
             }
-
-            // Create text generator adapter
-            var modelHandle = (ModelHandle)model;
-            var textGenerator = new InferenceEngineAdapter(modelHandle);
 
             // Use existing pipeline
             var pipeline = indexFacade.Pipeline;
