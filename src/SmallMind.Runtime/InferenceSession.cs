@@ -769,7 +769,7 @@ namespace SmallMind.Runtime
         private void ApplyRepetitionPenalties(float[] logits, List<int> context)
         {
             // Early exit if no penalties enabled
-            if (_options.RepetitionPenalty == 1.0f &&
+            if (MathF.Abs(_options.RepetitionPenalty - 1.0f) < 1e-9f &&
                 MathF.Abs(_options.PresencePenalty) < 1e-9f &&
                 MathF.Abs(_options.FrequencyPenalty) < 1e-9f)
             {
@@ -827,7 +827,7 @@ namespace SmallMind.Runtime
                 int count = _seenCounts![i];
 
                 // Apply repetition penalty
-                if (_options.RepetitionPenalty != 1.0f)
+                if (MathF.Abs(_options.RepetitionPenalty - 1.0f) > 1e-9f)
                 {
                     if (logits[tokenId] > 0)
                     {
