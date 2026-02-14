@@ -49,14 +49,14 @@ namespace SmallMind.Tests.Chat
         }
 
         [Fact]
-        public void Console_ChatTemplates_Format_ProducesExpectedOutput()
+        public void Engine_ChatTemplates_Format_Llama2_ProducesExpectedOutput()
         {
             // Arrange
-            var template = SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Llama2;
+            var template = SmallMind.Engine.ChatTemplateType.Llama2;
             string message = "Hello";
 
             // Act
-            string result = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(message, template, false);
+            string result = SmallMind.Engine.ChatTemplates.Format(message, template, false);
 
             // Assert
             Assert.Contains("[INST]", result);
@@ -65,45 +65,44 @@ namespace SmallMind.Tests.Chat
         }
 
         [Fact]
-        public void Console_ChatTemplates_DetectTemplate_Phi_Detected()
+        public void Engine_ChatTemplates_DetectTemplate_Phi_Detected()
         {
             // Act
-            var result = SmallMind.ConsoleApp.Commands.ChatTemplates.DetectTemplate("phi-2");
+            var result = SmallMind.Engine.ChatTemplates.DetectTemplate("phi-2");
 
             // Assert
-            Assert.Equal(SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Phi, result);
+            Assert.Equal(SmallMind.Engine.ChatTemplateType.Phi, result);
         }
 
         [Fact]
-        public void Engine_And_Console_ProduceSameOutput_ForChatML()
+        public void Engine_ChatTemplates_Format_ChatML_ConsistentOutput()
         {
             // Arrange
             string message = "Test message";
 
             // Act
-            string engineResult = SmallMind.Engine.ChatTemplates.Format(
+            string result = SmallMind.Engine.ChatTemplates.Format(
                 message, SmallMind.Engine.ChatTemplateType.ChatML, false);
-            string consoleResult = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
-                message, SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.ChatML, false);
 
-            // Assert - Both should produce identical output
-            Assert.Equal(engineResult, consoleResult);
+            // Assert - Should produce expected ChatML output
+            Assert.Contains("<|im_start|>user", result);
+            Assert.Contains("Test message", result);
+            Assert.Contains("<|im_end|>", result);
         }
 
         [Fact]
-        public void Engine_And_Console_ProduceSameOutput_ForLlama3()
+        public void Engine_ChatTemplates_Format_Llama3_SystemMessage()
         {
             // Arrange
             string message = "Test message";
 
             // Act
-            string engineResult = SmallMind.Engine.ChatTemplates.Format(
+            string result = SmallMind.Engine.ChatTemplates.Format(
                 message, SmallMind.Engine.ChatTemplateType.Llama3, true);
-            string consoleResult = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
-                message, SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Llama3, true);
 
-            // Assert - Both should produce identical output
-            Assert.Equal(engineResult, consoleResult);
+            // Assert - System message should use system role
+            Assert.Contains("system", result, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Test message", result);
         }
 
         [Fact]

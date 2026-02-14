@@ -1,3 +1,5 @@
+using SmallMind.Engine;
+
 namespace SmallMind.ConsoleApp.Commands
 {
     /// <summary>
@@ -24,7 +26,7 @@ namespace SmallMind.ConsoleApp.Commands
             int maxTokens = 128;
             double temperature = 0.7;
             double topP = 0.9;
-            ChatTemplates.TemplateType chatTemplate = ChatTemplates.TemplateType.None;
+            ChatTemplateType chatTemplate = ChatTemplateType.None;
             bool autoDetectTemplate = false;
 
             for (int i = 2; i < args.Length; i++)
@@ -46,13 +48,13 @@ namespace SmallMind.ConsoleApp.Commands
                     string templateName = args[++i].ToLowerInvariant();
                     chatTemplate = templateName switch
                     {
-                        "chatml" => ChatTemplates.TemplateType.ChatML,
-                        "llama2" => ChatTemplates.TemplateType.Llama2,
-                        "llama3" => ChatTemplates.TemplateType.Llama3,
-                        "mistral" => ChatTemplates.TemplateType.Mistral,
-                        "phi" => ChatTemplates.TemplateType.Phi,
-                        "none" => ChatTemplates.TemplateType.None,
-                        "auto" => ChatTemplates.TemplateType.None, // Will be detected
+                        "chatml" => ChatTemplateType.ChatML,
+                        "llama2" => ChatTemplateType.Llama2,
+                        "llama3" => ChatTemplateType.Llama3,
+                        "mistral" => ChatTemplateType.Mistral,
+                        "phi" => ChatTemplateType.Phi,
+                        "none" => ChatTemplateType.None,
+                        "auto" => ChatTemplateType.None, // Will be detected
                         _ => throw new ArgumentException($"Unknown chat template: {templateName}")
                     };
                     autoDetectTemplate = templateName == "auto";
@@ -95,14 +97,14 @@ namespace SmallMind.ConsoleApp.Commands
                     chatTemplate = ChatTemplates.DetectTemplate(modelPath);
                     System.Console.WriteLine($"  Auto-detected template: {ChatTemplates.GetTemplateDescription(chatTemplate)}");
                 }
-                else if (chatTemplate != ChatTemplates.TemplateType.None)
+                else if (chatTemplate != ChatTemplateType.None)
                 {
                     System.Console.WriteLine($"  Chat template: {ChatTemplates.GetTemplateDescription(chatTemplate)}");
                 }
 
                 // Apply chat template if specified
                 string formattedPrompt = prompt;
-                if (chatTemplate != ChatTemplates.TemplateType.None)
+                if (chatTemplate != ChatTemplateType.None)
                 {
                     formattedPrompt = ChatTemplates.Format(prompt, chatTemplate, isSystemMessage: false);
                 }

@@ -106,40 +106,40 @@ namespace SmallMind.Tests
         public void ChatTemplate_DetectsLlama2()
         {
             // This test doesn't require downloads
-            var template = SmallMind.ConsoleApp.Commands.ChatTemplates.DetectTemplate(
+            var template = SmallMind.Engine.ChatTemplates.DetectTemplate(
                 "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q8_0.gguf"
             );
 
-            Assert.Equal(SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Llama2, template);
+            Assert.Equal(SmallMind.Engine.ChatTemplateType.Llama2, template);
         }
 
         [Fact]
         public void ChatTemplate_DetectsMistral()
         {
-            var template = SmallMind.ConsoleApp.Commands.ChatTemplates.DetectTemplate(
+            var template = SmallMind.Engine.ChatTemplates.DetectTemplate(
                 "mistral-7b-instruct-v0.2.Q4_0.gguf"
             );
 
-            Assert.Equal(SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Mistral, template);
+            Assert.Equal(SmallMind.Engine.ChatTemplateType.Mistral, template);
         }
 
         [Fact]
         public void ChatTemplate_DetectsPhi()
         {
-            var template = SmallMind.ConsoleApp.Commands.ChatTemplates.DetectTemplate(
+            var template = SmallMind.Engine.ChatTemplates.DetectTemplate(
                 "phi-2-q8_0.gguf"
             );
 
-            Assert.Equal(SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Phi, template);
+            Assert.Equal(SmallMind.Engine.ChatTemplateType.Phi, template);
         }
 
         [Fact]
         public void ChatTemplate_FormatLlama2_Correct()
         {
             string prompt = "What is AI?";
-            string formatted = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
+            string formatted = SmallMind.Engine.ChatTemplates.Format(
                 prompt,
-                SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Llama2,
+                SmallMind.Engine.ChatTemplateType.Llama2,
                 isSystemMessage: false
             );
 
@@ -152,9 +152,9 @@ namespace SmallMind.Tests
         public void ChatTemplate_FormatMistral_Correct()
         {
             string prompt = "Hello";
-            string formatted = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
+            string formatted = SmallMind.Engine.ChatTemplates.Format(
                 prompt,
-                SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Mistral,
+                SmallMind.Engine.ChatTemplateType.Mistral,
                 isSystemMessage: false
             );
 
@@ -167,9 +167,9 @@ namespace SmallMind.Tests
         public void ChatTemplate_FormatChatML_Correct()
         {
             string prompt = "Test";
-            string formatted = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
+            string formatted = SmallMind.Engine.ChatTemplates.Format(
                 prompt,
-                SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.ChatML,
+                SmallMind.Engine.ChatTemplateType.ChatML,
                 isSystemMessage: false
             );
 
@@ -183,9 +183,9 @@ namespace SmallMind.Tests
         public void ChatTemplate_FormatPhi_Correct()
         {
             string prompt = "Question";
-            string formatted = SmallMind.ConsoleApp.Commands.ChatTemplates.Format(
+            string formatted = SmallMind.Engine.ChatTemplates.Format(
                 prompt,
-                SmallMind.ConsoleApp.Commands.ChatTemplates.TemplateType.Phi,
+                SmallMind.Engine.ChatTemplateType.Phi,
                 isSystemMessage: false
             );
 
