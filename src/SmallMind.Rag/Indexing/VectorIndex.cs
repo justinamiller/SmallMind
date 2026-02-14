@@ -284,7 +284,7 @@ namespace SmallMind.Rag.Indexing
                 normB += b[i] * b[i];
             }
 
-            if (normA < 1e-9f || normB < 1e-9f)
+            if (MathF.Abs(normA) < 1e-9f || MathF.Abs(normB) < 1e-9f)
             {
                 return 0f;
             }

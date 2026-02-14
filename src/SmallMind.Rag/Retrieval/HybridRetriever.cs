@@ -33,7 +33,7 @@ internal sealed class HybridRetriever
             throw new ArgumentException("Weights must be non-negative");
 
         float totalWeight = sparseWeight + denseWeight;
-        if (totalWeight < 1e-9f)
+        if (MathF.Abs(totalWeight) < 1e-9f)
             throw new ArgumentException("At least one weight must be positive");
 
         _sparseWeight = sparseWeight / totalWeight;
