@@ -15,14 +15,17 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  actions: read
-  contents: read
-  security-events: write
+  contents: read  # Minimal top-level permission
 
 jobs:
   analyze:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
+    
+    permissions:
+      actions: read  # Required for CodeQL action
+      contents: read  # Required to checkout code
+      security-events: write  # Required to upload CodeQL results
 
     strategy:
       fail-fast: false

@@ -13,15 +13,16 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  checks: write
   contents: read
-  pull-requests: write
 
 jobs:
   golden-tests:
     name: Golden Output Regression Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    
+    permissions:
+      checks: write  # Required for EnricoMi/publish-unit-test-result-action
     
     steps:
       - name: Checkout
