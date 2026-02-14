@@ -31,19 +31,26 @@ namespace SmallMind.ConsoleApp.Commands
             {
                 if (args[i] == "--max-tokens" && i + 1 < args.Length)
                 {
-                    maxTokens = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int tokens))
+                        maxTokens = tokens;
                 }
                 else if (args[i] == "--temperature" && i + 1 < args.Length)
                 {
-                    temperature = double.Parse(args[++i]);
+                    i++;
+                    if (double.TryParse(args[i], out double temp))
+                        temperature = temp;
                 }
                 else if (args[i] == "--top-p" && i + 1 < args.Length)
                 {
-                    topP = double.Parse(args[++i]);
+                    i++;
+                    if (double.TryParse(args[i], out double p))
+                        topP = p;
                 }
                 else if (args[i] == "--chat-template" && i + 1 < args.Length)
                 {
-                    string templateName = args[++i].ToLowerInvariant();
+                    i++;
+                    string templateName = args[i].ToLowerInvariant();
                     chatTemplate = templateName switch
                     {
                         "chatml" => ChatTemplates.TemplateType.ChatML,

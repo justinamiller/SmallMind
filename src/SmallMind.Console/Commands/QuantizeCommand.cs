@@ -25,7 +25,13 @@ namespace SmallMind.ConsoleApp.Commands
             string inputPath = args[0];
             string outputPath = args[1];
             string scheme = GetArgValue(args, "--scheme", "Q8_0").ToUpper();
-            int blockSize = int.Parse(GetArgValue(args, "--block-size", "64"));
+            
+            string blockSizeStr = GetArgValue(args, "--block-size", "64");
+            if (!int.TryParse(blockSizeStr, out int blockSize))
+            {
+                System.Console.Error.WriteLine($"Error: Invalid block size: {blockSizeStr}");
+                return 1;
+            }
 
             if (!File.Exists(inputPath))
             {

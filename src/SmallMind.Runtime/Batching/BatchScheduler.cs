@@ -211,9 +211,10 @@ namespace SmallMind.Runtime.Batching
                     {
                         _metrics.RecordRequestLatencyMs(-1); // Use -1 to indicate error
                     }
-                    catch
+                    catch (Exception)
                     {
-                        // If metrics recording fails, silently continue
+                        // Metrics recording failed - continue processing to maintain scheduler uptime
+                        // This is an acceptable trade-off for system resilience
                     }
                 }
             }

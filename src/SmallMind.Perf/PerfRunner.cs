@@ -55,10 +55,14 @@ internal class PerfRunner
             switch (args[i])
             {
                 case "--warmup" when i + 1 < args.Length:
-                    _warmupIters = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int warmup))
+                        _warmupIters = warmup;
                     break;
                 case "--iters" when i + 1 < args.Length:
-                    _measureIters = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int iters))
+                        _measureIters = iters;
                     break;
                 case "--bench" when i + 1 < args.Length:
                     _benchName = args[++i];
@@ -78,13 +82,17 @@ internal class PerfRunner
                     _promptFile = args[++i];
                     break;
                 case "--max-new-tokens" when i + 1 < args.Length:
-                    _maxNewTokens = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int maxTokens))
+                        _maxNewTokens = maxTokens;
                     break;
                 case "--deterministic":
                     _deterministicMode = true;
                     break;
                 case "--seed" when i + 1 < args.Length:
-                    _seed = int.Parse(args[++i]);
+                    i++;
+                    if (int.TryParse(args[i], out int seed))
+                        _seed = seed;
                     break;
                 case "--help":
                     PrintHelp();
