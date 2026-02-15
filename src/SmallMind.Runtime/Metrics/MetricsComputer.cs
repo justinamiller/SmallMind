@@ -25,6 +25,14 @@ namespace SmallMind.Runtime.Metrics
             int T = logits.Shape[1];
             int V = logits.Shape[2];
 
+            // Validate array dimensions match expected size to prevent pointer arithmetic issues
+            int expectedLogitsSize = B * T * V;
+            int expectedTargetsSize = B * T;
+            if (logits.Data.Length < expectedLogitsSize)
+                throw new ArgumentException($"Logits data array has {logits.Data.Length} elements but expected at least {expectedLogitsSize} based on shape ({B}, {T}, {V})");
+            if (targets.Data.Length < expectedTargetsSize)
+                throw new ArgumentException($"Targets data array has {targets.Data.Length} elements but expected at least {expectedTargetsSize} based on shape ({B}, {T})");
+
             int correctCount = 0;
             int totalCount = B * T;
 

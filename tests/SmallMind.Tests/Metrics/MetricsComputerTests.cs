@@ -77,6 +77,39 @@ namespace SmallMind.Tests.Metrics
         }
 
         [Fact]
+        public void ComputeTokenAccuracy_ThrowsOnInvalidLogitsSize()
+        {
+            // Arrange - Create logits with shape (1, 2, 3) but data only for (1, 2, 2)
+            var logits = new Tensor(new float[]
+            {
+                1.0f, 2.0f,  // Only 2 values per position
+                1.0f, 2.0f
+            }, new int[] { 1, 2, 3 }); // But shape says 3 values per position
+
+            var targets = new Tensor(new float[] { 0, 1 }, new int[] { 1, 2 });
+
+            // Act & Assert
+            Assert.Throws<ArgumentException>(() => MetricsComputer.ComputeTokenAccuracy(logits, targets));
+        }
+
+        [Fact]
+        public void ComputeTokenAccuracy_ThrowsOnInvalidTargetsSize()
+        {
+            // Arrange
+            var logits = new Tensor(new float[]
+            {
+                1.0f, 2.0f,
+                1.0f, 2.0f
+            }, new int[] { 1, 2, 2 });
+
+            // Targets with shape (1, 2) but only 1 element in data
+            var targets = new Tensor(new float[] { 0 }, new int[] { 1, 2 });
+
+            // Act & Assert
+            Assert.Throws<ArgumentException>(() => MetricsComputer.ComputeTokenAccuracy(logits, targets));
+        }
+
+        [Fact]
         public void ComputeGradientStats_DetectsHealthyGradients()
         {
             // Arrange
