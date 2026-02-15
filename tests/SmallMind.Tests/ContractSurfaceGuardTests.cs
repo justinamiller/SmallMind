@@ -41,7 +41,7 @@ namespace SmallMind.Tests
             "SmallMind.Abstractions.Citation",      // Citation for RAG/generated text
 
             // Options DTOs
-            "SmallMind.Abstractions.SmallMindOptions",
+            "SmallMind.Abstractions.EngineOptions",
             "SmallMind.Abstractions.GenerationOptions",
             "SmallMind.Abstractions.SessionOptions",
             "SmallMind.Abstractions.EngineCapabilities",

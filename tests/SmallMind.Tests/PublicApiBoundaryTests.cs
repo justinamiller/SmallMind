@@ -213,6 +213,10 @@ namespace SmallMind.Tests
                     // High-performance SIMD matrix multiplication with weight packing
                     allowed.Add("SmallMind.Core.Simd.PackedMatMul");
                     allowed.Add("SmallMind.Core.Simd.PackedMatMul+PackedMatrix");
+                    // SIMD matrix multiplication kernels (exposed for benchmarking)
+                    allowed.Add("SmallMind.Core.Simd.MatMulOps");
+                    allowed.Add("SmallMind.Core.Simd.MatMulOps+MatMulKernel");
+                    allowed.Add("SmallMind.Core.Simd.GemmMicrokernels");
                     break;
 
                 case "SmallMind.Runtime":
@@ -230,7 +234,13 @@ namespace SmallMind.Tests
                     break;
 
                 case "SmallMind.Quantization":
-                    // Only exception types should be public in Quantization
+                    // Quantization kernels and tensors (exposed for benchmarking)
+                    allowed.Add("SmallMind.Quantization.Tensors.Q4Tensor");
+                    allowed.Add("SmallMind.Quantization.Kernels.MatMulF32Q4");
+                    allowed.Add("SmallMind.Quantization.Kernels.MatMulF32Q4Optimized");
+                    // Quantization abstractions (needed for public APIs)
+                    allowed.Add("SmallMind.Quantization.Abstractions.IWeightTensor");
+                    allowed.Add("SmallMind.Quantization.Abstractions.QuantScheme");
                     break;
 
                 case "SmallMind.Engine":
