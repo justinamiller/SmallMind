@@ -32,6 +32,17 @@ namespace SmallMind.Training
         /// </summary>
         public TrainingMetrics Metrics { get; } = new TrainingMetrics();
 
+        /// <summary>
+        /// Current training stage information.
+        /// </summary>
+        public TrainingStageInfo StageInfo { get; private set; } = new TrainingStageInfo
+        {
+            CurrentStage = TrainingStage.Initialized,
+            StageStartedAt = DateTime.UtcNow,
+            StepsCompleted = 0,
+            TotalStepsPlanned = 0
+        };
+
         public Training(TransformerModel model, ITokenizer tokenizer, string trainingText,
                        int blockSize, int batchSize, int seed, ICheckpointStore? checkpointStore = null,
                        IRuntimeLogger? logger = null)
@@ -929,5 +940,212 @@ namespace SmallMind.Training
             }
         }
         */ // End of TrainOptimized - temporarily disabled
+
+        // ========================================
+        // Training Stage Management Methods
+        // ========================================
+
+        /// <summary>
+        /// Set the current training stage.
+        /// </summary>
+        /// <param name="stage">The stage to set</param>
+        /// <param name="totalSteps">Total steps planned for this stage (0 if unknown)</param>
+        public void SetTrainingStage(TrainingStage stage, int totalSteps = 0)
+        {
+            StageInfo = new TrainingStageInfo
+            {
+                CurrentStage = stage,
+                StageStartedAt = DateTime.UtcNow,
+                StepsCompleted = 0,
+                TotalStepsPlanned = totalSteps
+            };
+            _logger.Info($"Training stage set to: {stage}");
+        }
+
+        /// <summary>
+        /// Update the number of steps completed in the current stage.
+        /// </summary>
+        /// <param name="stepsCompleted">Number of steps completed</param>
+        public void UpdateStageProgress(int stepsCompleted)
+        {
+            StageInfo.StepsCompleted = stepsCompleted;
+        }
+
+        /// <summary>
+        /// Verify the current training stage and get information about next stage.
+        /// </summary>
+        /// <returns>A string describing the current stage and next stage (if any)</returns>
+        public string VerifyCurrentStage()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("=== Training Stage Information ===");
+            sb.AppendLine($"Current Stage: {StageInfo.CurrentStage}");
+            sb.AppendLine($"Steps Completed: {StageInfo.StepsCompleted}");
+            
+            if (StageInfo.TotalStepsPlanned > 0)
+            {
+                sb.AppendLine($"Total Steps Planned: {StageInfo.TotalStepsPlanned}");
+                sb.AppendLine($"Progress: {StageInfo.GetStageProgressPercentage():F2}%");
+            }
+            
+            sb.AppendLine($"Stage Started: {StageInfo.StageStartedAt:yyyy-MM-dd HH:mm:ss} UTC");
+            
+            var elapsed = DateTime.UtcNow - StageInfo.StageStartedAt;
+            sb.AppendLine($"Time in Stage: {elapsed.TotalMinutes:F2} minutes");
+            
+            if (StageInfo.IsStageComplete())
+            {
+                sb.AppendLine("Stage Status: COMPLETE ✓");
+                
+                var nextStage = StageInfo.GetNextStage();
+                if (nextStage.HasValue)
+                {
+                    sb.AppendLine($"Next Stage: {nextStage.Value}");
+                    sb.AppendLine("Ready to proceed to next stage.");
+                }
+                else
+                {
+                    sb.AppendLine("Next Stage: None - Training is complete!");
+                }
+            }
+            else
+            {
+                sb.AppendLine("Stage Status: IN PROGRESS");
+                
+                if (StageInfo.TotalStepsPlanned > 0)
+                {
+                    int remaining = StageInfo.TotalStepsPlanned - StageInfo.StepsCompleted;
+                    sb.AppendLine($"Remaining Steps: {remaining}");
+                }
+            }
+            
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Check if there is a next training stage to proceed to.
+        /// </summary>
+        /// <returns>True if there is a next stage, false otherwise</returns>
+        public bool HasNextStage()
+        {
+            return StageInfo.GetNextStage().HasValue;
+        }
+
+        /// <summary>
+        /// Get the next training stage, or null if training is complete.
+        /// </summary>
+        /// <returns>The next training stage, or null</returns>
+        public TrainingStage? GetNextStage()
+        {
+            return StageInfo.GetNextStage();
+        }
+
+        /// <summary>
+        /// Advance to the next training stage if current stage is complete.
+        /// </summary>
+        /// <param name="nextStageTotalSteps">Total steps for the next stage (0 if unknown)</param>
+        /// <returns>True if advanced to next stage, false if current stage not complete or no next stage</returns>
+        public bool AdvanceToNextStage(int nextStageTotalSteps = 0)
+        {
+            if (!StageInfo.IsStageComplete())
+            {
+                _logger.Info("Cannot advance to next stage - current stage is not complete.");
+                return false;
+            }
+
+            var nextStage = StageInfo.GetNextStage();
+            if (!nextStage.HasValue)
+            {
+                _logger.Info("Cannot advance to next stage - training is already complete.");
+                return false;
+            }
+
+            SetTrainingStage(nextStage.Value, nextStageTotalSteps);
+            _logger.Info($"Advanced to next stage: {nextStage.Value}");
+            return true;
+        }
+
+        /// <summary>
+        /// Save checkpoint with training stage information included in metadata.
+        /// </summary>
+        /// <param name="path">Path to save the checkpoint</param>
+        public void SaveCheckpointWithStage(string path)
+        {
+            var checkpoint = _model.ToCheckpoint();
+            
+            // Add stage information to metadata
+            checkpoint.Metadata.Extra["TrainingStage"] = StageInfo.CurrentStage.ToString();
+            checkpoint.Metadata.Extra["StageStepsCompleted"] = StageInfo.StepsCompleted;
+            checkpoint.Metadata.Extra["StageTotalSteps"] = StageInfo.TotalStepsPlanned;
+            checkpoint.Metadata.Extra["StageStartedAt"] = StageInfo.StageStartedAt.ToString("O"); // ISO 8601 format
+
+            // Auto-detect format based on file extension (symmetric with LoadCheckpoint)
+            if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                // Use JSON store for .json files
+                var jsonStore = new JsonCheckpointStore();
+                jsonStore.SaveAsync(checkpoint, path).GetAwaiter().GetResult();
+            }
+            else
+            {
+                // Use configured store (binary by default)
+                _checkpointStore.SaveAsync(checkpoint, path).GetAwaiter().GetResult();
+            }
+            
+            _logger.Info($"Checkpoint saved with stage information: {StageInfo.CurrentStage}");
+        }
+
+        /// <summary>
+        /// Load checkpoint and restore training stage information from metadata.
+        /// </summary>
+        /// <param name="path">Path to load the checkpoint from</param>
+        public void LoadCheckpointWithStage(string path)
+        {
+            ModelCheckpoint checkpoint;
+
+            // Auto-detect format based on file extension or content
+            if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                // Use JSON loader for legacy files
+                var jsonStore = new JsonCheckpointStore();
+                checkpoint = jsonStore.LoadAsync(path).GetAwaiter().GetResult();
+            }
+            else
+            {
+                // Use configured store (binary by default)
+                checkpoint = _checkpointStore.LoadAsync(path).GetAwaiter().GetResult();
+            }
+
+            _model.LoadFromCheckpoint(checkpoint);
+
+            // Restore stage information from metadata if present
+            if (checkpoint.Metadata.Extra.TryGetValue("TrainingStage", out var stageObj) &&
+                Enum.TryParse<TrainingStage>(stageObj.ToString(), out var stage))
+            {
+                StageInfo.CurrentStage = stage;
+                
+                if (checkpoint.Metadata.Extra.TryGetValue("StageStepsCompleted", out var stepsObj))
+                {
+                    StageInfo.StepsCompleted = Convert.ToInt32(stepsObj);
+                }
+                
+                if (checkpoint.Metadata.Extra.TryGetValue("StageTotalSteps", out var totalObj))
+                {
+                    StageInfo.TotalStepsPlanned = Convert.ToInt32(totalObj);
+                }
+                
+                if (checkpoint.Metadata.Extra.TryGetValue("StageStartedAt", out var startedObj) &&
+                    DateTime.TryParse(startedObj.ToString(), out var startedAt))
+                {
+                    StageInfo.StageStartedAt = startedAt;
+                }
+                
+                _logger.Info($"Checkpoint loaded with stage information: {StageInfo.CurrentStage}");
+            }
+            else
+            {
+                _logger.Info($"Checkpoint loaded from {path} (no stage information found)");
+            }
+        }
     }
 }
