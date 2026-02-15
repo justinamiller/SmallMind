@@ -18,7 +18,7 @@ namespace SmallMind.Core.Simd
     /// - Zero-allocation hot paths with stack-allocated buffers
     /// </summary>
     [SkipLocalsInit]
-    internal static class GemmMicrokernels
+    public static class GemmMicrokernels
     {
         // L2 cache blocking: ~256KB-1MB shared L2 per core
         private const int L2_BLOCK_M = 128;
