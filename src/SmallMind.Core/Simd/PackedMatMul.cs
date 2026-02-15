@@ -29,7 +29,9 @@ namespace SmallMind.Core.Simd
         
         // Microkernel tile sizes
         private const int MR = 6;   // M-register blocking
-        private const int NR = 16;  // N-register blocking (AVX2: 2x8, AVX-512: 1x16)
+        // NR must match the widest SIMD kernel (AVX-512 uses 32)
+        // Pack with NR=32 to support all kernels (AVX2 will use half the panel width)
+        private const int NR = 32;  // N-register blocking (AVX-512: 2x16, AVX2: 4x8)
         
         // Thread tiling threshold
         private const int PARALLEL_THRESHOLD_M = 256;
@@ -417,7 +419,8 @@ namespace SmallMind.Core.Simd
         }
         
         /// <summary>
-        /// AVX2 microkernel: 6×16 tile (MR=6, NR=16 using 2x8 vectors).
+        /// AVX2 microkernel: 6×16 partial tile (MR=6, processes 16 elements at a time from 32-wide panels).
+        /// Since panels are 32-wide but AVX2 processes 16 elements, each panel requires two iterations.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static unsafe void GemmMicrokernelAvx2(
@@ -431,27 +434,32 @@ namespace SmallMind.Core.Simd
                 return;
             }
             
+            // AVX2 processes 16 elements at a time (2x8 vectors)
+            const int NR_AVX2 = 16;
+            
             for (int i = 0; i < M; i += MR)
             {
                 int mr = Math.Min(MR, M - i);
                 
-                for (int j = 0; j < N; j += NR)
+                for (int j = 0; j < N; j += NR_AVX2)
                 {
-                    int nr = Math.Min(NR, N - j);
+                    int nr = Math.Min(NR_AVX2, N - j);
                     
-                    if (mr == MR && nr == NR)
+                    if (mr == MR && nr == NR_AVX2)
                     {
                         // Full tile fast path
-                        // Panel index for this j  
+                        // Panel index for this j (NR=32 in packed layout, but we process NR_AVX2=16 at a time)
+                        // Note: j increments by 16, so j=0 and j=16 both map to panel 0 (with different jInPanel offsets)
                         int panelIdx = j / NR;
-                        // Use panelStride (full K) for panel offset, not K (which is kb in blocked case)
+                        // Use panelStride (full K) for panel offset
                         float* panelBase = Bpacked + panelIdx * panelStride * NR;
+                        int jInPanel = j % NR;  // Offset within the 32-wide panel (0 or 16)
                         
                         GemmKernelAvx2_6x16(
                             A + i * ldA,
-                            panelBase,
+                            panelBase + jInPanel,
                             C + i * ldC + j,
-                            K, ldA, ldC);
+                            K, ldA, NR, ldC);
                     }
                     else
                     {
@@ -570,15 +578,13 @@ namespace SmallMind.Core.Simd
         /// <summary>
         /// AVX2 kernel: 6×16 tile with FMA.
         /// Processes 6 rows × 16 columns using register blocking.
-        /// Bpacked uses panel-major layout: sequential access pattern k*NR+offset.
+        /// Bpacked uses panel-major layout with ldB stride between rows.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static unsafe void GemmKernelAvx2_6x16(
             float* A, float* Bpacked, float* C,
-            int K, int ldA, int ldC)
+            int K, int ldA, int ldB, int ldC)
         {
-            const int NR = 16;
-            
             // Load accumulators (6 rows × 2 AVX2 vectors)
             Vector256<float> c00 = Avx.LoadVector256(C + 0 * ldC + 0);
             Vector256<float> c01 = Avx.LoadVector256(C + 0 * ldC + 8);
@@ -593,12 +599,12 @@ namespace SmallMind.Core.Simd
             Vector256<float> c50 = Avx.LoadVector256(C + 5 * ldC + 0);
             Vector256<float> c51 = Avx.LoadVector256(C + 5 * ldC + 8);
             
-            // K-dimension loop - panel-major access
+            // K-dimension loop - panel-major access with ldB stride
             for (int k = 0; k < K; k++)
             {
-                // Load B (16 elements from panel-major layout)
-                Vector256<float> b0 = Avx.LoadVector256(Bpacked + k * NR + 0);
-                Vector256<float> b1 = Avx.LoadVector256(Bpacked + k * NR + 8);
+                // Load B (16 elements from panel-major layout, using ldB as row stride)
+                Vector256<float> b0 = Avx.LoadVector256(Bpacked + k * ldB + 0);
+                Vector256<float> b1 = Avx.LoadVector256(Bpacked + k * ldB + 8);
                 
                 // Broadcast A and FMA
                 Vector256<float> a0 = Vector256.Create(A[0 * ldA + k]);

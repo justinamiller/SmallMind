@@ -9,7 +9,7 @@ namespace SmallMind.Quantization.Kernels
     /// Optimized block-oriented Q4 matrix multiplication kernels.
     /// Avoids per-element nibble decode by processing entire blocks at once.
     /// </summary>
-    internal static class MatMulF32Q4Optimized
+    public static class MatMulF32Q4Optimized
     {
         /// <summary>
         /// Matrix multiply: C[M×N] = A[M×K] * B[K×N] where B is Q4 quantized.
