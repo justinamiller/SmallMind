@@ -419,7 +419,8 @@ namespace SmallMind.Core.Simd
         }
         
         /// <summary>
-        /// AVX2 microkernel: 6×16 tile (MR=6, processes 16 elements from 32-wide panels using 2x8 vectors).
+        /// AVX2 microkernel: 6×16 partial tile (MR=6, processes 16 elements at a time from 32-wide panels).
+        /// Since panels are 32-wide but AVX2 processes 16 elements, each panel requires two iterations.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveOptimization | MethodImplOptions.AggressiveInlining)]
         private static unsafe void GemmMicrokernelAvx2(
@@ -448,10 +449,11 @@ namespace SmallMind.Core.Simd
                     {
                         // Full tile fast path
                         // Panel index for this j (NR=32 in packed layout, but we process NR_AVX2=16 at a time)
+                        // Note: j increments by 16, so j=0 and j=16 both map to panel 0 (with different jInPanel offsets)
                         int panelIdx = j / NR;
                         // Use panelStride (full K) for panel offset
                         float* panelBase = Bpacked + panelIdx * panelStride * NR;
-                        int jInPanel = j % NR;
+                        int jInPanel = j % NR;  // Offset within the 32-wide panel (0 or 16)
                         
                         GemmKernelAvx2_6x16(
                             A + i * ldA,
