@@ -1,5 +1,4 @@
 using SmallMind.Abstractions;
-using EngineSmallMindOptions = SmallMind.SmallMindOptions;
 
 namespace SmallMind.Tests
 {
@@ -15,7 +14,7 @@ namespace SmallMind.Tests
 
         public RuntimeGuaranteeTests()
         {
-            _engine = Engine.SmallMind.Create(new EngineSmallMindOptions
+            _engine = Engine.SmallMind.Create(new EngineOptions
             {
                 EnableKvCache = false,
                 EnableRag = false,
