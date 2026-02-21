@@ -1,5 +1,7 @@
+using SmallMind.Quantization.IO.Gguf;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Gguf;
+using SmallMind.Runtime.Gguf.TensorDecoders;
 
 namespace SmallMind.Tests
 {
@@ -307,6 +309,30 @@ namespace SmallMind.Tests
             });
 
             Assert.Equal("ggufPath", ex.ParamName);
+        }
+
+        [Fact]
+        public void TensorDecoderRegistry_Q6K_IsSupported()
+        {
+            // Ensure Q6_K is recognized by the decoder registry used for GGUF compatibility checks.
+            var registry = new TensorDecoderRegistry();
+            Assert.True(registry.IsSupported(GgufTensorType.Q6_K),
+                "Q6_K must be registered in TensorDecoderRegistry for end-to-end GGUF loading.");
+        }
+
+        [Fact]
+        public void TensorDecoderRegistry_CommonTypes_AreSupported()
+        {
+            // Regression guard: commonly used tensor types must never be accidentally removed.
+            var registry = new TensorDecoderRegistry();
+            Assert.True(registry.IsSupported(GgufTensorType.F32),  "F32 must be supported");
+            Assert.True(registry.IsSupported(GgufTensorType.F16),  "F16 must be supported");
+            Assert.True(registry.IsSupported(GgufTensorType.Q4_0), "Q4_0 must be supported");
+            Assert.True(registry.IsSupported(GgufTensorType.Q8_0), "Q8_0 must be supported");
+            Assert.True(registry.IsSupported(GgufTensorType.Q4_K), "Q4_K must be supported");
+            Assert.True(registry.IsSupported(GgufTensorType.Q5_K), "Q5_K must be supported");
+            Assert.True(registry.IsSupported(GgufTensorType.Q6_K), "Q6_K must be supported");
+            Assert.True(registry.IsSupported(GgufTensorType.Q8_K), "Q8_K must be supported");
         }
     }
 }

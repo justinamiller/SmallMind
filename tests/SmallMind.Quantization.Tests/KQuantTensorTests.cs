@@ -9,8 +9,6 @@ namespace SmallMind.Quantization.Tests
     /// </summary>
     public class KQuantTensorTests
     {
-        private const float Q4K_Tolerance = 0.15f; // 15% tolerance for Q4_K (4-bit super-block)
-        private const float Q6K_Tolerance = 0.05f; // 5% tolerance for Q6_K (6-bit super-block)
         private const float MatMul_Tolerance = 0.01f; // 1% tolerance for MatMul correctness
 
         #region Q4_K Tests
@@ -50,7 +48,7 @@ namespace SmallMind.Quantization.Tests
             Assert.Throws<ArgumentException>(() => new Q4KTensor(256, 100));
         }
 
-        [Fact(Skip = "Q4_K dequantization test data needs refinement")]
+        [Fact]
         public void Q4K_Dequantize_KnownValues_ProducesExpectedOutput()
         {
             // Arrange: Create a simple Q4_K block with known values
@@ -85,11 +83,11 @@ namespace SmallMind.Quantization.Tests
 
             // Assert
             Assert.Equal(256, result.Length);
-            // Values should be in reasonable range given the quantization
+            // Values should be in reasonable range given Q4_K: d=1.0, 6-bit scale≤63, 4-bit q≤15 → max |val|≤945
             foreach (var val in result)
             {
                 Assert.True(float.IsFinite(val), "Dequantized value should be finite");
-                Assert.InRange(val, -100f, 100f); // Reasonable range
+                Assert.InRange(val, -1000f, 1000f); // Reasonable range for Q4_K
             }
         }
 
@@ -106,7 +104,7 @@ namespace SmallMind.Quantization.Tests
             Assert.Equal(Abstractions.QuantScheme.Q4_K, weightTensor.Scheme);
         }
 
-        [Fact(Skip = "Q4_K fused MatMul needs test data refinement")]
+        [Fact]
         public void Q4K_FusedMatMul_MatchesReferenceImplementation()
         {
             // Arrange: Create small matrices for testing
@@ -176,7 +174,7 @@ namespace SmallMind.Quantization.Tests
             Assert.Throws<ArgumentException>(() => new Q6KTensor(256, 100));
         }
 
-        [Fact(Skip = "Q6_K dequantization test data needs refinement")]
+        [Fact]
         public void Q6K_Dequantize_KnownValues_ProducesExpectedOutput()
         {
             // Arrange: Create a simple Q6_K block
@@ -232,7 +230,7 @@ namespace SmallMind.Quantization.Tests
             Assert.Equal(Abstractions.QuantScheme.Q6_K, weightTensor.Scheme);
         }
 
-        [Fact(Skip = "Q6_K fused MatMul needs test data refinement")]
+        [Fact]
         public void Q6K_FusedMatMul_MatchesReferenceImplementation()
         {
             // Arrange
@@ -266,25 +264,44 @@ namespace SmallMind.Quantization.Tests
 
         private void FillQ4KWithRandomData(Q4KTensor tensor, Random random)
         {
-            // Fill with semi-realistic random data
-            for (int i = 0; i < tensor.Data.Length; i++)
+            // Fill each 144-byte block with valid data:
+            // d (fp16) at [0,1] and dmin (fp16) at [2,3] must not be NaN/Infinity.
+            // fp16 NaN/Inf has exponent bits [14:10] = 0b11111; fp16 1.0 = 0x3C00 is safe.
+            const int bytesPerBlock = 144;
+            int numBlocks = tensor.Data.Length / bytesPerBlock;
+            for (int b = 0; b < numBlocks; b++)
             {
-                tensor.Data[i] = (byte)random.Next(256);
+                int off = b * bytesPerBlock;
+                tensor.Data[off + 0] = 0x00; // d low byte  (fp16 1.0 = 0x3C00)
+                tensor.Data[off + 1] = 0x3C; // d high byte
+                tensor.Data[off + 2] = 0x00; // dmin low byte (fp16 1.0 = 0x3C00)
+                tensor.Data[off + 3] = 0x3C; // dmin high byte
+                for (int i = 4; i < bytesPerBlock; i++)
+                    tensor.Data[off + i] = (byte)random.Next(256);
             }
         }
 
         private void FillQ6KWithRandomData(Q6KTensor tensor, Random random)
         {
-            // Fill with semi-realistic random data
-            for (int i = 0; i < tensor.Data.Length; i++)
+            // Fill each 210-byte block with valid data:
+            // d (fp16) at [208,209] must not be NaN/Infinity.
+            // fp16 1.0 = 0x3C00 is safe.
+            const int bytesPerBlock = 210;
+            int numBlocks = tensor.Data.Length / bytesPerBlock;
+            for (int b = 0; b < numBlocks; b++)
             {
-                tensor.Data[i] = (byte)random.Next(256);
+                int off = b * bytesPerBlock;
+                for (int i = 0; i < 208; i++)
+                    tensor.Data[off + i] = (byte)random.Next(256);
+                tensor.Data[off + 208] = 0x00; // d low byte  (fp16 1.0 = 0x3C00)
+                tensor.Data[off + 209] = 0x3C; // d high byte
             }
         }
 
         private void NaiveMatMul(float[] A, float[] B, float[] C, int M, int K, int N)
         {
-            // C[M×N] = A[M×K] × B[K×N]
+            // C[M×N] = A[M×K] × B^T where B is stored as N×K (row n = weights for output n).
+            // This matches the fused kernel semantics: C[m][n] = sum_k A[m][k] * B[n][k].
             for (int m = 0; m < M; m++)
             {
                 for (int n = 0; n < N; n++)
@@ -292,7 +309,7 @@ namespace SmallMind.Quantization.Tests
                     float sum = 0f;
                     for (int k = 0; k < K; k++)
                     {
-                        sum += A[m * K + k] * B[k * N + n];
+                        sum += A[m * K + k] * B[n * K + k];
                     }
                     C[m * N + n] = sum;
                 }
@@ -315,10 +332,10 @@ namespace SmallMind.Quantization.Tests
 
         private ushort FloatToHalf(float value)
         {
-            // Simple FP32 to FP16 conversion
+            // FP32 to FP16 conversion (signed exponent arithmetic to handle zero/denormals correctly)
             uint bits = BitConverter.ToUInt32(BitConverter.GetBytes(value), 0);
             uint sign = (bits >> 16) & 0x8000;
-            uint exponent = ((bits >> 23) & 0xFF) - 112;
+            int exponent = (int)((bits >> 23) & 0xFF) - 112; // signed: 0.0f gives exp=-112 ≤ 0
             uint mantissa = (bits >> 13) & 0x3FF;
 
             if (exponent <= 0)
@@ -326,7 +343,7 @@ namespace SmallMind.Quantization.Tests
             if (exponent >= 31)
                 return (ushort)(sign | 0x7C00); // Infinity
 
-            return (ushort)(sign | (exponent << 10) | mantissa);
+            return (ushort)(sign | ((uint)exponent << 10) | mantissa);
         }
 
         #endregion
