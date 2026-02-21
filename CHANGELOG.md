@@ -18,6 +18,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Q8_K`: 292 bytes per 256-element super-block
 - **Q6_K size calculation unit tests** - Added 7 new tests in `GgufReaderTests` covering single-block, multi-block, 2D tensor, sub-block boundary, mixed-format, and related K-quant formats
 
+#### Chat Session (Level 3 API)
+- **`IChatSession.SendAsync(ChatRequest)`** - Level 3 messages-first chat API supporting multi-turn conversations with tools, structured output, and telemetry hooks
+  - `ChatRequest` carries a list of `ChatMessageV3` messages plus optional tools, response format, and per-request context policy
+  - `ChatResponse` returns the assistant message, finish reason, `UsageStats` (prompt tokens, completion tokens, TTFT, tokens/sec), and optional citations
+  - `ChatMessageV3` supports `System`, `User`, `Assistant`, and `Tool` roles with optional tool calls, tool call IDs, and per-message metadata
+- **`ResponseFormat`** - Structured output control: `Text` (default), `JsonObject` (any valid JSON), `JsonSchema` (schema-constrained JSON)
+- **Tool calling (function calling)** - `ToolDefinition` / `ToolCall` / `ToolResult` / `IToolExecutor` interface for model-driven function calling with configurable `MaxToolCalls` limit per request
+- **`IChatTelemetry`** - Observability hook interface for chat sessions:
+  - Events: `OnRequestStart`, `OnFirstToken`, `OnRequestComplete`, `OnContextPolicyApplied`, `OnKvCacheAccess`, `OnToolCall`, `OnKvCacheBudgetExceeded`, `OnKvCacheEviction`
+  - `NoOpTelemetry.Instance` (default, zero overhead)
+  - `ConsoleTelemetry` (logs to `IRuntimeLogger`)
+- **`ChatClient`** (`IChatClient`) - Synchronous wrapper over `IChatSession` for embedding in sync call stacks without deadlock risk
+  - `SendChat(ChatRequest)`, `AddSystemMessage(string)`, `GetSessionInfo()`
+
+#### Context Policies (`IContextPolicy`)
+- **`KeepLastNTurnsPolicy`** - Keeps the last N conversation turns (user + assistant pairs), always pinning system messages at the front; falls back to token budget via `FitToBudget`
+- **`SlidingWindowPolicy`** - Keeps the most recent messages that fit within the token budget, always pinning system messages
+- **`KeepAllPolicy`** - No truncation (use when budget is guaranteed or for testing)
+- **`ITokenCounter`** / **`TokenizerAdapter`** - Token counting abstraction allowing any `ITokenizer` to be used for context budgeting
+
+#### Session Persistence (`ISessionStore`)
+- **`InMemorySessionStore`** - Thread-safe `ConcurrentDictionary`-backed session store; `Get`, `Upsert`, `Delete`, `Exists`, `Clear`
+- **`FileSessionStore`** - Durable JSON session storage with atomic writes (temp-file-then-rename), schema versioning, and forward-compatible V1→V2 migration
+  - `ChatSessionData` / `ChatTurnData` (in `SmallMind.Abstractions`) persist per-turn user/assistant messages, timestamps, citations, and metadata
+- **`ChatSessionBuilder`** - Fluent builder for configuring `IChatSession` instances:
+  - `WithAutoTemplate()` - auto-detect chat template from model metadata
+  - `WithKvCache([customStore])` - enable KV cache with optional custom store
+  - `WithSlidingWindowContext()` - configure sliding window overflow strategy
+  - `WithMaxHistoryTurns(n)` - cap conversation history length
+  - `WithRag(pipeline)` - attach a RAG pipeline for retrieval-augmented generation
+  - `Configure(action)` - escape hatch for arbitrary `ChatSessionOptions` configuration
+
 ### Refactoring
 - **Removed duplicate utility methods across projects** - Promoted shared utility methods into canonical static helpers to reduce code duplication and maintenance drift:
   - Created `ChatTemplateFormatter` in `SmallMind.Core/Utilities` for chat template formatting (used by Engine and Console)
