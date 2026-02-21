@@ -10,8 +10,9 @@ echo "  SmallMind Comprehensive Benchmark Runner"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 
-# Change to repository root
-cd "$(dirname "$0")"
+# Resolve repository root (parent of the scripts/ directory)
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_ROOT"
 
 # Parse arguments
 QUICK_MODE=false
@@ -60,9 +61,9 @@ done
 # Build the runner
 if [ "$SKIP_BUILD" = false ]; then
     echo "Building BenchmarkRunner..."
-    cd ../tools/BenchmarkRunner
+    cd "$REPO_ROOT/tools/BenchmarkRunner"
     dotnet build -c Release > /dev/null 2>&1
-    cd ../..
+    cd "$REPO_ROOT"
     echo "✓ Build complete"
     echo ""
 fi
@@ -83,7 +84,7 @@ if [ -n "$VERBOSE" ]; then
 fi
 
 # Run the benchmark runner
-cd ../tools/BenchmarkRunner
+cd "$REPO_ROOT/tools/BenchmarkRunner"
 dotnet run -c Release -- $ARGS
 
 echo ""
