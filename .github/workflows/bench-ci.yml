@@ -14,6 +14,8 @@ jobs:
   benchmark:
     name: Benchmark (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    # Non-blocking: benchmark instability must not gate PR merges or releases
+    continue-on-error: true
     strategy:
       matrix:
         include:

@@ -56,7 +56,7 @@ jobs:
       
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2.22.0
-        if: always()
+        if: always() && runner.os == 'Linux'
         with:
           files: |
             **/TestResults/*.trx

@@ -1,0 +1,18 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- Benchmark tools don't need XML documentation or NuGet packaging -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+    <!-- Suppress false-positive warnings in benchmark/profiler infrastructure:
+         CA1303 = literal strings as localized params (no localization in benchmark tools)
+         CA1305 = specify IFormatProvider (not relevant for diagnostic/bench output)
+         CA1307 = specify StringComparison (benchmark code; correctness > locale-safety)
+         CA1310 = specify StringComparison for correctness (same rationale)
+         CA1707 = underscores in identifiers (benchmark helper method naming)
+         CA1852 = type can be sealed (not meaningful in single-assembly benchmark tools)
+         CA2007 = ConfigureAwait (not required in benchmark runner entry points) -->
+    <NoWarn>$(NoWarn);CA1303;CA1305;CA1307;CA1310;CA1707;CA1852;CA2007</NoWarn>
+  </PropertyGroup>
+</Project>
