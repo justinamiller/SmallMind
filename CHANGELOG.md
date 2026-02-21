@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Q6_K GGUF tensor size support** - `GgufReader.CalculateTensorSize` now handles all K-quant tensor types used by llama.cpp:
+  - `Q6_K`: 210 bytes per 256-element super-block (128 ql + 64 qh + 16 scales + 2 fp16 d)
+  - `Q4_K`: 144 bytes per 256-element super-block (2 d + 2 dmin + 12 scales + 128 qs)
+  - `Q5_K`: 176 bytes per 256-element super-block (2 d + 2 dmin + 12 scales + 32 qh + 128 qs)
+  - `Q5_0`: 22 bytes per 32-element block (2 scale + 4 high bits + 16 low nibbles)
+  - `Q2_K`: 84 bytes per 256-element super-block
+  - `Q3_K`: 114 bytes per 256-element super-block
+  - `Q8_K`: 292 bytes per 256-element super-block
+- **Q6_K size calculation unit tests** - Added 7 new tests in `GgufReaderTests` covering single-block, multi-block, 2D tensor, sub-block boundary, mixed-format, and related K-quant formats
+
 ### Refactoring
 - **Removed duplicate utility methods across projects** - Promoted shared utility methods into canonical static helpers to reduce code duplication and maintenance drift:
   - Created `ChatTemplateFormatter` in `SmallMind.Core/Utilities` for chat template formatting (used by Engine and Console)

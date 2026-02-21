@@ -373,5 +373,147 @@ namespace SmallMind.Quantization.Tests
                 Assert.Equal(testData[i], result[i]);
             }
         }
+
+        [Fact]
+        public void ReadModelInfo_WithQ6KTensor_ParsesCorrectly()
+        {
+            // Arrange: one Q6_K tensor with 256 elements (1 super-block = 210 bytes)
+            var tensors = new List<(string, GgufTensorType, ulong[])>
+            {
+                ("model.weight", GgufTensorType.Q6_K, new ulong[] { 256 })
+            };
+            byte[] data = CreateGgufWithTensors(tensors);
+
+            // Act
+            using var ms = new MemoryStream(data);
+            using var reader = new GgufReader(ms);
+            var modelInfo = reader.ReadModelInfo();
+
+            // Assert
+            Assert.Single(modelInfo.Tensors);
+            Assert.Equal(GgufTensorType.Q6_K, modelInfo.Tensors[0].Type);
+            // 1 super-block × 210 bytes = 210 bytes
+            Assert.Equal((ulong)210, modelInfo.Tensors[0].Size);
+        }
+
+        [Fact]
+        public void ReadModelInfo_WithQ6KTensor_TwoBlocks_SizeIsCorrect()
+        {
+            // Arrange: 512 elements = 2 super-blocks × 210 bytes = 420 bytes
+            var tensors = new List<(string, GgufTensorType, ulong[])>
+            {
+                ("model.weight", GgufTensorType.Q6_K, new ulong[] { 512 })
+            };
+            byte[] data = CreateGgufWithTensors(tensors);
+
+            // Act
+            using var ms = new MemoryStream(data);
+            using var reader = new GgufReader(ms);
+            var modelInfo = reader.ReadModelInfo();
+
+            // Assert: 2 super-blocks × 210 bytes = 420
+            Assert.Equal((ulong)420, modelInfo.Tensors[0].Size);
+        }
+
+        [Fact]
+        public void ReadModelInfo_WithQ6KTensor_2D_SizeIsCorrect()
+        {
+            // Arrange: 4096×256 = 1,048,576 elements = 4096 super-blocks × 210 bytes
+            var tensors = new List<(string, GgufTensorType, ulong[])>
+            {
+                ("model.layers.0.weight", GgufTensorType.Q6_K, new ulong[] { 4096, 256 })
+            };
+            byte[] data = CreateGgufWithTensors(tensors);
+
+            // Act
+            using var ms = new MemoryStream(data);
+            using var reader = new GgufReader(ms);
+            var modelInfo = reader.ReadModelInfo();
+
+            // Assert: (4096 × 256) / 256 blocks × 210 bytes = 4096 × 210
+            ulong expectedSize = 4096 * 210;
+            Assert.Equal(expectedSize, modelInfo.Tensors[0].Size);
+        }
+
+        [Fact]
+        public void ReadModelInfo_WithQ4KTensor_SizeIsCorrect()
+        {
+            // Arrange: 256 elements = 1 super-block × 144 bytes
+            var tensors = new List<(string, GgufTensorType, ulong[])>
+            {
+                ("model.weight", GgufTensorType.Q4_K, new ulong[] { 256 })
+            };
+            byte[] data = CreateGgufWithTensors(tensors);
+
+            // Act
+            using var ms = new MemoryStream(data);
+            using var reader = new GgufReader(ms);
+            var modelInfo = reader.ReadModelInfo();
+
+            // Assert: 1 super-block × 144 bytes = 144
+            Assert.Equal((ulong)144, modelInfo.Tensors[0].Size);
+        }
+
+        [Fact]
+        public void ReadModelInfo_WithQ5KTensor_SizeIsCorrect()
+        {
+            // Arrange: 256 elements = 1 super-block × 176 bytes
+            var tensors = new List<(string, GgufTensorType, ulong[])>
+            {
+                ("model.weight", GgufTensorType.Q5_K, new ulong[] { 256 })
+            };
+            byte[] data = CreateGgufWithTensors(tensors);
+
+            // Act
+            using var ms = new MemoryStream(data);
+            using var reader = new GgufReader(ms);
+            var modelInfo = reader.ReadModelInfo();
+
+            // Assert: 1 super-block × 176 bytes = 176
+            Assert.Equal((ulong)176, modelInfo.Tensors[0].Size);
+        }
+
+        [Fact]
+        public void ReadModelInfo_WithMixedQ6KAndF32Tensors_ParsesBoth()
+        {
+            // Arrange: mixed format file (common real-world scenario)
+            var tensors = new List<(string, GgufTensorType, ulong[])>
+            {
+                ("output_norm.weight", GgufTensorType.F32, new ulong[] { 64 }),
+                ("model.layers.0.ffn_down", GgufTensorType.Q6_K, new ulong[] { 256 })
+            };
+            byte[] data = CreateGgufWithTensors(tensors);
+
+            // Act
+            using var ms = new MemoryStream(data);
+            using var reader = new GgufReader(ms);
+            var modelInfo = reader.ReadModelInfo();
+
+            // Assert
+            Assert.Equal(2, modelInfo.Tensors.Count);
+            // F32: 64 × 4 = 256 bytes
+            Assert.Equal((ulong)(64 * 4), modelInfo.Tensors[0].Size);
+            // Q6_K: 1 super-block × 210 bytes = 210 bytes
+            Assert.Equal((ulong)210, modelInfo.Tensors[1].Size);
+        }
+
+        [Fact]
+        public void ReadModelInfo_WithQ6KTensorSubBlockBoundary_SizeIsCorrect()
+        {
+            // Arrange: partial last super-block (e.g. 300 elements → 2 blocks because ceiling(300/256)=2)
+            var tensors = new List<(string, GgufTensorType, ulong[])>
+            {
+                ("model.weight", GgufTensorType.Q6_K, new ulong[] { 300 })
+            };
+            byte[] data = CreateGgufWithTensors(tensors);
+
+            // Act
+            using var ms = new MemoryStream(data);
+            using var reader = new GgufReader(ms);
+            var modelInfo = reader.ReadModelInfo();
+
+            // Assert: ceil(300/256) = 2 super-blocks × 210 = 420 bytes
+            Assert.Equal((ulong)(2 * 210), modelInfo.Tensors[0].Size);
+        }
     }
 }
