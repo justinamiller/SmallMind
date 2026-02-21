@@ -60,7 +60,7 @@ done
 # Build the runner
 if [ "$SKIP_BUILD" = false ]; then
     echo "Building BenchmarkRunner..."
-    cd tools/BenchmarkRunner
+    cd ../tools/BenchmarkRunner
     dotnet build -c Release > /dev/null 2>&1
     cd ../..
     echo "✓ Build complete"
@@ -83,7 +83,7 @@ if [ -n "$VERBOSE" ]; then
 fi
 
 # Run the benchmark runner
-cd tools/BenchmarkRunner
+cd ../tools/BenchmarkRunner
 dotnet run -c Release -- $ARGS
 
 echo ""

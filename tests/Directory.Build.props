@@ -4,5 +4,10 @@
   <PropertyGroup>
     <!-- Tests don't need XML documentation -->
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Suppress false-positive warnings that are expected patterns in test code:
+         CA1707 = underscores in identifiers (standard xUnit Method_When_Should naming)
+         CA2007 = ConfigureAwait (not required in test code; xUnit uses its own sync ctx)
+         CA1303 = literal strings as localized params (no localization in test infrastructure) -->
+    <NoWarn>$(NoWarn);CA1707;CA2007;CA1303</NoWarn>
   </PropertyGroup>
 </Project>

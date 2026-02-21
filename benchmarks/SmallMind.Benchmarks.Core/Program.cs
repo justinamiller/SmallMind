@@ -55,8 +55,10 @@ class Program
         
         if (!File.Exists(manifestPath))
         {
-            Console.Error.WriteLine($"Model manifest not found: {manifestPath}");
-            return 1;
+            Console.WriteLine($"⚠️  Model manifest not found: {manifestPath}");
+            Console.WriteLine("Skipping model benchmarks — no manifest present.");
+            Console.WriteLine("To enable benchmarks, create the manifest at the path above.");
+            return 0;
         }
 
         var manifestJson = await File.ReadAllTextAsync(manifestPath);
