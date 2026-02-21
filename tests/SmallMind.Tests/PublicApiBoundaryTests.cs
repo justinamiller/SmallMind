@@ -230,7 +230,9 @@ namespace SmallMind.Tests
                     break;
 
                 case "SmallMind.Quantization":
-                    // Only exception types should be public in Quantization
+                    // Abstraction interfaces for weight tensor polymorphism
+                    allowed.Add("SmallMind.Quantization.Abstractions.IWeightTensor");
+                    allowed.Add("SmallMind.Quantization.Abstractions.QuantScheme");
                     break;
 
                 case "SmallMind.Engine":
