@@ -36,7 +36,7 @@ smallmind import-gguf models/tinyllama-1.1b-chat-v1.0.Q8_0.gguf models/tinyllama
 
 **What happens**:
 - Reads GGUF file structure
-- Validates quantization type (Q8_0 or Q4_0 required)
+- Validates quantization type (Q4_0, Q8_0, Q4_K, Q5_K, Q6_K, and others are all supported)
 - Converts to SMQ format with 64-element blocks
 - Creates two files:
   - `models/tinyllama.smq` (model weights)
@@ -228,15 +228,18 @@ smallmind model inspect models/tinyllama.smq
 
 ### "Unsupported tensor type" Error
 
-**Problem**: Model uses K-quants or other unsupported quantization
+**Problem**: Model uses IQ-quants (IQ2_XXS, IQ3_XXS, etc.) or Q2_K/Q3_K which are not yet fully supported
 
-**Solution**: Download Q8_0 or Q4_0 variant instead
+**Solution**: Download a Q6_K, Q5_K, Q4_K, Q8_0, or Q4_0 variant instead (all are fully supported)
 
 ```bash
-# ❌ This won't work:
-smallmind model download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q5_K_M.gguf
+# ❌ These won't work (IQ-quants):
+smallmind model download TheBloke/Llama-2-7B-GGUF llama-2-7b.IQ2_XXS.gguf
 
-# ✅ This will work:
+# ✅ These all work (standard and K-quant):
+smallmind model download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q6_K.gguf
+smallmind model download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q5_K_M.gguf
+smallmind model download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
 smallmind model download TheBloke/Llama-2-7B-GGUF llama-2-7b.Q8_0.gguf
 ```
 

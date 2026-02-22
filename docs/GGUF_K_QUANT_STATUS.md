@@ -2,196 +2,84 @@
 
 ## Overview
 
-This document tracks the implementation status of K-quant format support in SmallMind, specifically focusing on Q4_K_M compatibility.
+This document tracks the implementation status of K-quant format support in SmallMind.
 
 ## Current GGUF Support
 
 ### ✅ Fully Supported
 
 **Quantization Formats:**
+- `F32` - 32-bit float (pass-through)
+- `F16` - 16-bit float (converted to F32 on load)
 - `Q4_0` - 4-bit symmetric quantization (block size 32)
+- `Q4_1` - 4-bit asymmetric quantization (block size 32)
+- `Q5_0` - 5-bit symmetric quantization (block size 32)
 - `Q8_0` - 8-bit symmetric quantization (block size 32)
+- `Q4_K` - K-quant 4-bit (super-block size 256, 144 bytes/block)
+- `Q6_K` - K-quant 6-bit (super-block size 256, 210 bytes/block)
 
 **Features:**
 - GGUF file format parsing (v2 and v3)
 - Metadata extraction
-- Tensor information reading
+- Tensor information reading with correct byte-size calculation for all supported types
 - Automatic conversion to SMQ format
-- Block size conversion (GGUF 32 → SMQ 64)
+- Q6_K dequantization and fused FP32×Q6_K matrix multiplication kernel
+- Q4_K dequantization and fused FP32×Q4_K matrix multiplication kernel
 
-### ⚠️ Partially Implemented
+### ⚠️ Size-Calculation Supported (Import Not Implemented)
 
-**K-Quant Infrastructure:**
-- `GgufTensorType` enum includes K-quant types
-- Type definitions exist for:
-  - `Q2_K`, `Q3_K`, `Q4_K`, `Q5_K`, `Q6_K`, `Q8_K`
-- Import validation detects unsupported types
-- Clear error messages for unsupported formats
+These types are recognized for size calculation (so GGUF parsing succeeds) but the
+import path will report them as unsupported if they appear in a model file:
 
-### ❌ Not Yet Implemented
+- `Q2_K`, `Q3_K`, `Q5_K`, `Q8_K`
 
-**Missing K-Quant Support:**
-- Q4_K_M tensor representation
-- Q4_K_M kernel implementation
-- Q4_K_M quantization/dequantization
-- Other K-quant variants (Q2_K, Q3_K, Q5_K, Q6_K)
+### ❌ Not Yet Supported
 
-## Q4_K_M Implementation Plan
+**IQ (Importance-weighted) Quantization Formats:**
+- `IQ1_S`, `IQ2_XXS`, `IQ2_XS`, `IQ2_S`, `IQ3_XXS`, `IQ3_S`, `IQ4_NL`, `IQ4_XS`
 
-### Phase 1: Tensor Representation (Not Started)
+## Q6_K Format Details
 
-**Tasks:**
-1. Define `Q4_K_M_Tensor` class
-2. Implement GGUF Q4_K_M block structure:
-   - Super-blocks of 256 values
-   - 8 sub-blocks of 32 values each
-   - Scales and min values per sub-block
-   - Quantized values (4-bit packed)
-
-**File:**
-- `src/SmallMind.Quantization/Tensors/Q4_K_M_Tensor.cs`
-
-### Phase 2: GGUF Import Support (Not Started)
-
-**Tasks:**
-1. Add Q4_K_M case to `GgufImporter.ConvertTensor()`
-2. Parse GGUF Q4_K_M block format
-3. Convert to internal representation
-4. Handle super-block alignment
-
-**Files:**
-- `src/SmallMind.Quantization/IO/Gguf/GgufImporter.cs`
-
-### Phase 3: Kernel Implementation (Not Started)
-
-**Tasks:**
-1. Implement scalar blocked Q4_K_M kernel
-2. Add AVX2 fast path (optional)
-3. Ensure zero allocations in hot path
-4. Validate against reference implementation
-
-**File:**
-- `src/SmallMind.Quantization/Kernels/MatMulF32Q4_K_M.cs`
-
-### Phase 4: Testing & Validation (Not Started)
-
-**Tasks:**
-1. Unit tests for Q4_K_M quantization/dequantization
-2. MatMul correctness tests
-3. GGUF import round-trip tests
-4. Performance benchmarks
-
-**Files:**
-- `tests/SmallMind.Quantization.Tests/Q4_K_M_Tests.cs`
-
-## Current Behavior
-
-### Unsupported Format Handling
-
-When attempting to import a GGUF file with Q4_K_M tensors:
-
+**Block Structure (256 values per super-block):**
 ```
-The following tensors have unsupported types:
-  - model.layers.0.attention.wq: Q4_K
-  - model.layers.0.attention.wk: Q4_K
-  ...
-
-Supported types: Q8_0, Q4_0
+ql[128]:    low 4 bits of each 6-bit value (2 values packed per byte)
+qh[64]:     high 2 bits of each 6-bit value (4 values packed per byte)
+scales[16]: int8 scales for each 16-value sub-block
+d (fp16):   super-block scale
+Total:      128 + 64 + 16 + 2 = 210 bytes
 ```
 
-This provides:
-- ✅ Clear error message
-- ✅ List of problematic tensors
-- ✅ Guidance on supported formats
-- ✅ No silent failures or corruption
-
-### Workaround
-
-Until Q4_K_M support is implemented, users can:
-
-1. Convert GGUF models to supported formats:
-   ```bash
-   # Use llama.cpp's quantize tool
-   ./quantize model.gguf model-q4_0.gguf Q4_0
-   ```
-
-2. Use native SMQ format for quantization:
-   ```csharp
-   // Quantize directly in SmallMind
-   var q4Tensor = Q4Tensor.Quantize(weights, rows, cols, blockSize: 64);
-   ```
-
-## Technical Details
-
-### Q4_K_M Format Specification
-
-**Block Structure:**
+**Value reconstruction (per llama.cpp / ggml-quants.h spec):**
 ```
-Super-block (256 values):
-├─ scales_and_mins: fp16[8] - per sub-block
-├─ d: fp16 - super-block delta (scale)
-├─ dmin: fp16 - super-block minimum
-└─ qs: uint8[128] - quantized values (4-bit packed)
+q = (ql[i/2] >> ((i%2)*4)) & 0xF          // low 4 bits
+  | ((qh[i/4] >> ((i%4)*2)) & 0x3) << 4   // high 2 bits
+value = d * scales[subblock] * (q - 32)   // center around 0
 ```
 
-**Memory Layout:**
-- 256 values per super-block
-- 8 sub-blocks of 32 values
-- 2 scales per sub-block (scale + min)
-- More accurate than Q4_0 due to min tracking
+## Known Caveats
 
-### Implementation Challenges
-
-1. **Super-block Alignment:**
-   - Tensor dimensions must be divisible by 256
-   - Handle partial super-blocks at edges
-
-2. **Scale Hierarchies:**
-   - Super-block scale (`d`)
-   - Sub-block scales (8 per super-block)
-   - Efficient application during matmul
-
-3. **Memory Layout:**
-   - Different from Q4_0 (no direct mapping)
-   - Requires custom unpacking logic
-
-4. **Performance:**
-   - More complex than Q4_0
-   - Must maintain allocation-free guarantees
-   - AVX2 optimization more challenging
-
-## Timeline & Priorities
-
-### High Priority
-- [ ] Q4_K_M import (diagnostic only) - **Immediate**
-- [ ] Clear compatibility matrix documentation - **Immediate**
-
-### Medium Priority  
-- [ ] Q4_K_M tensor representation - **Next Sprint**
-- [ ] Scalar blocked kernel - **Next Sprint**
-
-### Low Priority
-- [ ] AVX2 optimized kernel - **Future**
-- [ ] Other K-quant variants - **Future**
-
-## References
-
-- GGUF Specification: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
-- llama.cpp K-quants: https://github.com/ggerganov/llama.cpp/pull/1684
-- K-quant Paper: https://arxiv.org/abs/2306.00978
+- `Q6_K` tensors require `totalElements % 256 == 0` for the import path; the size
+  calculator handles partial blocks via ceiling division.
+- Mixed-quant GGUF files (e.g. most Q6_K layers + F32 norms) are fully supported.
+- There is no AVX2 vectorized exp in the GELU approximation path; see code comments
+  in `FusedQ6KMatMul.cs` for details.
 
 ## Progress Tracking
 
 | Component | Status | File |
 |-----------|--------|------|
-| Type definitions | ✅ Complete | `GgufTypes.cs` |
+| Type definitions | ✅ Complete | `GgufTensorType.cs` |
+| Size calculation | ✅ Complete | `GgufReader.cs` |
 | Import validation | ✅ Complete | `GgufImporter.cs` |
-| Error diagnostics | ✅ Complete | `GgufImporter.cs` |
-| Tensor representation | ❌ Not started | - |
-| Import conversion | ❌ Not started | - |
-| Kernel implementation | ❌ Not started | - |
-| Unit tests | ❌ Not started | - |
-| Performance benchmarks | ❌ Not started | - |
+| Q6_K tensor class | ✅ Complete | `Q6KTensor.cs` |
+| Q6_K dequantization | ✅ Complete | `Q6KTensor.cs` |
+| Q6_K fused MatMul | ✅ Complete | `FusedQ6KMatMul.cs` |
+| Q6_K weight tensor | ✅ Complete | `Q6KWeightTensor.cs` |
+| Q6_K GGUF import | ✅ Complete | `GgufImporter.cs` |
+| Q6_K size unit tests | ✅ Complete | `GgufReaderTests.cs` |
+| Q4_K tensor class | ✅ Complete | `Q4KTensor.cs` |
+| Q4_K fused MatMul | ✅ Complete | `FusedQ4KMatMul.cs` |
+| Q4_K GGUF import | ✅ Complete | `GgufImporter.cs` |
 
 **Legend:**
 - ✅ Complete and tested
@@ -199,4 +87,4 @@ Super-block (256 values):
 - ❌ Not yet started
 - 🚧 In progress
 
-Last Updated: 2026-02-06
+Last Updated: 2026-02-21

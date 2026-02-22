@@ -294,6 +294,8 @@ namespace SmallMind.Quantization.IO.Gguf
 
         /// <summary>
         /// Calculate tensor data size in bytes based on type and dimensions.
+        /// Block sizes and layouts match the GGUF / ggml specification used by llama.cpp.
+        /// See: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md
         /// </summary>
         private ulong CalculateTensorSize(GgufTensorType type, ulong[] dimensions)
         {
@@ -311,9 +313,15 @@ namespace SmallMind.Quantization.IO.Gguf
                 GgufTensorType.F16 => totalElements * 2,
                 GgufTensorType.Q4_0 => CalculateQ4_0Size(totalElements),
                 GgufTensorType.Q4_1 => CalculateQ4_1Size(totalElements),
+                GgufTensorType.Q5_0 => CalculateQ5_0Size(totalElements),
                 GgufTensorType.Q8_0 => CalculateQ8_0Size(totalElements),
                 GgufTensorType.Q8_1 => CalculateQ8_1Size(totalElements),
-                // Add more types as needed
+                GgufTensorType.Q2_K => CalculateQ2KSize(totalElements),
+                GgufTensorType.Q3_K => CalculateQ3KSize(totalElements),
+                GgufTensorType.Q4_K => CalculateQ4KSize(totalElements),
+                GgufTensorType.Q5_K => CalculateQ5KSize(totalElements),
+                GgufTensorType.Q6_K => CalculateQ6KSize(totalElements),
+                GgufTensorType.Q8_K => CalculateQ8KSize(totalElements),
                 _ => throw new NotSupportedException($"Unsupported tensor type for size calculation: {type}")
             };
         }
@@ -341,6 +349,18 @@ namespace SmallMind.Quantization.IO.Gguf
         }
 
         /// <summary>
+        /// Calculate Q5_0 tensor size (block size = 32).
+        /// Each block: 2 bytes (fp16 scale) + 4 bytes (32 x 1-bit high bits) + 16 bytes (32 x 4-bit low nibbles).
+        /// Ref: block_q5_0 in ggml-quants.h
+        /// </summary>
+        private ulong CalculateQ5_0Size(ulong totalElements)
+        {
+            const int blockSize = 32;
+            ulong numBlocks = (totalElements + blockSize - 1) / blockSize;
+            return numBlocks * (2 + 4 + 16); // 2 bytes scale + 4 bytes high bits + 16 bytes low nibbles
+        }
+
+        /// <summary>
         /// Calculate Q8_0 tensor size (block size = 32).
         /// Each block: 2 bytes (fp16 scale) + 32 bytes (32 x int8 values).
         /// </summary>
@@ -360,6 +380,84 @@ namespace SmallMind.Quantization.IO.Gguf
             const int blockSize = 32;
             ulong numBlocks = (totalElements + blockSize - 1) / blockSize;
             return numBlocks * (2 + 2 + 32); // 2 bytes scale + 2 bytes min + 32 bytes data
+        }
+
+        /// <summary>
+        /// Calculate Q2_K tensor size (super-block size = 256).
+        /// Each super-block: 16 bytes (scales/mins, 4-bit each) + 64 bytes (256 x 2-bit quants)
+        ///   + 2 bytes (fp16 super-block scale d) + 2 bytes (fp16 super-block min dmin) = 84 bytes.
+        /// Ref: block_q2_K in ggml-quants.h
+        /// </summary>
+        private ulong CalculateQ2KSize(ulong totalElements)
+        {
+            const int blockSize = 256;
+            ulong numBlocks = (totalElements + blockSize - 1) / blockSize;
+            return numBlocks * 84; // 16 + 64 + 2 + 2 = 84 bytes per super-block
+        }
+
+        /// <summary>
+        /// Calculate Q3_K tensor size (super-block size = 256).
+        /// Each super-block: 32 bytes (high bits, 1 per value) + 64 bytes (low 2 bits, 4 per byte)
+        ///   + 16 bytes (int8 scales) + 2 bytes (fp16 scale d) = 114 bytes.
+        /// Ref: block_q3_K in ggml-quants.h
+        /// </summary>
+        private ulong CalculateQ3KSize(ulong totalElements)
+        {
+            const int blockSize = 256;
+            ulong numBlocks = (totalElements + blockSize - 1) / blockSize;
+            return numBlocks * 114; // 32 + 64 + 16 + 2 = 114 bytes per super-block
+        }
+
+        /// <summary>
+        /// Calculate Q4_K tensor size (super-block size = 256).
+        /// Each super-block: 2 bytes (fp16 scale d) + 2 bytes (fp16 min dmin)
+        ///   + 12 bytes (6-bit scales packed) + 128 bytes (256 x 4-bit quants) = 144 bytes.
+        /// Ref: block_q4_K in ggml-quants.h
+        /// </summary>
+        private ulong CalculateQ4KSize(ulong totalElements)
+        {
+            const int blockSize = 256;
+            ulong numBlocks = (totalElements + blockSize - 1) / blockSize;
+            return numBlocks * 144; // 2 + 2 + 12 + 128 = 144 bytes per super-block
+        }
+
+        /// <summary>
+        /// Calculate Q5_K tensor size (super-block size = 256).
+        /// Each super-block: 2 bytes (fp16 scale d) + 2 bytes (fp16 min dmin)
+        ///   + 12 bytes (6-bit scales packed) + 32 bytes (256 x 1-bit high bits) + 128 bytes (256 x 4-bit low nibbles) = 176 bytes.
+        /// Ref: block_q5_K in ggml-quants.h
+        /// </summary>
+        private ulong CalculateQ5KSize(ulong totalElements)
+        {
+            const int blockSize = 256;
+            ulong numBlocks = (totalElements + blockSize - 1) / blockSize;
+            return numBlocks * 176; // 2 + 2 + 12 + 32 + 128 = 176 bytes per super-block
+        }
+
+        /// <summary>
+        /// Calculate Q6_K tensor size (super-block size = 256).
+        /// Each super-block: 128 bytes (ql - low 4 bits of 256 values) + 64 bytes (qh - high 2 bits, 4 per byte)
+        ///   + 16 bytes (int8 scales, one per 16-value sub-block) + 2 bytes (fp16 super-block scale d) = 210 bytes.
+        /// Ref: block_q6_K in ggml-quants.h
+        /// </summary>
+        private ulong CalculateQ6KSize(ulong totalElements)
+        {
+            const int blockSize = 256;
+            ulong numBlocks = (totalElements + blockSize - 1) / blockSize;
+            return numBlocks * 210; // 128 + 64 + 16 + 2 = 210 bytes per super-block
+        }
+
+        /// <summary>
+        /// Calculate Q8_K tensor size (super-block size = 256).
+        /// Each super-block: 4 bytes (float32 scale d) + 256 bytes (256 x int8 quants)
+        ///   + 32 bytes (int16 block sums, one per 16-value sub-block) = 292 bytes.
+        /// Ref: block_q8_K in ggml-quants.h
+        /// </summary>
+        private ulong CalculateQ8KSize(ulong totalElements)
+        {
+            const int blockSize = 256;
+            ulong numBlocks = (totalElements + blockSize - 1) / blockSize;
+            return numBlocks * 292; // 4 + 256 + 32 = 292 bytes per super-block
         }
 
         /// <summary>

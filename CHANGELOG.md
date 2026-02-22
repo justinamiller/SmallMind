@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Q6_K GGUF tensor size support** - `GgufReader.CalculateTensorSize` now handles all K-quant tensor types used by llama.cpp:
+  - `Q6_K`: 210 bytes per 256-element super-block (128 ql + 64 qh + 16 scales + 2 fp16 d)
+  - `Q4_K`: 144 bytes per 256-element super-block (2 d + 2 dmin + 12 scales + 128 qs)
+  - `Q5_K`: 176 bytes per 256-element super-block (2 d + 2 dmin + 12 scales + 32 qh + 128 qs)
+  - `Q5_0`: 22 bytes per 32-element block (2 scale + 4 high bits + 16 low nibbles)
+  - `Q2_K`: 84 bytes per 256-element super-block
+  - `Q3_K`: 114 bytes per 256-element super-block
+  - `Q8_K`: 292 bytes per 256-element super-block
+- **Q6_K size calculation unit tests** - Added 7 new tests in `GgufReaderTests` covering single-block, multi-block, 2D tensor, sub-block boundary, mixed-format, and related K-quant formats
+- **K-quant dequantization + MatMul tests enabled** - Removed `[Skip]` from four `KQuantTensorTests` that were permanently disabled due to bugs in test helpers; also fixed the helpers themselves:
+  - `FloatToHalf` now uses signed exponent arithmetic so `0.0f` correctly encodes to fp16 `0x0000` (was incorrectly producing fp16 Infinity)
+  - `FillQ4KWithRandomData` / `FillQ6KWithRandomData` now produce structurally valid blocks (fp16 scale fields pinned to a safe value) instead of fully random bytes that could create NaN/Inf values in the scale fields
+  - `NaiveMatMul` reference now computes `A @ B^T` (index `B[n*K+k]`) to match the fused kernel's semantics rather than `A @ B`
+  - Q4_K range assertion widened from `[-100, 100]` to `[-1000, 1000]` (maximum valid value is `scale * nibble ≤ 63 * 15 = 945`)
+- **`TensorDecoderRegistry` coverage tests** - Added `TensorDecoderRegistry_Q6K_IsSupported` and `TensorDecoderRegistry_CommonTypes_AreSupported` as regression guards so Q6_K (and other decoder registrations) can never silently disappear
+- **GGUF compatibility report test with Q6_K tensor** - `GetCompatibilityReport_Q6KTensor_ReportedAsFullyCompatible` creates a valid GGUF binary with a 256-element Q6_K tensor, parses it via `GgufModelLoader.GetCompatibilityReport`, and asserts that Q6_K is recognised as fully compatible
+
+#### Chat Session (Level 3 API)
+- **`IChatSession.SendAsync(ChatRequest)`** - Level 3 messages-first chat API supporting multi-turn conversations with tools, structured output, and telemetry hooks
+  - `ChatRequest` carries a list of `ChatMessageV3` messages plus optional tools, response format, and per-request context policy
+  - `ChatResponse` returns the assistant message, finish reason, `UsageStats` (prompt tokens, completion tokens, TTFT, tokens/sec), and optional citations
+  - `ChatMessageV3` supports `System`, `User`, `Assistant`, and `Tool` roles with optional tool calls, tool call IDs, and per-message metadata
+- **`ResponseFormat`** - Structured output control: `Text` (default), `JsonObject` (any valid JSON), `JsonSchema` (schema-constrained JSON)
+- **Tool calling (function calling)** - `ToolDefinition` / `ToolCall` / `ToolResult` / `IToolExecutor` interface for model-driven function calling with configurable `MaxToolCalls` limit per request
+- **`IChatTelemetry`** - Observability hook interface for chat sessions:
+  - Events: `OnRequestStart`, `OnFirstToken`, `OnRequestComplete`, `OnContextPolicyApplied`, `OnKvCacheAccess`, `OnToolCall`, `OnKvCacheBudgetExceeded`, `OnKvCacheEviction`
+  - `NoOpTelemetry.Instance` (default, zero overhead)
+  - `ConsoleTelemetry` (logs to `IRuntimeLogger`)
+- **`ChatClient`** (`IChatClient`) - Synchronous wrapper over `IChatSession` for embedding in sync call stacks without deadlock risk
+  - `SendChat(ChatRequest)`, `AddSystemMessage(string)`, `GetSessionInfo()`
+
+#### Context Policies (`IContextPolicy`)
+- **`KeepLastNTurnsPolicy`** - Keeps the last N conversation turns (user + assistant pairs), always pinning system messages at the front; falls back to token budget via `FitToBudget`
+- **`SlidingWindowPolicy`** - Keeps the most recent messages that fit within the token budget, always pinning system messages
+- **`KeepAllPolicy`** - No truncation (use when budget is guaranteed or for testing)
+- **`ITokenCounter`** / **`TokenizerAdapter`** - Token counting abstraction allowing any `ITokenizer` to be used for context budgeting
+
+#### Session Persistence (`ISessionStore`)
+- **`InMemorySessionStore`** - Thread-safe `ConcurrentDictionary`-backed session store; `Get`, `Upsert`, `Delete`, `Exists`, `Clear`
+- **`FileSessionStore`** - Durable JSON session storage with atomic writes (temp-file-then-rename), schema versioning, and forward-compatible V1→V2 migration
+  - `ChatSessionData` / `ChatTurnData` (in `SmallMind.Abstractions`) persist per-turn user/assistant messages, timestamps, citations, and metadata
+- **`ChatSessionBuilder`** - Fluent builder for configuring `IChatSession` instances:
+  - `WithAutoTemplate()` - auto-detect chat template from model metadata
+  - `WithKvCache([customStore])` - enable KV cache with optional custom store
+  - `WithSlidingWindowContext()` - configure sliding window overflow strategy
+  - `WithMaxHistoryTurns(n)` - cap conversation history length
+  - `WithRag(pipeline)` - attach a RAG pipeline for retrieval-augmented generation
+  - `Configure(action)` - escape hatch for arbitrary `ChatSessionOptions` configuration
+
 ### Refactoring
 - **Removed duplicate utility methods across projects** - Promoted shared utility methods into canonical static helpers to reduce code duplication and maintenance drift:
   - Created `ChatTemplateFormatter` in `SmallMind.Core/Utilities` for chat template formatting (used by Engine and Console)

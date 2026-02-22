@@ -79,15 +79,17 @@ SmallMind can import models from GGUF (GPT-Generated Unified Format), the standa
 
 **Supported:**
 - GGUF versions 2 and 3
-- Tensor types: Q8_0, Q4_0
+- Tensor types: F32, F16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0
+- K-quant tensor types: Q4_K, Q5_K, Q6_K (full dequantization + fused inference kernel)
 - All metadata value types (strings, arrays, primitives)
+- Mixed-quant files (e.g. majority Q6_K layers with F16/F32 norms)
 
-**Unsupported (will error with clear message):**
-- Other quantization types (Q4_1, Q5_0, Q5_1, Q6_K, etc.)
-- K-quants (require lookup tables not implemented)
+**Not yet supported (will error with clear message):**
+- Q2_K, Q3_K, Q8_K (size calculation supported for parsing; import dequantization not yet implemented)
+- IQ-quant variants (IQ1_S, IQ2_XXS, IQ2_XS, IQ2_S, IQ3_XXS, IQ3_S, IQ4_NL, IQ4_XS)
 
 **Automatic Conversions:**
-- Block size: GGUF uses 32, SMQ uses 64 → automatic re-quantization
+- Block size: GGUF uses 32 (standard quants) or 256 (K-quants), SMQ uses 64 → automatic re-quantization
 - FP16 weights: Converted to FP32 on import
 
 ## CLI Tools
@@ -111,13 +113,14 @@ dotnet run --project src/SmallMind.Console import-gguf model.gguf model.smq
 #   SMQ size: 145.50 MB
 ```
 
-**Supported GGUF quantization types:** Q8_0, Q4_0  
+**Supported GGUF quantization types:** F32, F16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, Q4_K, Q5_K, Q6_K
+**Partially supported (size calculation only):** Q2_K, Q3_K, Q8_K
 **Unsupported types will fail with error:**
 ```
-Error: Unsupported tensor quantization type: Q4_K_M
+Error: Unsupported tensor quantization type: IQ2_XXS
 
-Note: SmallMind only supports Q8_0 and Q4_0 quantization schemes.
-Models using other quantization types (K-quants, Q4_1, Q5_0, etc.) are not supported.
+Note: SmallMind supports F32/F16 and standard quantization schemes (Q4_0..Q8_0, Q4_K, Q5_K, Q6_K).
+IQ-quant variants and Q2_K/Q3_K are not yet supported.
 ```
 
 ### Inspect Model
@@ -259,12 +262,23 @@ using (var ggufReader = new GgufReader("model.gguf"))
         Console.WriteLine($"  {tensor.Name}: {tensor.Type}");
     }
     
-    // Check for unsupported types
-    var unsupported = info.Tensors
-        .Where(t => t.Type != GgufTensorType.Q8_0 && t.Type != GgufTensorType.Q4_0)
-        .ToList();
+    // Check for unsupported types (Q2_K, Q3_K, IQ-variants)
+    var unsupported = new List<GgufTensorInfo>();
+    foreach (var t in info.Tensors)
+    {
+        var type = t.Type;
+        if (type != GgufTensorType.F32 && type != GgufTensorType.F16
+            && type != GgufTensorType.Q4_0 && type != GgufTensorType.Q4_1
+            && type != GgufTensorType.Q5_0 && type != GgufTensorType.Q5_1
+            && type != GgufTensorType.Q8_0
+            && type != GgufTensorType.Q4_K && type != GgufTensorType.Q5_K
+            && type != GgufTensorType.Q6_K)
+        {
+            unsupported.Add(t);
+        }
+    }
     
-    if (unsupported.Any())
+    if (unsupported.Count > 0)
     {
         Console.WriteLine("Unsupported tensor types:");
         foreach (var t in unsupported)
@@ -328,6 +342,9 @@ smallmind verify model.smq
 | FP32   | 4               | 1.0x (baseline)   |
 | FP16   | 2               | 2.0x              |
 | Q8_0   | ~1.06           | 3.8x              |
+| Q6_K   | ~0.82           | 4.9x              |
+| Q5_K   | ~0.70           | 5.7x              |
+| Q4_K   | ~0.58           | 6.9x              |
 | Q4_0   | ~0.56           | 7.1x              |
 
 *Note: Includes overhead for block scales*
@@ -362,16 +379,16 @@ smallmind verify model.smq
 ### Current Limitations
 
 1. **CPU Only**: No GPU acceleration yet
-2. **Limited GGUF Support**: Only Q8_0 and Q4_0 (no K-quants, mixed precision)
-3. **Block Size**: Fixed at 64 for SMQ (GGUF uses 32, requires re-quantization)
-4. **No Mixed Precision**: All tensors use same quantization scheme
+2. **Partial K-quant Import**: Q4_K, Q5_K, Q6_K are fully supported; Q2_K, Q3_K, Q8_K support size calculation (GGUF parsing) but import dequantization is not yet implemented
+3. **Block Size**: Fixed at 64 for native SMQ format (GGUF uses 32 or 256 for K-quants; automatic conversion is applied)
+4. **No Mixed Precision SMQ**: SMQ files use a uniform quantization scheme; mixed-quant files load correctly from GGUF but are stored uniformly in SMQ
 
 ### Future Enhancements
 
-- [ ] Mixed quantization (Q8 for attention, Q4 for FFN)
+- [ ] Mixed quantization in SMQ (Q8 for attention, Q4 for FFN)
 - [ ] Asymmetric quantization (with zero-point)
-- [ ] Group-wise quantization (smaller block sizes for better accuracy)
-- [ ] K-quants support (Q4_K, Q5_K, Q6_K)
+- [ ] Q2_K, Q3_K, Q8_K dequantization
+- [ ] IQ-quant variants (IQ2_XXS, IQ3_XXS, etc.)
 - [ ] GPU/CUDA kernels
 - [ ] INT4 GEMM with lookup tables
 
@@ -383,8 +400,8 @@ smallmind verify model.smq
 
 **Solution:**
 1. Check which types are unsupported: `smallmind inspect model.gguf`
-2. Convert using llama.cpp: `llama-quantize model.gguf model_q8.gguf Q8_0`
-3. Import the Q8/Q4-only GGUF
+2. If the model uses IQ-quants or Q2_K/Q3_K, convert using llama.cpp: `llama-quantize model.gguf model_q8.gguf Q8_0`
+3. If the model uses Q4_K/Q5_K/Q6_K, these are **fully supported** — no conversion needed
 
 ### High Inference Error with Q4
 
