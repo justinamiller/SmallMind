@@ -127,7 +127,9 @@ namespace SmallMind.Tokenizers.Gguf
                         continue;
                     }
 
-                    sb.Append(tokenStr);
+                    // SentencePiece-style token boundary marker: ▁ means a word-leading space.
+                    // Normalize to plain text so downstream coherence checks and UX are correct.
+                    sb.Append(tokenStr.Replace('▁', ' '));
                 }
             }
 

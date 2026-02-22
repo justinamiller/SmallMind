@@ -201,7 +201,7 @@ namespace SmallMind.ConsoleApp.Commands
                     alphaCount++;
                 if (c >= 32 && c <= 126) // Printable ASCII
                     printableCount++;
-                if (char.IsWhiteSpace(c))
+                if (char.IsWhiteSpace(c) || c == '▁')
                     spaceCount++;
             }
 
