@@ -45,52 +45,87 @@ namespace SmallMind.Tokenizers.Gguf
 
             var tokens = new List<int>();
 
-            // Simple greedy tokenization: longest match first
+            // SentencePiece-style GGUF vocab commonly stores word-leading tokens with ▁ prefix.
+            // Tokenize by words, then greedily match pieces (first piece prefixed with ▁).
             int pos = 0;
+            bool atWordStart = true;
+
             while (pos < text.Length)
             {
-                int longestMatchLen = 0;
-                int matchedTokenId = -1;
+                char c = text[pos];
 
-                // Try to find the longest matching token starting at current position
-                for (int len = Math.Min(text.Length - pos, MaxTokenLength); len > 0; len--)
+                if (char.IsWhiteSpace(c))
                 {
-                    string candidate = text.Substring(pos, len);
+                    atWordStart = true;
+                    pos++;
+                    continue;
+                }
+
+                // Read one word span
+                int wordStart = pos;
+                while (pos < text.Length && !char.IsWhiteSpace(text[pos]))
+                {
+                    pos++;
+                }
+
+                string word = text.Substring(wordStart, pos - wordStart);
+                EncodeWord(word, atWordStart, tokens);
+                atWordStart = false;
+            }
+
+            return tokens;
+        }
+
+        private void EncodeWord(string word, bool atWordStart, List<int> output)
+        {
+            int cursor = 0;
+            bool firstPiece = atWordStart;
+
+            while (cursor < word.Length)
+            {
+                int maxLen = Math.Min(word.Length - cursor, MaxTokenLength);
+                int matchedTokenId = -1;
+                int matchedLen = 0;
+
+                for (int len = maxLen; len > 0; len--)
+                {
+                    string piece = word.Substring(cursor, len);
+                    string candidate = firstPiece ? $"▁{piece}" : piece;
+
                     if (_vocab.TryGetValue(candidate, out int tokenId))
                     {
-                        longestMatchLen = len;
                         matchedTokenId = tokenId;
+                        matchedLen = len;
                         break;
                     }
                 }
 
                 if (matchedTokenId != -1)
                 {
-                    tokens.Add(matchedTokenId);
-                    pos += longestMatchLen;
+                    output.Add(matchedTokenId);
+                    cursor += matchedLen;
+                    firstPiece = false;
+                    continue;
+                }
+
+                // Fallback: unknown token or byte token for first char.
+                if (_specialTokens.UnkTokenId != -1)
+                {
+                    output.Add(_specialTokens.UnkTokenId);
                 }
                 else
                 {
-                    // No match found - use unknown token or byte fallback
-                    if (_specialTokens.UnkTokenId != -1)
+                    byte b = (byte)word[cursor];
+                    string byteToken = $"<0x{b:X2}>";
+                    if (_vocab.TryGetValue(byteToken, out int byteTokenId))
                     {
-                        tokens.Add(_specialTokens.UnkTokenId);
+                        output.Add(byteTokenId);
                     }
-                    else
-                    {
-                        // Try to encode as byte tokens
-                        byte b = (byte)text[pos];
-                        string byteToken = $"<0x{b:X2}>";
-                        if (_vocab.TryGetValue(byteToken, out int byteTokenId))
-                        {
-                            tokens.Add(byteTokenId);
-                        }
-                    }
-                    pos++;
                 }
-            }
 
-            return tokens;
+                cursor++;
+                firstPiece = false;
+            }
         }
 
         public int Encode(ReadOnlySpan<byte> utf8, Span<int> tokensOut)

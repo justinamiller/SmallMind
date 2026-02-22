@@ -107,22 +107,30 @@ namespace SmallMind.Tokenizers.Gguf
             // Determine which tokenizer to create
             ITokenizer? tokenizer;
 
-            if (tokenizerModel == "gpt2" || tokenizerModel == "llama")
+            if (tokenizerModel == "gpt2")
             {
                 if (hasMerges)
                 {
-                    // Create BPE tokenizer with merges
+                    // GPT-2 style tokenizer uses BPE merges.
                     tokenizer = new GgufBpeTokenizer(vocab, reverseVocab, merges, specialTokens);
                     logger.Info("Created GGUF BPE tokenizer with merges");
                 }
                 else
                 {
-                    // Fallback to token-table-only tokenizer
                     tokenizer = new GgufTokenTableTokenizer(vocab, reverseVocab, specialTokens);
                     diagnostics.AddIssue(RuntimeDegradeReason.TokenizerFallbackTokenTableOnly,
-                        "Using token-table-only tokenizer (no BPE merges available)");
-                    logger.Warn("Falling back to token-table-only tokenizer (no BPE merges)");
+                        "GPT-2 tokenizer metadata missing merges; using token-table fallback");
+                    logger.Warn("GPT-2 tokenizer metadata missing merges; using token-table fallback");
                 }
+            }
+            else if (tokenizerModel == "llama")
+            {
+                // LLaMA-family GGUF tokenizers are SentencePiece-based; merge-rank BPE path is not equivalent.
+                // Prefer token-table tokenizer for deterministic compatibility.
+                tokenizer = new GgufTokenTableTokenizer(vocab, reverseVocab, specialTokens);
+                diagnostics.AddIssue(RuntimeDegradeReason.TokenizerFallbackTokenTableOnly,
+                    "LLaMA tokenizer uses token-table path (SentencePiece-compatible fallback)");
+                logger.Info("Created GGUF token-table tokenizer for llama model");
             }
             else
             {
