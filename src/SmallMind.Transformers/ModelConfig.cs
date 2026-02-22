@@ -174,11 +174,13 @@ namespace SmallMind.Transformers
             // Extract general metadata
             config.Name = GetMetadataValue(metadata, "general.name", null);
 
-            // Extract architecture-specific parameters using archPrefix for key lookups
-            // Note: ?? operator ensures InferVocabSizeFromTokenizer is only called if ExtractInt returns null
+            // Extract architecture-specific parameters using archPrefix for key lookups.
+            // Vocab size: try primary key first, then known fallback sources.
             config.VocabSize = ExtractInt(metadata, $"{archPrefix}.vocab_size")
-                ?? InferVocabSizeFromTokenizer(metadata)
-                ?? throw new MissingMetadataException($"{archPrefix}.vocab_size");
+                ?? TryInferVocabSize(metadata)
+                ?? throw new MissingMetadataException(
+                    new[] { $"{archPrefix}.vocab_size", "tokenizer.ggml.vocab_size", "tokenizer.ggml.tokens" },
+                    "The GGUF file may be missing vocabulary metadata or have an incomplete/non-standard structure.");
 
             config.ContextLength = ExtractInt(metadata, $"{archPrefix}.context_length")
                 ?? throw new MissingMetadataException($"{archPrefix}.context_length");
@@ -284,31 +286,69 @@ namespace SmallMind.Transformers
             return null;
         }
 
-        private static int? InferVocabSizeFromTokenizer(Dictionary<string, object> metadata)
+        /// <summary>
+        /// Tries multiple fallback sources to determine vocab size when the primary key is absent.
+        /// Sources checked in order: tokenizer.ggml.vocab_size, then tokenizer.ggml.tokens list length.
+        /// Emits a diagnostic trace when a fallback source is used.
+        /// </summary>
+        private static int? TryInferVocabSize(Dictionary<string, object> metadata)
         {
+            // Try direct vocab size hint from tokenizer metadata
+            var directSize = ExtractInt(metadata, "tokenizer.ggml.vocab_size");
+            if (directSize.HasValue)
+            {
+                System.Diagnostics.Trace.TraceInformation(
+                    $"[ModelConfig] vocab_size: using fallback value {directSize.Value} from tokenizer.ggml.vocab_size");
+                return directSize;
+            }
+
+            // Infer from token list length (handles object[], string[], or any ICollection)
             if (metadata.TryGetValue("tokenizer.ggml.tokens", out var tokensObj) && tokensObj != null)
             {
-                // Handle different possible types for tokens array
-                if (tokensObj is object[] objArray)
+                // string[] is a subtype of object[] (array covariance), so object[] covers both
+                int? count = tokensObj switch
                 {
-                    return objArray.Length;
-                }
-                else if (tokensObj is string[] strArray)
+                    object[] objArray => objArray.Length,
+                    System.Collections.ICollection collection => collection.Count,
+                    _ => null
+                };
+
+                if (count.HasValue)
                 {
-                    return strArray.Length;
+                    System.Diagnostics.Trace.TraceInformation(
+                        $"[ModelConfig] vocab_size: inferred {count.Value} from tokenizer.ggml.tokens list length");
+                    return count;
                 }
-                else if (tokensObj is System.Collections.ICollection collection)
-                {
-                    return collection.Count;
-                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Tries each key in order, returning the first non-null value found.
+        /// Returns null if none of the keys are present.
+        /// </summary>
+        private static int? TryGetInt(Dictionary<string, object> metadata, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                var value = ExtractInt(metadata, key);
+                if (value.HasValue)
+                    return value;
             }
             return null;
         }
+
+        private const int MaxReasonableVocabSize = 2_000_000;
 
         private static void ValidateConfig(ModelConfig config)
         {
             if (config.VocabSize <= 0)
                 throw new ArgumentException($"Invalid vocab size: {config.VocabSize}");
+
+            if (config.VocabSize > MaxReasonableVocabSize)
+                throw new ArgumentException(
+                    $"Vocab size {config.VocabSize} exceeds sanity limit {MaxReasonableVocabSize}. Possible metadata corruption.");
 
             if (config.EmbeddingLength <= 0)
                 throw new ArgumentException($"Invalid embedding length: {config.EmbeddingLength}");
@@ -440,6 +480,25 @@ namespace SmallMind.Transformers
             : base($"Required metadata key not found: {metadataKey}")
         {
             MetadataKey = metadataKey;
+        }
+
+        /// <summary>
+        /// Constructs an exception indicating that multiple attempted keys were all missing.
+        /// </summary>
+        /// <param name="attemptedKeys">Keys that were tried in order.</param>
+        /// <param name="suggestion">Optional suggestion for the user.</param>
+        public MissingMetadataException(string[] attemptedKeys, string? suggestion = null)
+            : base(BuildMessage(attemptedKeys, suggestion))
+        {
+            MetadataKey = string.Join(", ", attemptedKeys);
+        }
+
+        private static string BuildMessage(string[] keys, string? suggestion)
+        {
+            var msg = $"Required metadata key not found. Tried: {string.Join(", ", keys)}.";
+            if (!string.IsNullOrEmpty(suggestion))
+                msg += $" {suggestion}";
+            return msg;
         }
     }
 }
