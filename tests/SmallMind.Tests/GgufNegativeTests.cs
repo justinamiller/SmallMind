@@ -334,5 +334,68 @@ namespace SmallMind.Tests
             Assert.True(registry.IsSupported(GgufTensorType.Q6_K), "Q6_K must be supported");
             Assert.True(registry.IsSupported(GgufTensorType.Q8_K), "Q8_K must be supported");
         }
+
+        [Fact]
+        public void GetCompatibilityReport_Q6KTensor_ReportedAsFullyCompatible()
+        {
+            // End-to-end GGUF loader test that includes a Q6_K tensor.
+            // Creates a minimal GGUF v3 binary with one 256-element Q6_K tensor,
+            // parses it via GgufModelLoader.GetCompatibilityReport, and verifies
+            // the report correctly identifies Q6_K as a supported tensor type.
+            //
+            // GGUF v3 binary layout (no metadata, one tensor):
+            //   [0..3]   magic "GGUF"
+            //   [4..7]   version = 3  (uint32 LE)
+            //   [8..15]  tensor_count = 1  (uint64 LE)
+            //   [16..23] metadata_kv_count = 0  (uint64 LE)
+            //   --- tensor info ---
+            //   [24..31] name length = 11  (uint64 LE)
+            //   [32..42] name = "test.weight"
+            //   [43..46] n_dims = 1  (uint32 LE)
+            //   [47..54] dims[0] = 256  (uint64 LE)
+            //   [55..58] type = 14 = Q6_K  (uint32 LE, per GgufTensorType enum)
+            //   [59..66] offset = 0  (uint64 LE, relative to data section)
+
+            string tempPath = Path.Combine(Path.GetTempPath(), $"q6k_loader_{Guid.NewGuid():N}.gguf");
+            try
+            {
+                using (var fs = File.Create(tempPath))
+                using (var bw = new System.IO.BinaryWriter(fs, System.Text.Encoding.UTF8))
+                {
+                    // Header
+                    bw.Write(System.Text.Encoding.ASCII.GetBytes("GGUF")); // magic (4 bytes)
+                    bw.Write((uint)3);    // version
+                    bw.Write((ulong)1);   // tensor_count
+                    bw.Write((ulong)0);   // metadata_kv_count
+
+                    // Tensor info: name = "test.weight"
+                    byte[] nameBytes = System.Text.Encoding.UTF8.GetBytes("test.weight");
+                    bw.Write((ulong)nameBytes.Length);
+                    bw.Write(nameBytes);
+                    bw.Write((uint)1);        // n_dims = 1
+                    bw.Write((ulong)256);     // dims[0] = 256 (one full Q6_K super-block)
+                    bw.Write((uint)14);       // type = Q6_K (GgufTensorType.Q6_K = 14)
+                    bw.Write((ulong)0);       // offset = 0 (relative, within data section)
+                }
+
+                // Act: parse through the real GgufModelLoader compatibility report path
+                var report = GgufModelLoader.GetCompatibilityReport(tempPath);
+
+                // Assert: the Q6_K tensor must be reported as supported
+                Assert.Equal(1, report.TotalTensors);
+                Assert.Equal(1, report.SupportedTensors);
+                Assert.Equal(0, report.UnsupportedTensors);
+                Assert.True(report.IsFullyCompatible,
+                    "A GGUF file with a single Q6_K tensor should be fully compatible.");
+                Assert.True(report.SupportedTensorsByType.ContainsKey("Q6_K"),
+                    "Q6_K should appear in SupportedTensorsByType.");
+                Assert.Equal(1, report.SupportedTensorsByType["Q6_K"]);
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+        }
     }
 }

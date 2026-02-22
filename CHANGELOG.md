@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Q3_K`: 114 bytes per 256-element super-block
   - `Q8_K`: 292 bytes per 256-element super-block
 - **Q6_K size calculation unit tests** - Added 7 new tests in `GgufReaderTests` covering single-block, multi-block, 2D tensor, sub-block boundary, mixed-format, and related K-quant formats
+- **K-quant dequantization + MatMul tests enabled** - Removed `[Skip]` from four `KQuantTensorTests` that were permanently disabled due to bugs in test helpers; also fixed the helpers themselves:
+  - `FloatToHalf` now uses signed exponent arithmetic so `0.0f` correctly encodes to fp16 `0x0000` (was incorrectly producing fp16 Infinity)
+  - `FillQ4KWithRandomData` / `FillQ6KWithRandomData` now produce structurally valid blocks (fp16 scale fields pinned to a safe value) instead of fully random bytes that could create NaN/Inf values in the scale fields
+  - `NaiveMatMul` reference now computes `A @ B^T` (index `B[n*K+k]`) to match the fused kernel's semantics rather than `A @ B`
+  - Q4_K range assertion widened from `[-100, 100]` to `[-1000, 1000]` (maximum valid value is `scale * nibble ≤ 63 * 15 = 945`)
+- **`TensorDecoderRegistry` coverage tests** - Added `TensorDecoderRegistry_Q6K_IsSupported` and `TensorDecoderRegistry_CommonTypes_AreSupported` as regression guards so Q6_K (and other decoder registrations) can never silently disappear
+- **GGUF compatibility report test with Q6_K tensor** - `GetCompatibilityReport_Q6KTensor_ReportedAsFullyCompatible` creates a valid GGUF binary with a 256-element Q6_K tensor, parses it via `GgufModelLoader.GetCompatibilityReport`, and asserts that Q6_K is recognised as fully compatible
 
 #### Chat Session (Level 3 API)
 - **`IChatSession.SendAsync(ChatRequest)`** - Level 3 messages-first chat API supporting multi-turn conversations with tools, structured output, and telemetry hooks

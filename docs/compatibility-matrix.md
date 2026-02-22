@@ -73,10 +73,13 @@ var model = await engine.LoadModelAsync(new ModelLoadRequest
 | Scheme | Bits per Weight | Status | Typical Size Reduction | Notes |
 |--------|-----------------|--------|------------------------|-------|
 | FP32 | 32 | ✅ Stable | Baseline (1x) | Full precision, largest file size |
-| Q8 | 8 | ✅ Stable | 4x smaller | ~1% accuracy loss, recommended |
-| Q4 | 4 | ✅ Stable | 8x smaller | ~2-3% accuracy loss, good for large models |
-| Q5, Q6 | 5-6 | ❌ Not Supported | - | Not implemented |
-| Mixed Precision | Variable | ⚠️ Experimental | Varies | Research feature |
+| Q8_0 | 8 | ✅ Stable | 4x smaller | ~1% accuracy loss, recommended |
+| Q4_0 | 4 | ✅ Stable | 8x smaller | ~2-3% accuracy loss, good for large models |
+| Q6_K | 6 | ✅ Stable | ~5x smaller | K-quant; full decode + fused MatMul kernel |
+| Q4_K, Q5_K | 4-5 | ✅ Stable | 7-6x smaller | K-quant; full decode + fused MatMul kernel |
+| Q4_1, Q5_0, Q5_1 | 4-5 | ✅ Stable | 6-7x smaller | Standard GGUF quants; decode supported |
+| Q2_K, Q3_K, Q8_K | 2-8 | ⚠️ Experimental | Varies | Size calculation only; decode not yet implemented |
+| Mixed Precision | Variable | ⚠️ Experimental | Varies | Mixed-quant GGUF files load correctly |
 
 ### Quantization Details
 
@@ -335,7 +338,8 @@ These may be added in future versions but are NOT guaranteed:
 - Additional model formats (ONNX, SafeTensors)
 - GPU acceleration (CUDA, Metal, Vulkan)
 - Distributed serving capabilities
-- Additional quantization schemes (Q5, Q6)
+- Q2_K, Q3_K, Q8_K dequantization
+- IQ-quant variants (IQ2_XXS, IQ3_XXS, etc.)
 
 ---
 
@@ -362,7 +366,7 @@ Include:
 | Category | Stable Path | Experimental | Not Supported |
 |----------|-------------|--------------|---------------|
 | **Formats** | .smq | .gguf, .json | .onnx, .pt, .safetensors |
-| **Quantization** | Q8, Q4, FP32 | Mixed precision | Q5, Q6, IQ |
+| **Quantization** | Q8, Q4, Q4_K, Q5_K, Q6_K, FP32 | Q2_K, Q3_K, Q8_K, Mixed precision | IQ-quant variants |
 | **Tokenizers** | BPE, Character | WordPiece, Byte-Level BPE | SentencePiece, Tiktoken |
 | **Hardware** | CPU (x64, ARM64) | - | GPU |
 | **Use Cases** | Inference, Streaming, RAG | Training | Distributed serving |
