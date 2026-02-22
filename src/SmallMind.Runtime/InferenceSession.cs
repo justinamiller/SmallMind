@@ -175,6 +175,15 @@ namespace SmallMind.Runtime
                 {
                     // Encode and validate input
                     var context = _tokenizer.Encode(prompt);
+
+                    // Many GGUF tokenizers require an explicit BOS token for coherent generation.
+                    // Add it when tokenizer metadata indicates BOS behavior.
+                    var info = _tokenizer.Info;
+                    if (info.AddBos && info.BosTokenId >= 0 && (context.Count == 0 || context[0] != info.BosTokenId))
+                    {
+                        context.Insert(0, info.BosTokenId);
+                    }
+
                     ValidateAndTruncateInput(context);
 
                     int inputTokens = context.Count;
@@ -338,6 +347,15 @@ namespace SmallMind.Runtime
                 {
                     // Encode and validate input
                     var context = _tokenizer.Encode(prompt);
+
+                    // Many GGUF tokenizers require an explicit BOS token for coherent generation.
+                    // Add it when tokenizer metadata indicates BOS behavior.
+                    var info = _tokenizer.Info;
+                    if (info.AddBos && info.BosTokenId >= 0 && (context.Count == 0 || context[0] != info.BosTokenId))
+                    {
+                        context.Insert(0, info.BosTokenId);
+                    }
+
                     ValidateAndTruncateInput(context);
 
                     int inputTokens = context.Count;
