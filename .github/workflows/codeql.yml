@@ -52,7 +52,7 @@ jobs:
 
       # Initialize CodeQL tools for scanning
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@9e907b5e64f6b83e7804b09294d44122997950d6 # v4.32.3
+        uses: github/codeql-action/init@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
         with:
           languages: ${{ matrix.language }}
           # Specify queries to run (optional - default is security-extended)
@@ -67,6 +67,6 @@ jobs:
         run: dotnet build SmallMind.sln --no-restore --configuration Release
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@9e907b5e64f6b83e7804b09294d44122997950d6 # v4.32.3
+        uses: github/codeql-action/analyze@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
         with:
           category: "/language:${{ matrix.language }}"
