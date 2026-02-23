@@ -282,18 +282,21 @@ namespace SmallMind.Tokenizers.Text
                 return string.Empty;
             }
 
-            // Skip BOS token at start if present
-            int startIdx = 0;
-            if (tokens.Count > 0 && tokens[0] == Info.BosTokenId)
-            {
-                startIdx = 1;
-            }
-
             var sb = new StringBuilder();
 
-            for (int i = startIdx; i < tokens.Count; i++)
+            for (int i = 0; i < tokens.Count; i++)
             {
                 int id = tokens[i];
+
+                // Skip structural special tokens: they must not appear as literal text
+                // in the output regardless of position (BOS, EOS, UNK).
+                if ((Info.BosTokenId >= 0 && id == Info.BosTokenId) ||
+                    (Info.EosTokenId >= 0 && id == Info.EosTokenId) ||
+                    id == Info.UnkTokenId)
+                {
+                    continue;
+                }
+
                 if (_inverseVocab.TryGetValue(id, out string? token))
                 {
                     sb.Append(token);

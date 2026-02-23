@@ -275,4 +275,45 @@ public class GgufBpeTokenizerTests
         // Assert
         Assert.False(tokenizer.Info.AddBos);
     }
+
+    [Fact]
+    public void GgufBpeTokenizer_Decode_SkipsEosTokenAnywhere()
+    {
+        // Arrange – EOS token (id=2) must be silently dropped wherever it appears.
+        var vocab = new Dictionary<string, int>
+        {
+            ["<s>"] = 1,
+            ["</s>"] = 2,
+            ["h"] = 100,
+            ["i"] = 101,
+        };
+        var merges = new List<(string, string)>();
+        var tokenizer = new GgufBpeTokenizer(vocab, merges, bosTokenId: 1, eosTokenId: 2);
+
+        // [BOS, h, i, EOS] – BOS and EOS should both be dropped
+        var tokens = new List<int> { 1, 100, 101, 2 };
+        var decoded = tokenizer.Decode(tokens);
+
+        Assert.Equal("hi", decoded);
+    }
+
+    [Fact]
+    public void GgufBpeTokenizer_Decode_SkipsBosTokenAnywhere()
+    {
+        // Arrange – BOS token appearing in the middle should also be silently dropped.
+        var vocab = new Dictionary<string, int>
+        {
+            ["<s>"] = 1,
+            ["a"] = 100,
+            ["b"] = 101,
+        };
+        var merges = new List<(string, string)>();
+        var tokenizer = new GgufBpeTokenizer(vocab, merges, bosTokenId: 1, eosTokenId: -1);
+
+        // [a, BOS, b] – BOS in the middle should be dropped
+        var tokens = new List<int> { 100, 1, 101 };
+        var decoded = tokenizer.Decode(tokens);
+
+        Assert.Equal("ab", decoded);
+    }
 }

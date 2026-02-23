@@ -62,9 +62,12 @@ public class GgufSmokeTests
 
         string output = await session.GenerateAsync(TestPrompt);
 
-        // Strip the prompt prefix from output for analysis
-        string generated = output.StartsWith(TestPrompt, StringComparison.Ordinal)
-            ? output[TestPrompt.Length..]
+        // Strip the prompt prefix from output for analysis.
+        // Decode now skips BOS, so the output may start with a leading space
+        // from the first ▁-prefixed token; use TrimStart before comparing.
+        string outputTrimmed = output.TrimStart();
+        string generated = outputTrimmed.StartsWith(TestPrompt, StringComparison.Ordinal)
+            ? outputTrimmed[TestPrompt.Length..].TrimStart()
             : output;
 
         // Validate output quality with heuristics

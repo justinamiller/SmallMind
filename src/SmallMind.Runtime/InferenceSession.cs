@@ -301,6 +301,14 @@ namespace SmallMind.Runtime
                             }
                         }
                     }
+                    else if (finishReason == FinishReason.EndOfSequence)
+                    {
+                        // Strip trailing EOS text (e.g. "</s>") produced by the model.
+                        // Decode always skips structural special tokens in the token loop,
+                        // so EOS only leaves a trace if it leaked through as a non-special-token
+                        // path.  Trim any trailing whitespace left behind after stripping.
+                        result = result.TrimEnd();
+                    }
 
                     return result;
                 }

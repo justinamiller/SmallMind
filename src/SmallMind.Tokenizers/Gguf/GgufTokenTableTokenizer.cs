@@ -98,6 +98,16 @@ namespace SmallMind.Tokenizers.Gguf
                         matchedLen = len;
                         break;
                     }
+
+                    // For the first piece of a word, also try WITHOUT the ▁ prefix.
+                    // This is required for special/added tokens (e.g. <|user|>, <|assistant|>,
+                    // </s>) which are stored in the vocab without a leading ▁.
+                    if (firstPiece && _vocab.TryGetValue(piece, out int tokenIdNoPrefix))
+                    {
+                        matchedTokenId = tokenIdNoPrefix;
+                        matchedLen = len;
+                        break;
+                    }
                 }
 
                 if (matchedTokenId != -1)
@@ -151,6 +161,15 @@ namespace SmallMind.Tokenizers.Gguf
             var sb = new StringBuilder();
             foreach (var tokenId in tokens)
             {
+                // Skip structural special tokens: they must not appear as literal text in output.
+                if (tokenId == _specialTokens.BosTokenId ||
+                    tokenId == _specialTokens.EosTokenId ||
+                    tokenId == _specialTokens.PadTokenId ||
+                    tokenId == _specialTokens.UnkTokenId)
+                {
+                    continue;
+                }
+
                 if (tokenId >= 0 && tokenId < _reverseVocab.Count)
                 {
                     string tokenStr = _reverseVocab[tokenId];

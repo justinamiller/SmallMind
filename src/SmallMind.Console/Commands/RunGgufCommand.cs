@@ -12,6 +12,13 @@ namespace SmallMind.ConsoleApp.Commands
         public string Name => "run-gguf";
         public string Description => "Load GGUF model and run inference validation";
 
+        /// <summary>
+        /// Minimum token ID used to distinguish chat-template added tokens (e.g.
+        /// &lt;|user|&gt; at ID 32001) from base-vocabulary tokens.  All Zephyr/TinyLlama
+        /// added-token IDs exceed this value.
+        /// </summary>
+        private const int MinimumChatTokenId = 30000;
+
         public async Task<int> ExecuteAsync(string[] args)
         {
             if (args.Length < 2)
@@ -74,6 +81,19 @@ namespace SmallMind.ConsoleApp.Commands
 
                 loadStopwatch.Stop();
                 System.Console.WriteLine($"✓ Model loaded in {loadStopwatch.ElapsedMilliseconds}ms");
+
+                // Detect Zephyr/TinyLlama-style chat model: <|user|> must encode as a single
+                // high-ID vocabulary token.  If so, wrap the prompt in the chat template so the
+                // model generates a coherent assistant response rather than raw text continuation.
+                string effectivePrompt = prompt;
+                var userTokens = tokenizer.Encode("<|user|>");
+                bool isChatModel = userTokens.Count == 1 && userTokens[0] > MinimumChatTokenId;
+                if (isChatModel)
+                {
+                    effectivePrompt = $"<|user|>\n{prompt}</s>\n<|assistant|>\n";
+                    System.Console.WriteLine("Chat template: Zephyr format applied");
+                }
+
                 System.Console.WriteLine();
 
                 // Create inference session
@@ -98,7 +118,7 @@ namespace SmallMind.ConsoleApp.Commands
                 System.Console.WriteLine("Generating...");
                 System.Console.WriteLine("─".PadRight(60, '─'));
 
-                string output = await session.GenerateAsync(prompt);
+                string output = await session.GenerateAsync(effectivePrompt);
 
                 genStopwatch.Stop();
                 System.Console.WriteLine(output);
@@ -106,7 +126,7 @@ namespace SmallMind.ConsoleApp.Commands
                 System.Console.WriteLine();
 
                 // Calculate tokens/sec
-                int outputTokens = tokenizer.Encode(output).Count - tokenizer.Encode(prompt).Count;
+                int outputTokens = tokenizer.Encode(output).Count - tokenizer.Encode(effectivePrompt).Count;
                 double tokensPerSec = outputTokens / (genStopwatch.ElapsedMilliseconds / 1000.0);
 
                 System.Console.WriteLine($"Generation time: {genStopwatch.ElapsedMilliseconds}ms");
@@ -114,7 +134,8 @@ namespace SmallMind.ConsoleApp.Commands
                 System.Console.WriteLine($"Speed: {tokensPerSec:F2} tok/s");
                 System.Console.WriteLine();
 
-                // Coherence check
+                // Coherence check — always evaluate against the original user prompt so
+                // the extractor can locate the generated portion inside the output.
                 bool isCoherent = ValidateCoherence(output, prompt);
 
                 if (isCoherent)
@@ -170,12 +191,42 @@ namespace SmallMind.ConsoleApp.Commands
         /// - Contains alphabetic characters
         /// - Not mostly repeated characters or garbage
         /// </summary>
-        private bool ValidateCoherence(string output, string prompt)
+        private bool ValidateCoherence(string output, string rawUserPrompt)
         {
-            // Extract generated portion (after prompt)
-            string generated = output.Length > prompt.Length
-                ? output.Substring(prompt.Length).TrimStart()
-                : output;
+            // Extract the generated portion.
+            // The decoded output may differ from rawUserPrompt in whitespace representation
+            // (▁ prefix → leading space) and may be prefixed by chat-template tokens such
+            // as <|user|> and <|assistant|>.  We try three strategies in order:
+            //   1. TrimStart + StartsWith to handle the common case where the decoded output
+            //      is just the decoded prompt (possibly with a leading ▁-space) followed by
+            //      the generated text.
+            //   2. IndexOf to locate rawUserPrompt inside the output when a chat template
+            //      prepends extra tokens (<|user|> etc.).
+            //   3. Length-based fallback (original behaviour).
+            string generated;
+            string outputTrimmed = output.TrimStart();
+
+            if (outputTrimmed.StartsWith(rawUserPrompt, StringComparison.Ordinal))
+            {
+                // Common case: prompt decoded cleanly, generated text follows.
+                generated = outputTrimmed.Substring(rawUserPrompt.Length).TrimStart();
+            }
+            else
+            {
+                int idx = output.IndexOf(rawUserPrompt, StringComparison.Ordinal);
+                if (idx >= 0)
+                {
+                    // Chat-template case: rawUserPrompt is embedded in the decoded output.
+                    generated = output.Substring(idx + rawUserPrompt.Length).TrimStart();
+                }
+                else
+                {
+                    // Last-resort length-based strip.
+                    generated = output.Length > rawUserPrompt.Length
+                        ? output.Substring(rawUserPrompt.Length).TrimStart()
+                        : outputTrimmed;
+                }
+            }
 
             if (string.IsNullOrWhiteSpace(generated))
             {
@@ -213,10 +264,11 @@ namespace SmallMind.ConsoleApp.Commands
             // English text should have:
             // - At least 40% alphabetic characters
             // - At least 80% printable ASCII
-            // - 5-25% whitespace
+            // - 3-30% whitespace (slightly wider than the naive 5-25% to tolerate chat
+            //   template prefix tokens that have no spaces, e.g. "<|assistant|>")
             bool hasEnoughAlpha = alphaPct >= 0.4;
             bool mostlyPrintable = printablePct >= 0.8;
-            bool reasonableSpacing = spacePct >= 0.05 && spacePct <= 0.25;
+            bool reasonableSpacing = spacePct >= 0.03 && spacePct <= 0.30;
 
             if (!hasEnoughAlpha)
             {
