@@ -140,6 +140,13 @@ namespace SmallMind.Runtime
         public bool IncludeLogProbs { get; set; } = false;
 
         /// <summary>
+        /// Gets or sets whether to log first-step logit diagnostics (top tokens, probs, entropy).
+        /// Can also be activated via the SMALLMIND_DEBUG_LOGITS=1 environment variable.
+        /// Default: false.
+        /// </summary>
+        public bool EnableLogitsDiagnostics { get; set; } = false;
+
+        /// <summary>
         /// Gets or sets whether to enable deterministic token scheduling.
         /// When true, token generation order is tracked and made reproducible.
         /// Default: false.
@@ -244,6 +251,7 @@ namespace SmallMind.Runtime
                 MaxTimeMs = MaxTimeMs,
                 TruncateInput = TruncateInput,
                 IncludeLogProbs = IncludeLogProbs,
+                EnableLogitsDiagnostics = EnableLogitsDiagnostics,
                 EnableScheduleTracking = EnableScheduleTracking,
                 SchedulingPolicy = SchedulingPolicy,
                 OutputConstraint = OutputConstraint
