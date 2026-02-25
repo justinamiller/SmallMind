@@ -160,10 +160,39 @@ namespace SmallMind.Runtime
             logger.LogInfo($"Tensor reads: {mainLoopReads} (main loop) + {qkvReads} (Q/K/V merge) = {mainLoopReads + qkvReads} total");
             logger.LogDebug($"Q/K/V tensors skipped in main loop: {qkvSkipped}");
 
-            // Check for missing critical parameters — hard-fail to avoid silent partial-load corruption.
-            // These tensors are required for any valid inference; missing any of them produces garbage output.
+            // Build the set of SmallMind parameter names that THIS GGUF file is expected to provide,
+            // derived from the tensor mapping.  Tensors absent from the mapping (e.g. LLaMA/Mistral
+            // bias tensors that the architecture simply does not use) are optional by design and must
+            // never trigger a hard-fail.
+            //
+            // PENDING_Q/K/V_X and PENDING_QKV_X (weight, non-bias) entries get merged into
+            // blk.X.attn_qkv.weight; PENDING_*_BIAS_* entries are optional and are skipped.
+            var expectedFromGguf = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (ggufName, smName) in tensorMapping)
+            {
+                if (smName == "MERGE_QKV")
+                    continue;
+
+                if (smName.StartsWith("PENDING_"))
+                {
+                    // Skip bias PENDING entries (they are optional in LLaMA-family models).
+                    if (smName.Contains("BIAS"))
+                        continue;
+
+                    // Non-bias PENDING entries resolve to the merged QKV weight tensor.
+                    int layer = ExtractLayerIndex(ggufName);
+                    if (layer >= 0)
+                        expectedFromGguf.Add($"blk.{layer}.attn_qkv.weight");
+                }
+                else
+                {
+                    expectedFromGguf.Add(smName);
+                }
+            }
+
+            // Hard-fail only if a tensor the GGUF file advertises was not successfully loaded.
             var missingCritical = new List<string>();
-            foreach (var key in namedParams.Keys)
+            foreach (var key in expectedFromGguf)
             {
                 if (!loadedParams.Contains(key) && IsCriticalParameter(key))
                 {
