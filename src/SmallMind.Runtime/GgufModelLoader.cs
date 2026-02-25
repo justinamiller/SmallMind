@@ -135,7 +135,7 @@ namespace SmallMind.Runtime
             {
                 using (var mmapReader = new GgufMmapReader(ggufPath))
                 {
-                    LoadWeightsWithReader(mmapReader, modelInfo, tensorMapping, namedParams, loadedParams,
+                    LoadWeightsWithReader(mmapReader, modelInfo, config, tensorMapping, namedParams, loadedParams,
                         ref mainLoopReads, ref qkvSkipped, ref qkvReads, logger);
                 }
             }
@@ -147,7 +147,7 @@ namespace SmallMind.Runtime
                     // Re-read model info to position stream correctly
                     reader.ReadModelInfo();
 
-                    LoadWeightsWithReader(reader, modelInfo, tensorMapping, namedParams, loadedParams,
+                    LoadWeightsWithReader(reader, modelInfo, config, tensorMapping, namedParams, loadedParams,
                         ref mainLoopReads, ref qkvSkipped, ref qkvReads, logger);
                 }
             }
@@ -190,7 +190,7 @@ namespace SmallMind.Runtime
         /// Load weights using the provided tensor data reader (stream-based or mmap).
         /// </summary>
         private static void LoadWeightsWithReader(ITensorDataReader reader, GgufModelInfo modelInfo,
-            Dictionary<string, string> tensorMapping, Dictionary<string, Tensor> namedParams,
+            ModelConfig config, Dictionary<string, string> tensorMapping, Dictionary<string, Tensor> namedParams,
             HashSet<string> loadedParams, ref int mainLoopReads, ref int qkvSkipped, ref int qkvReads, IInternalRuntimeLogger logger)
         {
             bool hasQuantizedTensors = false;
@@ -247,7 +247,7 @@ namespace SmallMind.Runtime
             }
 
             // Handle QKV merging
-            qkvReads = MergeQKVWeights(reader, modelInfo, namedParams, tensorMapping, loadedParams, logger);
+            qkvReads = MergeQKVWeights(reader, modelInfo, config, namedParams, tensorMapping, loadedParams, logger);
         }
 
         /// <summary>
@@ -1022,13 +1022,20 @@ namespace SmallMind.Runtime
 
         /// <summary>
         /// Merge separate Q/K/V weight tensors from GGUF into combined QKV tensor in SmallMind.
+        /// Supports GQA (Grouped Query Attention) where K/V have fewer heads than Q.
         /// Returns the count of Q/K/V tensor reads.
         /// </summary>
         private static int MergeQKVWeights(ITensorDataReader reader, GgufModelInfo modelInfo,
-            Dictionary<string, Tensor> namedParams,
+            ModelConfig config, Dictionary<string, Tensor> namedParams,
             Dictionary<string, string> tensorMapping, HashSet<string> loadedParams, IInternalRuntimeLogger logger)
         {
             int qkvReadsCount = 0;
+
+            // Precompute expected GQA dimensions from config for validation
+            int headSize = config.HeadCount > 0 ? config.EmbeddingLength / config.HeadCount : 0;
+            int expectedQRows = config.EmbeddingLength;          // nHead * headSize = nEmbd
+            int expectedKvRows = config.HeadCountKv * headSize;  // nKvHead * headSize (< nEmbd for GQA)
+            bool isGqa = config.HeadCountKv < config.HeadCount;
 
             // Group Q/K/V tensors by layer
             var qkvGroups = new Dictionary<int, (GgufTensorInfo? q, GgufTensorInfo? k, GgufTensorInfo? v)>();
@@ -1082,31 +1089,84 @@ namespace SmallMind.Runtime
                 float[] vData = ReadAndDequantizeTensor(reader, v);
                 qkvReadsCount += 3; // Count Q, K, V reads
 
+                // Build human-readable shape strings for diagnostics (GGUF dims: [cols, rows])
+                string qShape = FormatTensorShape(q.Dimensions);
+                string kShape = FormatTensorShape(k.Dimensions);
+                string vShape = FormatTensorShape(v.Dimensions);
+
                 // Merge: [Q, K, V] concatenation
-                // GGUF stores as (out, in) but we need to match SmallMind's layout
+                // GGUF stores as row-major (outFeatures, inFeatures); SmallMind uses same layout.
+                // For GQA: Q has nEmbd rows, K/V each have nKvHead*headSize rows.
                 int qSize = qData.Length;
                 int kSize = kData.Length;
                 int vSize = vData.Length;
                 int totalSize = qSize + kSize + vSize;
 
-                if (totalSize != targetParam.Size)
+                if (isGqa && layer == 0)
                 {
-                    throw new InvalidOperationException(
-                        $"QKV merge size mismatch for layer {layer}:\n" +
-                        $"  Q: {qSize}, K: {kSize}, V: {vSize}, Total: {totalSize}\n" +
-                        $"  Target: {targetParam.Size}");
+                    logger.LogDebug($"  GQA detected: Q={qShape}, K={kShape}, V={vShape}" +
+                        $" (nHead={config.HeadCount}, nKvHead={config.HeadCountKv})");
                 }
 
-                // Copy Q, then K, then V
+                if (totalSize != targetParam.Size)
+                {
+                    // Provide a GQA-aware error message showing the actual vs expected dimensions
+                    int qRows = qSize > 0 && q.Dimensions.Length >= 2 ? (int)q.Dimensions[1] : 0;
+                    int kRows = kSize > 0 && k.Dimensions.Length >= 2 ? (int)k.Dimensions[1] : 0;
+                    bool isGqaShapeMismatch = qRows > 0 && kRows > 0 && kRows < qRows;
+
+                    // For GQA hint: infer expected nKvHead from K's actual row count and headSize
+                    // headSize = nEmbd / nHead; expected nKvHead = kRows / headSize
+                    string hint = string.Empty;
+                    if (isGqaShapeMismatch && headSize > 0)
+                    {
+                        int inferredKvHead = kRows / headSize;
+                        hint = $"\n  Hint: K/V have fewer rows than Q — this is a GQA model." +
+                               $" K rows={kRows} implies nKvHead={inferredKvHead}," +
+                               $" but config has nKvHead={config.HeadCountKv}." +
+                               $" Verify the GGUF metadata key '{config.Architecture}.attention.head_count_kv' is present and correct.";
+                    }
+
+                    throw new InvalidOperationException(
+                        $"QKV merge dimension mismatch for layer {layer}:\n" +
+                        $"  Q={qShape}, K={kShape}, V={vShape}\n" +
+                        $"  Combined elements: Q({qSize}) + K({kSize}) + V({vSize}) = {totalSize}\n" +
+                        $"  Target tensor size: {targetParam.Size}\n" +
+                        $"  (config: nHead={config.HeadCount}, nKvHead={config.HeadCountKv}, nEmbd={config.EmbeddingLength})" +
+                        hint);
+                }
+
+                // Copy Q, then K, then V (row-major layout preserved)
                 Array.Copy(qData, 0, targetParam.Data, 0, qSize);
                 Array.Copy(kData, 0, targetParam.Data, qSize, kSize);
                 Array.Copy(vData, 0, targetParam.Data, qSize + kSize, vSize);
 
-                logger.LogDebug($"  blk.{layer}.attn_qkv.weight: Merged Q({qSize}) + K({kSize}) + V({vSize}) = {totalSize} elements");
+                logger.LogDebug($"  blk.{layer}.attn_qkv.weight: Merged Q={qShape} + K={kShape} + V={vShape} = {totalSize} elements");
                 loadedParams.Add(targetName);
             }
 
             return qkvReadsCount;
+        }
+
+        /// <summary>
+        /// Format GGUF tensor dimensions as a readable shape string.
+        /// GGUF stores dims[0]=cols (input), dims[1]=rows (output) for 2D tensors.
+        /// Displayed as (rows x cols) to match weight matrix convention.
+        /// </summary>
+        private static string FormatTensorShape(ulong[] dims)
+        {
+            if (dims == null || dims.Length == 0)
+                return "(empty)";
+            if (dims.Length == 1)
+                return $"({dims[0]})";
+            if (dims.Length == 2)
+                // GGUF: dims[0]=cols(in), dims[1]=rows(out) → display as (rows x cols)
+                return $"({dims[1]}x{dims[0]})";
+            // For higher-rank tensors, reverse to show outermost dimension first
+            var parts = new string[dims.Length];
+            for (int i = 0; i < dims.Length; i++)
+                parts[i] = dims[dims.Length - 1 - i].ToString();
+            return $"({string.Join("x", parts)})";
         }
 
         private static int ExtractLayerIndex(string tensorName)
