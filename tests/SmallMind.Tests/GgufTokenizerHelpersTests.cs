@@ -137,4 +137,119 @@ namespace SmallMind.Tests
             Assert.True(result);
         }
     }
+
+    /// <summary>
+    /// Tests for SentencePiece space character (▁ U+2581) handling in GGUF tokenizer decode.
+    /// Ensures that the GGUF tokenizers used for LLaMA/TinyLlama models correctly convert
+    /// "▁" (word-leading space marker) to a regular space " " when decoding.
+    /// </summary>
+    public class GgufTokenizerSentencePieceDecodeTests
+    {
+        [Fact]
+        public void GgufBpeTokenizer_Decode_ReplacesLeadingSpaceMarker_WithRegularSpace()
+        {
+            // Arrange: vocabulary simulating LLaMA-style tokens with "▁" prefix
+            var vocab = new Dictionary<string, int>
+            {
+                ["▁Paris"] = 0,
+                ["▁is"] = 1,
+                ["▁the"] = 2,
+                ["▁capital"] = 3,
+            };
+            var reverseVocab = new List<string> { "▁Paris", "▁is", "▁the", "▁capital" };
+            var merges = new List<(string, string)>();
+            var specialTokens = new SpecialTokens();
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act: decode tokens that map to SentencePiece-style tokens
+            var decoded = tokenizer.Decode(new List<int> { 0, 1, 2, 3 });
+
+            // Assert: "▁" should be converted to " " (regular space)
+            Assert.Equal(" Paris is the capital", decoded);
+            Assert.DoesNotContain('\u2581', decoded); // No "▁" chars remain
+            Assert.Contains(' ', decoded);            // Regular spaces are present
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_Decode_SpacePct_IsNonZero_AfterFix()
+        {
+            // Arrange: tokens including word-boundary markers
+            var vocab = new Dictionary<string, int>
+            {
+                ["Hello"] = 0,
+                ["▁world"] = 1,
+            };
+            var reverseVocab = new List<string> { "Hello", "▁world" };
+            var merges = new List<(string, string)>();
+            var specialTokens = new SpecialTokens();
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act
+            var decoded = tokenizer.Decode(new List<int> { 0, 1 });
+
+            // Assert
+            Assert.Equal("Hello world", decoded);
+
+            // Verify coherence check would pass (spacePct 5-25%)
+            int spaceCount = decoded.Count(c => char.IsWhiteSpace(c));
+            double spacePct = (double)spaceCount / decoded.Length;
+            Assert.InRange(spacePct, 0.05, 0.25);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_Decode_ReplacesLeadingSpaceMarker_WithRegularSpace()
+        {
+            // Arrange: LLaMA-style vocabulary
+            var vocab = new Dictionary<string, int>
+            {
+                ["▁The"] = 0,
+                ["▁capital"] = 1,
+                ["▁of"] = 2,
+                ["▁France"] = 3,
+                ["▁is"] = 4,
+                ["▁Paris"] = 5,
+                ["."] = 6,
+            };
+            var reverseVocab = new List<string>
+                { "▁The", "▁capital", "▁of", "▁France", "▁is", "▁Paris", "." };
+            var specialTokens = new SpecialTokens();
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Act
+            var decoded = tokenizer.Decode(new List<int> { 0, 1, 2, 3, 4, 5, 6 });
+
+            // Assert
+            Assert.Equal(" The capital of France is Paris.", decoded);
+            Assert.DoesNotContain('\u2581', decoded);
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_Decode_MixedTokens_ByteAndSentencePiece_WorksCorrectly()
+        {
+            // Arrange: mix of byte tokens and SentencePiece tokens
+            var vocab = new Dictionary<string, int>
+            {
+                ["<0x0A>"] = 0,  // newline byte token
+                ["▁Hello"] = 1,  // SentencePiece word token
+            };
+            var reverseVocab = new List<string> { "<0x0A>", "▁Hello" };
+            var merges = new List<(string, string)>();
+            var specialTokens = new SpecialTokens();
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act
+            var decoded = tokenizer.Decode(new List<int> { 0, 1 });
+
+            // Assert: byte token decoded as '\n', SentencePiece token decoded with space
+            Assert.Equal("\n Hello", decoded);
+        }
+    }
 }
