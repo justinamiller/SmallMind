@@ -58,6 +58,10 @@ namespace SmallMind.Runtime
         private readonly DeterministicScheduler? _scheduler;
         private TokenScheduleResult? _currentSchedule;
 
+        // Logit diagnostics: activated by option or SMALLMIND_DEBUG_LOGITS=1 env var
+        private readonly bool _logitsDiagnosticsEnabled;
+        private bool _firstStepLogged = false;
+
         private bool _disposed;
 
         /// <summary>
@@ -114,6 +118,10 @@ namespace SmallMind.Runtime
             {
                 _scheduler = new DeterministicScheduler();
             }
+
+            // Initialize logit diagnostics (option OR env var)
+            _logitsDiagnosticsEnabled = _options.EnableLogitsDiagnostics ||
+                Environment.GetEnvironmentVariable("SMALLMIND_DEBUG_LOGITS") == "1";
 
             SessionId = sessionId ?? Guid.NewGuid().ToString("N");
 
@@ -185,6 +193,9 @@ namespace SmallMind.Runtime
                     }
 
                     ValidateAndTruncateInput(context);
+
+                    // Reset first-step diagnostics flag for each new generation
+                    _firstStepLogged = false;
 
                     int inputTokens = context.Count;
                     int requestId = -1;
@@ -290,6 +301,14 @@ namespace SmallMind.Runtime
                             }
                         }
                     }
+                    else if (finishReason == FinishReason.EndOfSequence)
+                    {
+                        // Strip trailing EOS text (e.g. "</s>") produced by the model.
+                        // Decode always skips structural special tokens in the token loop,
+                        // so EOS only leaves a trace if it leaked through as a non-special-token
+                        // path.  Trim any trailing whitespace left behind after stripping.
+                        result = result.TrimEnd();
+                    }
 
                     return result;
                 }
@@ -357,6 +376,9 @@ namespace SmallMind.Runtime
                     }
 
                     ValidateAndTruncateInput(context);
+
+                    // Reset first-step diagnostics flag for each new generation
+                    _firstStepLogged = false;
 
                     int inputTokens = context.Count;
                     int requestId = -1;
@@ -580,6 +602,9 @@ namespace SmallMind.Runtime
                 logitsLast[v] = logits.Data[lastPosOffset + v];
             }
 
+            // Guard: detect NaN/Inf in raw logits (indicates numerical instability)
+            ValidateLogits(logitsLast, vocabSize);
+
             // SAMPLING PIPELINE (order matters):
 
             // 1. Apply repetition/presence/frequency penalties (before temperature)
@@ -620,6 +645,13 @@ namespace SmallMind.Runtime
                 probs = Softmax(logitsLast);
             }
 
+            // Emit first-step diagnostics if enabled
+            if (_logitsDiagnosticsEnabled && !_firstStepLogged)
+            {
+                _firstStepLogged = true;
+                LogFirstStepDiagnostics(logitsLast, probs, vocabSize);
+            }
+
             // 7. Sample from the distribution
             return SampleFromProbs(probs);
         }
@@ -647,6 +679,105 @@ namespace SmallMind.Runtime
                         tokens.Count,
                         "Set TruncateInput=true to automatically truncate, or reduce input size.");
                 }
+            }
+        }
+
+        /// <summary>
+        /// Validates raw logits for NaN/Inf values. Throws on NaN/Inf, warns on degenerate distribution.
+        /// </summary>
+        private static void ValidateLogits(float[] logits, int length)
+        {
+            int nanCount = 0;
+            int infCount = 0;
+            float min = float.MaxValue;
+            float max = float.MinValue;
+
+            for (int i = 0; i < length; i++)
+            {
+                float v = logits[i];
+                if (float.IsNaN(v)) nanCount++;
+                else if (float.IsInfinity(v)) infCount++;
+                else
+                {
+                    if (v < min) min = v;
+                    if (v > max) max = v;
+                }
+            }
+
+            if (nanCount > 0)
+                throw new InvalidOperationException(
+                    $"Model produced {nanCount} NaN logit(s) out of {length}. " +
+                    "This indicates a numerical instability (e.g. missing weights, zero embeddings, or gradient explosion). " +
+                    "Verify that all critical tensors are loaded correctly.");
+
+            if (infCount > 0 && infCount == length)
+                throw new InvalidOperationException(
+                    $"All {length} logits are infinite. " +
+                    "This indicates a severe numerical issue. Verify model weights and configuration.");
+
+            // Degenerate distribution: nearly uniform (range < 1e-4) or all near-zero
+            if (min <= max && (max - min) < 1e-4f)
+            {
+                // Log via stderr since we have no logger reference here; use Console.Error for guardrail
+                Console.Error.WriteLine(
+                    $"[SmallMind WARNING] Degenerate logit distribution detected: min={min:G4}, max={max:G4}, range={max - min:G4}. " +
+                    "Output may be random/incoherent. Check that all model weights were loaded.");
+            }
+        }
+
+        /// <summary>
+        /// Logs first-step diagnostics: top-10 tokens, logits, probs, and entropy.
+        /// </summary>
+        private void LogFirstStepDiagnostics(float[] logits, float[] probs, int vocabSize)
+        {
+            // Build top-10 indices by probability (selection sort for small k)
+            const int topK = 10;
+            int k = Math.Min(topK, vocabSize);
+            var topIndices = new int[k];
+            var topProbs = new float[k];
+            var usedFlags = new bool[vocabSize]; // allocated once since this method is called at most once per session
+
+            for (int rank = 0; rank < k; rank++)
+            {
+                float best = float.NegativeInfinity;
+                int bestIdx = 0;
+                for (int i = 0; i < vocabSize; i++)
+                {
+                    if (!usedFlags[i] && probs[i] > best)
+                    {
+                        best = probs[i];
+                        bestIdx = i;
+                    }
+                }
+                topIndices[rank] = bestIdx;
+                topProbs[rank] = best;
+                usedFlags[bestIdx] = true;
+            }
+
+            // Compute entropy H = -sum(p * log(p))
+            double entropy = 0.0;
+            for (int i = 0; i < vocabSize; i++)
+            {
+                float p = probs[i];
+                if (p > 1e-12f)
+                    entropy -= p * Math.Log(p);
+            }
+
+            Console.Error.WriteLine("[SmallMind DIAG] First decode step logit diagnostics:");
+            Console.Error.WriteLine($"  Vocab size : {vocabSize}");
+            Console.Error.WriteLine($"  Entropy    : {entropy:F4} nats (max possible: {Math.Log(vocabSize):F4})");
+            Console.Error.WriteLine($"  Top-{k} tokens:");
+            for (int rank = 0; rank < k; rank++)
+            {
+                int tokenId = topIndices[rank];
+                float logit = logits[tokenId];
+                float prob = topProbs[rank];
+                string tokenText;
+                try { tokenText = _tokenizer.DecodeSingleToken(tokenId); }
+                catch { tokenText = "?"; }
+                // Escape for display
+                tokenText = tokenText.Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
+                Console.Error.WriteLine($"    [{rank + 1}] id={tokenId,6}  logit={logit,8:F3}  prob={prob,8:F5}  token={tokenText}");
             }
         }
 

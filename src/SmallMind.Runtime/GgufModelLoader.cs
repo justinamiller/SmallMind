@@ -130,6 +130,19 @@ namespace SmallMind.Runtime
             int qkvSkipped = 0;
             int qkvReads = 0;
 
+            // Count unmapped GGUF tensors for diagnostics
+            int ggufTensorCount = modelInfo.Tensors.Count;
+            int mappedTensorCount = 0;
+            var unmappedTensorNames = new List<string>();
+            foreach (var tensorInfo in modelInfo.Tensors)
+            {
+                if (tensorMapping.ContainsKey(tensorInfo.Name))
+                    mappedTensorCount++;
+                else
+                    unmappedTensorNames.Add(tensorInfo.Name);
+            }
+            int skippedTensorCount = unmappedTensorNames.Count;
+
             // Read and load tensors using appropriate reader
             if (useMmap)
             {
@@ -153,36 +166,91 @@ namespace SmallMind.Runtime
             }
 
             // Handle weight tying (copy token embeddings to output if missing)
-            HandleWeightTying(namedParams, loadedParams, config, logger);
+            bool outputTied = HandleWeightTying(namedParams, loadedParams, config, logger);
 
-            // Report loading summary
-            logger.LogInfo($"Loaded {loadedParams.Count} / {namedParams.Count} parameters");
-            logger.LogInfo($"Tensor reads: {mainLoopReads} (main loop) + {qkvReads} (Q/K/V merge) = {mainLoopReads + qkvReads} total");
-            logger.LogDebug($"Q/K/V tensors skipped in main loop: {qkvSkipped}");
-
-            // Check for missing critical parameters (avoid LINQ for better performance)
-            var missingCritical = new List<string>();
-            foreach (var key in namedParams.Keys)
+            // Emit structured load summary at INFO level
+            logger.LogInfo("=== GGUF Load Summary ===");
+            logger.LogInfo($"  Architecture    : {config.Architecture}, blocks={config.BlockCount}");
+            logger.LogInfo($"  ggufTensorCount : {ggufTensorCount}");
+            logger.LogInfo($"  mappedTensorCount: {mappedTensorCount}");
+            logger.LogInfo($"  loadedTensorCount: {loadedParams.Count}");
+            logger.LogInfo($"  skippedTensorCount: {skippedTensorCount}");
+            if (unmappedTensorNames.Count > 0)
             {
-                if (!loadedParams.Contains(key) &&
-                    (key.Contains("token_embd") || key.Contains("output_norm") || key.Contains("attn")))
-                {
-                    missingCritical.Add(key);
-                }
+                int displayTop = Math.Min(10, unmappedTensorNames.Count);
+                logger.LogInfo($"  unmappedTensorNames (top {displayTop}):");
+                for (int i = 0; i < displayTop; i++)
+                    logger.LogInfo($"    - {unmappedTensorNames[i]}");
+                if (unmappedTensorNames.Count > 10)
+                    logger.LogInfo($"    ... and {unmappedTensorNames.Count - 10} more");
+            }
+            logger.LogInfo($"  outputTied      : {outputTied}");
+            logger.LogInfo($"  Tensor reads    : {mainLoopReads} (main) + {qkvReads} (Q/K/V) = {mainLoopReads + qkvReads} total");
+            logger.LogDebug($"  Q/K/V tensors skipped in main loop: {qkvSkipped}");
+            logger.LogInfo("=========================");
+
+            // Critical tensor presence check: fail fast with actionable exception
+            ValidateCriticalTensors(namedParams, loadedParams, config, outputTied, logger);
+        }
+
+        /// <summary>
+        /// Validates that all critical tensors are loaded; throws if any are missing.
+        /// </summary>
+        private static void ValidateCriticalTensors(Dictionary<string, Tensor> namedParams,
+            HashSet<string> loadedParams, ModelConfig config, bool outputTied, IInternalRuntimeLogger logger)
+        {
+            var missing = new List<string>();
+
+            // token_embd.weight is always required
+            if (!loadedParams.Contains("token_embd.weight"))
+                missing.Add("token_embd.weight");
+
+            // output_norm.weight is always required
+            if (!loadedParams.Contains("output_norm.weight"))
+                missing.Add("output_norm.weight");
+
+            // output.weight required unless weight tying was applied
+            if (!outputTied && !loadedParams.Contains("output.weight"))
+                missing.Add("output.weight");
+
+            // Per-layer critical tensors
+            for (int i = 0; i < config.BlockCount; i++)
+            {
+                string layerPrefix = $"blk.{i}.";
+
+                // Q/K/V (merged) or separate
+                bool hasQkv = loadedParams.Contains($"{layerPrefix}attn_qkv.weight");
+                if (!hasQkv)
+                    missing.Add($"{layerPrefix}attn_qkv.weight");
+
+                // Attention output projection
+                if (!loadedParams.Contains($"{layerPrefix}attn_output.weight"))
+                    missing.Add($"{layerPrefix}attn_output.weight");
+
+                // FFN projections
+                if (!loadedParams.Contains($"{layerPrefix}ffn_up.weight"))
+                    missing.Add($"{layerPrefix}ffn_up.weight");
+                if (!loadedParams.Contains($"{layerPrefix}ffn_down.weight"))
+                    missing.Add($"{layerPrefix}ffn_down.weight");
+                if (config.UseSwiGlu && !loadedParams.Contains($"{layerPrefix}ffn_gate.weight"))
+                    missing.Add($"{layerPrefix}ffn_gate.weight");
             }
 
-            if (missingCritical.Count > 0)
+            if (missing.Count > 0)
             {
-                logger.LogWarning($"{missingCritical.Count} critical parameters not loaded:");
-                int displayCount = Math.Min(10, missingCritical.Count);
+                int displayCount = Math.Min(20, missing.Count);
+                var details = new System.Text.StringBuilder();
+                details.AppendLine($"GGUF model is missing {missing.Count} critical tensor(s). Model will not function correctly.");
+                details.AppendLine("Missing critical tensors:");
                 for (int i = 0; i < displayCount; i++)
-                {
-                    logger.LogWarning($"  - {missingCritical[i]}");
-                }
-                if (missingCritical.Count > 10)
-                {
-                    logger.LogWarning($"  ... and {missingCritical.Count - 10} more");
-                }
+                    details.AppendLine($"  - {missing[i]}");
+                if (missing.Count > 20)
+                    details.AppendLine($"  ... and {missing.Count - 20} more");
+                details.AppendLine("Ensure the GGUF file is complete and the tensor name mapping matches the model architecture.");
+
+                string msg = details.ToString();
+                logger.LogWarning(msg);
+                throw new InvalidOperationException(msg);
             }
         }
 
@@ -1076,33 +1144,37 @@ namespace SmallMind.Runtime
                     continue;
                 }
 
+                // Shape assertions: verify individual tensor dimensions before merge
+                ulong qRows = q.Dimensions.Length >= 1 ? q.Dimensions[0] : 0;
+                ulong kRows = k.Dimensions.Length >= 1 ? k.Dimensions[0] : 0;
+                ulong vRows = v.Dimensions.Length >= 1 ? v.Dimensions[0] : 0;
+                ulong qCols = q.Dimensions.Length >= 2 ? q.Dimensions[1] : 1;
+                ulong kCols = k.Dimensions.Length >= 2 ? k.Dimensions[1] : 1;
+                ulong vCols = v.Dimensions.Length >= 2 ? v.Dimensions[1] : 1;
+                if (qCols != kCols || qCols != vCols)
+                {
+                    throw new InvalidOperationException(
+                        $"QKV merge dimension mismatch for layer {layer}: " +
+                        $"Q=({qRows}x{qCols}), K=({kRows}x{kCols}), V=({vRows}x{vCols}). " +
+                        $"K and V input dimension must match Q. " +
+                        $"Expected in-dim={qCols} for all three.");
+                }
+
                 // Read Q/K/V tensors
                 float[] qData = ReadAndDequantizeTensor(reader, q);
                 float[] kData = ReadAndDequantizeTensor(reader, k);
                 float[] vData = ReadAndDequantizeTensor(reader, v);
                 qkvReadsCount += 3; // Count Q, K, V reads
 
-                // Merge: [Q, K, V] concatenation
-                // GGUF stores as (out, in) but we need to match SmallMind's layout
                 int qSize = qData.Length;
                 int kSize = kData.Length;
                 int vSize = vData.Length;
-                int totalSize = qSize + kSize + vSize;
 
-                if (totalSize != targetParam.Size)
-                {
-                    throw new InvalidOperationException(
-                        $"QKV merge size mismatch for layer {layer}:\n" +
-                        $"  Q: {qSize}, K: {kSize}, V: {vSize}, Total: {totalSize}\n" +
-                        $"  Target: {targetParam.Size}");
-                }
+                // Merge: [Q || K || V] concatenation; MergeQkvArrays validates size and layout
+                float[] merged = MergeQkvArrays(qData, kData, vData, targetParam.Size, layer);
+                Array.Copy(merged, targetParam.Data, merged.Length);
 
-                // Copy Q, then K, then V
-                Array.Copy(qData, 0, targetParam.Data, 0, qSize);
-                Array.Copy(kData, 0, targetParam.Data, qSize, kSize);
-                Array.Copy(vData, 0, targetParam.Data, qSize + kSize, vSize);
-
-                logger.LogDebug($"  blk.{layer}.attn_qkv.weight: Merged Q({qSize}) + K({kSize}) + V({vSize}) = {totalSize} elements");
+                logger.LogDebug($"  blk.{layer}.attn_qkv.weight: Merged Q({qSize}) + K({kSize}) + V({vSize}) = {qSize + kSize + vSize} elements");
                 loadedParams.Add(targetName);
             }
 
@@ -1121,9 +1193,46 @@ namespace SmallMind.Runtime
         }
 
         /// <summary>
-        /// Handle weight tying: copy token embeddings to output head if missing.
+        /// Merges separate Q, K, V weight arrays into a single [Q || K || V] concatenated array.
+        /// The result layout is: [q[0..qSize), k[0..kSize), v[0..vSize)].
+        /// Throws <see cref="InvalidOperationException"/> with actionable message if sizes don't match
+        /// the expected target size.
         /// </summary>
-        private static void HandleWeightTying(Dictionary<string, Tensor> namedParams,
+        /// <param name="qData">Query weight data</param>
+        /// <param name="kData">Key weight data</param>
+        /// <param name="vData">Value weight data</param>
+        /// <param name="expectedTotalSize">Expected merged size (must equal qData.Length + kData.Length + vData.Length)</param>
+        /// <param name="layerIndex">Layer index for error messages</param>
+        /// <returns>Merged [Q || K || V] array</returns>
+        internal static float[] MergeQkvArrays(float[] qData, float[] kData, float[] vData,
+            int expectedTotalSize, int layerIndex)
+        {
+            int qSize = qData.Length;
+            int kSize = kData.Length;
+            int vSize = vData.Length;
+            int totalSize = qSize + kSize + vSize;
+
+            if (totalSize != expectedTotalSize)
+            {
+                throw new InvalidOperationException(
+                    $"QKV merge size mismatch for layer {layerIndex}: " +
+                    $"Q={qSize}, K={kSize}, V={vSize}, Total={totalSize}, " +
+                    $"expected={expectedTotalSize}. " +
+                    $"Check head_count/head_count_kv/embedding_length configuration.");
+            }
+
+            var merged = new float[totalSize];
+            Array.Copy(qData, 0, merged, 0, qSize);
+            Array.Copy(kData, 0, merged, qSize, kSize);
+            Array.Copy(vData, 0, merged, qSize + kSize, vSize);
+            return merged;
+        }
+
+        /// <summary>
+        /// Handle weight tying: copy token embeddings to output head if missing.
+        /// Returns true if weight tying was applied.
+        /// </summary>
+        private static bool HandleWeightTying(Dictionary<string, Tensor> namedParams,
             HashSet<string> loadedParams, ModelConfig config, IInternalRuntimeLogger logger)
         {
             // Check if output.weight is loaded
@@ -1143,7 +1252,9 @@ namespace SmallMind.Runtime
 
                 Array.Copy(tokenEmbed.Data, outputWeight.Data, tokenEmbed.Size);
                 loadedParams.Add("output.weight");
+                return true;
             }
+            return false;
         }
 
         private static bool IsCriticalParameter(string paramName)

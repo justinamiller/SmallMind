@@ -176,6 +176,15 @@ namespace SmallMind.Tokenizers.Gguf
             var sb = new StringBuilder();
             foreach (var tokenId in tokens)
             {
+                // Skip structural special tokens: they must not appear as literal text in output.
+                if (tokenId == _specialTokens.BosTokenId ||
+                    tokenId == _specialTokens.EosTokenId ||
+                    tokenId == _specialTokens.PadTokenId ||
+                    tokenId == _specialTokens.UnkTokenId)
+                {
+                    continue;
+                }
+
                 if (tokenId >= 0 && tokenId < _reverseVocab.Count)
                 {
                     string tokenStr = _reverseVocab[tokenId];
