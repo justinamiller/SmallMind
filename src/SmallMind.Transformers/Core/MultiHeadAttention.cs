@@ -681,6 +681,7 @@ namespace SmallMind.Transformers
 
             float scale = 1.0f / MathF.Sqrt(_headSize);
             int headsPerKvHead = _nHead / _nKvHead;  // For GQA head mapping
+            int kvSeqStride = k.Shape[2];  // Actual sequence stride (T for fresh tensors, blockSize for KV-cache)
 
             int totalParallelWork = B * _nHead;
             if (totalParallelWork >= 4)
@@ -694,7 +695,7 @@ namespace SmallMind.Transformers
                     int kvHead = h / headsPerKvHead;
 
                     int qOffset = (b * _nHead + h) * T * _headSize;
-                    int kOffset = (b * _nKvHead + kvHead) * kSeqLen * _headSize;
+                    int kOffset = (b * _nKvHead + kvHead) * kvSeqStride * _headSize;
                     int scoreOffset = (b * _nHead + h) * T * kSeqLen;
 
                     // Step 1: Batched matrix multiplication Q @ K^T
@@ -721,7 +722,7 @@ namespace SmallMind.Transformers
                         int kvHead = h / headsPerKvHead;
 
                         int qOffset = (b * _nHead + h) * T * _headSize;
-                        int kOffset = (b * _nKvHead + kvHead) * kSeqLen * _headSize;
+                        int kOffset = (b * _nKvHead + kvHead) * kvSeqStride * _headSize;
                         int scoreOffset = (b * _nHead + h) * T * kSeqLen;
 
                         // Step 1: Batched matrix multiplication Q @ K^T
@@ -818,6 +819,7 @@ namespace SmallMind.Transformers
             // resulting in output[b,h] as (T × headSize)
 
             int headsPerKvHead = _nHead / _nKvHead;  // For GQA head mapping
+            int vSeqStride = v.Shape[2];  // Actual sequence stride (T for fresh tensors, blockSize for KV-cache)
             int totalParallelWork = B * _nHead;
             TransformerHelpers.ParallelOrSequential(totalParallelWork, bh =>
             {
@@ -829,7 +831,7 @@ namespace SmallMind.Transformers
 
                 // Calculate offsets for this batch and head
                 int attOffset = (b * _nHead + h) * T * vSeqLen;
-                int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
+                int vOffset = (b * _nKvHead + kvHead) * vSeqStride * _headSize;
                 int outOffset = (b * _nHead + h) * T * _headSize;
 
                 // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]

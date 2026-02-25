@@ -186,20 +186,24 @@ namespace SmallMind.Runtime.Batching
             if (batch == null || batch.Count == 0)
                 return;
 
+            // Snapshot the batch since the caller reuses the list and may clear it
+            // before the Task.Run starts executing
+            var batchSnapshot = new List<InferenceRequest>(batch);
+
             // Execute batch asynchronously (fire and forget)
             _ = Task.Run(async () =>
             {
                 await _executionSemaphore.WaitAsync();
                 try
                 {
-                    await ProcessBatchAsync(batch);
+                    await ProcessBatchAsync(batchSnapshot);
                 }
                 catch (Exception ex)
                 {
                     // Mark all requests as failed
-                    for (int i = 0; i < batch.Count; i++)
+                    for (int i = 0; i < batchSnapshot.Count; i++)
                     {
-                        batch[i].MarkFailed(ex);
+                        batchSnapshot[i].MarkFailed(ex);
                     }
                 }
                 finally

@@ -582,40 +582,38 @@ namespace SmallMind.Runtime
             {
                 for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
                 {
-                    // Read fp16 scale
+                    // Read fp16 scale (2 bytes)
                     ushort scaleHalf = br.ReadUInt16();
                     float scale = HalfToFloat(scaleHalf);
 
-                    // Read high bits (1 bit per value, packed into 4 bytes for 32 values)
-                    uint highBits = br.ReadUInt32();
+                    // Read high bits (4 bytes = 32 bits, one per value)
+                    uint qh = br.ReadUInt32();
 
-                    // Read low 4-bit values (16 bytes for 32 values)
+                    // Read low 4-bit values (16 bytes, packed split-half like Q4_0)
+                    byte[] qs = br.ReadBytes(16);
+
                     int blockStart = blockIdx * GgufBlockSize;
-                    int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
+                    const int halfBlock = GgufBlockSize / 2; // 16
 
-                    for (int i = blockStart; i < blockEnd; i++)
+                    // Split-half layout (matches ggml dequantize_row_q5_0):
+                    // For j=0..15:
+                    //   Element j:      (qs[j] & 0xF) | high_bit_j       - 16
+                    //   Element j + 16: (qs[j] >> 4)  | high_bit_(j+16)  - 16
+                    for (int j = 0; j < halfBlock; j++)
                     {
-                        int localIdx = i - blockStart;
+                        int e0 = blockStart + j;
+                        int e1 = blockStart + j + halfBlock;
 
-                        // Extract high bit
-                        int highBit = (int)(((highBits >> localIdx) & 1) << 4);
+                        int xh0 = (int)(((qh >> j) & 1) << 4);
+                        int xh1 = (int)(((qh >> (j + halfBlock)) & 1) << 4);
 
-                        // Extract low 4 bits
-                        byte packedByte = br.ReadByte();
-                        int lowNibble;
-                        if (localIdx % 2 == 0)
-                        {
-                            lowNibble = packedByte & 0xF;
-                        }
-                        else
-                        {
-                            lowNibble = (packedByte >> 4) & 0xF;
-                            if (i + 1 < blockEnd) continue; // Skip, already read
-                        }
+                        int x0 = (qs[j] & 0xF) | xh0;
+                        int x1 = ((qs[j] >> 4) & 0xF) | xh1;
 
-                        // Combine to get 5-bit value and center it
-                        int q5 = (highBit | lowNibble) - 16;
-                        floatData[i] = q5 * scale;
+                        if (e0 < totalElements)
+                            floatData[e0] = (x0 - 16) * scale;
+                        if (e1 < totalElements)
+                            floatData[e1] = (x1 - 16) * scale;
                     }
                 }
             }
@@ -638,43 +636,40 @@ namespace SmallMind.Runtime
             {
                 for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
                 {
-                    // Read fp16 scale and min
+                    // Read fp16 scale and min (4 bytes)
                     ushort scaleHalf = br.ReadUInt16();
                     float scale = HalfToFloat(scaleHalf);
                     ushort minHalf = br.ReadUInt16();
                     float min = HalfToFloat(minHalf);
 
-                    // Read high bits (1 bit per value, packed into 4 bytes for 32 values)
-                    uint highBits = br.ReadUInt32();
+                    // Read high bits (4 bytes = 32 bits, one per value)
+                    uint qh = br.ReadUInt32();
 
-                    // Read low 4-bit values
+                    // Read low 4-bit values (16 bytes, packed split-half)
+                    byte[] qs = br.ReadBytes(16);
+
                     int blockStart = blockIdx * GgufBlockSize;
-                    int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
+                    const int halfBlock = GgufBlockSize / 2; // 16
 
-                    byte[] lowBits = br.ReadBytes(16); // 16 bytes = 32 nibbles
-
-                    for (int i = blockStart; i < blockEnd; i++)
+                    // Split-half layout (matches ggml dequantize_row_q5_1):
+                    // For j=0..15:
+                    //   Element j:      (qs[j] & 0xF) | high_bit_j,       value * scale + min
+                    //   Element j + 16: (qs[j] >> 4)  | high_bit_(j+16),  value * scale + min
+                    for (int j = 0; j < halfBlock; j++)
                     {
-                        int localIdx = i - blockStart;
+                        int e0 = blockStart + j;
+                        int e1 = blockStart + j + halfBlock;
 
-                        // Extract high bit
-                        int highBit = (int)(((highBits >> localIdx) & 1) << 4);
+                        int xh0 = (int)(((qh >> j) & 1) << 4);
+                        int xh1 = (int)(((qh >> (j + halfBlock)) & 1) << 4);
 
-                        // Extract low 4 bits
-                        int byteIdx = localIdx / 2;
-                        int lowNibble;
-                        if (localIdx % 2 == 0)
-                        {
-                            lowNibble = lowBits[byteIdx] & 0xF;
-                        }
-                        else
-                        {
-                            lowNibble = (lowBits[byteIdx] >> 4) & 0xF;
-                        }
+                        int x0 = (qs[j] & 0xF) | xh0;
+                        int x1 = ((qs[j] >> 4) & 0xF) | xh1;
 
-                        // Combine to get 5-bit value (no centering for Q5_1)
-                        int q5 = highBit | lowNibble;
-                        floatData[i] = q5 * scale + min;
+                        if (e0 < totalElements)
+                            floatData[e0] = x0 * scale + min;
+                        if (e1 < totalElements)
+                            floatData[e1] = x1 * scale + min;
                     }
                 }
             }
@@ -691,8 +686,6 @@ namespace SmallMind.Runtime
         private static float[] ConvertQ4_KTensor(byte[] rawData, ulong[] dimensions)
         {
             const int SuperBlockSize = 256;
-            const int SubBlockSize = 32;  // 8 sub-blocks of 32 values each
-            const int SubBlockCount = 8;
             const int BytesPerBlock = 144;  // 2 + 2 + 12 + 128
 
             int totalElements = CalculateTotalElements(dimensions);
@@ -703,8 +696,8 @@ namespace SmallMind.Runtime
             int srcOffset = 0;
 
             // Allocate once outside loop to avoid CA2014 warning
-            Span<byte> scales = stackalloc byte[SubBlockCount];
-            Span<byte> mins = stackalloc byte[SubBlockCount];
+            Span<byte> scales = stackalloc byte[8];
+            Span<byte> mins = stackalloc byte[8];
 
             for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
@@ -714,58 +707,58 @@ namespace SmallMind.Runtime
                 float d = HalfToFloat(dBits);
                 float dmin = HalfToFloat(dminBits);
 
-                // Read 12 bytes containing 8 6-bit scales and 8 6-bit mins (packed)
-                ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 4, 12);
+                // Read 12 bytes containing 8 6-bit scales and 8 6-bit mins
+                ReadOnlySpan<byte> q = src.Slice(srcOffset + 4, 12);
 
-                // Unpack scales (first 6 bytes -> 8 6-bit values)
-                // Per llama.cpp Q4_K spec: each group of 3 bytes holds 4 6-bit values
-                scales[0] = (byte)(scalesBytes[0] & 0x3F);
-                scales[1] = (byte)((scalesBytes[0] >> 6) | ((scalesBytes[1] & 0x0F) << 2));
-                scales[2] = (byte)((scalesBytes[1] >> 4) | ((scalesBytes[2] & 0x03) << 4));
-                scales[3] = (byte)((scalesBytes[2] >> 2) & 0x3F);
-                scales[4] = (byte)(scalesBytes[3] & 0x3F);
-                scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
-                scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
-                scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
-
-                // Unpack mins (last 6 bytes -> 8 6-bit values)
-                mins[0] = (byte)(scalesBytes[6] & 0x3F);
-                mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));
-                mins[2] = (byte)((scalesBytes[7] >> 4) | ((scalesBytes[8] & 0x03) << 4));
-                mins[3] = (byte)((scalesBytes[8] >> 2) & 0x3F);
-                mins[4] = (byte)(scalesBytes[9] & 0x3F);
-                mins[5] = (byte)((scalesBytes[9] >> 6) | ((scalesBytes[10] & 0x0F) << 2));
-                mins[6] = (byte)((scalesBytes[10] >> 4) | ((scalesBytes[11] & 0x03) << 4));
-                mins[7] = (byte)((scalesBytes[11] >> 2) & 0x3F);
+                // Unpack scales and mins using llama.cpp get_scale_min_k4 logic:
+                // j<4: scale=q[j]&63, min=q[j+4]&63
+                // j>=4: scale=(q[j+4]&0xF)|((q[j-4]>>6)<<4), min=(q[j+4]>>4)|((q[j]>>6)<<4)
+                for (int j = 0; j < 8; j++)
+                {
+                    if (j < 4)
+                    {
+                        scales[j] = (byte)(q[j] & 63);
+                        mins[j] = (byte)(q[j + 4] & 63);
+                    }
+                    else
+                    {
+                        scales[j] = (byte)((q[j + 4] & 0xF) | ((q[j - 4] >> 6) << 4));
+                        mins[j] = (byte)((q[j + 4] >> 4) | ((q[j] >> 6) << 4));
+                    }
+                }
 
                 // Read quantized values (128 bytes, 2 values per byte)
                 ReadOnlySpan<byte> qs = src.Slice(srcOffset + 16, 128);
 
-                // Decode each sub-block
                 int sbStart = sbIdx * SuperBlockSize;
                 int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
 
-                for (int subBlock = 0; subBlock < SubBlockCount; subBlock++)
+                // Process in groups of 64 (split-half: 32 low nibbles + 32 high nibbles)
+                // Matches llama.cpp dequantize_row_q4_K layout
+                int qsIdx = 0;
+                int scaleIdx = 0;
+
+                for (int j = 0; j < SuperBlockSize && sbStart + j < sbEnd; j += 64)
                 {
-                    float sc = d * scales[subBlock];
-                    float m = dmin * mins[subBlock];
+                    float d1 = d * scales[scaleIdx];
+                    float m1 = dmin * mins[scaleIdx];
+                    float d2 = d * scales[scaleIdx + 1];
+                    float m2 = dmin * mins[scaleIdx + 1];
 
-                    int subBlockStart = sbStart + subBlock * SubBlockSize;
-                    int subBlockEnd = Math.Min(subBlockStart + SubBlockSize, sbEnd);
-                    int qsOffset = subBlock * (SubBlockSize / 2); // 16 bytes per sub-block
-
-                    for (int i = 0; i < (subBlockEnd - subBlockStart) / 2; i++)
+                    // First 32 elements: low nibbles with scale d1/m1
+                    for (int l = 0; l < 32 && sbStart + j + l < sbEnd; l++)
                     {
-                        byte packed = qs[qsOffset + i];
-                        int q0 = packed & 0xF;
-                        int q1 = (packed >> 4) & 0xF;
-
-                        floatData[subBlockStart + i * 2] = sc * q0 - m;
-                        if (subBlockStart + i * 2 + 1 < subBlockEnd)
-                        {
-                            floatData[subBlockStart + i * 2 + 1] = sc * q1 - m;
-                        }
+                        floatData[sbStart + j + l] = d1 * (qs[qsIdx + l] & 0xF) - m1;
                     }
+
+                    // Next 32 elements: high nibbles with scale d2/m2
+                    for (int l = 0; l < 32 && sbStart + j + 32 + l < sbEnd; l++)
+                    {
+                        floatData[sbStart + j + 32 + l] = d2 * ((qs[qsIdx + l] >> 4) & 0xF) - m2;
+                    }
+
+                    qsIdx += 32;
+                    scaleIdx += 2;
                 }
 
                 srcOffset += BytesPerBlock;
@@ -782,8 +775,7 @@ namespace SmallMind.Runtime
         private static float[] ConvertQ5_KTensor(byte[] rawData, ulong[] dimensions)
         {
             const int SuperBlockSize = 256;
-            const int SubBlockSize = 32;
-            const int SubBlockCount = 8;
+            const int BytesPerBlock = 176;  // 2 + 2 + 12 + 32 + 128
 
             int totalElements = CalculateTotalElements(dimensions);
             int numSuperBlocks = (totalElements + SuperBlockSize - 1) / SuperBlockSize;
@@ -793,8 +785,8 @@ namespace SmallMind.Runtime
             int srcOffset = 0;
 
             // Allocate once outside loop
-            Span<byte> scales = stackalloc byte[SubBlockCount];
-            Span<byte> mins = stackalloc byte[SubBlockCount];
+            Span<byte> scales = stackalloc byte[8];
+            Span<byte> mins = stackalloc byte[8];
 
             for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
@@ -805,69 +797,66 @@ namespace SmallMind.Runtime
                 float dmin = HalfToFloat(dminBits);
 
                 // Read 12 bytes containing 8 6-bit scales and 8 6-bit mins
-                ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 4, 12);
+                ReadOnlySpan<byte> q = src.Slice(srcOffset + 4, 12);
 
-                // Unpack scales (same as Q4_K)
-                scales[0] = (byte)(scalesBytes[0] & 0x3F);
-                scales[1] = (byte)((scalesBytes[0] >> 6) | ((scalesBytes[1] & 0x0F) << 2));
-                scales[2] = (byte)((scalesBytes[1] >> 4) | ((scalesBytes[2] & 0x03) << 4));
-                scales[3] = (byte)((scalesBytes[2] >> 2) & 0x3F);
-                scales[4] = (byte)(scalesBytes[3] & 0x3F);
-                scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
-                scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
-                scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
+                // Unpack scales and mins using llama.cpp get_scale_min_k4 logic (same as Q4_K)
+                for (int j = 0; j < 8; j++)
+                {
+                    if (j < 4)
+                    {
+                        scales[j] = (byte)(q[j] & 63);
+                        mins[j] = (byte)(q[j + 4] & 63);
+                    }
+                    else
+                    {
+                        scales[j] = (byte)((q[j + 4] & 0xF) | ((q[j - 4] >> 6) << 4));
+                        mins[j] = (byte)((q[j + 4] >> 4) | ((q[j] >> 6) << 4));
+                    }
+                }
 
-                // Unpack mins
-                mins[0] = (byte)(scalesBytes[6] & 0x3F);
-                mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));
-                mins[2] = (byte)((scalesBytes[7] >> 4) | ((scalesBytes[8] & 0x03) << 4));
-                mins[3] = (byte)((scalesBytes[8] >> 2) & 0x3F);
-                mins[4] = (byte)(scalesBytes[9] & 0x3F);
-                mins[5] = (byte)((scalesBytes[9] >> 6) | ((scalesBytes[10] & 0x0F) << 2));
-                mins[6] = (byte)((scalesBytes[10] >> 4) | ((scalesBytes[11] & 0x03) << 4));
-                mins[7] = (byte)((scalesBytes[11] >> 2) & 0x3F);
-
-                // Read high bits (32 bytes = 256 bits, one per value)
-                ReadOnlySpan<byte> highBits = src.Slice(srcOffset + 16, 32);
+                // Read high bits (32 bytes, each byte provides bits for elements across groups)
+                ReadOnlySpan<byte> qh = src.Slice(srcOffset + 16, 32);
 
                 // Read low nibbles (128 bytes, 2 values per byte)
                 ReadOnlySpan<byte> ql = src.Slice(srcOffset + 48, 128);
 
-                // Decode each sub-block
                 int sbStart = sbIdx * SuperBlockSize;
                 int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
 
-                for (int subBlock = 0; subBlock < SubBlockCount; subBlock++)
+                // Process in groups of 64 (split-half like Q4_K, plus high bits from qh)
+                // Matches llama.cpp dequantize_row_q5_K layout
+                int qlIdx = 0;
+                int scaleIdx = 0;
+                byte u1 = 1, u2 = 2;  // Bit masks for high bits, shift left by 2 each group
+
+                for (int j = 0; j < SuperBlockSize && sbStart + j < sbEnd; j += 64)
                 {
-                    float sc = d * scales[subBlock];
-                    float m = dmin * mins[subBlock];
+                    float d1 = d * scales[scaleIdx];
+                    float m1 = dmin * mins[scaleIdx];
+                    float d2 = d * scales[scaleIdx + 1];
+                    float m2 = dmin * mins[scaleIdx + 1];
 
-                    int subBlockStart = sbStart + subBlock * SubBlockSize;
-                    int subBlockEnd = Math.Min(subBlockStart + SubBlockSize, sbEnd);
-
-                    for (int i = 0; i < (subBlockEnd - subBlockStart); i++)
+                    // First 32 elements: low nibbles + high bit (u1) with d1/m1
+                    for (int l = 0; l < 32 && sbStart + j + l < sbEnd; l++)
                     {
-                        int valueIdx = subBlock * SubBlockSize + i;
-                        
-                        // Extract high bit (1 bit per value)
-                        int highBitByteIdx = valueIdx / 8;
-                        int highBitShift = valueIdx % 8;
-                        int highBit = ((highBits[highBitByteIdx] >> highBitShift) & 1) << 4;
-
-                        // Extract low nibble
-                        int qlIdx = valueIdx / 2;
-                        byte low4 = (valueIdx % 2 == 0) 
-                            ? (byte)(ql[qlIdx] & 0xF) 
-                            : (byte)((ql[qlIdx] >> 4) & 0xF);
-
-                        // Combine to get 5-bit value (0-31), then center around 0
-                        int q = (highBit | low4) - 16;
-                        floatData[subBlockStart + i] = sc * q - m;
+                        int q5 = (ql[qlIdx + l] & 0xF) + ((qh[l] & u1) != 0 ? 16 : 0);
+                        floatData[sbStart + j + l] = d1 * q5 - m1;
                     }
+
+                    // Next 32 elements: high nibbles + high bit (u2) with d2/m2
+                    for (int l = 0; l < 32 && sbStart + j + 32 + l < sbEnd; l++)
+                    {
+                        int q5 = ((ql[qlIdx + l] >> 4) & 0xF) + ((qh[l] & u2) != 0 ? 16 : 0);
+                        floatData[sbStart + j + 32 + l] = d2 * q5 - m2;
+                    }
+
+                    qlIdx += 32;
+                    scaleIdx += 2;
+                    u1 <<= 2;
+                    u2 <<= 2;
                 }
 
-                // Q5_K block size varies, approximating with typical size
-                srcOffset += 176; // 2 + 2 + 12 + 32 + 128
+                srcOffset += BytesPerBlock;
             }
 
             return floatData;
@@ -883,8 +872,6 @@ namespace SmallMind.Runtime
         private static float[] ConvertQ6_KTensor(byte[] rawData, ulong[] dimensions)
         {
             const int SuperBlockSize = 256;
-            const int SubBlockSize = 16;
-            const int SubBlockCount = 16;
             const int BytesPerBlock = 210;  // 128 + 64 + 16 + 2
 
             int totalElements = CalculateTotalElements(dimensions);
@@ -896,52 +883,65 @@ namespace SmallMind.Runtime
 
             for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
-                // Read ql (128 bytes - low 4 bits of 6-bit values)
+                // Read ql (128 bytes - lower 4 bits of 6-bit values)
                 ReadOnlySpan<byte> ql = src.Slice(srcOffset, 128);
 
-                // Read qh (64 bytes - high 2 bits of 6-bit values)
+                // Read qh (64 bytes - upper 2 bits of 6-bit values)
                 ReadOnlySpan<byte> qh = src.Slice(srcOffset + 128, 64);
 
-                // Read scales (16 bytes - int8 per sub-block)
+                // Read scales (16 signed int8 values)
                 ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 192, 16);
 
                 // Read super-block scale d (fp16)
                 ushort dBits = BitConverter.ToUInt16(src.Slice(srcOffset + 208, 2));
                 float d = HalfToFloat(dBits);
 
-                // Decode each sub-block
                 int sbStart = sbIdx * SuperBlockSize;
                 int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
 
-                for (int subBlock = 0; subBlock < SubBlockCount; subBlock++)
+                // Process in groups of 128 (matching llama.cpp dequantize_row_q6_K layout)
+                // Each group uses 64 bytes of ql, 32 bytes of qh, 8 scales
+                int qlOffset = 0;
+                int qhOffset = 0;
+                int scOffset = 0;
+
+                for (int n = 0; n < SuperBlockSize && sbStart + n < sbEnd; n += 128)
                 {
-                    sbyte scaleQ = (sbyte)scalesBytes[subBlock];
-                    float sc = d * scaleQ;
-
-                    int subBlockStart = sbStart + subBlock * SubBlockSize;
-                    int subBlockEnd = Math.Min(subBlockStart + SubBlockSize, sbEnd);
-
-                    // Decode values in this sub-block
-                    for (int i = 0; i < (subBlockEnd - subBlockStart); i++)
+                    for (int l = 0; l < 32; l++)
                     {
-                        int valueIdx = subBlock * SubBlockSize + i;
+                        int isIdx = l / 16;
 
-                        // Reconstruct 6-bit value from low 4 bits (ql) and high 2 bits (qh)
-                        // ql packs 2 values per byte: even values in low nibble, odd in high nibble
-                        int qlIdx = valueIdx / 2;
-                        byte low4 = (valueIdx % 2 == 0) 
-                            ? (byte)(ql[qlIdx] & 0xF) 
-                            : (byte)((ql[qlIdx] >> 4) & 0xF);
+                        // Reconstruct 4 6-bit values from ql and qh
+                        // q1: ql[l] low nibble + qh[l] bits 0-1 → element n+l
+                        // q2: ql[l+32] low nibble + qh[l] bits 2-3 → element n+l+32
+                        // q3: ql[l] HIGH nibble + qh[l] bits 4-5 → element n+l+64
+                        // q4: ql[l+32] HIGH nibble + qh[l] bits 6-7 → element n+l+96
+                        int q1 = (ql[qlOffset + l] & 0xF) | (((qh[qhOffset + l] >> 0) & 3) << 4);
+                        int q2 = (ql[qlOffset + l + 32] & 0xF) | (((qh[qhOffset + l] >> 2) & 3) << 4);
+                        int q3 = ((ql[qlOffset + l] >> 4) & 0xF) | (((qh[qhOffset + l] >> 4) & 3) << 4);
+                        int q4 = ((ql[qlOffset + l + 32] >> 4) & 0xF) | (((qh[qhOffset + l] >> 6) & 3) << 4);
 
-                        // Extract high 2 bits from qh (4 values per byte)
-                        int qhIdx = valueIdx / 4;
-                        int qhShift = (valueIdx % 4) * 2;
-                        byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
+                        // Scales are signed int8, indexed by sub-block within the 128-value group
+                        sbyte sc0 = (sbyte)scalesBytes[scOffset + isIdx + 0];
+                        sbyte sc2 = (sbyte)scalesBytes[scOffset + isIdx + 2];
+                        sbyte sc4 = (sbyte)scalesBytes[scOffset + isIdx + 4];
+                        sbyte sc6 = (sbyte)scalesBytes[scOffset + isIdx + 6];
 
-                        // Combine to form 6-bit value (range 0-63), then center around 0
-                        int q = low4 | (high2 << 4);
-                        floatData[subBlockStart + i] = sc * (q - 32);
+                        // 6-bit value (0-63) centered by -32 → signed range (-32..+31)
+                        int idx0 = sbStart + n + l;
+                        int idx1 = sbStart + n + l + 32;
+                        int idx2 = sbStart + n + l + 64;
+                        int idx3 = sbStart + n + l + 96;
+
+                        if (idx0 < sbEnd) floatData[idx0] = d * sc0 * (q1 - 32);
+                        if (idx1 < sbEnd) floatData[idx1] = d * sc2 * (q2 - 32);
+                        if (idx2 < sbEnd) floatData[idx2] = d * sc4 * (q3 - 32);
+                        if (idx3 < sbEnd) floatData[idx3] = d * sc6 * (q4 - 32);
                     }
+
+                    qlOffset += 64;
+                    qhOffset += 32;
+                    scOffset += 8;
                 }
 
                 srcOffset += BytesPerBlock;
