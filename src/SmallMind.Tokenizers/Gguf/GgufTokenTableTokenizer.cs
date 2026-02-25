@@ -127,7 +127,11 @@ namespace SmallMind.Tokenizers.Gguf
                         continue;
                     }
 
-                    sb.Append(tokenStr);
+                    // SentencePiece space: replace "▁" (U+2581) with regular space " "
+                    if (tokenStr.Contains('\u2581'))
+                        sb.Append(tokenStr.Replace('\u2581', ' '));
+                    else
+                        sb.Append(tokenStr);
                 }
             }
 
@@ -173,6 +177,10 @@ namespace SmallMind.Tokenizers.Gguf
                 {
                     return ((char)byteValue).ToString();
                 }
+
+                // SentencePiece space: replace "▁" (U+2581) with regular space " "
+                if (tokenStr.Contains('\u2581'))
+                    return tokenStr.Replace('\u2581', ' ');
 
                 return tokenStr;
             }
