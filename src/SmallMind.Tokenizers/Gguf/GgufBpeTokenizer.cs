@@ -14,6 +14,7 @@ namespace SmallMind.Tokenizers.Gguf
         private readonly Dictionary<(string, string), int> _mergeRanks;
         private readonly SpecialTokens _specialTokens;
         private readonly string[] _byteTokenCache; // Pre-computed byte tokens for performance
+        private readonly bool _isSentencePiece;    // True for LLaMA/TinyLlama/Mistral (▁ space marker)
 
         public GgufBpeTokenizer(
             Dictionary<string, int> vocab,
@@ -39,6 +40,11 @@ namespace SmallMind.Tokenizers.Gguf
             {
                 _byteTokenCache[b] = $"<0x{b:X2}>";
             }
+
+            // Detect SentencePiece-style vocabulary (LLaMA/TinyLlama/Mistral family).
+            // These models store word-boundary spaces as ▁ (U+2581) in the vocabulary
+            // and require character-level BPE encoding rather than byte-level (GPT-2) encoding.
+            _isSentencePiece = vocab.ContainsKey("\u2581");
         }
 
         public int VocabSize => _vocab.Count;
@@ -59,22 +65,36 @@ namespace SmallMind.Tokenizers.Gguf
             if (string.IsNullOrEmpty(text))
                 return new List<int>();
 
-            // Convert text to byte tokens first
-            var bytes = Encoding.UTF8.GetBytes(text);
             var tokens = new List<string>();
 
-            foreach (byte b in bytes)
+            if (_isSentencePiece)
             {
-                // Use pre-computed byte token string (no allocation)
-                string byteToken = _byteTokenCache[b];
-                if (_vocab.ContainsKey(byteToken))
+                // SentencePiece encoding (LLaMA/TinyLlama/Mistral family):
+                // Replace spaces with ▁ (U+2581) and prepend ▁ to mark the word boundary at start.
+                // e.g. "The capital" → "▁The▁capital" → ["▁","T","h","e","▁","c",…] → BPE merges → ["▁The","▁capital"]
+                string spaceNorm = text.Replace(" ", "\u2581");
+                if (!spaceNorm.StartsWith("\u2581", StringComparison.Ordinal))
+                    spaceNorm = "\u2581" + spaceNorm;
+                foreach (char c in spaceNorm)
+                    tokens.Add(c.ToString());
+            }
+            else
+            {
+                // Byte-level encoding (GPT-2 style): convert each UTF-8 byte to a <0xXX> token
+                var bytes = Encoding.UTF8.GetBytes(text);
+                foreach (byte b in bytes)
                 {
-                    tokens.Add(byteToken);
-                }
-                else
-                {
-                    // Fallback to character
-                    tokens.Add(((char)b).ToString());
+                    // Use pre-computed byte token string (no allocation)
+                    string byteToken = _byteTokenCache[b];
+                    if (_vocab.ContainsKey(byteToken))
+                    {
+                        tokens.Add(byteToken);
+                    }
+                    else
+                    {
+                        // Fallback to character
+                        tokens.Add(((char)b).ToString());
+                    }
                 }
             }
 
@@ -108,6 +128,10 @@ namespace SmallMind.Tokenizers.Gguf
                     result.Add(_specialTokens.UnkTokenId);
                 }
             }
+
+            // Prepend BOS token if configured (LLaMA-family models require <s> as the first token)
+            if (_specialTokens.BosTokenId >= 0 && result.Count > 0 && result[0] != _specialTokens.BosTokenId)
+                result.Insert(0, _specialTokens.BosTokenId);
 
             return result;
         }
@@ -173,9 +197,14 @@ namespace SmallMind.Tokenizers.Gguf
             if (tokens == null || tokens.Count == 0)
                 return string.Empty;
 
+            // Skip BOS token at start so the decoded output length matches the original prompt length.
+            // This is required for ValidateCoherence's output.Substring(prompt.Length) to work correctly.
+            int startIdx = (_specialTokens.BosTokenId >= 0 && tokens[0] == _specialTokens.BosTokenId) ? 1 : 0;
+
             var sb = new StringBuilder();
-            foreach (var tokenId in tokens)
+            for (int ti = startIdx; ti < tokens.Count; ti++)
             {
+                int tokenId = tokens[ti];
                 if (tokenId >= 0 && tokenId < _reverseVocab.Count)
                 {
                     string tokenStr = _reverseVocab[tokenId];

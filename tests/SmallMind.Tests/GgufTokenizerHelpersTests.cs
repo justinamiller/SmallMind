@@ -252,4 +252,186 @@ namespace SmallMind.Tests
             Assert.Equal("\n Hello", decoded);
         }
     }
+
+    /// <summary>
+    /// Tests for GgufBpeTokenizer SentencePiece-style encoding (LLaMA/TinyLlama path).
+    /// Validates the three fixes needed for coherent TinyLlama GGUF output:
+    ///   1. Spaces encoded as ▁ (not &lt;0x20&gt; byte tokens) so BPE merges match
+    ///   2. BOS token prepended when BosTokenId is configured
+    ///   3. BOS token skipped in Decode so output.Substring(prompt.Length) gives the right slice
+    /// </summary>
+    public class GgufBpeTokenizerEncodeTests
+    {
+        /// <summary>
+        /// Build a minimal LLaMA-style SentencePiece vocab + merge table that can encode "The".
+        /// The vocab contains standalone ▁ (token 0) to trigger _isSentencePiece = true.
+        /// </summary>
+        private static (Dictionary<string, int> vocab, List<string> reverseVocab, List<(string, string)> merges) BuildLlamaMinimalVocab()
+        {
+            var vocab = new Dictionary<string, int>
+            {
+                ["<unk>"] = 0,
+                ["<s>"]   = 1,   // BOS
+                ["</s>"]  = 2,   // EOS
+                ["▁"]     = 3,   // standalone ▁ → triggers _isSentencePiece = true
+                ["T"]     = 4,
+                ["h"]     = 5,
+                ["e"]     = 6,
+                ["▁T"]    = 7,
+                ["▁Th"]   = 8,
+                ["▁The"]  = 9,
+            };
+            var reverseVocab = new List<string>
+                { "<unk>", "<s>", "</s>", "▁", "T", "h", "e", "▁T", "▁Th", "▁The" };
+
+            // Merges in priority order (lowest rank = applied first)
+            var merges = new List<(string, string)>
+            {
+                ("▁", "T"),    // rank 0 → produces "▁T"
+                ("▁T", "h"),   // rank 1 → produces "▁Th"
+                ("▁Th", "e"),  // rank 2 → produces "▁The"
+            };
+
+            return (vocab, reverseVocab, merges);
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_Encode_SentencePiece_UsesSpaceMarker_NotByteToken()
+        {
+            // Arrange: minimal LLaMA vocab that triggers _isSentencePiece = true
+            var (vocab, reverseVocab, merges) = BuildLlamaMinimalVocab();
+            var specialTokens = new SpecialTokens { BosTokenId = -1 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act: encode "The" (no leading space)
+            var tokens = tokenizer.Encode("The");
+
+            // Assert: should produce [▁The] = [9], NOT individual byte tokens
+            // Without BOS configured, no BOS token added
+            Assert.Single(tokens);
+            Assert.Equal(9, tokens[0]); // vocab["▁The"] = 9
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_Encode_SentencePiece_PrependsBos_WhenConfigured()
+        {
+            // Arrange
+            var (vocab, reverseVocab, merges) = BuildLlamaMinimalVocab();
+            var specialTokens = new SpecialTokens { BosTokenId = 1 }; // <s> = 1
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act
+            var tokens = tokenizer.Encode("The");
+
+            // Assert: BOS (1) prepended, then ▁The (9)
+            Assert.Equal(2, tokens.Count);
+            Assert.Equal(1, tokens[0]); // BOS = <s>
+            Assert.Equal(9, tokens[1]); // ▁The
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_Encode_SentencePiece_DoesNotDuplicateBos()
+        {
+            // Arrange: verify that if BOS is already first token, it is not duplicated
+            var (vocab, reverseVocab, merges) = BuildLlamaMinimalVocab();
+            var specialTokens = new SpecialTokens { BosTokenId = 1 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act: encode twice, check BOS appears exactly once
+            var tokens = tokenizer.Encode("The");
+
+            int bosCount = 0;
+            foreach (var t in tokens)
+                if (t == 1) bosCount++;
+            Assert.Equal(1, bosCount);
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_Encode_WithLeadingSpace_DoesNotDoubleSpaceMarker()
+        {
+            // Arrange
+            var (vocab, reverseVocab, merges) = BuildLlamaMinimalVocab();
+            var specialTokens = new SpecialTokens { BosTokenId = -1 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act: text with a leading space
+            var tokensNoLeadSpace = tokenizer.Encode("The");
+            var tokensLeadSpace   = tokenizer.Encode(" The");
+
+            // Assert: both should produce the same result (▁The = 9)
+            // " The" → "▁The" (space replaced), already starts with ▁ → no double ▁
+            Assert.Equal(tokensNoLeadSpace, tokensLeadSpace);
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_Decode_SkipsBos_WhenBosConfigured()
+        {
+            // Arrange
+            var (vocab, reverseVocab, merges) = BuildLlamaMinimalVocab();
+            var specialTokens = new SpecialTokens { BosTokenId = 1 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act: decode [BOS, ▁The] — BOS should be stripped, "▁The" → " The"
+            var decoded = tokenizer.Decode(new List<int> { 1, 9 });
+
+            // Assert: output starts with " The" (no <s> prefix)
+            Assert.Equal(" The", decoded);
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_Decode_DoesNotSkipBos_WhenBosNotConfigured()
+        {
+            // Arrange: tokenizer without BOS configured
+            var (vocab, reverseVocab, merges) = BuildLlamaMinimalVocab();
+            var specialTokens = new SpecialTokens { BosTokenId = -1 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Act: token 1 is "<s>" in reverseVocab — but BosTokenId = -1, so it's not skipped
+            var decoded = tokenizer.Decode(new List<int> { 1, 9 });
+
+            // Assert: "<s>" is included + " The"
+            Assert.Equal("<s> The", decoded);
+        }
+
+        [Fact]
+        public void GgufBpeTokenizer_EncodeDecodeRoundtrip_SentencePiece_IsCoherent()
+        {
+            // Full round-trip: encode produces valid token IDs, decode produces original text.
+            // This mirrors what happens in run-gguf with a TinyLlama-style prompt.
+            var (vocab, reverseVocab, merges) = BuildLlamaMinimalVocab();
+            var specialTokens = new SpecialTokens { BosTokenId = 1, EosTokenId = 2 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufBpeTokenizer(
+                vocab, reverseVocab, merges, specialTokens);
+
+            // Encode "The"
+            var encoded = tokenizer.Encode("The");
+            // Expected: [BOS=1, ▁The=9]
+            Assert.Equal(2, encoded.Count);
+            Assert.Equal(1, encoded[0]);
+            Assert.Equal(9, encoded[1]);
+
+            // Decode: BOS stripped, ▁The → " The"
+            var decoded = tokenizer.Decode(encoded);
+            Assert.Equal(" The", decoded);
+
+            // Coherence check: decoded text has alphabetic chars and reasonable spacing
+            int alphaCount = decoded.Count(char.IsLetter);
+            int spaceCount = decoded.Count(char.IsWhiteSpace);
+            Assert.True((double)alphaCount / decoded.Length >= 0.4, "alphaPct < 40%");
+            Assert.InRange((double)spaceCount / decoded.Length, 0.05, 0.40);
+        }
+    }
 }
