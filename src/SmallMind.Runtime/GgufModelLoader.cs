@@ -160,12 +160,12 @@ namespace SmallMind.Runtime
             logger.LogInfo($"Tensor reads: {mainLoopReads} (main loop) + {qkvReads} (Q/K/V merge) = {mainLoopReads + qkvReads} total");
             logger.LogDebug($"Q/K/V tensors skipped in main loop: {qkvSkipped}");
 
-            // Check for missing critical parameters (avoid LINQ for better performance)
+            // Check for missing critical parameters — hard-fail to avoid silent partial-load corruption.
+            // These tensors are required for any valid inference; missing any of them produces garbage output.
             var missingCritical = new List<string>();
             foreach (var key in namedParams.Keys)
             {
-                if (!loadedParams.Contains(key) &&
-                    (key.Contains("token_embd") || key.Contains("output_norm") || key.Contains("attn")))
+                if (!loadedParams.Contains(key) && IsCriticalParameter(key))
                 {
                     missingCritical.Add(key);
                 }
@@ -173,16 +173,23 @@ namespace SmallMind.Runtime
 
             if (missingCritical.Count > 0)
             {
-                logger.LogWarning($"{missingCritical.Count} critical parameters not loaded:");
+                // Log all missing params before throwing so the user sees the full list.
+                logger.LogError($"{missingCritical.Count} required tensor(s) were not loaded from the GGUF file:");
                 int displayCount = Math.Min(10, missingCritical.Count);
                 for (int i = 0; i < displayCount; i++)
                 {
-                    logger.LogWarning($"  - {missingCritical[i]}");
+                    logger.LogError($"  - {missingCritical[i]}");
                 }
                 if (missingCritical.Count > 10)
                 {
-                    logger.LogWarning($"  ... and {missingCritical.Count - 10} more");
+                    logger.LogError($"  ... and {missingCritical.Count - 10} more");
                 }
+
+                throw new InvalidOperationException(
+                    $"GGUF weight loading failed: {missingCritical.Count} required tensor(s) missing. " +
+                    $"First missing: '{missingCritical[0]}'. " +
+                    "The model cannot produce valid output without these weights. " +
+                    "Verify the GGUF file is complete and matches the declared architecture.");
             }
         }
 
