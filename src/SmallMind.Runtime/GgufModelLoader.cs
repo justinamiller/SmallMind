@@ -506,26 +506,24 @@ namespace SmallMind.Runtime
                     ushort scaleHalf = br.ReadUInt16();
                     float scale = HalfToFloat(scaleHalf);
 
-                    // Read 4-bit packed values (16 bytes = 32 values)
                     int blockStart = blockIdx * GgufBlockSize;
-                    int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
+                    const int halfBlock = GgufBlockSize / 2; // 16
 
-                    for (int i = blockStart; i < blockEnd; i += 2)
+                    // GGUF Q4_0 split layout (matches ggml dequantize_row_q4_0):
+                    //   byte j (j=0..15): low nibble  → element j,      dequant = (nibble & 0xF) - 8
+                    //                     high nibble → element j + 16, dequant = (nibble >> 4)  - 8
+                    // Values are unsigned 4-bit offset by 8, NOT two's-complement.
+                    for (int j = 0; j < halfBlock; j++)
                     {
                         byte packedByte = br.ReadByte();
 
-                        // Low nibble
-                        byte nibble0 = (byte)(packedByte & 0xF);
-                        int q0 = Q4Tensor.DecodeNibble(nibble0);
-                        floatData[i] = q0 * scale;
+                        int e0 = blockStart + j;             // low nibble → first half
+                        int e1 = blockStart + j + halfBlock; // high nibble → second half
 
-                        // High nibble (if not last element)
-                        if (i + 1 < blockEnd)
-                        {
-                            byte nibble1 = (byte)((packedByte >> 4) & 0xF);
-                            int q1 = Q4Tensor.DecodeNibble(nibble1);
-                            floatData[i + 1] = q1 * scale;
-                        }
+                        if (e0 < totalElements)
+                            floatData[e0] = ((packedByte & 0xF) - 8) * scale;
+                        if (e1 < totalElements)
+                            floatData[e1] = ((packedByte >> 4) - 8) * scale;
                     }
                 }
             }
