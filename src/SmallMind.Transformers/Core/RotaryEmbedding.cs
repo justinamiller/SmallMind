@@ -78,9 +78,9 @@ namespace SmallMind.Transformers
         /// <summary>
         /// Apply RoPE rotation in-place to a single tensor (Q or K).
         /// Tensor shape: (batch, nHeads, seqLen, headDim)
-        /// For each pair (x0, x1) at dimension i:
-        ///   x0' = x0 * cos(theta) - x1 * sin(theta)
-        ///   x1' = x0 * sin(theta) + x1 * cos(theta)
+        /// LLaMA / NeoX style: for dimension pair i, rotate (x[i], x[i+halfDim]).
+        ///   x[i]'        = x[i]        * cos(θ) - x[i+halfDim] * sin(θ)
+        ///   x[i+halfDim]'= x[i]        * sin(θ) + x[i+halfDim] * cos(θ)
         /// </summary>
         private void ApplyRotationInPlace(Span<float> data, int positionOffset, int batchSize, int nHeads, int seqLen)
         {
@@ -97,11 +97,12 @@ namespace SmallMind.Transformers
                         // Base offset for this (batch, head, seq) position
                         int baseOffset = ((b * nHeads + h) * seqLen + s) * _headDim;
 
-                        // Apply rotation to each pair of dimensions
+                        // NeoX-style RoPE: pair element i with element i+halfDim
+                        // (used by LLaMA, TinyLlama, Mistral, and most modern models)
                         for (int i = 0; i < _halfDim; i++)
                         {
-                            int i0 = baseOffset + 2 * i;
-                            int i1 = baseOffset + 2 * i + 1;
+                            int i0 = baseOffset + i;
+                            int i1 = baseOffset + i + _halfDim;
 
                             float x0 = data[i0];
                             float x1 = data[i1];

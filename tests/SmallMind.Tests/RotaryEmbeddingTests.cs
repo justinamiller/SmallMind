@@ -10,6 +10,87 @@ namespace SmallMind.Tests
     {
         private const float Tolerance = 1e-4f;
 
+        // ---------------------------------------------------------------
+        // NeoX-style pairing tests (primary correctness verification)
+        // LLaMA / TinyLlama use NeoX: pair element i with element i+halfDim.
+        // ---------------------------------------------------------------
+
+        [Fact]
+        public void ApplyInPlace_NeoXPairing_KnownValuesAtPosition1()
+        {
+            // Reference values computed from ggml/llama.cpp dequantize_row_q4_0 convention.
+            // headDim=4, halfDim=2, theta=10000, pos=1
+            //   freq[0] = 1/(10000^(0/4)) = 1.0
+            //   freq[1] = 1/(10000^(2/4)) = 0.01
+            //   cos[0]=cos(1.0)≈0.540302, sin[0]=sin(1.0)≈0.841471
+            //   cos[1]=cos(0.01)≈0.999950, sin[1]=sin(0.01)≈0.010000
+            //
+            // Input q = [1, 2, 3, 4]
+            // NeoX pairs: (q[0]=1, q[2]=3) and (q[1]=2, q[3]=4)
+            //   q[0]' = 1*cos(1) - 3*sin(1) ≈ 0.540302 - 2.524413 ≈ -1.984111
+            //   q[2]' = 1*sin(1) + 3*cos(1) ≈ 0.841471 + 1.620906 ≈  2.462377
+            //   q[1]' = 2*cos(0.01) - 4*sin(0.01) ≈ 1.999900 - 0.040000 ≈  1.959900
+            //   q[3]' = 2*sin(0.01) + 4*cos(0.01) ≈ 0.020000 + 3.999800 ≈  4.019800
+
+            var rope = new RotaryEmbedding(maxSeqLen: 512, headDim: 4, theta: 10000f);
+            var q = new float[] { 1f, 2f, 3f, 4f };
+            var k = new float[] { 0f, 0f, 0f, 0f }; // K unused in this test
+
+            rope.ApplyInPlace(q, k, position: 1, batchSize: 1, nHeads: 1, nKvHeads: 1, seqLen: 1);
+
+            // Verify NeoX pairing: element 0 paired with element 2 (not element 1)
+            Assert.Equal(-1.9841f, q[0], 3);
+            Assert.Equal( 1.9599f, q[1], 3);
+            Assert.Equal( 2.4624f, q[2], 3);
+            Assert.Equal( 4.0198f, q[3], 3);
+        }
+
+        [Fact]
+        public void ApplyInPlace_NeoXPairing_NotGptJ_AtPosition1()
+        {
+            // Explicitly verify the result does NOT match GPT-J style pairing.
+            // GPT-J would pair (q[0],q[1]) and (q[2],q[3]):
+            //   q[0]_gptj = 1*cos(1) - 2*sin(1) ≈ -1.143  (different from NeoX -1.984)
+            //   q[1]_gptj = 1*sin(1) + 2*cos(1) ≈  1.922  (different from NeoX  1.960)
+
+            var rope = new RotaryEmbedding(maxSeqLen: 512, headDim: 4, theta: 10000f);
+            var q = new float[] { 1f, 2f, 3f, 4f };
+            var k = new float[] { 0f, 0f, 0f, 0f };
+
+            rope.ApplyInPlace(q, k, position: 1, batchSize: 1, nHeads: 1, nKvHeads: 1, seqLen: 1);
+
+            // GPT-J q[0] would be ≈ -1.143; NeoX q[0] must be ≈ -1.984
+            Assert.True(q[0] < -1.8f, $"Expected NeoX q[0]≈-1.984, got {q[0]:F4}. GPT-J gives ≈-1.143.");
+        }
+
+        [Fact]
+        public void ApplyInPlace_NeoXPairing_LargerHeadDim_KnownValues()
+        {
+            // headDim=8, halfDim=4, theta=10000, pos=1
+            // Only verify a couple of pairs to confirm NeoX pairing.
+            // freq[0]=1/(10000^0)=1.0, cos0=0.540302, sin0=0.841471
+            // Input q = [1,0,0,0, 2,0,0,0]  (only q[0] and q[4]=2 non-zero)
+            // NeoX pair (q[0]=1, q[4]=2):
+            //   q[0]' = 1*cos(1) - 2*sin(1) ≈ -1.143
+            //   q[4]' = 1*sin(1) + 2*cos(1) ≈  1.922
+
+            var rope = new RotaryEmbedding(maxSeqLen: 512, headDim: 8, theta: 10000f);
+            var q = new float[] { 1f, 0f, 0f, 0f, 2f, 0f, 0f, 0f };
+            var k = new float[8];
+
+            rope.ApplyInPlace(q, k, position: 1, batchSize: 1, nHeads: 1, nKvHeads: 1, seqLen: 1);
+
+            // cos(1)=0.5403, sin(1)=0.8415
+            // q[0]' = 1*0.5403 - 2*0.8415 ≈ -1.1427
+            // q[4]' = 1*0.8415 + 2*0.5403 ≈  1.9221
+            Assert.Equal(-1.1427f, q[0], 3);
+            Assert.Equal( 1.9221f, q[4], 3);
+            // Elements 1,2,3 paired with 5,6,7 - all zero so unchanged
+            Assert.Equal(0f, q[1], Tolerance);
+            Assert.Equal(0f, q[2], Tolerance);
+            Assert.Equal(0f, q[3], Tolerance);
+        }
+
         [Fact]
         public void Constructor_ValidParameters_CreatesSuccessfully()
         {
