@@ -238,4 +238,145 @@ public class ModelConfigGgufTests
         // Assert
         Assert.Equal(10000.0, config.RopeFreqBase); // Default value
     }
+
+    // ---------------------------------------------------------------
+    // GQA (Grouped Query Attention) tests
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void ModelConfig_FromGgufMetadata_GQA_ReadsHeadCountKv()
+    {
+        // Arrange - TinyLlama-style config with GQA (4 KV heads vs 32 Q heads)
+        var metadata = new Dictionary<string, object>
+        {
+            ["general.architecture"] = "llama",
+            ["llama.vocab_size"] = 32000,
+            ["llama.context_length"] = 2048,
+            ["llama.embedding_length"] = 2048,
+            ["llama.block_count"] = 22,
+            ["llama.attention.head_count"] = (uint)32,
+            ["llama.attention.head_count_kv"] = (uint)4,
+            ["llama.feed_forward_length"] = 5632
+        };
+
+        // Act
+        var config = ModelConfig.FromGgufMetadata(metadata);
+
+        // Assert - GQA config is read correctly
+        Assert.Equal(32, config.HeadCount);
+        Assert.Equal(4, config.HeadCountKv);
+    }
+
+    [Fact]
+    public void ModelConfig_FromGgufMetadata_GQA_HeadCountKv_AsUInt8()
+    {
+        // Arrange - head_count_kv stored as byte (UInt8) as some GGUF writers may produce
+        var metadata = new Dictionary<string, object>
+        {
+            ["general.architecture"] = "llama",
+            ["llama.vocab_size"] = 32000,
+            ["llama.context_length"] = 2048,
+            ["llama.embedding_length"] = 2048,
+            ["llama.block_count"] = 22,
+            ["llama.attention.head_count"] = (uint)32,
+            ["llama.attention.head_count_kv"] = (byte)4,  // UInt8 type
+            ["llama.feed_forward_length"] = 5632
+        };
+
+        // Act
+        var config = ModelConfig.FromGgufMetadata(metadata);
+
+        // Assert - byte value is handled; GQA config reads correctly
+        Assert.Equal(4, config.HeadCountKv);
+    }
+
+    [Fact]
+    public void ModelConfig_FromGgufMetadata_GQA_HeadCountKv_AsInt16()
+    {
+        // Arrange - head_count_kv stored as short (Int16)
+        var metadata = new Dictionary<string, object>
+        {
+            ["general.architecture"] = "llama",
+            ["llama.vocab_size"] = 32000,
+            ["llama.context_length"] = 2048,
+            ["llama.embedding_length"] = 2048,
+            ["llama.block_count"] = 22,
+            ["llama.attention.head_count"] = (uint)32,
+            ["llama.attention.head_count_kv"] = (short)4,  // Int16 type
+            ["llama.feed_forward_length"] = 5632
+        };
+
+        // Act
+        var config = ModelConfig.FromGgufMetadata(metadata);
+
+        // Assert - short value is handled; GQA config reads correctly
+        Assert.Equal(4, config.HeadCountKv);
+    }
+
+    [Fact]
+    public void TransformerModel_GQA_QkvWeightSizedCorrectly()
+    {
+        // Arrange - TinyLlama-style GQA config
+        // nHead=32, nKvHead=4, nEmbd=2048, headDim=64, kvDim=4*64=256
+        var config = new ModelConfig
+        {
+            VocabSize = 32000,
+            ContextLength = 128,  // Small for test speed
+            EmbeddingLength = 2048,
+            FeedForwardLength = 5632,
+            BlockCount = 1,
+            HeadCount = 32,
+            HeadCountKv = 4,
+            Architecture = "llama",
+            UseRope = true,
+            NormType = "rms",
+            MlpType = "swiglu",
+            UseBias = false,
+            NormEps = 1e-5
+        };
+
+        // Act
+        var model = new TransformerModel(config, seed: 42);
+        var namedParams = model.GetNamedParameters();
+
+        // Assert - QKV weight should be sized for GQA: (nEmbd + 2*kvDim) x nEmbd
+        // nEmbd=2048, kvDim=4*64=256, so weight shape = (2048+512, 2048) = (2560, 2048)
+        Assert.True(namedParams.ContainsKey("blk.0.attn_qkv.weight"),
+            "Named parameters should contain blk.0.attn_qkv.weight");
+
+        var qkvWeight = namedParams["blk.0.attn_qkv.weight"];
+        int expectedOutFeatures = 2048 + 2 * (4 * 64);  // nEmbd + 2 * kvDim = 2048 + 512 = 2560
+        int expectedInFeatures = 2048;                   // nEmbd
+        int expectedSize = expectedOutFeatures * expectedInFeatures;
+
+        Assert.Equal(expectedSize, qkvWeight.Size);
+        Assert.Equal(2, qkvWeight.Shape.Length);
+        Assert.Equal(expectedOutFeatures, qkvWeight.Shape[0]);
+        Assert.Equal(expectedInFeatures, qkvWeight.Shape[1]);
+    }
+
+    [Fact]
+    public void TransformerModel_GQA_QkvMergeSize_MatchesGgufTensors()
+    {
+        // Arrange - Verify that Q+K+V element counts from GGUF match the target QKV weight
+        // TinyLlama: nHead=32, nKvHead=4, nEmbd=2048, headDim=64
+        int nHead = 32;
+        int nKvHead = 4;
+        int nEmbd = 2048;
+        int headDim = nEmbd / nHead;  // 64
+        int kvDim = nKvHead * headDim;  // 4 * 64 = 256
+
+        // GGUF tensor elements (dequantized float counts)
+        int qElements = nEmbd * nEmbd;           // 2048*2048 = 4,194,304
+        int kElements = kvDim * nEmbd;           // 256*2048  =   524,288
+        int vElements = kvDim * nEmbd;           // 256*2048  =   524,288
+        int totalElements = qElements + kElements + vElements;  // 5,242,880
+
+        // SmallMind target tensor size: Linear(nEmbd, nEmbd + 2*kvDim).Weight
+        int targetOutFeatures = nEmbd + 2 * kvDim;  // 2048 + 512 = 2560
+        int targetSize = targetOutFeatures * nEmbd;  // 2560 * 2048 = 5,242,880
+
+        // Assert - sizes must match for the merge to succeed
+        Assert.Equal(targetSize, totalElements);
+    }
 }

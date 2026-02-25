@@ -5,6 +5,9 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
     /// <summary>
     /// Decoder for Q4_0 tensor type (4-bit symmetric quantization).
     /// GGUF Q4_0 format: block_size=32, each block has fp16 scale + 16 bytes (32 x 4-bit values).
+    /// Values are unsigned 4-bit offset by 8 (0→-8, 8→0, 15→7), using split layout:
+    ///   byte j (j=0..15): low nibble → element j; high nibble → element j+16.
+    /// Reference: ggml dequantize_row_q4_0 in ggml-quants.c.
     /// </summary>
     internal sealed class Q4_0Decoder : TensorDecoderBase
     {
@@ -23,8 +26,7 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
             using (var ms = new MemoryStream(rawData))
             using (var br = new BinaryReader(ms))
             {
-                // Reusable buffer for packed nibbles (16 bytes per block = 32 nibbles)
-                byte[] blockBuffer = new byte[16];
+                const int halfBlock = GgufBlockSize / 2; // 16
 
                 for (int blockIdx = 0; blockIdx < numBlocks; blockIdx++)
                 {
@@ -32,27 +34,22 @@ namespace SmallMind.Runtime.Gguf.TensorDecoders
                     ushort scaleHalf = br.ReadUInt16();
                     float scale = HalfToFloat(scaleHalf);
 
-                    // Read 16 bytes (32 x 4-bit values packed)
-                    // GGUF Q4_0 always stores 16 bytes per block
-                    br.Read(blockBuffer, 0, 16);
-
                     int blockStart = blockIdx * GgufBlockSize;
-                    int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
 
-                    // Decode nibbles directly into floatData
-                    for (int i = blockStart; i < blockEnd; i++)
+                    // GGUF Q4_0 split layout (ggml dequantize_row_q4_0):
+                    //   byte j: low nibble  → element j,      dequant = (byte & 0xF) - 8
+                    //           high nibble → element j + 16, dequant = (byte >> 4)  - 8
+                    for (int j = 0; j < halfBlock; j++)
                     {
-                        int localIdx = i - blockStart;
-                        int byteIdx = localIdx / 2;
-                        byte packedByte = blockBuffer[byteIdx];
+                        byte packedByte = br.ReadByte();
 
-                        // Extract nibble (low nibble for even indices, high nibble for odd)
-                        byte nibble = (localIdx % 2 == 0)
-                            ? (byte)(packedByte & 0xF)
-                            : (byte)((packedByte >> 4) & 0xF);
+                        int e0 = blockStart + j;
+                        int e1 = blockStart + j + halfBlock;
 
-                        int quantized = DecodeNibble(nibble);
-                        floatData[i] = quantized * scale;
+                        if (e0 < totalElements)
+                            floatData[e0] = ((packedByte & 0xF) - 8) * scale;
+                        if (e1 < totalElements)
+                            floatData[e1] = ((packedByte >> 4) - 8) * scale;
                     }
                 }
             }

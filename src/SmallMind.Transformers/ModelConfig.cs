@@ -268,6 +268,15 @@ namespace SmallMind.Transformers
                     return (int)longVal;
                 if (value is ulong ulongVal)
                     return (int)ulongVal;
+                // Handle smaller integer types that some GGUF writers may produce
+                if (value is byte byteVal)
+                    return byteVal;
+                if (value is sbyte sbyteVal)
+                    return sbyteVal;
+                if (value is short shortVal)
+                    return shortVal;
+                if (value is ushort ushortVal)
+                    return ushortVal;
             }
             return null;
         }
