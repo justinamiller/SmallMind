@@ -4,10 +4,13 @@ using SmallMind.Transformers;
 
 namespace SmallMind.Tests.Batching
 {
-    // Run this collection serially to avoid engine lifecycle races when xunit
-    // uses maxParallelThreads=-1 (parallelizeAssembly=true in xunit.runner.json).
-    // Each test creates/disposes a BatchedInferenceEngine with background scheduler
-    // tasks; running them in parallel causes non-deterministic hangs.
+    // Explicitly define the collection so xunit v2 disables parallelization within it.
+    // Without DisableParallelization = true, xunit may run tests in the collection concurrently,
+    // which causes non-deterministic hangs: each BatchedInferenceEngine owns a background
+    // BatchScheduler Task.Run; concurrent engines interfere through the shared thread pool.
+    [Xunit.CollectionDefinition("BatchedInferenceEngine", DisableParallelization = true)]
+    public class BatchedInferenceEngineCollection { }
+
     [Xunit.Collection("BatchedInferenceEngine")]
     public class BatchedInferenceEngineTests
     {

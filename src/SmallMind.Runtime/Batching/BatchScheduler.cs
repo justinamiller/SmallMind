@@ -139,7 +139,7 @@ namespace SmallMind.Runtime.Batching
                         ? _options.MaxBatchWaitMs
                         : 100; // Default 100ms if no timeout configured
 
-                    await _batchReadySemaphore.WaitAsync(waitTimeout, shutdownToken);
+                    await _batchReadySemaphore.WaitAsync(waitTimeout, shutdownToken).ConfigureAwait(false);
 
                     stopwatch.Restart();
 
@@ -330,11 +330,13 @@ namespace SmallMind.Runtime.Batching
             {
                 _shutdownCts.Cancel();
 
-                // Do NOT block here with _schedulerTask.Wait() - that causes thread-pool starvation
-                // when many engines are disposed concurrently from an async context (e.g. parallel tests).
-                // The scheduler loop checks IsCancellationRequested at each iteration and exits quickly
-                // after cancellation; any ObjectDisposedException from the semaphore below is also caught
-                // by the loop's catch block, which then exits because the token is cancelled.
+                // Wait briefly for the scheduler task to exit before releasing its resources.
+                // After Cancel() the loop exits within one polling interval (MaxBatchWaitMs or
+                // 100 ms at most).  Waiting here prevents accumulation of lingering scheduler
+                // tasks in the thread pool when many engines are created/disposed in sequence,
+                // which would otherwise starve the thread pool and cause test hangs.
+                try { _schedulerTask.Wait(TimeSpan.FromMilliseconds(500)); } catch { /* Ignore */ }
+
                 _shutdownCts.Dispose();
                 _batchReadySemaphore.Dispose();
                 _disposed = true;

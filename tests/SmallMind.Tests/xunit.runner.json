@@ -6,7 +6,7 @@
   "internalDiagnosticMessages": false,
   "maxParallelThreads": -1,
   "parallelizeAssembly": true,
-  "parallelizeTestCollections": true,
+  "parallelizeTestCollections": false,
   "preEnumerateTheories": true,
   "shadowCopy": false,
   "stopOnFail": false,

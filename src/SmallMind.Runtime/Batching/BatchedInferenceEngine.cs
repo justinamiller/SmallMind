@@ -110,7 +110,10 @@ namespace SmallMind.Runtime.Batching
                 // Collect all generated tokens
                 var generatedTokens = new List<GeneratedToken>();
 
-                await foreach (var token in request.ResponseReader.ReadAllAsync(cancellationToken))
+                // ConfigureAwait(false): prevent capturing the caller's SynchronizationContext
+                // (e.g. xunit's AsyncTestSyncContext) so that channel reader continuations run
+                // on the ThreadPool and cannot cause scheduler starvation.
+                await foreach (var token in request.ResponseReader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
                 {
                     generatedTokens.Add(token);
                 }
@@ -165,8 +168,9 @@ namespace SmallMind.Runtime.Batching
                 // Enqueue for batched processing
                 _scheduler.EnqueueRequest(request);
 
-                // Stream tokens as they're generated
-                await foreach (var token in request.ResponseReader.ReadAllAsync(cancellationToken))
+                // Stream tokens as they're generated (ConfigureAwait(false) avoids
+                // capturing the caller's SynchronizationContext for channel continuations)
+                await foreach (var token in request.ResponseReader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
                 {
                     yield return token;
                 }
@@ -189,10 +193,10 @@ namespace SmallMind.Runtime.Batching
             // Execute batch asynchronously (fire and forget)
             _ = Task.Run(async () =>
             {
-                await _executionSemaphore.WaitAsync();
+                await _executionSemaphore.WaitAsync().ConfigureAwait(false);
                 try
                 {
-                    await ProcessBatchAsync(batch);
+                    await ProcessBatchAsync(batch).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -299,7 +303,7 @@ namespace SmallMind.Runtime.Batching
                     );
 
                     // Send to response channel
-                    await request.ResponseWriter.WriteAsync(generatedToken, request.CancellationToken);
+                    await request.ResponseWriter.WriteAsync(generatedToken, request.CancellationToken).ConfigureAwait(false);
 
                     request.CurrentPosition = i + 1;
                     request.GeneratedTokenCount = i + 1;
