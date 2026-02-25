@@ -245,6 +245,12 @@ namespace SmallMind.Transformers
             // KV-Cache: Use cached keys/values if available
             Tensor kFull, vFull;
             int fullSeqLen;
+            // kvCacheSeqStride: the per-KV-head stride (in positions) used when indexing into kFull/vFull.
+            // For the compact k/v tensors (no cache) this equals T (== fullSeqLen).
+            // For the pre-allocated KV cache (_blockSize slots per head) this equals _blockSize, because
+            // each head's data starts at head_index * _blockSize * _headSize inside the cache array even
+            // though only the first fullSeqLen positions are valid.
+            int kvCacheSeqStride;
 
             if (_useKVCache && !_isTraining)
             {
@@ -277,6 +283,8 @@ namespace SmallMind.Transformers
                 fullSeqLen = _cachePosition + T;
                 kFull = _cachedKeys;
                 vFull = _cachedValues;
+                // The cache is allocated with _blockSize positions per head; use that as the stride.
+                kvCacheSeqStride = _blockSize;
 
                 // Increment cache position for next forward pass
                 _cachePosition += T;
@@ -287,6 +295,7 @@ namespace SmallMind.Transformers
                 kFull = k;
                 vFull = v;
                 fullSeqLen = T;
+                kvCacheSeqStride = T;
             }
 
             // Use workspace for attention scores (update cached shape)
@@ -294,13 +303,13 @@ namespace SmallMind.Transformers
             // TIER-1 AUDIT: Scores workspace is fully overwritten by MatMulTransposeB (store-once: C = sum).
             // clearBeforeReuse=false eliminates unnecessary zeroing of potentially large (T×T) score matrices.
             var att = GetOrAllocateWorkspace(ref _scoresWorkspace, _scoresShapeCache, clearBeforeReuse: false);
-            ComputeAttentionScoresInPlace(q, kFull, att, B, T, fullSeqLen);
+            ComputeAttentionScoresInPlace(q, kFull, att, B, T, fullSeqLen, kvCacheSeqStride);
 
             // Use workspace for attention output (reuse qShapeCache)
             // IMPORTANT: y workspace MUST be cleared because ApplyAttentionInPlace uses MatMul with FMA (C += A*B).
             // MatMul accumulates into the output buffer, so it must start zeroed.
             var y = GetOrAllocateWorkspace(ref _attnOutputWorkspace, _qShapeCache, clearBeforeReuse: true);
-            ApplyAttentionInPlace(att, vFull, y, B, T, fullSeqLen);
+            ApplyAttentionInPlace(att, vFull, y, B, T, fullSeqLen, kvCacheSeqStride);
 
             // Reshape back: (B, nHead, T, headSize) -> (B, T, n_embd)
             // Use cached shape array to avoid allocation
@@ -673,10 +682,16 @@ namespace SmallMind.Transformers
         /// Supports KV-cache where K may have more positions than Q.
         /// Supports GQA where query heads are mapped to fewer KV heads.
         /// </summary>
-        private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T, int kSeqLen)
+        /// <param name="kvSeqStride">
+        /// The per-KV-head stride (number of sequence positions allocated) in the K tensor.
+        /// For compact K tensors this equals kSeqLen. For the pre-allocated KV cache
+        /// (which reserves _blockSize slots per head) this must be _blockSize so that
+        /// each head's data is read from the correct offset.
+        /// </param>
+        private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T, int kSeqLen, int kvSeqStride)
         {
             // q: (B, nHead, T, headSize) - query for current tokens
-            // k: (B, nKvHead, kSeqLen, headSize) - keys (may include cached past, GQA)
+            // k: (B, nKvHead, kvSeqStride, headSize) - keys (may include cached past, GQA)
             // scores: (B, nHead, T, kSeqLen) - pre-allocated, will be modified in-place
 
             float scale = 1.0f / MathF.Sqrt(_headSize);
@@ -694,7 +709,9 @@ namespace SmallMind.Transformers
                     int kvHead = h / headsPerKvHead;
 
                     int qOffset = (b * _nHead + h) * T * _headSize;
-                    int kOffset = (b * _nKvHead + kvHead) * kSeqLen * _headSize;
+                    // Use kvSeqStride (not kSeqLen) so that when K is the pre-allocated KV cache
+                    // (stride == _blockSize) each head's data is read from the correct position.
+                    int kOffset = (b * _nKvHead + kvHead) * kvSeqStride * _headSize;
                     int scoreOffset = (b * _nHead + h) * T * kSeqLen;
 
                     // Step 1: Batched matrix multiplication Q @ K^T
@@ -721,7 +738,7 @@ namespace SmallMind.Transformers
                         int kvHead = h / headsPerKvHead;
 
                         int qOffset = (b * _nHead + h) * T * _headSize;
-                        int kOffset = (b * _nKvHead + kvHead) * kSeqLen * _headSize;
+                        int kOffset = (b * _nKvHead + kvHead) * kvSeqStride * _headSize;
                         int scoreOffset = (b * _nHead + h) * T * kSeqLen;
 
                         // Step 1: Batched matrix multiplication Q @ K^T
@@ -746,7 +763,7 @@ namespace SmallMind.Transformers
         // Overload for backward compatibility (no KV-cache)
         private void ComputeAttentionScoresInPlace(Tensor q, Tensor k, Tensor scores, int B, int T)
         {
-            ComputeAttentionScoresInPlace(q, k, scores, B, T, T);
+            ComputeAttentionScoresInPlace(q, k, scores, B, T, T, T);
         }
 
         /// <summary>
@@ -807,10 +824,16 @@ namespace SmallMind.Transformers
         /// Supports GQA where query heads are mapped to fewer KV heads.
         /// Tier-0 optimization: Replaced triple nested loops with MatMul kernel for better performance.
         /// </summary>
-        private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T, int vSeqLen)
+        /// <param name="kvSeqStride">
+        /// The per-KV-head stride (number of sequence positions allocated) in the V tensor.
+        /// For compact V tensors this equals vSeqLen. For the pre-allocated KV cache
+        /// (which reserves _blockSize slots per head) this must be _blockSize so that
+        /// each head's data is read from the correct offset.
+        /// </param>
+        private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T, int vSeqLen, int kvSeqStride)
         {
             // att: (B, nHead, T, vSeqLen) - attention weights
-            // v: (B, nKvHead, vSeqLen, headSize) - values (may include cached past, GQA)
+            // v: (B, nKvHead, kvSeqStride, headSize) - values (may include cached past, GQA)
             // output: (B, nHead, T, headSize) - pre-allocated
 
             // For each batch and head, perform: output[b,h] = att[b,h] @ v[b,kvh]
@@ -827,9 +850,11 @@ namespace SmallMind.Transformers
                 // Map query head to KV head (for GQA)
                 int kvHead = h / headsPerKvHead;
 
-                // Calculate offsets for this batch and head
+                // Calculate offsets for this batch and head.
+                // Use kvSeqStride (not vSeqLen) so that when V is the pre-allocated KV cache
+                // (stride == _blockSize) each head's data is read from the correct position.
                 int attOffset = (b * _nHead + h) * T * vSeqLen;
-                int vOffset = (b * _nKvHead + kvHead) * vSeqLen * _headSize;
+                int vOffset = (b * _nKvHead + kvHead) * kvSeqStride * _headSize;
                 int outOffset = (b * _nHead + h) * T * _headSize;
 
                 // Use MatMul: att[b,h] @ v[b,kvh] -> output[b,h]
@@ -846,7 +871,7 @@ namespace SmallMind.Transformers
         // Overload for backward compatibility (no KV-cache)
         private void ApplyAttentionInPlace(Tensor att, Tensor v, Tensor output, int B, int T)
         {
-            ApplyAttentionInPlace(att, v, output, B, T, T);
+            ApplyAttentionInPlace(att, v, output, B, T, T, T);
         }
 
         public void Train()

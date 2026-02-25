@@ -240,22 +240,14 @@ namespace SmallMind.Runtime.Batching
         /// </summary>
         private async Task ProcessBatchPrefillOnlyAsync(List<InferenceRequest> batch)
         {
-            // For simplicity in this implementation, we process each request individually
-            // A full implementation would:
-            // 1. Pad all prompts to same length
-            // 2. Create batched tensor [batch_size, max_seq_len]
-            // 3. Run single forward pass
-            // 4. Continue generation individually
-
-            // Process each request individually
-            var tasks = new Task[batch.Count];
+            // Process requests sequentially to avoid concurrent access to shared model workspace tensors.
+            // The TransformerModel is not thread-safe (shared workspace tensors, KV-cache state).
+            // A future batched implementation would pad prompts, run a single forward pass, then continue
+            // individually; for now, sequential processing is correct and safe.
             for (int i = 0; i < batch.Count; i++)
             {
-                var request = batch[i];
-                tasks[i] = Task.Run(() => ProcessSingleRequestAsync(request));
+                await ProcessSingleRequestAsync(batch[i]);
             }
-
-            await Task.WhenAll(tasks);
         }
 
         /// <summary>

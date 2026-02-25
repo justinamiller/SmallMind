@@ -4,6 +4,11 @@ using SmallMind.Transformers;
 
 namespace SmallMind.Tests.Batching
 {
+    // Run this collection serially to avoid engine lifecycle races when xunit
+    // uses maxParallelThreads=-1 (parallelizeAssembly=true in xunit.runner.json).
+    // Each test creates/disposes a BatchedInferenceEngine with background scheduler
+    // tasks; running them in parallel causes non-deterministic hangs.
+    [Xunit.Collection("BatchedInferenceEngine")]
     public class BatchedInferenceEngineTests
     {
         private TransformerModel CreateMockModel()
