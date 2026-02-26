@@ -61,6 +61,16 @@ namespace SmallMind.Core.Simd
                 C.Clear();
             }
             
+            // For very small M, the blocked SIMD microkernels (MR=6) provide no full tiles and
+            // the partial-tile scalar fallback across multiple K-blocks can leave residual errors
+            // for non-square real-world shapes (e.g. M=8, K=2048, N=2560+).  Route these through
+            // the general vectorised path instead.
+            if (M < MR_AVX2)
+            {
+                MatMulOps.MatMul(A, B, C, M, K, N, accumulate: true);  // C already cleared above if needed
+                return;
+            }
+            
             // Dispatch to optimal implementation
             if (Avx512F.IsSupported && N >= NR_AVX512)
             {
@@ -339,7 +349,8 @@ namespace SmallMind.Core.Simd
             
             fixed (float* pA = A, pB = B, pC = C)
             {
-                C.Clear();
+                // C is already cleared (or kept) by the outer MatMul based on the accumulate flag.
+                // Do NOT clear here – that would discard existing C values when accumulate=true.
                 
                 // Direct microkernel calls without L2 blocking overhead
                 GemmL1BlockedAvx2(pA, pB, pC, M, K, N, K, N, N);
@@ -363,7 +374,8 @@ namespace SmallMind.Core.Simd
             
             fixed (float* pA = A, pB = B, pC = C)
             {
-                C.Clear();
+                // C is already cleared (or kept) by the outer MatMul based on the accumulate flag.
+                // Do NOT clear here – that would discard existing C values when accumulate=true.
                 
                 // 2×2×2 blocking - simple and cache-friendly
                 for (int mc = 0; mc < M; mc += MC)
