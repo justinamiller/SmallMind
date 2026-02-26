@@ -252,6 +252,13 @@ namespace SmallMind.Runtime
                                 break;
                             }
                         }
+
+                        // Anti-looping: stop generation if the same token repeats too many times
+                        if (_options.MaxRepeatedTokenStreak > 0 && HasRepeatedTokenStreak(context, _options.MaxRepeatedTokenStreak))
+                        {
+                            finishReason = FinishReason.MaxTokens;
+                            break;
+                        }
                     }
 
                     // Set finish reason if loop completed normally
@@ -448,6 +455,13 @@ namespace SmallMind.Runtime
                         // Stop if we hit a stop condition
                         if (isStop || isStopSeq)
                         {
+                            break;
+                        }
+
+                        // Anti-looping: stop generation if the same token repeats too many times
+                        if (_options.MaxRepeatedTokenStreak > 0 && HasRepeatedTokenStreak(context, _options.MaxRepeatedTokenStreak))
+                        {
+                            finishReason = FinishReason.MaxTokens;
                             break;
                         }
                     }
@@ -1310,6 +1324,27 @@ namespace SmallMind.Runtime
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Returns true if the last <paramref name="streak"/> tokens in <paramref name="context"/>
+        /// are all the same token ID (anti-looping guard).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool HasRepeatedTokenStreak(List<int> context, int streak)
+        {
+            if (context.Count < streak)
+                return false;
+
+            // Use Span to eliminate per-element bounds checking in the hot path
+            var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(context);
+            int lastToken = span[span.Length - 1];
+            for (int j = 2; j <= streak; j++)
+            {
+                if (span[span.Length - j] != lastToken)
+                    return false;
+            }
+            return true;
         }
 
         private void ThrowIfDisposed()

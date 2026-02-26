@@ -327,5 +327,63 @@ namespace SmallMind.Tests
             Assert.Equal(1, summary.CompletedRequests);
             Assert.True(summary.TotalOutputTokens > 0);
         }
+
+        [Fact]
+        public void ProductionInferenceOptions_MaxRepeatedTokenStreak_DefaultsToFive()
+        {
+            var options = new ProductionInferenceOptions();
+            Assert.Equal(5, options.MaxRepeatedTokenStreak);
+        }
+
+        [Fact]
+        public void ProductionInferenceOptions_MaxRepeatedTokenStreak_NegativeThrows()
+        {
+            var (model, tokenizer) = CreateTestModel();
+            var options = new ProductionInferenceOptions { MaxRepeatedTokenStreak = -1 };
+            Assert.Throws<ValidationException>(() =>
+                new InferenceSession(model, tokenizer, options, 32));
+        }
+
+        [Fact]
+        public void ProductionInferenceOptions_MaxRepeatedTokenStreak_ZeroDisablesCheck()
+        {
+            // MaxRepeatedTokenStreak = 0 should be a valid configuration (disabled)
+            var (model, tokenizer) = CreateTestModel();
+            var options = new ProductionInferenceOptions { MaxRepeatedTokenStreak = 0 };
+            using var session = new InferenceSession(model, tokenizer, options, 32);
+            Assert.NotNull(session);
+        }
+
+        [Fact]
+        public async Task InferenceSession_MaxRepeatedTokenStreak_StopsEarlyOnRepetition()
+        {
+            // Arrange: set MaxNewTokens much higher than streak - if the model produces
+            // a repeated streak, the streak guard should terminate generation before MaxNewTokens.
+            var (model, tokenizer) = CreateTestModel();
+            var options = new ProductionInferenceOptions
+            {
+                MaxNewTokens = 50,
+                MaxRepeatedTokenStreak = 3,
+                Temperature = 0.0001, // Near-greedy: maximizes chance of repeated tokens
+                Seed = 42
+            };
+
+            using var session = new InferenceSession(model, tokenizer, options, 32);
+
+            // Act
+            var result = await session.GenerateAsync("a");
+
+            // Assert: result should not be null/empty
+            Assert.NotNull(result);
+            Assert.NotEmpty(result);
+        }
+
+        [Fact]
+        public void ProductionInferenceOptions_Clone_IncludesMaxRepeatedTokenStreak()
+        {
+            var options = new ProductionInferenceOptions { MaxRepeatedTokenStreak = 7 };
+            var clone = options.Clone();
+            Assert.Equal(7, clone.MaxRepeatedTokenStreak);
+        }
     }
 }

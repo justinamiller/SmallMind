@@ -83,6 +83,10 @@ namespace SmallMind.ConsoleApp.Commands
                     Temperature = temperature,
                     TopK = 40,
                     TopP = 0.95,
+                    RepetitionPenalty = 1.1f,
+                    PresencePenalty = 0.1f,
+                    RepetitionWindow = 64,
+                    MaxRepeatedTokenStreak = 5,
                     Seed = seed,
                     MaxContextTokens = config.ContextLength
                 };
@@ -163,14 +167,17 @@ namespace SmallMind.ConsoleApp.Commands
         }
 
         /// <summary>
-        /// Minimal coherence check: validates that output contains reasonable English text.
+        /// Coherence check: validates that output contains reasonable English text.
         /// Checks for:
         /// - Sufficient length
         /// - Primarily ASCII printable characters
         /// - Contains alphabetic characters
         /// - Not mostly repeated characters or garbage
+        /// - No repeated word streaks (e.g., "the the the")
+        /// - No repeated n-gram phrases (bigram/trigram loops)
+        /// - Sufficient lexical diversity (unique words / total words)
         /// </summary>
-        private bool ValidateCoherence(string output, string prompt)
+        internal bool ValidateCoherence(string output, string prompt)
         {
             // Extract generated portion (after prompt)
             string generated = output.Length > prompt.Length
@@ -236,8 +243,8 @@ namespace SmallMind.ConsoleApp.Commands
                 return false;
             }
 
-            // Check for excessive repetition (same character repeated many times)
-            int maxRepeat = 0;
+            // Check for excessive character repetition (same character repeated many times)
+            int maxCharRepeat = 0;
             int currentRepeat = 1;
             char lastChar = '\0';
 
@@ -246,7 +253,7 @@ namespace SmallMind.ConsoleApp.Commands
                 if (c == lastChar)
                 {
                     currentRepeat++;
-                    maxRepeat = Math.Max(maxRepeat, currentRepeat);
+                    maxCharRepeat = Math.Max(maxCharRepeat, currentRepeat);
                 }
                 else
                 {
@@ -255,14 +262,112 @@ namespace SmallMind.ConsoleApp.Commands
                 }
             }
 
-            if (maxRepeat > 20)
+            if (maxCharRepeat > 20)
             {
-                System.Console.WriteLine($"Coherence check: Excessive character repetition (max {maxRepeat})");
+                System.Console.WriteLine($"Coherence check: Excessive character repetition (max {maxCharRepeat})");
                 return false;
             }
 
-            System.Console.WriteLine($"Coherence check: alpha={alphaPct:P0}, printable={printablePct:P0}, spacing={spacePct:P0}, maxRepeat={maxRepeat}");
+            // Tokenize into words for word-level checks
+            var words = generated
+                .Split(new char[] { ' ', '\t', '\n', '\r', '.', ',', '!', '?', ';', ':' },
+                       StringSplitOptions.RemoveEmptyEntries);
+
+            if (words.Length >= 3)
+            {
+                // Check for repeated word streak (e.g., "the the the the the")
+                int maxWordStreak = 0;
+                int wordStreak = 1;
+                string lastWord = "";
+
+                foreach (string word in words)
+                {
+                    string lower = word.ToLowerInvariant();
+                    if (lower == lastWord && lower.Length > 1)
+                    {
+                        wordStreak++;
+                        maxWordStreak = Math.Max(maxWordStreak, wordStreak);
+                    }
+                    else
+                    {
+                        wordStreak = 1;
+                        lastWord = lower;
+                    }
+                }
+
+                if (maxWordStreak >= 4)
+                {
+                    System.Console.WriteLine($"Coherence check: Repeated word streak detected (max {maxWordStreak})");
+                    return false;
+                }
+
+                // Check for repeated bigrams (e.g., "hello world hello world hello world")
+                if (words.Length >= 6)
+                {
+                    int maxBigramRepeat = CountMaxNgramRepetitions(words, 2);
+                    int bigramThreshold = Math.Max(3, words.Length / 4);
+                    if (maxBigramRepeat >= bigramThreshold)
+                    {
+                        System.Console.WriteLine($"Coherence check: Repeated bigram detected ({maxBigramRepeat} repetitions)");
+                        return false;
+                    }
+                }
+
+                // Check lexical diversity: unique words / total words
+                var uniqueWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string word in words)
+                    uniqueWords.Add(word);
+
+                double diversity = (double)uniqueWords.Count / words.Length;
+                if (words.Length >= 10 && diversity < 0.3)
+                {
+                    System.Console.WriteLine($"Coherence check: Low lexical diversity ({diversity:P0}, {uniqueWords.Count} unique / {words.Length} total words)");
+                    return false;
+                }
+            }
+
+            System.Console.WriteLine($"Coherence check: alpha={alphaPct:P0}, printable={printablePct:P0}, spacing={spacePct:P0}, maxCharRepeat={maxCharRepeat}");
             return true;
+        }
+
+        /// <summary>
+        /// Counts the maximum number of times any n-gram of <paramref name="n"/> words
+        /// is consecutively repeated in <paramref name="words"/>.
+        /// </summary>
+        internal static int CountMaxNgramRepetitions(string[] words, int n)
+        {
+            int maxRepeat = 0;
+            int outerBound = words.Length - n * 2;
+            int endPos = words.Length - n;
+            for (int i = 0; i <= outerBound; i++)
+            {
+                // Build n-gram starting at i
+                int consecutive = 1;
+                int pos = i + n;
+                while (pos <= endPos)
+                {
+                    bool match = true;
+                    for (int k = 0; k < n; k++)
+                    {
+                        if (!string.Equals(words[i + k], words[pos + k], StringComparison.OrdinalIgnoreCase))
+                        {
+                            match = false;
+                            break;
+                        }
+                    }
+                    if (match)
+                    {
+                        consecutive++;
+                        pos += n;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                maxRepeat = Math.Max(maxRepeat, consecutive);
+            }
+            return maxRepeat;
         }
     }
 }

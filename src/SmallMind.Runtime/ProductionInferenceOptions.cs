@@ -87,6 +87,13 @@ namespace SmallMind.Runtime
         public int RepetitionWindow { get; set; } = 0;
 
         /// <summary>
+        /// Gets or sets the maximum allowed streak of identical consecutive tokens before
+        /// generation is stopped early. This acts as a hard anti-looping guard.
+        /// Default: 5. Set to 0 to disable.
+        /// </summary>
+        public int MaxRepeatedTokenStreak { get; set; } = 5;
+
+        /// <summary>
         /// Gets or sets the random seed for deterministic generation.
         /// When set, the same seed with same prompt and options produces identical output.
         /// Default: null (non-deterministic).
@@ -210,6 +217,11 @@ namespace SmallMind.Runtime
                 throw new ValidationException("RepetitionWindow cannot be negative", nameof(RepetitionWindow));
             }
 
+            if (MaxRepeatedTokenStreak < 0)
+            {
+                throw new ValidationException("MaxRepeatedTokenStreak cannot be negative", nameof(MaxRepeatedTokenStreak));
+            }
+
             // Validate that context limit is reasonable
             if (MaxContextTokens > 0 && MaxInputTokens > MaxContextTokens)
             {
@@ -237,6 +249,7 @@ namespace SmallMind.Runtime
                 PresencePenalty = PresencePenalty,
                 FrequencyPenalty = FrequencyPenalty,
                 RepetitionWindow = RepetitionWindow,
+                MaxRepeatedTokenStreak = MaxRepeatedTokenStreak,
                 Seed = Seed,
                 MaxInputTokens = MaxInputTokens,
                 MaxContextTokens = MaxContextTokens,
