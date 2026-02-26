@@ -154,42 +154,30 @@ namespace SmallMind.Quantization.Kernels
             byte* scales_ptr = pBlock + 4;
             byte* qs_ptr = pBlock + 16;
 
-            // Unpack scales and mins (6-bit values from 12 bytes)
+            // Unpack scales and mins (6-bit values from 12 bytes, GGML get_scale_min_k4 format)
             Span<byte> scales = stackalloc byte[Q4K_SUB_BLOCKS];
             Span<byte> mins = stackalloc byte[Q4K_SUB_BLOCKS];
             UnpackScalesAndMins(scales_ptr, scales, mins);
 
             float accum = *pAccum;
 
-            // Process each sub-block
+            // Process each sub-block using correct GGML Q4_K qs layout:
+            //   sub-blocks 0,2,4,6 use low  nibbles of qs bytes (sb/2)*32 .. (sb/2)*32+31
+            //   sub-blocks 1,3,5,7 use high nibbles of the same bytes
             for (int sb = 0; sb < Q4K_SUB_BLOCKS; sb++)
             {
                 float sc = d * scales[sb];
                 float m = dmin * mins[sb];
 
-                // Process 32 values in sub-block
                 float* pA_sub = pA + sb * Q4K_SUB_BLOCK_SIZE;
-                byte* qs_sub = qs_ptr + sb * (Q4K_SUB_BLOCK_SIZE / 2);
+                byte* qs_sub = qs_ptr + (sb / 2) * Q4K_SUB_BLOCK_SIZE; // 32 bytes per pair
+                bool useHigh = (sb % 2) != 0;
 
-                // Vectorized inner loop (process 8 values at a time)
-                for (int i = 0; i < Q4K_SUB_BLOCK_SIZE / 8; i++)
+                for (int l = 0; l < Q4K_SUB_BLOCK_SIZE; l++)
                 {
-                    // Load 4 bytes (8 4-bit values)
-                    uint packed = *(uint*)(qs_sub + i * 4);
-
-                    // Extract nibbles and dequantize
-                    for (int j = 0; j < 4; j++)
-                    {
-                        byte b = (byte)((packed >> (j * 8)) & 0xFF);
-                        int q0 = b & 0xF;
-                        int q1 = (b >> 4) & 0xF;
-
-                        float val0 = sc * q0 - m;
-                        float val1 = sc * q1 - m;
-
-                        accum += pA_sub[i * 8 + j * 2] * val0;
-                        accum += pA_sub[i * 8 + j * 2 + 1] * val1;
-                    }
+                    byte b = qs_sub[l];
+                    int q = useHigh ? ((b >> 4) & 0xF) : (b & 0xF);
+                    accum += pA_sub[l] * (sc * q - m);
                 }
             }
 
@@ -197,30 +185,34 @@ namespace SmallMind.Quantization.Kernels
         }
 
         /// <summary>
-        /// Unpack 12 bytes into 8 6-bit scales and 8 6-bit mins.
+        /// Unpack 12 bytes into 8 6-bit scales and 8 6-bit mins using GGML get_scale_min_k4 format.
+        /// For j &lt; 4: scale[j] = src[j] &amp; 0x3F, min[j] = src[j+4] &amp; 0x3F.
+        /// For j &gt;= 4: scale[j] = (src[j+4] &amp; 0xF) | ((src[j-4] >> 6) &lt;&lt; 4),
+        ///             min[j]   = (src[j+4] >> 4)  | ((src[j]   >> 6) &lt;&lt; 4).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe void UnpackScalesAndMins(byte* src, Span<byte> scales, Span<byte> mins)
         {
-            // Extract scales (first 6 bytes -> 8 6-bit values)
+            // Sub-blocks 0-3: lower 6 bits of bytes 0-3 (scales) and bytes 4-7 (mins)
             scales[0] = (byte)(src[0] & 0x3F);
-            scales[1] = (byte)((src[0] >> 6) | ((src[1] & 0x0F) << 2));
-            scales[2] = (byte)((src[1] >> 4) | ((src[2] & 0x03) << 4));
-            scales[3] = (byte)((src[2] >> 2) & 0x3F);
-            scales[4] = (byte)(src[3] & 0x3F);
-            scales[5] = (byte)((src[3] >> 6) | ((src[4] & 0x0F) << 2));
-            scales[6] = (byte)((src[4] >> 4) | ((src[5] & 0x03) << 4));
-            scales[7] = (byte)((src[5] >> 2) & 0x3F);
+            scales[1] = (byte)(src[1] & 0x3F);
+            scales[2] = (byte)(src[2] & 0x3F);
+            scales[3] = (byte)(src[3] & 0x3F);
+            // Sub-blocks 4-7: bytes 8-11 split between scales (low nibble) and mins (high nibble),
+            //                  upper 2 bits come from bytes 0-3 (scales) and bytes 4-7 (mins).
+            scales[4] = (byte)((src[8]  & 0xF) | ((src[0] >> 6) << 4));
+            scales[5] = (byte)((src[9]  & 0xF) | ((src[1] >> 6) << 4));
+            scales[6] = (byte)((src[10] & 0xF) | ((src[2] >> 6) << 4));
+            scales[7] = (byte)((src[11] & 0xF) | ((src[3] >> 6) << 4));
 
-            // Extract mins (last 6 bytes -> 8 6-bit values)
-            mins[0] = (byte)(src[6] & 0x3F);
-            mins[1] = (byte)((src[6] >> 6) | ((src[7] & 0x0F) << 2));
-            mins[2] = (byte)((src[7] >> 4) | ((src[8] & 0x03) << 4));
-            mins[3] = (byte)((src[8] >> 2) & 0x3F);
-            mins[4] = (byte)(src[9] & 0x3F);
-            mins[5] = (byte)((src[9] >> 6) | ((src[10] & 0x0F) << 2));
-            mins[6] = (byte)((src[10] >> 4) | ((src[11] & 0x03) << 4));
-            mins[7] = (byte)((src[11] >> 2) & 0x3F);
+            mins[0] = (byte)(src[4] & 0x3F);
+            mins[1] = (byte)(src[5] & 0x3F);
+            mins[2] = (byte)(src[6] & 0x3F);
+            mins[3] = (byte)(src[7] & 0x3F);
+            mins[4] = (byte)((src[8]  >> 4) | ((src[4] >> 6) << 4));
+            mins[5] = (byte)((src[9]  >> 4) | ((src[5] >> 6) << 4));
+            mins[6] = (byte)((src[10] >> 4) | ((src[6] >> 6) << 4));
+            mins[7] = (byte)((src[11] >> 4) | ((src[7] >> 6) << 4));
         }
 
         /// <summary>
@@ -286,49 +278,47 @@ namespace SmallMind.Quantization.Kernels
             ReadOnlySpan<byte> scalesBytes = block.Slice(4, 12);
             ReadOnlySpan<byte> qs = block.Slice(16, 128);
 
-            // Unpack scales and mins
+            // Unpack scales and mins using GGML get_scale_min_k4 format
             Span<byte> scales = stackalloc byte[Q4K_SUB_BLOCKS];
             Span<byte> mins = stackalloc byte[Q4K_SUB_BLOCKS];
 
-            // Extract scales
             scales[0] = (byte)(scalesBytes[0] & 0x3F);
-            scales[1] = (byte)((scalesBytes[0] >> 6) | ((scalesBytes[1] & 0x0F) << 2));
-            scales[2] = (byte)((scalesBytes[1] >> 4) | ((scalesBytes[2] & 0x03) << 4));
-            scales[3] = (byte)((scalesBytes[2] >> 2) & 0x3F);
-            scales[4] = (byte)(scalesBytes[3] & 0x3F);
-            scales[5] = (byte)((scalesBytes[3] >> 6) | ((scalesBytes[4] & 0x0F) << 2));
-            scales[6] = (byte)((scalesBytes[4] >> 4) | ((scalesBytes[5] & 0x03) << 4));
-            scales[7] = (byte)((scalesBytes[5] >> 2) & 0x3F);
+            scales[1] = (byte)(scalesBytes[1] & 0x3F);
+            scales[2] = (byte)(scalesBytes[2] & 0x3F);
+            scales[3] = (byte)(scalesBytes[3] & 0x3F);
+            scales[4] = (byte)((scalesBytes[8]  & 0xF) | ((scalesBytes[0] >> 6) << 4));
+            scales[5] = (byte)((scalesBytes[9]  & 0xF) | ((scalesBytes[1] >> 6) << 4));
+            scales[6] = (byte)((scalesBytes[10] & 0xF) | ((scalesBytes[2] >> 6) << 4));
+            scales[7] = (byte)((scalesBytes[11] & 0xF) | ((scalesBytes[3] >> 6) << 4));
 
-            // Extract mins
-            mins[0] = (byte)(scalesBytes[6] & 0x3F);
-            mins[1] = (byte)((scalesBytes[6] >> 6) | ((scalesBytes[7] & 0x0F) << 2));
-            mins[2] = (byte)((scalesBytes[7] >> 4) | ((scalesBytes[8] & 0x03) << 4));
-            mins[3] = (byte)((scalesBytes[8] >> 2) & 0x3F);
-            mins[4] = (byte)(scalesBytes[9] & 0x3F);
-            mins[5] = (byte)((scalesBytes[9] >> 6) | ((scalesBytes[10] & 0x0F) << 2));
-            mins[6] = (byte)((scalesBytes[10] >> 4) | ((scalesBytes[11] & 0x03) << 4));
-            mins[7] = (byte)((scalesBytes[11] >> 2) & 0x3F);
+            mins[0] = (byte)(scalesBytes[4] & 0x3F);
+            mins[1] = (byte)(scalesBytes[5] & 0x3F);
+            mins[2] = (byte)(scalesBytes[6] & 0x3F);
+            mins[3] = (byte)(scalesBytes[7] & 0x3F);
+            mins[4] = (byte)((scalesBytes[8]  >> 4) | ((scalesBytes[4] >> 6) << 4));
+            mins[5] = (byte)((scalesBytes[9]  >> 4) | ((scalesBytes[5] >> 6) << 4));
+            mins[6] = (byte)((scalesBytes[10] >> 4) | ((scalesBytes[6] >> 6) << 4));
+            mins[7] = (byte)((scalesBytes[11] >> 4) | ((scalesBytes[7] >> 6) << 4));
 
             float sum = 0f;
 
-            // Process each sub-block
+            // Process each sub-block using correct GGML Q4_K qs layout:
+            //   sub-blocks 0,2,4,6 use low  nibbles of qs bytes (sb/2)*32..(sb/2)*32+31
+            //   sub-blocks 1,3,5,7 use high nibbles of the same bytes
             for (int sb = 0; sb < Q4K_SUB_BLOCKS; sb++)
             {
                 float sc = d * scales[sb];
                 float m = dmin * mins[sb];
 
                 int aOffset = sb * Q4K_SUB_BLOCK_SIZE;
-                int qsOffset = sb * (Q4K_SUB_BLOCK_SIZE / 2);
+                int qsByteBase = (sb / 2) * Q4K_SUB_BLOCK_SIZE;
+                bool useHigh = (sb % 2) != 0;
 
-                for (int i = 0; i < Q4K_SUB_BLOCK_SIZE / 2; i++)
+                for (int l = 0; l < Q4K_SUB_BLOCK_SIZE; l++)
                 {
-                    byte packed = qs[qsOffset + i];
-                    int q0 = packed & 0xF;
-                    int q1 = (packed >> 4) & 0xF;
-
-                    sum += a[aOffset + i * 2] * (sc * q0 - m);
-                    sum += a[aOffset + i * 2 + 1] * (sc * q1 - m);
+                    byte b = qs[qsByteBase + l];
+                    int q = useHigh ? ((b >> 4) & 0xF) : (b & 0xF);
+                    sum += a[aOffset + l] * (sc * q - m);
                 }
             }
 

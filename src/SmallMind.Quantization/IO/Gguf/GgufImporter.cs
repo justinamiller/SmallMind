@@ -302,8 +302,16 @@ namespace SmallMind.Quantization.IO.Gguf
             // GGUF uses block size 32
             int ggufNumBlocks = (totalElements + GgufBlockSize - 1) / GgufBlockSize;
 
-            // Parse GGUF Q4_0 blocks
-            var ggufData = new byte[(totalElements + 1) / 2];
+            // GGUF Q4_0 block layout (matches ggml dequantize_row_q4_0):
+            //   16 bytes per 32-element block.
+            //   byte[j] low  nibble → element[j],      value = (nibble & 0xF) - 8
+            //   byte[j] high nibble → element[j + 16], value = (nibble >> 4)  - 8
+            // i.e. low nibbles fill the FIRST half of the block and high nibbles fill the SECOND half.
+            // Values use unsigned-offset-8 encoding, NOT two's-complement.
+            const int halfBlock = GgufBlockSize / 2; // 16
+
+            // One byte per two source elements; store raw packed bytes per-block.
+            var ggufData = new byte[ggufNumBlocks * halfBlock];
             var ggufScales = new float[ggufNumBlocks];
 
             using (var ms = new MemoryStream(rawData))
@@ -313,26 +321,16 @@ namespace SmallMind.Quantization.IO.Gguf
                 {
                     // Read fp16 scale and convert to fp32
                     ushort scaleHalf = br.ReadUInt16();
-                    float scale = HalfToFloat(scaleHalf);
-                    ggufScales[blockIdx] = scale;
+                    ggufScales[blockIdx] = HalfToFloat(scaleHalf);
 
-                    // Read 16 bytes (32 x 4-bit values packed)
-                    int blockStart = blockIdx * GgufBlockSize;
-                    int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
-
-                    for (int i = blockStart; i < blockEnd; i += 2)
-                    {
-                        byte packedByte = br.ReadByte();
-
-                        // GGUF packs low nibble first, then high nibble
-                        int byteIdx = i / 2;
-                        ggufData[byteIdx] = packedByte;
-                    }
+                    // Read 16 packed bytes for this block
+                    int byteBase = blockIdx * halfBlock;
+                    for (int j = 0; j < halfBlock; j++)
+                        ggufData[byteBase + j] = br.ReadByte();
                 }
             }
 
-            // Re-quantize: dequantize with GGUF blocks, then quantize with SMQ blocks
-            // GGUF block size (32) differs from SMQ default (64), so we must re-quantize
+            // Dequantize using GGUF Q4_0 interleaved layout
             var floatData = new float[totalElements];
 
             for (int blockIdx = 0; blockIdx < ggufNumBlocks; blockIdx++)
@@ -340,19 +338,22 @@ namespace SmallMind.Quantization.IO.Gguf
                 int blockStart = blockIdx * GgufBlockSize;
                 int blockEnd = Math.Min(blockStart + GgufBlockSize, totalElements);
                 float scale = ggufScales[blockIdx];
+                int byteBase = blockIdx * halfBlock;
+                int halfElements = (blockEnd - blockStart) / 2;
 
-                for (int i = blockStart; i < blockEnd; i++)
+                for (int j = 0; j < halfElements; j++)
                 {
-                    int byteIdx = i / 2;
-                    byte packedByte = ggufData[byteIdx];
+                    byte b = ggufData[byteBase + j];
+                    // Low nibble → first half of block; high nibble → second half
+                    floatData[blockStart + j]               = ((b & 0xF) - 8) * scale;
+                    floatData[blockStart + j + halfElements] = ((b >> 4)  - 8) * scale;
+                }
 
-                    // Extract nibble
-                    byte nibble = (i % 2 == 0)
-                        ? (byte)(packedByte & 0xF)
-                        : (byte)((packedByte >> 4) & 0xF);
-
-                    int quantized = Q4Tensor.DecodeNibble(nibble);
-                    floatData[i] = quantized * scale;
+                // Handle odd-length last block (extremely rare in practice)
+                if ((blockEnd - blockStart) % 2 != 0)
+                {
+                    byte b = ggufData[byteBase + halfElements];
+                    floatData[blockStart + halfElements] = ((b & 0xF) - 8) * scale;
                 }
             }
 

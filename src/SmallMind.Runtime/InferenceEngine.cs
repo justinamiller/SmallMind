@@ -157,14 +157,9 @@ namespace SmallMind.Runtime
             {
                 var config = ModelConfig.FromGgufMetadata(metadata.Metadata!);
 
-                model = new TransformerModel(
-                    vocabSize: config.VocabSize,
-                    blockSize: config.ContextLength,
-                    nEmbd: config.EmbeddingLength,
-                    nLayer: config.BlockCount,
-                    nHead: config.HeadCount,
-                    dropout: 0.0,
-                    seed: 42);
+                // Use ModelConfig constructor to properly initialise architecture-specific features
+                // (RoPE, RMSNorm, SwiGLU, GQA) for Llama/Mistral/Phi models.
+                model = new TransformerModel(config, seed: 42);
             }
             catch
             {
