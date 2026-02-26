@@ -300,9 +300,12 @@ namespace SmallMind.Transformers
 
             // Use workspace for attention scores (update cached shape)
             TransformerHelpers.UpdateShapeCache4D(_scoresShapeCache, B, _nHead, T, fullSeqLen);
-            // TIER-1 AUDIT: Scores workspace is fully overwritten by MatMulTransposeB (store-once: C = sum).
-            // clearBeforeReuse=false eliminates unnecessary zeroing of potentially large (T×T) score matrices.
-            var att = GetOrAllocateWorkspace(ref _scoresWorkspace, _scoresShapeCache, clearBeforeReuse: false);
+            // CORRECTNESS: scores workspace must be cleared before reuse.
+            // MatMulTransposeB overwrites all T×kSeqLen elements, but only for the valid causal window.
+            // Masked-out positions beyond the causal mask are zeroed by FusedScaleMaskSoftmax, yet
+            // clearing defensively prevents any stale values from corrupting softmax in multi-step
+            // generation when the workspace is reused across forward passes with the same shape.
+            var att = GetOrAllocateWorkspace(ref _scoresWorkspace, _scoresShapeCache, clearBeforeReuse: true);
             ComputeAttentionScoresInPlace(q, kFull, att, B, T, fullSeqLen, kvCacheSeqStride);
 
             // Use workspace for attention output (reuse qShapeCache)

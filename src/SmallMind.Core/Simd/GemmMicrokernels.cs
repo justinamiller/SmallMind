@@ -61,6 +61,16 @@ namespace SmallMind.Core.Simd
                 C.Clear();
             }
             
+            // For very small M, the blocked SIMD microkernels (MR=6) provide no full tiles and
+            // the partial-tile scalar fallback across multiple K-blocks can leave residual errors
+            // for non-square real-world shapes (e.g. M=8, K=2048, N=2560+).  Route these through
+            // the general vectorised path instead.
+            if (M < MR_AVX2)
+            {
+                MatMulOps.MatMul(A, B, C, M, K, N, accumulate: true);  // C already cleared above if needed
+                return;
+            }
+            
             // Dispatch to optimal implementation
             if (Avx512F.IsSupported && N >= NR_AVX512)
             {
