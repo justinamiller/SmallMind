@@ -349,7 +349,8 @@ namespace SmallMind.Core.Simd
             
             fixed (float* pA = A, pB = B, pC = C)
             {
-                C.Clear();
+                // C is already cleared (or kept) by the outer MatMul based on the accumulate flag.
+                // Do NOT clear here – that would discard existing C values when accumulate=true.
                 
                 // Direct microkernel calls without L2 blocking overhead
                 GemmL1BlockedAvx2(pA, pB, pC, M, K, N, K, N, N);
@@ -373,7 +374,8 @@ namespace SmallMind.Core.Simd
             
             fixed (float* pA = A, pB = B, pC = C)
             {
-                C.Clear();
+                // C is already cleared (or kept) by the outer MatMul based on the accumulate flag.
+                // Do NOT clear here – that would discard existing C values when accumulate=true.
                 
                 // 2×2×2 blocking - simple and cache-friendly
                 for (int mc = 0; mc < M; mc += MC)
