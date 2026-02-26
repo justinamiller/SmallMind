@@ -72,15 +72,10 @@ namespace SmallMind.Runtime
                 }
             }
 
-            // Create TransformerModel
-            var model = new TransformerModel(
-                vocabSize: config.VocabSize,
-                blockSize: config.ContextLength,
-                nEmbd: config.EmbeddingLength,
-                nLayer: config.BlockCount,
-                nHead: config.HeadCount,
-                dropout: 0.0,
-                seed: seed);
+            // Create TransformerModel using ModelConfig constructor so that architecture-specific
+            // features (RoPE, RMSNorm, SwiGLU, GQA) are correctly initialised for Llama/Mistral/Phi.
+            IRuntimeLogger? runtimeLogger = (logger as RuntimeLoggerAdapter)?.PublicLogger;
+            var model = new TransformerModel(config, seed, runtimeLogger);
 
             // Load weights from SMQ tensors into model
             logger.LogInfo("Loading weights into model...");
