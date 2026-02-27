@@ -1,5 +1,4 @@
 using System.Numerics;
-using SmallMind.Core.Utilities;
 
 namespace SmallMind.Core.Optimized
 {
@@ -61,7 +60,7 @@ namespace SmallMind.Core.Optimized
                 float sum = 0;
                 for (int j = 0; j < validCols; j++)
                 {
-                    float e = MathUtils.FastExp(scores[rowStart + j] * scale - maxVal);
+                    float e = MathF.Exp(scores[rowStart + j] * scale - maxVal);
                     output[outRowStart + j] = e;
                     sum += e;
                 }
