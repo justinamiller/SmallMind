@@ -1,3 +1,4 @@
+using SmallMind.Core.Core;
 using SmallMind.Core.Simd;
 using SmallMind.Tests.Fixtures;
 using SmallMind.Tokenizers.Gguf;
@@ -174,7 +175,7 @@ namespace SmallMind.Tests.Regression
             attn.Eval();
 
             // Create a fixed input tensor that we'll reuse across all three calls
-            var input = new SmallMind.Core.Core.Tensor(new int[] { 1, seqLen, nEmbd });
+            var input = new Tensor(new int[] { 1, seqLen, nEmbd });
             for (int i = 0; i < input.Size; i++)
                 input.Data[i] = (float)(random.NextDouble() * 0.2 - 0.1);
 
@@ -235,7 +236,7 @@ namespace SmallMind.Tests.Regression
             // Run sequential single-token forward passes (simulates autoregressive decode)
             for (int step = 0; step < numSteps; step++)
             {
-                var token = new SmallMind.Core.Core.Tensor(
+                var token = new Tensor(
                     new float[] { (float)(step + 1) },
                     new int[] { 1, 1 });
 
@@ -281,21 +282,21 @@ namespace SmallMind.Tests.Regression
 
             // Build Q tensor: (1, nHead, T, headSz)
             int qSize = nHead * T * headSz;
-            var q = new SmallMind.Core.Core.Tensor(new int[] { 1, nHead, T, headSz });
+            var q = new Tensor(new int[] { 1, nHead, T, headSz });
             FillRandom(q.Data, rng);
 
             // Build K tensor: (1, nKvHead, T, headSz) – compact (no cache)
-            var k = new SmallMind.Core.Core.Tensor(new int[] { 1, nKvHead, T, headSz });
+            var k = new Tensor(new int[] { 1, nKvHead, T, headSz });
             FillRandom(k.Data, rng);
 
             // Build V tensor: same shape as K
-            var v = new SmallMind.Core.Core.Tensor(new int[] { 1, nKvHead, T, headSz });
+            var v = new Tensor(new int[] { 1, nKvHead, T, headSz });
             FillRandom(v.Data, rng);
 
             // Scores tensor: (1, nHead, T, T)
             int B = 1;
-            var scoresOpt = new SmallMind.Core.Core.Tensor(new int[] { B, nHead, T, T });
-            var scoresRef = new SmallMind.Core.Core.Tensor(new int[] { B, nHead, T, T });
+            var scoresOpt = new Tensor(new int[] { B, nHead, T, T });
+            var scoresRef = new Tensor(new int[] { B, nHead, T, T });
 
             // --- Optimised path ---
             // Temporarily ensure reference flag is NOT set (it is a read-only static,
@@ -323,7 +324,7 @@ namespace SmallMind.Tests.Regression
             }
 
             // Value application: output must be finite
-            var outRef = new SmallMind.Core.Core.Tensor(new int[] { B, nHead, T, headSz });
+            var outRef = new Tensor(new int[] { B, nHead, T, headSz });
             attn.ApplyAttentionScalar(scoresRef, v, outRef, B, T, T, T);
 
             for (int i = 0; i < outRef.Data.Length; i++)
@@ -353,32 +354,53 @@ namespace SmallMind.Tests.Regression
                 nKvHead: nKvHead, useRope: false);
             attn.Eval();
 
-            var q = new SmallMind.Core.Core.Tensor(new int[] { B, nHead, T, headSz });
-            var k = new SmallMind.Core.Core.Tensor(new int[] { B, nKvHead, T, headSz });
-            var v = new SmallMind.Core.Core.Tensor(new int[] { B, nKvHead, T, headSz });
+            var q = new Tensor(new int[] { B, nHead, T, headSz });
+            var k = new Tensor(new int[] { B, nKvHead, T, headSz });
+            var v = new Tensor(new int[] { B, nKvHead, T, headSz });
             FillRandom(q.Data, rng);
             FillRandom(k.Data, rng);
             FillRandom(v.Data, rng);
 
             // --- Reference scalar path ---
-            var scoresRef = new SmallMind.Core.Core.Tensor(new int[] { B, nHead, T, T });
-            var outRef    = new SmallMind.Core.Core.Tensor(new int[] { B, nHead, T, headSz });
+            var scoresRef = new Tensor(new int[] { B, nHead, T, T });
+            var outRef    = new Tensor(new int[] { B, nHead, T, headSz });
             attn.ComputeAttentionScoresScalar(q, k, scoresRef, B, T, T, T);
             attn.ApplyAttentionScalar(scoresRef, v, outRef, B, T, T, T);
 
-            // --- Optimised path via internal helpers ---
-            // (ResetKVCache / EnableKVCache not needed; we call internal methods directly)
-            var scoresOpt = new SmallMind.Core.Core.Tensor(new int[] { B, nHead, T, T });
-            // Invoke the scalar reference directly for the scores so we can compare
-            // value-projection path differences independently.
-            // For scores: scalar vs optimised uses MatMulTransposeB which is heavily tested;
-            // this test focuses on the value-projection (ApplyAttentionScalar vs MatMul path).
+            // --- Optimised path: use MatMulTransposeB + FusedScaleMaskSoftmax directly ---
+            // We construct the scores independently using the optimised MatMulTransposeB
+            // to compare against the scalar path, isolating any Q@K^T discrepancy.
+            var scoresOpt = new Tensor(new int[] { B, nHead, T, T });
+            int headsPerKvHead = nHead / nKvHead;
+            for (int h = 0; h < nHead; h++)
+            {
+                int kvHead = h / headsPerKvHead;
+                var qSpan = q.Data.AsSpan(h * T * headSz, T * headSz);
+                var kSpan = k.Data.AsSpan(kvHead * T * headSz, T * headSz);
+                var sSpan = scoresOpt.Data.AsSpan(h * T * T, T * T);
+                MatMulOps.MatMulTransposeB(
+                    (ReadOnlySpan<float>)qSpan,
+                    (ReadOnlySpan<float>)kSpan,
+                    sSpan, T, headSz, T);
+                // Apply fused scale + causal mask + softmax
+                SmallMind.Core.Optimized.OptimizedOps.FusedScaleMaskSoftmax(
+                    scoresOpt.Data, h * T * T,
+                    1f / MathF.Sqrt(headSz),
+                    scoresOpt.Data, h * T * T,
+                    T, T, 0);
+            }
 
-            // Both outputs must agree within 1% relative error
-            float maxErr = MaxRelError(outRef.Data, outRef.Data); // compare ref with itself → 0
-            Assert.Equal(0f, maxErr);
+            // Scores must agree: both are Q @ K^T with the same inputs.
+            float maxScoreErr = MaxRelError(scoresRef.Data, scoresOpt.Data);
+            Assert.True(maxScoreErr < RelTolerance,
+                $"GQA scalar vs optimised scores mismatch: max relative error {maxScoreErr:E3}");
 
-            // More usefully: verify ref outputs have correct softmax properties
+            // Scalar reference output must be finite (value projection sanity)
+            for (int i = 0; i < outRef.Data.Length; i++)
+                Assert.True(float.IsFinite(outRef.Data[i]),
+                    $"GQA scalar value-projection output[{i}] is not finite: {outRef.Data[i]}");
+
+            // Softmax row sums must equal 1
             for (int h = 0; h < nHead; h++)
             {
                 for (int qi = 0; qi < T; qi++)

@@ -221,7 +221,7 @@ namespace SmallMind.Core.Simd
                 for (int k = 0; k < K; k++)
                 {
                     float aik = A[i * K + k];
-                    if (aik == 0f) continue; // skip zero rows to preserve C
+                    if (aik == 0f) continue; // zero A element contributes nothing; skip to preserve C intact
                     int bRowStart = k * N;
                     int cRowStart = i * N;
                     for (int j = 0; j < N; j++)

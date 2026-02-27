@@ -1023,6 +1023,8 @@ namespace SmallMind.Runtime
                     {
                         logger.LogDebug($"  {smName}: Transposing from ({ggufRows}, {ggufCols}) to ({targetRows}, {targetCols})");
                         TransposeAndCopy(source, target.Data, ggufRows, ggufCols);
+                        if (_debugTensorStats)
+                            LogTensorStats(source, ggufName, smName, logger);
                         return;
                     }
                 }
@@ -1036,6 +1038,35 @@ namespace SmallMind.Runtime
             // Direct copy
             Array.Copy(source, target.Data, sourceSize);
             logger.LogDebug($"  {smName}: Loaded {sourceSize} elements from {ggufName}");
+            if (_debugTensorStats)
+                LogTensorStats(source, ggufName, smName, logger);
+        }
+
+        /// <summary>
+        /// When SMALLMIND_DEBUG_TENSOR_STATS=1, emit per-tensor min/max/mean and finite-value
+        /// diagnostics to help identify misaligned or corrupted weight tensors.
+        /// </summary>
+        private static readonly bool _debugTensorStats =
+            Environment.GetEnvironmentVariable("SMALLMIND_DEBUG_TENSOR_STATS") == "1";
+
+        private static void LogTensorStats(float[] data, string ggufName, string smName,
+            IInternalRuntimeLogger logger)
+        {
+            float min = float.MaxValue, max = float.MinValue, sum = 0f;
+            int nonFiniteCount = 0;
+            for (int i = 0; i < data.Length; i++)
+            {
+                float v = data[i];
+                if (!float.IsFinite(v)) { nonFiniteCount++; continue; }
+                if (v < min) min = v;
+                if (v > max) max = v;
+                sum += v;
+            }
+            float mean = data.Length > 0 ? sum / data.Length : 0f;
+            string finiteTag = nonFiniteCount > 0 ? $" !! {nonFiniteCount} non-finite !!" : "";
+            logger.LogDebug(
+                $"  [STATS] {smName} ({ggufName}): " +
+                $"n={data.Length} min={min:G6} max={max:G6} mean={mean:G6}{finiteTag}");
         }
 
         /// <summary>
