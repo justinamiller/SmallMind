@@ -89,6 +89,16 @@ namespace SmallMind.Core.Simd
                 return;
             }
 
+            // For small matrices with accumulate=true we must add A×B to the existing C values.
+            // The direct SIMD "store-once" kernels below unconditionally overwrite C, so they are
+            // only safe when accumulate=false (C has already been cleared above).
+            if (accumulate)
+            {
+                LastKernelUsed = MatMulKernel.VectorUnsafe;
+                MatMulScalarAccumulate(A.AsSpan(), B.AsSpan(), C.AsSpan(), M, K, N);
+                return;
+            }
+
             // For small matrices, use direct SIMD path (avoid packing overhead)
             // Select best implementation based on CPU capabilities
             if (Avx512F.IsSupported && K >= 16)
@@ -154,6 +164,18 @@ namespace SmallMind.Core.Simd
                 return;
             }
 
+            // For small matrices with accumulate=true we must add A×B to the existing C values.
+            // The direct SIMD "store-once" kernels below unconditionally overwrite C (they initialise
+            // accumulators to zero), so they are only safe when accumulate=false (C has already been
+            // cleared above).  When accumulate=true we fall back to the scalar ikj loop which correctly
+            // accumulates into whatever C already contains.
+            if (accumulate)
+            {
+                LastKernelUsed = MatMulKernel.VectorUnsafe;
+                MatMulScalarAccumulate(A, B, C, M, K, N);
+                return;
+            }
+
             // For small matrices, use direct SIMD path (avoid packing overhead)
             // Use unsafe fixed pointers for SIMD operations
             unsafe
@@ -181,6 +203,29 @@ namespace SmallMind.Core.Simd
                         LastKernelUsed = MatMulKernel.VectorUnsafe;
                         MatMulVectorUnsafe(pA, pB, pC, M, K, N);
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Scalar ikj-order accumulation kernel: C += A×B.
+        /// Used as the correct fallback for small-matrix accumulate=true to avoid the
+        /// "store-once" SIMD kernels that unconditionally overwrite C.
+        /// </summary>
+        private static void MatMulScalarAccumulate(
+            ReadOnlySpan<float> A, ReadOnlySpan<float> B, Span<float> C,
+            int M, int K, int N)
+        {
+            for (int i = 0; i < M; i++)
+            {
+                for (int k = 0; k < K; k++)
+                {
+                    float aik = A[i * K + k];
+                    if (aik == 0f) continue; // skip zero rows to preserve C
+                    int bRowStart = k * N;
+                    int cRowStart = i * N;
+                    for (int j = 0; j < N; j++)
+                        C[cRowStart + j] += aik * B[bRowStart + j];
                 }
             }
         }

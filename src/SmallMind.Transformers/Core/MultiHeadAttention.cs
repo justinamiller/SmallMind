@@ -51,6 +51,15 @@ namespace SmallMind.Transformers
 
         private bool _isTraining = true;
 
+        /// <summary>
+        /// When true, bypasses all SIMD/blocked optimizations and uses a deterministic scalar path
+        /// for attention score computation and value projection.  Enables differential testing
+        /// against the optimised path and diagnoses numerical drift in SIMD kernels.
+        /// Enable via the SMALLMIND_REFERENCE_ATTENTION=1 environment variable.
+        /// </summary>
+        internal static readonly bool UseReferenceScalarPath =
+            Environment.GetEnvironmentVariable("SMALLMIND_REFERENCE_ATTENTION") == "1";
+
         public List<Tensor> Parameters { get; private set; }
 
         /// <summary>
@@ -697,6 +706,13 @@ namespace SmallMind.Transformers
             // k: (B, nKvHead, kvSeqStride, headSize) - keys (may include cached past, GQA)
             // scores: (B, nHead, T, kSeqLen) - pre-allocated, will be modified in-place
 
+            // Reference scalar path for diagnostic/validation use.
+            if (UseReferenceScalarPath)
+            {
+                ComputeAttentionScoresScalar(q, k, scores, B, T, kSeqLen, kvSeqStride);
+                return;
+            }
+
             float scale = 1.0f / MathF.Sqrt(_headSize);
             int headsPerKvHead = _nHead / _nKvHead;  // For GQA head mapping
 
@@ -839,6 +855,13 @@ namespace SmallMind.Transformers
             // v: (B, nKvHead, kvSeqStride, headSize) - values (may include cached past, GQA)
             // output: (B, nHead, T, headSize) - pre-allocated
 
+            // Reference scalar path for diagnostic/validation use.
+            if (UseReferenceScalarPath)
+            {
+                ApplyAttentionScalar(att, v, output, B, T, vSeqLen, kvSeqStride);
+                return;
+            }
+
             // For each batch and head, perform: output[b,h] = att[b,h] @ v[b,kvh]
             // where att[b,h] is (T × vSeqLen) and v[b,kvh] is (vSeqLen × headSize)
             // resulting in output[b,h] as (T × headSize)
@@ -893,6 +916,118 @@ namespace SmallMind.Transformers
             _proj.Eval();
             _attnDropout.Eval();
             _projDropout.Eval();
+        }
+
+        // ----------------------------------------------------------------
+        // Reference scalar implementations – enabled via SMALLMIND_REFERENCE_ATTENTION=1.
+        // These perform identical maths to the optimised paths but use only scalar
+        // arithmetic (no SIMD, no Parallel.For) so that they can serve as a truth
+        // baseline for differential testing.
+        // ----------------------------------------------------------------
+
+        /// <summary>
+        /// Scalar-only attention score computation (Q @ K^T) with fused causal-mask softmax.
+        /// Identical numerical contract to ComputeAttentionScoresInPlace but uses no SIMD.
+        /// </summary>
+        internal void ComputeAttentionScoresScalar(Tensor q, Tensor k, Tensor scores,
+            int B, int T, int kSeqLen, int kvSeqStride)
+        {
+            float scale = 1.0f / MathF.Sqrt(_headSize);
+            int headsPerKvHead = _nHead / _nKvHead;
+
+            for (int b = 0; b < B; b++)
+            {
+                for (int h = 0; h < _nHead; h++)
+                {
+                    int kvHead = h / headsPerKvHead;
+                    int qOff = (b * _nHead + h) * T * _headSize;
+                    int kOff = (b * _nKvHead + kvHead) * kvSeqStride * _headSize;
+                    int sOff = (b * _nHead + h) * T * kSeqLen;
+
+                    // Q @ K^T  (scalar triple loop, ikj order for cache efficiency)
+                    for (int qi = 0; qi < T; qi++)
+                    {
+                        for (int ki = 0; ki < kSeqLen; ki++)
+                            scores.Data[sOff + qi * kSeqLen + ki] = 0f;
+
+                        for (int d = 0; d < _headSize; d++)
+                        {
+                            float qval = q.Data[qOff + qi * _headSize + d];
+                            for (int ki = 0; ki < kSeqLen; ki++)
+                                scores.Data[sOff + qi * kSeqLen + ki] +=
+                                    qval * k.Data[kOff + ki * _headSize + d];
+                        }
+                    }
+
+                    // Causal-masked softmax, one row at a time
+                    int cacheOffset = kSeqLen - T;
+                    for (int qi = 0; qi < T; qi++)
+                    {
+                        int rowStart = sOff + qi * kSeqLen;
+                        int validCols = cacheOffset + qi + 1;
+
+                        float maxVal = float.NegativeInfinity;
+                        for (int j = 0; j < validCols; j++)
+                        {
+                            float s = scores.Data[rowStart + j] * scale;
+                            if (s > maxVal) maxVal = s;
+                        }
+
+                        float sum = 0f;
+                        for (int j = 0; j < validCols; j++)
+                        {
+                            float e = MathF.Exp(scores.Data[rowStart + j] * scale - maxVal);
+                            scores.Data[rowStart + j] = e;
+                            sum += e;
+                        }
+
+                        float invSum = sum > 0f ? 1f / sum : 0f;
+                        for (int j = 0; j < validCols; j++)
+                            scores.Data[rowStart + j] *= invSum;
+
+                        for (int j = validCols; j < kSeqLen; j++)
+                            scores.Data[rowStart + j] = 0f;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Scalar-only value projection: output = softmax_scores @ V.
+        /// Identical contract to ApplyAttentionInPlace but uses no SIMD.
+        /// </summary>
+        internal void ApplyAttentionScalar(Tensor att, Tensor v, Tensor output,
+            int B, int T, int vSeqLen, int kvSeqStride)
+        {
+            int headsPerKvHead = _nHead / _nKvHead;
+
+            for (int b = 0; b < B; b++)
+            {
+                for (int h = 0; h < _nHead; h++)
+                {
+                    int kvHead = h / headsPerKvHead;
+                    int aOff = (b * _nHead + h) * T * vSeqLen;
+                    int vOff = (b * _nKvHead + kvHead) * kvSeqStride * _headSize;
+                    int oOff = (b * _nHead + h) * T * _headSize;
+
+                    for (int qi = 0; qi < T; qi++)
+                    {
+                        // Zero output row first
+                        for (int d = 0; d < _headSize; d++)
+                            output.Data[oOff + qi * _headSize + d] = 0f;
+
+                        // Weighted sum over value vectors
+                        for (int vi = 0; vi < vSeqLen; vi++)
+                        {
+                            float w = att.Data[aOff + qi * vSeqLen + vi];
+                            if (w == 0f) continue;
+                            for (int d = 0; d < _headSize; d++)
+                                output.Data[oOff + qi * _headSize + d] +=
+                                    w * v.Data[vOff + vi * _headSize + d];
+                        }
+                    }
+                }
+            }
         }
     }
 

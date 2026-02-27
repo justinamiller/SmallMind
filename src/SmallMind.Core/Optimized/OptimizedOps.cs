@@ -10,6 +10,12 @@ namespace SmallMind.Core.Optimized
     {
         private static readonly int VectorSize = Vector<float>.Count;
 
+        /// <summary>
+        /// When true, asserts that attention scores and softmax outputs are finite.
+        /// Controlled via the SMALLMIND_ASSERT_FINITE environment variable ("1" to enable).
+        /// </summary>
+        internal static readonly bool AssertFinite =
+            Environment.GetEnvironmentVariable("SMALLMIND_ASSERT_FINITE") == "1";
 
         /// <summary>
         /// Fused scale + causal mask + softmax. Reduces memory bandwidth.
@@ -52,6 +58,9 @@ namespace SmallMind.Core.Optimized
                 for (int j = 0; j < validCols; j++)
                 {
                     float s = scores[rowStart + j] * scale;
+                    if (AssertFinite && !float.IsFinite(s))
+                        throw new InvalidOperationException(
+                            $"Non-finite attention score at seqLen={seqLen}, row={i}, col={j}: raw={scores[rowStart + j]}, scale={scale}");
                     if (s > maxVal) maxVal = s;
                 }
 
@@ -64,6 +73,10 @@ namespace SmallMind.Core.Optimized
                     output[outRowStart + j] = e;
                     sum += e;
                 }
+
+                if (AssertFinite && !float.IsFinite(sum))
+                    throw new InvalidOperationException(
+                        $"Non-finite softmax sum at seqLen={seqLen}, row={i}: sum={sum}, maxVal={maxVal}");
 
                 // Pass 3: Normalize with SIMD
                 float invSum = 1f / sum;

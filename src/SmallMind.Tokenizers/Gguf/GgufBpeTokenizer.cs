@@ -99,18 +99,23 @@ namespace SmallMind.Tokenizers.Gguf
             }
 
             // Apply BPE merges
+            var skipPairs = new HashSet<(string, string)>();
             while (tokens.Count > 1)
             {
-                var bestPair = FindBestPair(tokens);
+                var bestPair = FindBestPair(tokens, skipPairs);
                 if (bestPair == null)
                     break;
 
                 var (left, right, _) = bestPair.Value;
                 string merged = left + right;
 
-                // Only merge if the result is in vocabulary
+                // Only merge if the result is in vocabulary.
+                // If not (inconsistency in GGUF data), skip this pair and try the next-best merge.
                 if (!_vocab.ContainsKey(merged))
-                    break;
+                {
+                    skipPairs.Add((left, right));
+                    continue;
+                }
 
                 tokens = MergePair(tokens, left, right, merged);
             }
@@ -136,7 +141,8 @@ namespace SmallMind.Tokenizers.Gguf
             return result;
         }
 
-        private (string left, string right, int rank)? FindBestPair(List<string> tokens)
+        private (string left, string right, int rank)? FindBestPair(List<string> tokens,
+            HashSet<(string, string)>? skipPairs = null)
         {
             (string, string, int)? best = null;
             int bestRank = int.MaxValue;
@@ -144,6 +150,8 @@ namespace SmallMind.Tokenizers.Gguf
             for (int i = 0; i < tokens.Count - 1; i++)
             {
                 var pair = (tokens[i], tokens[i + 1]);
+                if (skipPairs != null && skipPairs.Contains(pair))
+                    continue;
                 if (_mergeRanks.TryGetValue(pair, out int rank))
                 {
                     if (rank < bestRank)
