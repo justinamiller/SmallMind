@@ -182,8 +182,32 @@ namespace SmallMind.ConsoleApp.Commands
                             tokenText = $"<id:{idx}>";
                         }
 
-                        System.Console.WriteLine($"  {i + 1,-3} \"{tokenText,-22}\" {idx,7}  {val,9:F4}");
+                        System.Console.WriteLine($"  {i + 1,-3} {idx,7}  \"{tokenText,-22}\" {val,9:F4}");
                     }
+
+                    // One-line quality summary: classify top tokens as English-like or garbage
+                    int printableEnglishCount = 0;
+                    foreach (var (_, idx) in top10)
+                    {
+                        string tokenText;
+                        try { tokenText = tokenizer.Decode(new List<int> { idx }); }
+                        catch { tokenText = string.Empty; }
+
+                        // Count as English-like if it contains an ASCII letter or digit (no LINQ allocation)
+                        bool isEnglishLike = false;
+                        for (int ci = 0; ci < tokenText.Length; ci++)
+                        {
+                            char c = tokenText[ci];
+                            if (c < 128 && char.IsLetterOrDigit(c)) { isEnglishLike = true; break; }
+                        }
+                        if (isEnglishLike) printableEnglishCount++;
+                    }
+
+                    string qualitySummary = printableEnglishCount >= 6
+                        ? "Top-k mostly printable English-like"
+                        : "Top-k dominated by mixed-script/symbol tokens";
+                    System.Console.WriteLine();
+                    System.Console.WriteLine($"Quality summary: {qualitySummary} ({printableEnglishCount}/{top10.Length} English-like tokens)");
 
                     System.Console.WriteLine();
                     System.Console.WriteLine("Interpretation guide:");

@@ -5,7 +5,8 @@ namespace SmallMind.Tokenizers.Gguf
     /// <summary>
     /// Token-table-only tokenizer for GGUF models.
     /// Uses direct vocabulary lookup without BPE merges.
-    /// Provides deterministic fallback when merges are unavailable.
+    /// Supports SentencePiece-style vocabularies (LLaMA family) where word-boundary spaces
+    /// are represented by ▁ (U+2581) prefixed tokens.
     /// </summary>
     internal sealed class GgufTokenTableTokenizer : ITokenizer
     {
@@ -14,6 +15,7 @@ namespace SmallMind.Tokenizers.Gguf
         private readonly Dictionary<string, int> _vocab;
         private readonly List<string> _reverseVocab;
         private readonly SpecialTokens _specialTokens;
+        private readonly bool _isSentencePiece; // True when vocab uses ▁ (U+2581) word-boundary markers
 
         public GgufTokenTableTokenizer(
             Dictionary<string, int> vocab,
@@ -23,6 +25,17 @@ namespace SmallMind.Tokenizers.Gguf
             _vocab = vocab ?? throw new ArgumentNullException(nameof(vocab));
             _reverseVocab = reverseVocab ?? throw new ArgumentNullException(nameof(reverseVocab));
             _specialTokens = specialTokens ?? throw new ArgumentNullException(nameof(specialTokens));
+
+            // Detect SentencePiece vocabulary: any token starting with ▁ (U+2581) signals
+            // that this vocab uses word-boundary space markers (LLaMA/Mistral family).
+            foreach (var token in vocab.Keys)
+            {
+                if (token.Length > 0 && token[0] == '\u2581')
+                {
+                    _isSentencePiece = true;
+                    break;
+                }
+            }
         }
 
         public int VocabSize => _vocab.Count;
@@ -43,19 +56,34 @@ namespace SmallMind.Tokenizers.Gguf
             if (string.IsNullOrEmpty(text))
                 return new List<int>();
 
-            var tokens = new List<int>();
+            // SentencePiece normalization: replace spaces with ▁ (U+2581) and
+            // prepend ▁ at the start to mark the first word boundary.
+            // e.g. "The capital of France" → "▁The▁capital▁of▁France"
+            string normalized = text;
+            if (_isSentencePiece)
+            {
+                normalized = text.Replace(' ', '\u2581');
+                if (!normalized.StartsWith('\u2581'))
+                    normalized = "\u2581" + normalized;
+            }
 
-            // Simple greedy tokenization: longest match first
+            // Pre-seed list with BOS so we avoid O(n) Insert(0) later
+            bool shouldAddBos = _specialTokens.BosTokenId >= 0;
+            var tokens = new List<int>();
+            if (shouldAddBos)
+                tokens.Add(_specialTokens.BosTokenId);
+
+            // Greedy longest-match tokenization
             int pos = 0;
-            while (pos < text.Length)
+            while (pos < normalized.Length)
             {
                 int longestMatchLen = 0;
                 int matchedTokenId = -1;
 
                 // Try to find the longest matching token starting at current position
-                for (int len = Math.Min(text.Length - pos, MaxTokenLength); len > 0; len--)
+                for (int len = Math.Min(normalized.Length - pos, MaxTokenLength); len > 0; len--)
                 {
-                    string candidate = text.Substring(pos, len);
+                    string candidate = normalized.Substring(pos, len);
                     if (_vocab.TryGetValue(candidate, out int tokenId))
                     {
                         longestMatchLen = len;
@@ -79,7 +107,7 @@ namespace SmallMind.Tokenizers.Gguf
                     else
                     {
                         // Try to encode as byte tokens
-                        byte b = (byte)text[pos];
+                        byte b = (byte)normalized[pos];
                         string byteToken = $"<0x{b:X2}>";
                         if (_vocab.TryGetValue(byteToken, out int byteTokenId))
                         {
@@ -89,6 +117,10 @@ namespace SmallMind.Tokenizers.Gguf
                     pos++;
                 }
             }
+
+            // If encoding produced nothing (empty text after normalization), don't return bare BOS
+            if (shouldAddBos && tokens.Count == 1)
+                tokens.Clear();
 
             return tokens;
         }
