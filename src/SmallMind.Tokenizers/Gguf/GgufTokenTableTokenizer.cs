@@ -145,9 +145,20 @@ namespace SmallMind.Tokenizers.Gguf
             if (tokens == null || tokens.Count == 0)
                 return string.Empty;
 
+            // Skip BOS token at start so the decoded output length matches the original prompt
+            // length. This is required for ValidateCoherence's output.Substring(prompt.Length)
+            // to work correctly (mirrors GgufBpeTokenizer.Decode behaviour).
+            int startIdx = (_specialTokens.BosTokenId >= 0 && tokens[0] == _specialTokens.BosTokenId) ? 1 : 0;
+
             var sb = new StringBuilder();
-            foreach (var tokenId in tokens)
+            for (int tokenIndex = startIdx; tokenIndex < tokens.Count; tokenIndex++)
             {
+                int tokenId = tokens[tokenIndex];
+
+                // Skip EOS token so "</s>" does not appear in the decoded output.
+                if (_specialTokens.EosTokenId >= 0 && tokenId == _specialTokens.EosTokenId)
+                    continue;
+
                 if (tokenId >= 0 && tokenId < _reverseVocab.Count)
                 {
                     string tokenStr = _reverseVocab[tokenId];
@@ -167,7 +178,15 @@ namespace SmallMind.Tokenizers.Gguf
                 }
             }
 
-            return sb.ToString();
+            // SentencePiece models prepend a word-boundary space to the first real token
+            // (e.g. "▁What" → " What"). Strip that leading space ONLY when a BOS token was
+            // present and has been skipped, because in that case the ▁ represents the sentence
+            // start boundary (not a real space in the original text). This keeps
+            // output.Substring(prompt.Length) aligned with the prompt in ValidateCoherence.
+            // Use a start offset into the StringBuilder instead of Remove(0,1) to avoid O(n)
+            // internal buffer shifting.
+            int resultStart = (_isSentencePiece && startIdx > 0 && sb.Length > 0 && sb[0] == ' ') ? 1 : 0;
+            return resultStart > 0 ? sb.ToString(resultStart, sb.Length - resultStart) : sb.ToString();
         }
 
         public int Decode(ReadOnlySpan<int> tokens, Span<byte> utf8Out)

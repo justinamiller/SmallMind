@@ -192,7 +192,7 @@ namespace SmallMind.ConsoleApp.Commands
             // Extract generated portion (after prompt)
             string generated = output.Length > prompt.Length
                 ? output.Substring(prompt.Length).TrimStart()
-                : output;
+                : string.Empty;
 
             if (string.IsNullOrWhiteSpace(generated))
             {

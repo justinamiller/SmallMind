@@ -203,7 +203,9 @@ namespace SmallMind.Tests
         [Fact]
         public void GgufTokenTableTokenizer_Decode_ReplacesLeadingSpaceMarker_WithRegularSpace()
         {
-            // Arrange: LLaMA-style vocabulary
+            // Arrange: LLaMA-style vocabulary WITHOUT a BOS token configured.
+            // When no BOS is configured the leading ▁ in the first token is preserved
+            // as a regular space (it represents a real word-boundary space in the output).
             var vocab = new Dictionary<string, int>
             {
                 ["▁The"] = 0,
@@ -224,9 +226,102 @@ namespace SmallMind.Tests
             // Act
             var decoded = tokenizer.Decode(new List<int> { 0, 1, 2, 3, 4, 5, 6 });
 
-            // Assert
+            // Assert: no BOS configured so leading space is preserved (first ▁ → space)
             Assert.Equal(" The capital of France is Paris.", decoded);
             Assert.DoesNotContain('\u2581', decoded);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_Decode_SkipsBosToken_AndStripsLeadingSpace()
+        {
+            // Arrange: LLaMA/TinyLlama-style vocabulary with BOS configured.
+            // When BOS is present at the start the leading ▁ space must be stripped so
+            // output.Substring(prompt.Length) works correctly in ValidateCoherence.
+            var vocab = new Dictionary<string, int>
+            {
+                ["<s>"]     = 1,   // BOS
+                ["</s>"]    = 2,   // EOS
+                ["▁What"]   = 3,
+                ["▁is"]     = 4,
+                ["▁Paris"]  = 5,
+                ["?"]       = 6,
+            };
+            var reverseVocab = new List<string>
+                { "<unk>", "<s>", "</s>", "▁What", "▁is", "▁Paris", "?" };
+            var specialTokens = new SpecialTokens { BosTokenId = 1, EosTokenId = 2 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Act: decode [BOS, ▁What, ▁is, ?, ▁Paris]
+            var decoded = tokenizer.Decode(new List<int> { 1, 3, 4, 6, 5 });
+
+            // Assert: BOS skipped AND leading space stripped → starts directly with "What"
+            Assert.Equal("What is? Paris", decoded);
+            Assert.DoesNotContain('\u2581', decoded);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_Decode_SkipsEosToken()
+        {
+            // Arrange: EOS should not appear as "</s>" in the decoded output.
+            var vocab = new Dictionary<string, int>
+            {
+                ["<s>"]   = 1,
+                ["</s>"]  = 2,
+                ["▁Hi"]   = 3,
+            };
+            var reverseVocab = new List<string> { "<unk>", "<s>", "</s>", "▁Hi" };
+            var specialTokens = new SpecialTokens { BosTokenId = 1, EosTokenId = 2 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Act: context is [BOS, ▁Hi, EOS] — the EOS was the first generated token
+            var decoded = tokenizer.Decode(new List<int> { 1, 3, 2 });
+
+            // Assert: BOS and EOS both absent; leading space from ▁Hi stripped (BOS was skipped)
+            Assert.Equal("Hi", decoded);
+            Assert.DoesNotContain("</s>", decoded);
+            Assert.DoesNotContain("<s>", decoded);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_Decode_WithBos_OutputMatchesPromptLength_ForAlignment()
+        {
+            // Arrange: verify that encode → generate-nothing → decode produces output that
+            // starts with exactly the original prompt text (enabling prompt.Substring(promptLen)
+            // to correctly extract the generated portion in ValidateCoherence).
+            const string prompt = "What is?";
+
+            var vocab = new Dictionary<string, int>
+            {
+                ["<s>"]     = 1,
+                ["</s>"]    = 2,
+                ["▁What"]   = 3,
+                ["▁is"]     = 4,
+                ["?"]       = 5,
+            };
+            var reverseVocab = new List<string>
+                { "<unk>", "<s>", "</s>", "▁What", "▁is", "?" };
+            var specialTokens = new SpecialTokens { BosTokenId = 1, EosTokenId = 2 };
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Simulate: encode the prompt
+            var encoded = tokenizer.Encode(prompt);  // [1, 3, 4, 5]
+
+            // Simulate: model generates EOS immediately (no new content)
+            var context = new List<int>(encoded) { 2 };
+
+            // Decode the full context
+            var decoded = tokenizer.Decode(context);
+
+            // Assert: decoded output is exactly the prompt (BOS and EOS stripped, leading
+            // space removed), so output.Substring(prompt.Length) == ""
+            Assert.Equal(prompt, decoded);
+            Assert.Equal(prompt.Length, decoded.Length);
         }
 
         [Fact]
