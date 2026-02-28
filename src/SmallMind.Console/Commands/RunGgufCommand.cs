@@ -50,22 +50,26 @@ namespace SmallMind.ConsoleApp.Commands
                 }
             }
 
+            // Print banner to stdout FIRST so there is always visible output
+            System.Console.WriteLine($"=== GGUF Validation Test ===");
+            System.Console.WriteLine($"Model: {Path.GetFileName(ggufPath)}");
+            System.Console.WriteLine($"Path:  {ggufPath}");
+            System.Console.WriteLine($"Prompt: \"{prompt}\"");
+            System.Console.WriteLine($"Max tokens: {maxTokens}");
+            System.Console.WriteLine($"Temperature: {temperature}");
+            System.Console.WriteLine($"Seed: {seed}");
+            System.Console.WriteLine();
+
             if (!File.Exists(ggufPath))
             {
-                System.Console.Error.WriteLine($"Error: GGUF file not found: {ggufPath}");
+                string msg = $"Error: GGUF file not found: {ggufPath}";
+                System.Console.WriteLine(msg);
+                System.Console.Error.WriteLine(msg);
                 return 1;
             }
 
             try
             {
-                System.Console.WriteLine($"=== GGUF Validation Test ===");
-                System.Console.WriteLine($"Model: {Path.GetFileName(ggufPath)}");
-                System.Console.WriteLine($"Prompt: \"{prompt}\"");
-                System.Console.WriteLine($"Max tokens: {maxTokens}");
-                System.Console.WriteLine($"Temperature: {temperature}");
-                System.Console.WriteLine($"Seed: {seed}");
-                System.Console.WriteLine();
-
                 // Load model from GGUF
                 var loadStopwatch = Stopwatch.StartNew();
                 System.Console.WriteLine("Loading GGUF model...");
@@ -134,11 +138,17 @@ namespace SmallMind.ConsoleApp.Commands
             }
             catch (Exception ex)
             {
-                System.Console.Error.WriteLine($"Error: {ex.Message}");
+                string msg = $"Error: {ex.Message}";
+                System.Console.WriteLine(msg);
+                System.Console.Error.WriteLine(msg);
                 if (ex.InnerException != null)
                 {
-                    System.Console.Error.WriteLine($"Inner: {ex.InnerException.Message}");
+                    string inner = $"Inner: {ex.InnerException.Message}";
+                    System.Console.WriteLine(inner);
+                    System.Console.Error.WriteLine(inner);
                 }
+                System.Console.WriteLine();
+                System.Console.WriteLine($"Stack trace:\n{ex.StackTrace}");
                 System.Console.Error.WriteLine(ex.StackTrace);
                 return 1;
             }

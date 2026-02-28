@@ -52,17 +52,22 @@ namespace SmallMind.ConsoleApp.Commands
                 }
             }
 
-            if (!File.Exists(ggufPath))
-            {
-                System.Console.Error.WriteLine($"Error: GGUF file not found: {ggufPath}");
-                return 1;
-            }
-
+            // Print banner to stdout FIRST so there is always visible output,
+            // even if the file is missing or loading subsequently fails.
             System.Console.WriteLine("=== GGUF Diagnostics ===");
             System.Console.WriteLine($"Model:  {Path.GetFileName(ggufPath)}");
+            System.Console.WriteLine($"Path:   {ggufPath}");
             System.Console.WriteLine($"Prompt: \"{prompt}\"");
             System.Console.WriteLine($"Seed:   {seed}");
             System.Console.WriteLine();
+
+            if (!File.Exists(ggufPath))
+            {
+                string msg = $"Error: GGUF file not found: {ggufPath}";
+                System.Console.WriteLine(msg);          // stdout – always visible
+                System.Console.Error.WriteLine(msg);    // stderr – for tools that capture it
+                return 1;
+            }
 
             try
             {
@@ -285,17 +290,28 @@ namespace SmallMind.ConsoleApp.Commands
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("required tensor"))
             {
-                // Hard-fail from GgufModelLoader — missing critical weights
-                System.Console.ForegroundColor = ConsoleColor.Red;
-                System.Console.Error.WriteLine($"\nFATAL: {ex.Message}");
-                System.Console.ResetColor();
+                // Exit code 2: Hard-fail from GgufModelLoader — one or more critical weight
+                // tensors (e.g. token embeddings, attention QKV, FFN) were not loaded from the
+                // GGUF file.  The model cannot produce valid output.  Exit code 1 covers all
+                // other load/runtime errors.
+                string msg = $"\nFATAL: {ex.Message}";
+                System.Console.WriteLine(msg);              // stdout – always visible
+                System.Console.Error.WriteLine(msg);        // stderr
                 return 2;
             }
             catch (Exception ex)
             {
-                System.Console.Error.WriteLine($"Error: {ex.Message}");
+                string msg = $"Error: {ex.Message}";
+                System.Console.WriteLine(msg);
+                System.Console.Error.WriteLine(msg);
                 if (ex.InnerException != null)
-                    System.Console.Error.WriteLine($"Inner: {ex.InnerException.Message}");
+                {
+                    string inner = $"Inner: {ex.InnerException.Message}";
+                    System.Console.WriteLine(inner);
+                    System.Console.Error.WriteLine(inner);
+                }
+                System.Console.WriteLine();
+                System.Console.WriteLine($"Stack trace:\n{ex.StackTrace}");
                 return 1;
             }
         }
