@@ -434,4 +434,256 @@ namespace SmallMind.Tests
             Assert.InRange((double)spaceCount / decoded.Length, 0.05, 0.40);
         }
     }
+
+    /// <summary>
+    /// Tests for GgufTokenTableTokenizer SentencePiece-aware encoding.
+    /// Validates the llama-model routing fix: token-table tokenizer must handle
+    /// ▁ word-boundary markers so that LLaMA-family prompts do not collapse into UNK spam.
+    /// </summary>
+    public class GgufTokenTableTokenizerEncodeTests
+    {
+        private static (Dictionary<string, int> vocab, List<string> reverseVocab, SpecialTokens specialTokens)
+            BuildLlamaVocab()
+        {
+            // Minimal LLaMA-style SentencePiece vocabulary
+            var vocab = new Dictionary<string, int>
+            {
+                ["<unk>"]     = 0,
+                ["<s>"]       = 1,   // BOS
+                ["</s>"]      = 2,   // EOS
+                ["▁"]         = 3,   // standalone ▁ (used for detection)
+                ["▁The"]      = 4,
+                ["▁capital"]  = 5,
+                ["▁of"]       = 6,
+                ["▁France"]   = 7,
+                ["▁is"]       = 8,
+                ["▁Paris"]    = 9,
+                ["."]         = 10,
+            };
+            var reverseVocab = new List<string>
+                { "<unk>", "<s>", "</s>", "▁", "▁The", "▁capital", "▁of", "▁France", "▁is", "▁Paris", "." };
+
+            var specialTokens = new SpecialTokens
+            {
+                BosTokenId = 1,
+                EosTokenId = 2,
+                UnkTokenId = 0,
+            };
+
+            return (vocab, reverseVocab, specialTokens);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_Encode_SentencePiece_DoesNotCollapseToUnk()
+        {
+            // Arrange: LLaMA-style vocab with ▁ word-boundary tokens
+            var (vocab, reverseVocab, specialTokens) = BuildLlamaVocab();
+            specialTokens.BosTokenId = -1; // No BOS for simpler assertion
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Act: encode a phrase that should map cleanly to SentencePiece tokens
+            var tokens = tokenizer.Encode("The capital of France is");
+
+            // Assert: should NOT produce all-UNK tokens (id=0)
+            int unkCount = tokens.Count(t => t == 0);
+            Assert.True(unkCount < tokens.Count, "All tokens are UNK - SentencePiece normalization not applied");
+
+            // Should contain the expected vocab IDs for ▁The, ▁capital, ▁of, ▁France, ▁is
+            Assert.Contains(4, tokens);  // ▁The
+            Assert.Contains(5, tokens);  // ▁capital
+            Assert.Contains(6, tokens);  // ▁of
+            Assert.Contains(7, tokens);  // ▁France
+            Assert.Contains(8, tokens);  // ▁is
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_Encode_SentencePiece_PrependsBos_WhenConfigured()
+        {
+            // Arrange: BOS configured
+            var (vocab, reverseVocab, specialTokens) = BuildLlamaVocab();
+            // specialTokens.BosTokenId = 1 (set in BuildLlamaVocab)
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Act
+            var tokens = tokenizer.Encode("The capital of France is");
+
+            // Assert: first token should be BOS
+            Assert.NotEmpty(tokens);
+            Assert.Equal(1, tokens[0]);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_Encode_SentencePiece_DoesNotPrependBos_WhenNotConfigured()
+        {
+            // Arrange: no BOS
+            var (vocab, reverseVocab, specialTokens) = BuildLlamaVocab();
+            specialTokens.BosTokenId = -1;
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Act
+            var tokens = tokenizer.Encode("The capital of France is");
+
+            // Assert: first token should NOT be 1 (<s>)
+            Assert.NotEmpty(tokens);
+            Assert.NotEqual(1, tokens[0]);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_Encode_SentencePiece_LeadingSpaceNotDoubled()
+        {
+            // Arrange: input already has leading space (should normalize to same as without)
+            var (vocab, reverseVocab, specialTokens) = BuildLlamaVocab();
+            specialTokens.BosTokenId = -1;
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Act
+            var tokensNoLeadSpace = tokenizer.Encode("The capital");
+            var tokensLeadSpace   = tokenizer.Encode(" The capital");
+
+            // Both should produce the same token sequence (▁ is not doubled)
+            Assert.Equal(tokensNoLeadSpace, tokensLeadSpace);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_BosTokenId_ExposedCorrectlyInInfo()
+        {
+            // Arrange & Act: verify BOS/EOS IDs are exposed correctly (behavior unchanged)
+            var (vocab, reverseVocab, specialTokens) = BuildLlamaVocab();
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Assert: Info.BosTokenId and EosTokenId match what was provided
+            Assert.Equal(1, tokenizer.Info.BosTokenId);
+            Assert.Equal(2, tokenizer.Info.EosTokenId);
+            Assert.True(tokenizer.Info.AddBos);
+        }
+
+        [Fact]
+        public void GgufTokenTableTokenizer_NonSentencePiece_Vocab_EncodesWithoutNormalization()
+        {
+            // Arrange: vocab without ▁ tokens (GPT-2 style)
+            var vocab = new Dictionary<string, int>
+            {
+                ["hello"] = 0,
+                ["world"] = 1,
+                [" "]     = 2,
+            };
+            var reverseVocab = new List<string> { "hello", "world", " " };
+            var specialTokens = new SpecialTokens();
+
+            var tokenizer = new SmallMind.Tokenizers.Gguf.GgufTokenTableTokenizer(
+                vocab, reverseVocab, specialTokens);
+
+            // Act: encode "hello world" - no ▁ normalization expected
+            var tokens = tokenizer.Encode("hello world");
+
+            // Assert: should find "hello", " ", "world"
+            Assert.Contains(0, tokens);  // "hello"
+            Assert.Contains(2, tokens);  // " "
+            Assert.Contains(1, tokens);  // "world"
+        }
+    }
+
+    /// <summary>
+    /// Tests for GgufTokenizerFactory llama routing fix.
+    /// Validates that llama models always use GgufTokenTableTokenizer even when BPE merges are present.
+    /// </summary>
+    public class GgufTokenizerFactoryRoutingTests
+    {
+        private static Dictionary<string, object> BuildLlamaMetadata(bool includeMerges)
+        {
+            var tokensArray = new object[]
+            {
+                "<unk>", "<s>", "</s>", "▁", "▁The", "▁capital", "▁of", "▁France"
+            };
+
+            var metadata = new Dictionary<string, object>
+            {
+                ["tokenizer.ggml.model"]  = "llama",
+                ["tokenizer.ggml.tokens"] = tokensArray,
+                ["tokenizer.ggml.bos_token_id"] = (uint)1,
+                ["tokenizer.ggml.eos_token_id"] = (uint)2,
+            };
+
+            if (includeMerges)
+            {
+                metadata["tokenizer.ggml.merges"] = new object[] { "▁ T", "▁T h", "▁Th e" };
+            }
+
+            return metadata;
+        }
+
+        [Fact]
+        public void GgufTokenizerFactory_LlamaWithMerges_UsesTokenTableTokenizer()
+        {
+            // Arrange: llama metadata WITH merges (previously would have used BPE)
+            var metadata = BuildLlamaMetadata(includeMerges: true);
+
+            // Act
+            var (tokenizer, diagnostics) = SmallMind.Tokenizers.Gguf.GgufTokenizerFactory.CreateTokenizer(metadata);
+
+            // Assert: must be token-table tokenizer, NOT BPE
+            Assert.NotNull(tokenizer);
+            Assert.Equal("GgufTokenTableTokenizer", diagnostics.TokenizerType);
+        }
+
+        [Fact]
+        public void GgufTokenizerFactory_LlamaWithoutMerges_UsesTokenTableTokenizer()
+        {
+            // Arrange: llama metadata without merges (already worked before, verify still works)
+            var metadata = BuildLlamaMetadata(includeMerges: false);
+
+            // Act
+            var (tokenizer, diagnostics) = SmallMind.Tokenizers.Gguf.GgufTokenizerFactory.CreateTokenizer(metadata);
+
+            // Assert
+            Assert.NotNull(tokenizer);
+            Assert.Equal("GgufTokenTableTokenizer", diagnostics.TokenizerType);
+        }
+
+        [Fact]
+        public void GgufTokenizerFactory_LlamaWithMerges_AddsDiagnosticIssue()
+        {
+            // Arrange
+            var metadata = BuildLlamaMetadata(includeMerges: true);
+
+            // Act
+            var (_, diagnostics) = SmallMind.Tokenizers.Gguf.GgufTokenizerFactory.CreateTokenizer(metadata);
+
+            // Assert: diagnostics should note the llama token-table forced path
+            Assert.True(diagnostics.HasIssues);
+            Assert.Contains(diagnostics.Issues, i =>
+                i.message.Contains("llama", StringComparison.OrdinalIgnoreCase) ||
+                i.message.Contains("token-table", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public void GgufTokenizerFactory_Gpt2WithMerges_UsesBpeTokenizer()
+        {
+            // Arrange: gpt2 with merges should still use BPE tokenizer
+            var tokensArray = new object[] { "<|endoftext|>", "h", "e", "l", "o", "he", "ll", "lo" };
+            var metadata = new Dictionary<string, object>
+            {
+                ["tokenizer.ggml.model"]  = "gpt2",
+                ["tokenizer.ggml.tokens"] = tokensArray,
+                ["tokenizer.ggml.merges"] = new object[] { "h e", "l l", "l o" },
+            };
+
+            // Act
+            var (tokenizer, diagnostics) = SmallMind.Tokenizers.Gguf.GgufTokenizerFactory.CreateTokenizer(metadata);
+
+            // Assert: gpt2 with merges → BPE tokenizer
+            Assert.NotNull(tokenizer);
+            Assert.Equal("GgufBpeTokenizer", diagnostics.TokenizerType);
+        }
+    }
 }

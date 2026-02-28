@@ -107,7 +107,17 @@ namespace SmallMind.Tokenizers.Gguf
             // Determine which tokenizer to create
             ITokenizer? tokenizer;
 
-            if (tokenizerModel == "gpt2" || tokenizerModel == "llama")
+            if (tokenizerModel == "llama")
+            {
+                // LLaMA uses SentencePiece-style vocabulary (▁ word-boundary markers).
+                // Always route to GgufTokenTableTokenizer regardless of whether BPE merges exist,
+                // because BPE merge application over SentencePiece characters yields incoherent tokens.
+                tokenizer = new GgufTokenTableTokenizer(vocab, reverseVocab, specialTokens);
+                logger.Info("Created GGUF token-table tokenizer for llama model");
+                diagnostics.AddIssue(RuntimeDegradeReason.TokenizerFallbackTokenTableOnly,
+                    "Llama model: forced token-table path (SentencePiece-compatible)");
+            }
+            else if (tokenizerModel == "gpt2")
             {
                 if (hasMerges)
                 {

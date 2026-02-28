@@ -160,6 +160,9 @@ namespace SmallMind.Runtime
             logger.LogInfo($"Tensor reads: {mainLoopReads} (main loop) + {qkvReads} (Q/K/V merge) = {mainLoopReads + qkvReads} total");
             logger.LogDebug($"Q/K/V tensors skipped in main loop: {qkvSkipped}");
 
+            // Structured diagnostics for critical tensor groups
+            LogTensorGroupCoverage(loadedParams, config, logger);
+
             // Build the set of SmallMind parameter names that THIS GGUF file is expected to provide,
             // derived from the tensor mapping.  Tensors absent from the mapping (e.g. LLaMA/Mistral
             // bias tensors that the architecture simply does not use) are optional by design and must
@@ -1278,6 +1281,63 @@ namespace SmallMind.Runtime
                    paramName.Contains("attn_qkv") ||
                    paramName.Contains("attn_output") ||
                    paramName.Contains("ffn");
+        }
+
+        /// <summary>
+        /// Log structured diagnostics for critical tensor groups to help isolate
+        /// weight-mapping or dequantization issues.
+        /// </summary>
+        private static void LogTensorGroupCoverage(HashSet<string> loadedParams, ModelConfig config,
+            IInternalRuntimeLogger logger)
+        {
+            const int MaxMissingToShow = 3;
+
+            // ── Global tensors ─────────────────────────────────────────────────
+            var globalGroup = new[] { "token_embd.weight", "output_norm.weight", "output.weight" };
+            var globalMissing = globalGroup.Where(n => !loadedParams.Contains(n)).ToList();
+            logger.LogInfo($"[TensorCoverage] Global: {globalGroup.Length - globalMissing.Count}/{globalGroup.Length} present" +
+                (globalMissing.Count > 0
+                    ? $" | missing: {string.Join(", ", globalMissing)}"
+                    : string.Empty));
+
+            if (config.BlockCount <= 0)
+                return;
+
+            // ── Per-layer tensors ───────────────────────────────────────────────
+            // Groups: attn_qkv, attn_output, ffn_up, ffn_down, ffn_gate (optional)
+            var layerGroupDefs = new (string groupName, Func<int, string> nameFor)[]
+            {
+                ("attn_qkv",    i => $"blk.{i}.attn_qkv.weight"),
+                ("attn_output", i => $"blk.{i}.attn_output.weight"),
+                ("ffn_up",      i => $"blk.{i}.ffn_up.weight"),
+                ("ffn_down",    i => $"blk.{i}.ffn_down.weight"),
+                ("ffn_gate",    i => $"blk.{i}.ffn_gate.weight"),
+            };
+
+            foreach (var (groupName, nameFor) in layerGroupDefs)
+            {
+                int present = 0;
+                var missing = new List<string>();
+                for (int i = 0; i < config.BlockCount; i++)
+                {
+                    string paramName = nameFor(i);
+                    if (loadedParams.Contains(paramName))
+                        present++;
+                    else
+                        missing.Add(paramName);
+                }
+
+                // ffn_gate is only present in SwiGLU models; skip noisy "all missing" report for it
+                if (groupName == "ffn_gate" && present == 0)
+                    continue;
+
+                string missingSnippet = missing.Count > 0
+                    ? $" | first missing: {string.Join(", ", missing.Take(MaxMissingToShow))}" +
+                      (missing.Count > MaxMissingToShow ? $" (+{missing.Count - MaxMissingToShow} more)" : string.Empty)
+                    : string.Empty;
+
+                logger.LogInfo($"[TensorCoverage] {groupName}: {present}/{config.BlockCount} layers{missingSnippet}");
+            }
         }
 
         /// <summary>
