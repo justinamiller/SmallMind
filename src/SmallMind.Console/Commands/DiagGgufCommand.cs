@@ -2,6 +2,7 @@ using SmallMind.Abstractions.Telemetry;
 using SmallMind.Core.Core;
 using SmallMind.Runtime;
 using SmallMind.Runtime.Telemetry;
+using SmallMind.Transformers;
 
 namespace SmallMind.ConsoleApp.Commands
 {
@@ -32,6 +33,7 @@ namespace SmallMind.ConsoleApp.Commands
             string ggufPath = args[0];
             string prompt = "The capital of France is";
             int seed = 42;
+            bool runDiff = false;
 
             for (int i = 1; i < args.Length; i++)
             {
@@ -43,6 +45,10 @@ namespace SmallMind.ConsoleApp.Commands
                 {
                     if (int.TryParse(args[++i], out int s))
                         seed = s;
+                }
+                else if (args[i] == "--diff")
+                {
+                    runDiff = true;
                 }
             }
 
@@ -215,6 +221,64 @@ namespace SmallMind.ConsoleApp.Commands
                     System.Console.WriteLine("  • Top tokens are all punctuation/garbage  → check weight loading / Q4_0 dequant");
                     System.Console.WriteLine("  • Logit range is extremely narrow (<1.0)  → check RoPE / layer-norm params");
                     System.Console.WriteLine("  • NaN or Inf present                      → numerical instability in forward pass");
+
+                    // ── 7. Optional differential check: optimized vs reference scalar attention ──
+                    if (runDiff)
+                    {
+                        System.Console.WriteLine();
+                        System.Console.WriteLine("--- Differential Check (Optimized vs Reference Scalar Attention) ---");
+
+                        // Run a second forward pass with the scalar reference path enabled.
+                        // This isolates whether SIMD attention kernels diverge from the scalar contract.
+                        bool prevFlag = MultiHeadAttention.UseReferenceScalarPath;
+                        try
+                        {
+                            MultiHeadAttention.UseReferenceScalarPath = true;
+                            // Reuse inputTensor – Forward does not mutate the input data
+                            var refOutput = model.Forward(inputTensor);
+
+                            float[] refLogits;
+                            if (shape.Length >= 2 && refOutput.Size > vocabSize)
+                            {
+                                int offset2 = refOutput.Size - vocabSize;
+                                refLogits = new float[vocabSize];
+                                Array.Copy(refOutput.Data, offset2, refLogits, 0, vocabSize);
+                            }
+                            else
+                            {
+                                refLogits = refOutput.Data;
+                            }
+
+                            // Compute max absolute difference between the two logit vectors
+                            float maxDiff = 0f;
+                            float sumSqDiff = 0f;
+                            for (int i = 0; i < vocabSize; i++)
+                            {
+                                float diff = MathF.Abs(lastLogits[i] - refLogits[i]);
+                                if (diff > maxDiff) maxDiff = diff;
+                                sumSqDiff += diff * diff;
+                            }
+                            float rmseDiff = MathF.Sqrt(sumSqDiff / vocabSize);
+
+                            System.Console.WriteLine($"Max |optimized - reference| : {maxDiff:F6}");
+                            System.Console.WriteLine($"RMSE(optimized - reference) : {rmseDiff:F6}");
+
+                            if (maxDiff < 1e-4f)
+                            {
+                                System.Console.WriteLine("Diagnosis: Attention SIMD is numerically consistent with scalar reference.");
+                                System.Console.WriteLine("           → If logits are still garbage, the issue is in weight loading/dequant, NOT attention math.");
+                            }
+                            else
+                            {
+                                System.Console.WriteLine($"Diagnosis: ATTENTION SIMD DIVERGENCE DETECTED (maxDiff={maxDiff:F4}).");
+                                System.Console.WriteLine("           → Set SMALLMIND_REFERENCE_ATTENTION=1 to reproduce consistently.");
+                            }
+                        }
+                        finally
+                        {
+                            MultiHeadAttention.UseReferenceScalarPath = prevFlag;
+                        }
+                    }
                 }
 
                 return (hasNaN || hasInf) ? 2 : 0;
@@ -246,6 +310,8 @@ namespace SmallMind.ConsoleApp.Commands
             System.Console.WriteLine("Options:");
             System.Console.WriteLine("  --prompt <text>     Prompt for first-step analysis (default: \"The capital of France is\")");
             System.Console.WriteLine("  --seed <n>          Random seed (default: 42)");
+            System.Console.WriteLine("  --diff              Run optimized vs reference scalar attention and report max logit diff.");
+            System.Console.WriteLine("                      A small diff confirms SIMD is correct; a large diff points to attention bugs.");
             System.Console.WriteLine("  --help, -h          Show this help");
             System.Console.WriteLine();
             System.Console.WriteLine("Output includes:");
@@ -253,6 +319,7 @@ namespace SmallMind.ConsoleApp.Commands
             System.Console.WriteLine("  - Tensor load coverage summary (from loader INFO log)");
             System.Console.WriteLine("  - NaN/Inf check on first-step logits");
             System.Console.WriteLine("  - Top-10 next-token predictions with decoded text");
+            System.Console.WriteLine("  - (--diff) Max absolute difference between optimized and reference logits");
             System.Console.WriteLine();
             System.Console.WriteLine("Exit codes:");
             System.Console.WriteLine("  0 - Diagnostics completed, no NaN/Inf detected");

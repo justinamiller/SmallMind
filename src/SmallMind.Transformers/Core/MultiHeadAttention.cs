@@ -55,9 +55,10 @@ namespace SmallMind.Transformers
         /// When true, bypasses all SIMD/blocked optimizations and uses a deterministic scalar path
         /// for attention score computation and value projection.  Enables differential testing
         /// against the optimised path and diagnoses numerical drift in SIMD kernels.
-        /// Enable via the SMALLMIND_REFERENCE_ATTENTION=1 environment variable.
+        /// Enable via the SMALLMIND_REFERENCE_ATTENTION=1 environment variable, or set directly
+        /// (e.g. from DiagGgufCommand --diff mode) for programmatic per-run control.
         /// </summary>
-        internal static readonly bool UseReferenceScalarPath =
+        internal static bool UseReferenceScalarPath =
             Environment.GetEnvironmentVariable("SMALLMIND_REFERENCE_ATTENTION") == "1";
 
         public List<Tensor> Parameters { get; private set; }
