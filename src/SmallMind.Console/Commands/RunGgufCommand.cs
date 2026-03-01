@@ -109,12 +109,24 @@ namespace SmallMind.ConsoleApp.Commands
                 string output = await session.GenerateAsync(prompt);
 
                 genStopwatch.Stop();
-                System.Console.WriteLine(output);
+
+                // Encode prompt and full output once; reuse for both token counting and display.
+                // Decoding only the generated-token slice avoids the fragile string-length
+                // comparison and is robust to Unicode normalization differences.
+                var promptTokenIds = tokenizer.Encode(prompt);
+                var outputTokenIds = tokenizer.Encode(output);
+                int outputTokens = Math.Max(0, outputTokenIds.Count - promptTokenIds.Count);
+
+                // Decode only the newly generated tokens for display.
+                string generated = outputTokens > 0
+                    ? tokenizer.Decode(outputTokenIds.GetRange(promptTokenIds.Count, outputTokens)).TrimStart()
+                    : string.Empty;
+
+                System.Console.WriteLine($"Prompt: {prompt}");
+                System.Console.WriteLine($"Output: {generated}");
                 System.Console.WriteLine("─".PadRight(60, '─'));
                 System.Console.WriteLine();
 
-                // Calculate tokens/sec
-                int outputTokens = tokenizer.Encode(output).Count - tokenizer.Encode(prompt).Count;
                 double tokensPerSec = outputTokens / (genStopwatch.ElapsedMilliseconds / 1000.0);
 
                 System.Console.WriteLine($"Generation time: {genStopwatch.ElapsedMilliseconds}ms");
@@ -122,8 +134,10 @@ namespace SmallMind.ConsoleApp.Commands
                 System.Console.WriteLine($"Speed: {tokensPerSec:F2} tok/s");
                 System.Console.WriteLine();
 
-                // Coherence check
-                bool isCoherent = ValidateCoherence(output, prompt);
+                // Coherence check — pass prompt+generated as the "output" argument so
+                // ValidateCoherence's string-length math is guaranteed to work regardless of
+                // how the tokenizer decoded the full context string.
+                bool isCoherent = ValidateCoherence(prompt + generated, prompt);
 
                 if (isCoherent)
                 {
@@ -192,7 +206,7 @@ namespace SmallMind.ConsoleApp.Commands
             // Extract generated portion (after prompt)
             string generated = output.Length > prompt.Length
                 ? output.Substring(prompt.Length).TrimStart()
-                : output;
+                : string.Empty;
 
             if (string.IsNullOrWhiteSpace(generated))
             {

@@ -581,34 +581,40 @@ namespace SmallMind.Runtime
             // 1. Apply repetition/presence/frequency penalties (before temperature)
             ApplyRepetitionPenalties(logitsLast, context);
 
-            // 2. Apply temperature scaling (SIMD optimized)
+            // 2. Greedy decoding: temperature=0 → return the highest-logit token directly.
+            if (_options.Temperature == 0.0)
+            {
+                return ArgMax(logitsLast);
+            }
+
+            // 3. Apply temperature scaling (SIMD optimized)
             if (_options.Temperature != 1.0)
             {
                 ApplyTemperatureScaling(logitsLast, (float)_options.Temperature);
             }
 
-            // 3. Apply top-k filtering
+            // 4. Apply top-k filtering
             if (_options.TopK > 0)
             {
                 logitsLast = ApplyTopK(logitsLast, _options.TopK);
             }
 
-            // 4. Convert to probabilities (softmax)
+            // 5. Convert to probabilities (softmax)
             var probs = Softmax(logitsLast);
 
-            // 5. Apply top-p (nucleus) sampling
+            // 6. Apply top-p (nucleus) sampling
             if (_options.TopP < 1.0)
             {
                 ApplyTopP(probs, _options.TopP);
             }
 
-            // 6. Apply min-p sampling
+            // 7. Apply min-p sampling
             if (_options.MinP > 0.0)
             {
                 ApplyMinP(probs, _options.MinP);
             }
 
-            // 6.5. Apply output constraints (Phase 5)
+            // 7.5. Apply output constraints (Phase 5)
             if (_options.OutputConstraint != null)
             {
                 ApplyOutputConstraints(logitsLast, context);
@@ -616,7 +622,7 @@ namespace SmallMind.Runtime
                 probs = Softmax(logitsLast);
             }
 
-            // 7. Sample from the distribution
+            // 8. Sample from the distribution
             return SampleFromProbs(probs);
         }
 
@@ -745,6 +751,36 @@ namespace SmallMind.Runtime
 
             // Fallback
             return probs.Length - 1;
+        }
+
+        /// <summary>
+        /// Returns the index of the maximum value in <paramref name="logits"/> (argmax).
+        /// Uses a SIMD pass to find the peak value, then a scalar pass to locate its index.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int ArgMax(float[] logits)
+        {
+            int n = logits.Length;
+            int vectorSize = System.Numerics.Vector<float>.Count;
+
+            // SIMD pass: find the maximum value
+            var maxVec = new System.Numerics.Vector<float>(float.NegativeInfinity);
+            int i = 0;
+            for (; i <= n - vectorSize; i += vectorSize)
+            {
+                maxVec = System.Numerics.Vector.Max(maxVec, new System.Numerics.Vector<float>(logits, i));
+            }
+            float maxVal = float.NegativeInfinity;
+            for (int j = 0; j < vectorSize; j++)
+                if (maxVec[j] > maxVal) maxVal = maxVec[j];
+            for (; i < n; i++)
+                if (logits[i] > maxVal) maxVal = logits[i];
+
+            // Scalar pass: find the first index that equals maxVal
+            for (int vi = 0; vi < n; vi++)
+                if (logits[vi] == maxVal) return vi;
+
+            return n - 1;
         }
 
         /// <summary>

@@ -213,6 +213,12 @@ namespace SmallMind.Tokenizers.Gguf
             for (int ti = startIdx; ti < tokens.Count; ti++)
             {
                 int tokenId = tokens[ti];
+
+                // Skip EOS token so it does not appear in the decoded output.
+                // Mirrors GgufTokenTableTokenizer.Decode behaviour.
+                if (_specialTokens.EosTokenId >= 0 && tokenId == _specialTokens.EosTokenId)
+                    continue;
+
                 if (tokenId >= 0 && tokenId < _reverseVocab.Count)
                 {
                     string tokenStr = _reverseVocab[tokenId];

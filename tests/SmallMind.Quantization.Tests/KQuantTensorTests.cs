@@ -347,5 +347,86 @@ namespace SmallMind.Quantization.Tests
         }
 
         #endregion
+
+        // ─── Exact fixture tests for Q6_K bit-accurate decode ──────────────────
+
+        /// <summary>
+        /// Verifies Q6_K dequantization against hand-computed expected values using the
+        /// llama.cpp ggml layout (two 128-value half-passes, llama.cpp ql/qh indexing).
+        /// </summary>
+        [Fact]
+        public void Q6K_Dequantize_ExactKnownBlock_MatchesExpectedValues()
+        {
+            // Build a single 256-element Q6_K super-block with known bytes so we can
+            // compute the expected float values by hand and compare exactly.
+            //
+            // Layout: ql[128], qh[64], scales[16], d(fp16)[2]  — total 210 bytes.
+            //
+            // Chosen values (simple to verify):
+            //   d = 1.0f (fp16 = 0x3C00)
+            //   scales[i] = 1 for all i  (int8)
+            //   ql[0..127] = 0x0F (low nibble=15, high nibble=0)
+            //   qh[0..63]  = 0x00 (all high bits = 0)
+            //
+            // With ql[b]=0x0F and qh[b]=0x00:
+            //   For half h=0, l=0..31:
+            //     q0 (pos l):    low4 = ql[l]  & 0xF = 15, high2 = (qh[l]>>0)&3 = 0  → q=15  → val=1*1*(15-32)=-17
+            //     q1 (pos l+32): low4 = ql[l+32]&0xF = 15, high2 = (qh[l]>>2)&3 = 0  → q=15  → val=-17
+            //     q2 (pos l+64): low4 = (ql[l]>>4)&F = 0,  high2 = (qh[l]>>4)&3 = 0  → q=0   → val=1*1*(0-32)=-32
+            //     q3 (pos l+96): low4 = (ql[l+32]>>4) = 0, high2 = (qh[l]>>6)&3 = 0  → q=0   → val=-32
+            //   Same for half h=1 (uses ql[64..127], qh[32..63], same pattern).
+            var rawBlock = new byte[210];
+
+            // ql: all 0x0F
+            for (int i = 0; i < 128; i++) rawBlock[i] = 0x0F;
+            // qh: all 0x00 (already zero)
+            // scales: all 1  (int8 = 0x01)
+            for (int i = 192; i < 208; i++) rawBlock[i] = 0x01;
+            // d = 1.0f → fp16 = 0x3C00
+            rawBlock[208] = 0x00;
+            rawBlock[209] = 0x3C;
+
+            float[] dst = new float[256];
+            Q6KTensor.Dequantize(rawBlock, dst);
+
+            // Positions 0..31 and 32..63 (q0/q1, nibble=15, high2=0): expected = 1*1*(15-32) = -17
+            for (int i = 0; i < 64; i++)
+                Assert.Equal(-17f, dst[i], precision: 4);
+            // Positions 64..127 (q2/q3, nibble=0, high2=0): expected = 1*1*(0-32) = -32
+            for (int i = 64; i < 128; i++)
+                Assert.Equal(-32f, dst[i], precision: 4);
+            // Second half mirrors first half
+            for (int i = 0; i < 64; i++)
+                Assert.Equal(-17f, dst[128 + i], precision: 4);
+            for (int i = 64; i < 128; i++)
+                Assert.Equal(-32f, dst[128 + i], precision: 4);
+        }
+
+        /// <summary>
+        /// Verifies Q6_K high-bit extraction by using non-zero qh values.
+        /// Sets ql=0x00 (low4=0) and qh so that high2=1 for all positions.
+        /// Expected q = 0 | (1<<4) = 16, so float = d * scale * (16-32) = 1*1*(-16) = -16.
+        /// </summary>
+        [Fact]
+        public void Q6K_Dequantize_HighBits_ExtractedCorrectly()
+        {
+            var rawBlock = new byte[210];
+
+            // ql: all 0x00 (low4=0 for all positions)
+            // qh: 0x55 = 0b01010101 — bits[1:0]=01, bits[3:2]=01, bits[5:4]=01, bits[7:6]=01
+            //   → high2=1 for all four positions that each qh byte covers
+            for (int i = 128; i < 192; i++) rawBlock[i] = 0x55;
+            // scales: all 1
+            for (int i = 192; i < 208; i++) rawBlock[i] = 0x01;
+            // d = 1.0f
+            rawBlock[208] = 0x00; rawBlock[209] = 0x3C;
+
+            float[] dst = new float[256];
+            Q6KTensor.Dequantize(rawBlock, dst);
+
+            // q = 0 | (1<<4) = 16  →  float = 1*1*(16-32) = -16
+            foreach (float v in dst)
+                Assert.Equal(-16f, v, precision: 4);
+        }
     }
 }

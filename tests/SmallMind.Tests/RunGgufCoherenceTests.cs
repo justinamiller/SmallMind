@@ -29,6 +29,24 @@ public class RunGgufCoherenceTests
     }
 
     [Fact]
+    public void ValidateCoherence_OutputEqualsPrompt_ReturnsFalse()
+    {
+        // When the model produces no new tokens the decoded output equals the prompt exactly.
+        // ValidateCoherence must detect this and return false (no generation).
+        string prompt = "What is the capital of France?";
+        Assert.False(_command.ValidateCoherence(prompt, prompt));
+    }
+
+    [Fact]
+    public void ValidateCoherence_OutputShorterThanPrompt_ReturnsFalse()
+    {
+        // output shorter than prompt → no generation, must fail
+        string prompt = "What is the capital of France?";
+        string output = "What is the capital";  // truncated
+        Assert.False(_command.ValidateCoherence(output, prompt));
+    }
+
+    [Fact]
     public void ValidateCoherence_TooShort_ReturnsFalse()
     {
         string prompt = "Hi";

@@ -46,18 +46,41 @@ namespace SmallMind.Tests
         }
 
         [Fact]
-        public void InferenceSession_InvalidOptions_ThrowsValidationException()
+        public void InferenceSession_NegativeTemperature_ThrowsValidationException()
         {
             // Arrange
             var (model, tokenizer) = CreateTestModel();
             var options = new ProductionInferenceOptions
             {
-                Temperature = 0.0 // Invalid: must be > 0
+                Temperature = -0.1 // Invalid: must be >= 0
             };
 
             // Act & Assert
             Assert.Throws<ValidationException>(() =>
                 new InferenceSession(model, tokenizer, options, 32));
+        }
+
+        [Fact]
+        public async Task InferenceSession_TemperatureZero_UsesGreedyDecoding()
+        {
+            // Temperature=0 must be accepted (greedy decoding), must not throw,
+            // and must produce identical output across two independent runs (deterministic).
+            var (model, tokenizer) = CreateTestModel();
+            var options = new ProductionInferenceOptions
+            {
+                MaxNewTokens = 3,
+                Temperature = 0.0 // Greedy: always pick highest-logit token
+            };
+
+            // Run once
+            using var session1 = new InferenceSession(model, tokenizer, options, 32);
+            string result1 = await session1.GenerateAsync("test");
+            Assert.NotNull(result1);
+
+            // Run again with a fresh session — greedy decoding must be identical
+            using var session2 = new InferenceSession(model, tokenizer, options, 32);
+            string result2 = await session2.GenerateAsync("test");
+            Assert.Equal(result1, result2);
         }
 
         [Fact]

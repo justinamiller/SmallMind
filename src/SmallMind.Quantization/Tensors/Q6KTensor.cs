@@ -95,33 +95,45 @@ namespace SmallMind.Quantization.Tensors
                 ushort dBits = MemoryMarshal.Read<ushort>(src.Slice(srcOffset + 208));
                 float d = HalfToFloat(dBits);
 
-                // Decode each sub-block (16 sub-blocks of 16 values each)
-                for (int subBlock = 0; subBlock < SUB_BLOCK_COUNT; subBlock++)
+                // Decode 256 values using the llama.cpp ggml Q6_K layout.
+                // Two half-passes of 128 values each (h=0: positions 0..127, h=1: 128..255).
+                // Within each half-pass, l=0..31 produces 4 output positions:
+                //   pos h*128+l:    ql[h*64+l]&0xF,     qh[h*32+l] bits 0-1
+                //   pos h*128+l+32: ql[h*64+l+32]&0xF,  qh[h*32+l] bits 2-3
+                //   pos h*128+l+64: ql[h*64+l]>>4,       qh[h*32+l] bits 4-5
+                //   pos h*128+l+96: ql[h*64+l+32]>>4,    qh[h*32+l] bits 6-7
+                // Scale index = absolute position / 16
+                for (int h = 0; h < 2; h++)
                 {
-                    float sc = d * scales[subBlock];
-                    int subBlockDstOffset = dstOffset + subBlock * SUB_BLOCK_SIZE;
+                    int qlBase = h * 64;
+                    int qhBase = h * 32;
+                    int outBase = h * 128;
 
-                    // Decode 16 values in this sub-block
-                    for (int i = 0; i < SUB_BLOCK_SIZE; i++)
+                    for (int l = 0; l < 32; l++)
                     {
-                        int valueIdx = subBlock * SUB_BLOCK_SIZE + i;
+                        byte ql0 = ql[qlBase + l];
+                        byte ql1 = ql[qlBase + l + 32];
+                        byte qhb = qh[qhBase + l];
 
-                        // Reconstruct 6-bit value from low 4 bits (ql) and high 2 bits (qh)
-                        // ql packs 2 values per byte: even values in low nibble, odd in high nibble
-                        int qlIdx = valueIdx / 2;
-                        byte qlByte = ql[qlIdx];
-                        byte low4 = (valueIdx % 2 == 0) ? (byte)(qlByte & 0xF) : (byte)((qlByte >> 4) & 0xF);
+                        int p0 = outBase + l;
+                        int p1 = outBase + l + 32;
+                        int p2 = outBase + l + 64;
+                        int p3 = outBase + l + 96;
 
-                        // Extract high 2 bits from qh (4 values per byte)
-                        int qhIdx = valueIdx / 4;
-                        int qhShift = (valueIdx % 4) * 2;
-                        byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
+                        float sc0 = d * scales[p0 / 16];
+                        float sc1 = d * scales[p1 / 16];
+                        float sc2 = d * scales[p2 / 16];
+                        float sc3 = d * scales[p3 / 16];
 
-                        // Combine to form 6-bit value (range 0-63)
-                        int q = low4 | (high2 << 4);
+                        int q0 = (ql0 & 0xF) | (((qhb >> 0) & 3) << 4);
+                        int q1 = (ql1 & 0xF) | (((qhb >> 2) & 3) << 4);
+                        int q2 = ((ql0 >> 4) & 0xF) | (((qhb >> 4) & 3) << 4);
+                        int q3 = ((ql1 >> 4) & 0xF) | (((qhb >> 6) & 3) << 4);
 
-                        // Dequantize: center around 0 with -32 bias
-                        dst[subBlockDstOffset + i] = sc * (q - 32);
+                        dst[dstOffset + p0] = sc0 * (q0 - 32);
+                        dst[dstOffset + p1] = sc1 * (q1 - 32);
+                        dst[dstOffset + p2] = sc2 * (q2 - 32);
+                        dst[dstOffset + p3] = sc3 * (q3 - 32);
                     }
                 }
             }

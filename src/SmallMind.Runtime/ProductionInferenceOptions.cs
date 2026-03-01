@@ -172,9 +172,9 @@ namespace SmallMind.Runtime
         /// <exception cref="ValidationException">Thrown when options are invalid.</exception>
         public void Validate()
         {
-            if (Temperature <= 0.0)
+            if (Temperature < 0.0)
             {
-                throw new ValidationException("Temperature must be greater than 0", nameof(Temperature));
+                throw new ValidationException("Temperature must be >= 0 (0 = greedy decoding)", nameof(Temperature));
             }
 
             if (MaxNewTokens <= 0)

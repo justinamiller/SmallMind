@@ -294,6 +294,11 @@ namespace SmallMind.Tokenizers.Text
             for (int i = startIdx; i < tokens.Count; i++)
             {
                 int id = tokens[i];
+
+                // Skip EOS token so it does not appear in the decoded output.
+                if (Info.EosTokenId >= 0 && id == Info.EosTokenId)
+                    continue;
+
                 if (_inverseVocab.TryGetValue(id, out string? token))
                 {
                     sb.Append(token);

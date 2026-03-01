@@ -253,6 +253,35 @@ public class GgufBpeTokenizerTests
     }
 
     [Fact]
+    public void GgufBpeTokenizer_Decode_SkipsEosToken()
+    {
+        // Arrange
+        var vocab = new Dictionary<string, int>
+        {
+            ["<s>"]  = 1,      // BOS token
+            ["</s>"] = 2,      // EOS token
+            ["h"]    = 100,
+            ["i"]    = 101,
+        };
+
+        var merges = new List<(string, string)>();
+        var tokenizer = new GgufBpeTokenizer(
+            vocab,
+            merges,
+            bosTokenId: 1,
+            eosTokenId: 2,
+            unkTokenId: -1,
+            isByteLevelBpe: false);
+
+        // Act - Decode [BOS, "h", "i", EOS]
+        var tokens = new List<int> { 1, 100, 101, 2 };
+        var decoded = tokenizer.Decode(tokens);
+
+        // Assert - BOS and EOS should be stripped, only "hi" remains
+        Assert.Equal("hi", decoded);
+    }
+
+    [Fact]
     public void GgufBpeTokenizer_AddBosProperty_IsTrueWhenBosTokenConfigured()
     {
         // Arrange & Act

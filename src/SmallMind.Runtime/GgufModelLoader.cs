@@ -876,16 +876,23 @@ namespace SmallMind.Runtime
 
         /// <summary>
         /// Q6_K: K-quant 6-bit with per-sub-block scales.
-        /// Super-block size: 256. Uses 16 sub-blocks of 16 values each.
+        /// Super-block size: 256.
         /// Block structure: ql (128 bytes), qh (64 bytes), scales (16 bytes int8), d (fp16).
         /// Total: 210 bytes per super-block.
-        /// NOTE: This is a simplified dequantization. For production use, keep weights quantized.
+        ///
+        /// Layout (matches ggml dequantize_row_q6_K):
+        ///   The 256 values are produced in two half-passes of 128 values each.
+        ///   Half-pass h=0 uses ql[0..63], qh[0..31]; half-pass h=1 uses ql[64..127], qh[32..63].
+        ///   Within each half-pass, for l = 0..31:
+        ///     pos h*128+l:    low4=ql[h*64+l]&0xF,     high2=(qh[h*32+l]&0x03)
+        ///     pos h*128+l+32: low4=ql[h*64+l+32]&0xF,  high2=(qh[h*32+l]>>2)&3
+        ///     pos h*128+l+64: low4=(ql[h*64+l]>>4)&0xF, high2=(qh[h*32+l]>>4)&3
+        ///     pos h*128+l+96: low4=(ql[h*64+l+32]>>4),  high2=(qh[h*32+l]>>6)&3
+        ///     6-bit value = low4 | (high2 << 4), float = d * scales[pos/16] * (value - 32)
         /// </summary>
         private static float[] ConvertQ6_KTensor(byte[] rawData, ulong[] dimensions)
         {
             const int SuperBlockSize = 256;
-            const int SubBlockSize = 16;
-            const int SubBlockCount = 16;
             const int BytesPerBlock = 210;  // 128 + 64 + 16 + 2
 
             int totalElements = CalculateTotalElements(dimensions);
@@ -897,51 +904,46 @@ namespace SmallMind.Runtime
 
             for (int sbIdx = 0; sbIdx < numSuperBlocks; sbIdx++)
             {
-                // Read ql (128 bytes - low 4 bits of 6-bit values)
                 ReadOnlySpan<byte> ql = src.Slice(srcOffset, 128);
-
-                // Read qh (64 bytes - high 2 bits of 6-bit values)
                 ReadOnlySpan<byte> qh = src.Slice(srcOffset + 128, 64);
-
-                // Read scales (16 bytes - int8 per sub-block)
                 ReadOnlySpan<byte> scalesBytes = src.Slice(srcOffset + 192, 16);
-
-                // Read super-block scale d (fp16)
                 ushort dBits = BitConverter.ToUInt16(src.Slice(srcOffset + 208, 2));
                 float d = HalfToFloat(dBits);
 
-                // Decode each sub-block
                 int sbStart = sbIdx * SuperBlockSize;
-                int sbEnd = Math.Min(sbStart + SuperBlockSize, totalElements);
 
-                for (int subBlock = 0; subBlock < SubBlockCount; subBlock++)
+                // Two half-passes: h=0 → output positions 0..127, h=1 → 128..255
+                for (int h = 0; h < 2; h++)
                 {
-                    sbyte scaleQ = (sbyte)scalesBytes[subBlock];
-                    float sc = d * scaleQ;
+                    int qlBase = h * 64;  // ql byte offset for this half
+                    int qhBase = h * 32;  // qh byte offset for this half
+                    int outBase = sbStart + h * 128;
 
-                    int subBlockStart = sbStart + subBlock * SubBlockSize;
-                    int subBlockEnd = Math.Min(subBlockStart + SubBlockSize, sbEnd);
-
-                    // Decode values in this sub-block
-                    for (int i = 0; i < (subBlockEnd - subBlockStart); i++)
+                    for (int l = 0; l < 32; l++)
                     {
-                        int valueIdx = subBlock * SubBlockSize + i;
+                        byte ql0 = ql[qlBase + l];
+                        byte ql1 = ql[qlBase + l + 32];
+                        byte qhb = qh[qhBase + l];
 
-                        // Reconstruct 6-bit value from low 4 bits (ql) and high 2 bits (qh)
-                        // ql packs 2 values per byte: even values in low nibble, odd in high nibble
-                        int qlIdx = valueIdx / 2;
-                        byte low4 = (valueIdx % 2 == 0) 
-                            ? (byte)(ql[qlIdx] & 0xF) 
-                            : (byte)((ql[qlIdx] >> 4) & 0xF);
+                        int pos0 = outBase + l;
+                        int pos1 = outBase + l + 32;
+                        int pos2 = outBase + l + 64;
+                        int pos3 = outBase + l + 96;
 
-                        // Extract high 2 bits from qh (4 values per byte)
-                        int qhIdx = valueIdx / 4;
-                        int qhShift = (valueIdx % 4) * 2;
-                        byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
+                        float sc0 = d * (sbyte)scalesBytes[(pos0 - sbStart) / 16];
+                        float sc1 = d * (sbyte)scalesBytes[(pos1 - sbStart) / 16];
+                        float sc2 = d * (sbyte)scalesBytes[(pos2 - sbStart) / 16];
+                        float sc3 = d * (sbyte)scalesBytes[(pos3 - sbStart) / 16];
 
-                        // Combine to form 6-bit value (range 0-63), then center around 0
-                        int q = low4 | (high2 << 4);
-                        floatData[subBlockStart + i] = sc * (q - 32);
+                        int q0 = (ql0 & 0xF) | (((qhb >> 0) & 3) << 4);
+                        int q1 = (ql1 & 0xF) | (((qhb >> 2) & 3) << 4);
+                        int q2 = ((ql0 >> 4) & 0xF) | (((qhb >> 4) & 3) << 4);
+                        int q3 = ((ql1 >> 4) & 0xF) | (((qhb >> 6) & 3) << 4);
+
+                        if (pos0 < totalElements) floatData[pos0] = sc0 * (q0 - 32);
+                        if (pos1 < totalElements) floatData[pos1] = sc1 * (q1 - 32);
+                        if (pos2 < totalElements) floatData[pos2] = sc2 * (q2 - 32);
+                        if (pos3 < totalElements) floatData[pos3] = sc3 * (q3 - 32);
                     }
                 }
 

@@ -515,5 +515,72 @@ namespace SmallMind.Quantization.Tests
             // Assert: ceil(300/256) = 2 super-blocks × 210 = 420 bytes
             Assert.Equal((ulong)(2 * 210), modelInfo.Tensors[0].Size);
         }
+
+        /// <summary>
+        /// Verifies that tensor absolute offsets are derived from the STORED relative offsets
+        /// in the GGUF header (DataOffset + storedRelativeOffset), NOT from a sequential
+        /// recalculation.  A real llama.cpp GGUF file can have alignment padding between
+        /// tensors, making the two strategies diverge.
+        /// </summary>
+        [Fact]
+        public void ReadModelInfo_TensorOffsets_UseStoredRelativeOffset()
+        {
+            // Build a synthetic GGUF with TWO tensors.
+            // The first tensor has relative offset 0.
+            // The second tensor has relative offset = firstTensorSize + 64  (64-byte gap,
+            // simulating alignment padding that a real writer might insert).
+            const uint alignment = 32;
+            var firstDims  = new ulong[] { 32 };       // F32: 32×4=128 bytes
+            var secondDims = new ulong[] { 32 };       // F32: 32×4=128 bytes
+
+            ulong firstSize  = 32 * 4;                 // 128 bytes
+            ulong firstRelativeOffset  = 0;
+            ulong secondRelativeOffset = firstSize + 64; // 192 — with 64-byte padding gap
+
+            using var headerMs = new MemoryStream();
+            using var bw = new BinaryWriter(headerMs, Encoding.UTF8, leaveOpen: true);
+
+            // GGUF magic + version
+            bw.Write(Encoding.ASCII.GetBytes("GGUF"));
+            bw.Write((uint)3);
+
+            // Counts
+            bw.Write((ulong)2); // tensor count
+            bw.Write((ulong)1); // kv count (alignment)
+
+            // KV: general.alignment
+            WriteGgufString(bw, "general.alignment");
+            bw.Write((uint)4); // GgufValueType.UInt32
+            bw.Write(alignment);
+
+            // Tensor 1
+            WriteGgufString(bw, "first");
+            bw.Write((uint)1);                           // ndims
+            bw.Write(firstDims[0]);
+            bw.Write((uint)GgufTensorType.F32);
+            bw.Write(firstRelativeOffset);
+
+            // Tensor 2
+            WriteGgufString(bw, "second");
+            bw.Write((uint)1);
+            bw.Write(secondDims[0]);
+            bw.Write((uint)GgufTensorType.F32);
+            bw.Write(secondRelativeOffset);
+
+            bw.Flush();
+            byte[] header = headerMs.ToArray();
+
+            // Calculate data section start (next aligned position after header)
+            ulong headerEnd = (ulong)header.Length;
+            ulong dataOffset = (headerEnd + alignment - 1) / alignment * alignment;
+
+            using var ms = new MemoryStream(header);
+            using var reader = new GgufReader(ms);
+            var modelInfo = reader.ReadModelInfo();
+
+            Assert.Equal(2, modelInfo.Tensors.Count);
+            Assert.Equal(dataOffset + firstRelativeOffset,  modelInfo.Tensors[0].Offset);
+            Assert.Equal(dataOffset + secondRelativeOffset, modelInfo.Tensors[1].Offset);
+        }
     }
 }
