@@ -90,13 +90,17 @@ namespace SmallMind.Quantization.IO.Gguf
             ulong alignedOffset = (currentOffset + alignment - 1) / alignment * alignment;
             info.DataOffset = alignedOffset;
 
-            // Calculate tensor data sizes and update offsets
-            ulong runningOffset = info.DataOffset;
+            // Resolve tensor offsets to absolute file positions.
+            // GGUF tensors are stored at offsets RELATIVE to the start of the data section.
+            // The writer (llama.cpp) aligns each tensor independently within the data section,
+            // so the gaps between tensors may not equal CalculateTensorSize(prev).
+            // Using the stored relative offsets (+ DataOffset base) is the only correct approach.
             foreach (var tensor in info.Tensors)
             {
-                tensor.Offset = runningOffset;
+                // tensor.Offset was read as a relative offset from the data section start.
+                ulong relativeOffset = tensor.Offset;
+                tensor.Offset = info.DataOffset + relativeOffset;
                 tensor.Size = CalculateTensorSize(tensor.Type, tensor.Dimensions);
-                runningOffset += tensor.Size;
             }
 
             return info;

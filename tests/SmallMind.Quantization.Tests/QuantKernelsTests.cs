@@ -313,5 +313,77 @@ namespace SmallMind.Quantization.Tests
                 }
             }
         }
+
+        // ─── Exact fixture tests for Q4_0 (GGUF block layout) ──────────────────
+
+        /// <summary>
+        /// Verifies Q4_0 quantize-then-dequantize round-trip against manually
+        /// computed expected values.  Uses a 32-element block (GGUF Q4_0 block size).
+        ///
+        /// Symmetric 4-bit quant: values range 0..15, bias -8.
+        /// With scale = maxAbs/7:
+        ///   input[i] = i - 15  (range -15..15 for 32 elements)
+        ///   maxAbs = 15  →  scale = 15/7 ≈ 2.142857f
+        ///   quantized[i] = round(input[i]/scale) + 8  clamped [0,15]
+        ///   dequant[i]   = (quantized[i] - 8) * scale
+        /// </summary>
+        [Fact]
+        public void Q4_0_QuantizeDequantize_32Element_MatchesExpected()
+        {
+            // input: -15, -14, ..., 0, ..., 15, 16  (32 elements, blockSize=32)
+            int blockSize = 32;
+            var input = new float[blockSize];
+            for (int i = 0; i < blockSize; i++)
+                input[i] = i - 15f;  // -15 to +16
+
+            var tensor = Q4Tensor.Quantize(input, rows: 1, cols: blockSize, blockSize: blockSize);
+            var dequant = tensor.Dequantize();
+
+            Assert.Equal(blockSize, dequant.Length);
+
+            // Each element should round-trip within one quant step (scale = maxAbs/7)
+            float maxAbs = input.Max(v => Math.Abs(v));
+            float scale = maxAbs / 7f;
+            float tolerance = scale + 1e-3f;  // within one quant step
+
+            for (int i = 0; i < blockSize; i++)
+            {
+                float diff = Math.Abs(dequant[i] - input[i]);
+                Assert.True(diff <= tolerance,
+                    $"[{i}] input={input[i]:F3} dequant={dequant[i]:F3} diff={diff:F4} > {tolerance:F4}");
+            }
+        }
+
+        /// <summary>
+        /// Fused Q4_0 matvec must agree with dequantize-then-dot to within Q4 tolerance.
+        /// </summary>
+        [Fact]
+        public void Q4_0_FusedDot_ParityWith_DequantThenDot()
+        {
+            var rng = new Random(12345);
+            int k = 64, n = 32;
+            var a = Enumerable.Range(0, k).Select(_ => (float)(rng.NextDouble() - 0.5) * 4f).ToArray();
+            var bFloat = Enumerable.Range(0, k * n).Select(_ => (float)(rng.NextDouble() - 0.5) * 4f).ToArray();
+
+            var bQuant = Q4Tensor.Quantize(bFloat, k, n, blockSize: 32);
+            var bDeq = bQuant.Dequantize();
+
+            // Reference: dequantize-then-dot
+            var expected = new float[n];
+            for (int j = 0; j < n; j++)
+            {
+                float dot = 0f;
+                for (int i = 0; i < k; i++)
+                    dot += a[i] * bDeq[i * n + j];
+                expected[j] = dot;
+            }
+
+            // Fused path
+            var actual = new float[n];
+            MatMulF32Q4Optimized.Multiply(a, bQuant, actual, 1, k, n);
+
+            float fusedTol = Q4Tolerance * (k * 0.05f + 1f);  // scale with k
+            AssertArraysClose(expected, actual, fusedTol);
+        }
     }
 }

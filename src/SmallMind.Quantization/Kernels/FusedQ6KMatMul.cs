@@ -136,27 +136,38 @@ namespace SmallMind.Quantization.Kernels
 
             float accum = *pAccum;
 
-            for (int sb = 0; sb < Q6K_SUB_BLOCKS; sb++)
+            // Two half-passes (h=0: positions 0..127, h=1: 128..255)
+            for (int h = 0; h < 2; h++)
             {
-                float sc = d * scales_ptr[sb];
-                float* pA_sub = pA + sb * Q6K_SUB_BLOCK_SIZE;
+                int qlBase = h * 64;
+                int qhBase = h * 32;
+                int outBase = h * 128;
 
-                for (int i = 0; i < Q6K_SUB_BLOCK_SIZE; i++)
+                for (int l = 0; l < 32; l++)
                 {
-                    int valueIdx = sb * Q6K_SUB_BLOCK_SIZE + i;
+                    byte ql0 = ql_ptr[qlBase + l];
+                    byte ql1 = ql_ptr[qlBase + l + 32];
+                    byte qhb = qh_ptr[qhBase + l];
 
-                    int qlIdx = valueIdx / 2;
-                    byte qlByte = ql_ptr[qlIdx];
-                    byte low4 = (valueIdx % 2 == 0) ? (byte)(qlByte & 0xF) : (byte)((qlByte >> 4) & 0xF);
+                    int p0 = outBase + l;
+                    int p1 = outBase + l + 32;
+                    int p2 = outBase + l + 64;
+                    int p3 = outBase + l + 96;
 
-                    int qhIdx = valueIdx / 4;
-                    int qhShift = (valueIdx % 4) * 2;
-                    byte high2 = (byte)((qh_ptr[qhIdx] >> qhShift) & 0x3);
+                    float sc0 = d * scales_ptr[p0 / 16];
+                    float sc1 = d * scales_ptr[p1 / 16];
+                    float sc2 = d * scales_ptr[p2 / 16];
+                    float sc3 = d * scales_ptr[p3 / 16];
 
-                    int q = low4 | (high2 << 4);
-                    float val = sc * (q - 32);
+                    int q0 = (ql0 & 0xF) | (((qhb >> 0) & 3) << 4);
+                    int q1 = (ql1 & 0xF) | (((qhb >> 2) & 3) << 4);
+                    int q2 = ((ql0 >> 4) & 0xF) | (((qhb >> 4) & 3) << 4);
+                    int q3 = ((ql1 >> 4) & 0xF) | (((qhb >> 6) & 3) << 4);
 
-                    accum += pA_sub[i] * val;
+                    accum += pA[p0] * (sc0 * (q0 - 32));
+                    accum += pA[p1] * (sc1 * (q1 - 32));
+                    accum += pA[p2] * (sc2 * (q2 - 32));
+                    accum += pA[p3] * (sc3 * (q3 - 32));
                 }
             }
 
@@ -213,27 +224,38 @@ namespace SmallMind.Quantization.Kernels
 
             float sum = 0f;
 
-            for (int sb = 0; sb < Q6K_SUB_BLOCKS; sb++)
+            // Two half-passes (h=0: positions 0..127, h=1: 128..255)
+            for (int h = 0; h < 2; h++)
             {
-                sbyte scale_sb = (sbyte)scales[sb];
-                float sc = d * scale_sb;
+                int qlBase = h * 64;
+                int qhBase = h * 32;
+                int outBase = h * 128;
 
-                int aOffset = sb * Q6K_SUB_BLOCK_SIZE;
-
-                for (int i = 0; i < Q6K_SUB_BLOCK_SIZE; i++)
+                for (int l = 0; l < 32; l++)
                 {
-                    int valueIdx = sb * Q6K_SUB_BLOCK_SIZE + i;
+                    byte ql0 = ql[qlBase + l];
+                    byte ql1 = ql[qlBase + l + 32];
+                    byte qhb = qh[qhBase + l];
 
-                    int qlIdx = valueIdx / 2;
-                    byte qlByte = ql[qlIdx];
-                    byte low4 = (valueIdx % 2 == 0) ? (byte)(qlByte & 0xF) : (byte)((qlByte >> 4) & 0xF);
+                    int p0 = outBase + l;
+                    int p1 = outBase + l + 32;
+                    int p2 = outBase + l + 64;
+                    int p3 = outBase + l + 96;
 
-                    int qhIdx = valueIdx / 4;
-                    int qhShift = (valueIdx % 4) * 2;
-                    byte high2 = (byte)((qh[qhIdx] >> qhShift) & 0x3);
+                    float sc0 = d * (sbyte)scales[p0 / 16];
+                    float sc1 = d * (sbyte)scales[p1 / 16];
+                    float sc2 = d * (sbyte)scales[p2 / 16];
+                    float sc3 = d * (sbyte)scales[p3 / 16];
 
-                    int q = low4 | (high2 << 4);
-                    sum += a[aOffset + i] * (sc * (q - 32));
+                    int q0 = (ql0 & 0xF) | (((qhb >> 0) & 3) << 4);
+                    int q1 = (ql1 & 0xF) | (((qhb >> 2) & 3) << 4);
+                    int q2 = ((ql0 >> 4) & 0xF) | (((qhb >> 4) & 3) << 4);
+                    int q3 = ((ql1 >> 4) & 0xF) | (((qhb >> 6) & 3) << 4);
+
+                    sum += a[p0] * (sc0 * (q0 - 32));
+                    sum += a[p1] * (sc1 * (q1 - 32));
+                    sum += a[p2] * (sc2 * (q2 - 32));
+                    sum += a[p3] * (sc3 * (q3 - 32));
                 }
             }
 
