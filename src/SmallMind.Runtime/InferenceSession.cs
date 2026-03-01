@@ -581,34 +581,50 @@ namespace SmallMind.Runtime
             // 1. Apply repetition/presence/frequency penalties (before temperature)
             ApplyRepetitionPenalties(logitsLast, context);
 
-            // 2. Apply temperature scaling (SIMD optimized)
+            // 2. Greedy decoding: temperature=0 → return the highest-logit token directly.
+            if (_options.Temperature == 0.0)
+            {
+                int bestToken = 0;
+                float bestLogit = logitsLast[0];
+                for (int vi = 1; vi < logitsLast.Length; vi++)
+                {
+                    if (logitsLast[vi] > bestLogit)
+                    {
+                        bestLogit = logitsLast[vi];
+                        bestToken = vi;
+                    }
+                }
+                return bestToken;
+            }
+
+            // 3. Apply temperature scaling (SIMD optimized)
             if (_options.Temperature != 1.0)
             {
                 ApplyTemperatureScaling(logitsLast, (float)_options.Temperature);
             }
 
-            // 3. Apply top-k filtering
+            // 4. Apply top-k filtering
             if (_options.TopK > 0)
             {
                 logitsLast = ApplyTopK(logitsLast, _options.TopK);
             }
 
-            // 4. Convert to probabilities (softmax)
+            // 5. Convert to probabilities (softmax)
             var probs = Softmax(logitsLast);
 
-            // 5. Apply top-p (nucleus) sampling
+            // 6. Apply top-p (nucleus) sampling
             if (_options.TopP < 1.0)
             {
                 ApplyTopP(probs, _options.TopP);
             }
 
-            // 6. Apply min-p sampling
+            // 7. Apply min-p sampling
             if (_options.MinP > 0.0)
             {
                 ApplyMinP(probs, _options.MinP);
             }
 
-            // 6.5. Apply output constraints (Phase 5)
+            // 7.5. Apply output constraints (Phase 5)
             if (_options.OutputConstraint != null)
             {
                 ApplyOutputConstraints(logitsLast, context);
@@ -616,7 +632,7 @@ namespace SmallMind.Runtime
                 probs = Softmax(logitsLast);
             }
 
-            // 7. Sample from the distribution
+            // 8. Sample from the distribution
             return SampleFromProbs(probs);
         }
 

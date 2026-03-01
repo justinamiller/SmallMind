@@ -134,8 +134,10 @@ namespace SmallMind.ConsoleApp.Commands
                 System.Console.WriteLine($"Speed: {tokensPerSec:F2} tok/s");
                 System.Console.WriteLine();
 
-                // Coherence check
-                bool isCoherent = ValidateCoherence(output, prompt);
+                // Coherence check — pass prompt+generated as the "output" argument so
+                // ValidateCoherence's string-length math is guaranteed to work regardless of
+                // how the tokenizer decoded the full context string.
+                bool isCoherent = ValidateCoherence(prompt + generated, prompt);
 
                 if (isCoherent)
                 {
