@@ -97,9 +97,8 @@ namespace SmallMind.Quantization.IO.Gguf
             // Using the stored relative offsets (+ DataOffset base) is the only correct approach.
             foreach (var tensor in info.Tensors)
             {
-                // tensor.Offset was read as a relative offset from the data section start.
-                ulong relativeOffset = tensor.Offset;
-                tensor.Offset = info.DataOffset + relativeOffset;
+                // tensor.Offset currently holds the relative offset (read from file); convert to absolute.
+                tensor.Offset = info.DataOffset + tensor.Offset;
                 tensor.Size = CalculateTensorSize(tensor.Type, tensor.Dimensions);
             }
 

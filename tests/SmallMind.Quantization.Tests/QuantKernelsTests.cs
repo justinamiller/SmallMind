@@ -342,7 +342,8 @@ namespace SmallMind.Quantization.Tests
             Assert.Equal(blockSize, dequant.Length);
 
             // Each element should round-trip within one quant step (scale = maxAbs/7)
-            float maxAbs = input.Max(v => Math.Abs(v));
+            float maxAbs = 0f;
+            foreach (var v in input) { float abs = Math.Abs(v); if (abs > maxAbs) maxAbs = abs; }
             float scale = maxAbs / 7f;
             float tolerance = scale + 1e-3f;  // within one quant step
 
@@ -362,8 +363,10 @@ namespace SmallMind.Quantization.Tests
         {
             var rng = new Random(12345);
             int k = 64, n = 32;
-            var a = Enumerable.Range(0, k).Select(_ => (float)(rng.NextDouble() - 0.5) * 4f).ToArray();
-            var bFloat = Enumerable.Range(0, k * n).Select(_ => (float)(rng.NextDouble() - 0.5) * 4f).ToArray();
+            var a = new float[k];
+            for (int i = 0; i < k; i++) a[i] = (float)(rng.NextDouble() - 0.5) * 4f;
+            var bFloat = new float[k * n];
+            for (int i = 0; i < k * n; i++) bFloat[i] = (float)(rng.NextDouble() - 0.5) * 4f;
 
             var bQuant = Q4Tensor.Quantize(bFloat, k, n, blockSize: 32);
             var bDeq = bQuant.Dequantize();
