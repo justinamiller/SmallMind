@@ -63,7 +63,8 @@ namespace SmallMind.Tests
         [Fact]
         public async Task InferenceSession_TemperatureZero_UsesGreedyDecoding()
         {
-            // Temperature=0 must be accepted (greedy decoding) and must not throw.
+            // Temperature=0 must be accepted (greedy decoding), must not throw,
+            // and must produce identical output across two independent runs (deterministic).
             var (model, tokenizer) = CreateTestModel();
             var options = new ProductionInferenceOptions
             {
@@ -71,10 +72,15 @@ namespace SmallMind.Tests
                 Temperature = 0.0 // Greedy: always pick highest-logit token
             };
 
-            using var session = new InferenceSession(model, tokenizer, options, 32);
-            // Should not throw and should produce some output
-            string result = await session.GenerateAsync("test");
-            Assert.NotNull(result);
+            // Run once
+            using var session1 = new InferenceSession(model, tokenizer, options, 32);
+            string result1 = await session1.GenerateAsync("test");
+            Assert.NotNull(result1);
+
+            // Run again with a fresh session — greedy decoding must be identical
+            using var session2 = new InferenceSession(model, tokenizer, options, 32);
+            string result2 = await session2.GenerateAsync("test");
+            Assert.Equal(result1, result2);
         }
 
         [Fact]

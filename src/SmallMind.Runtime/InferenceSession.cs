@@ -584,17 +584,7 @@ namespace SmallMind.Runtime
             // 2. Greedy decoding: temperature=0 → return the highest-logit token directly.
             if (_options.Temperature == 0.0)
             {
-                int bestToken = 0;
-                float bestLogit = logitsLast[0];
-                for (int vi = 1; vi < logitsLast.Length; vi++)
-                {
-                    if (logitsLast[vi] > bestLogit)
-                    {
-                        bestLogit = logitsLast[vi];
-                        bestToken = vi;
-                    }
-                }
-                return bestToken;
+                return ArgMax(logitsLast);
             }
 
             // 3. Apply temperature scaling (SIMD optimized)
@@ -761,6 +751,36 @@ namespace SmallMind.Runtime
 
             // Fallback
             return probs.Length - 1;
+        }
+
+        /// <summary>
+        /// Returns the index of the maximum value in <paramref name="logits"/> (argmax).
+        /// Uses a SIMD pass to find the peak value, then a scalar pass to locate its index.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int ArgMax(float[] logits)
+        {
+            int n = logits.Length;
+            int vectorSize = System.Numerics.Vector<float>.Count;
+
+            // SIMD pass: find the maximum value
+            var maxVec = new System.Numerics.Vector<float>(float.NegativeInfinity);
+            int i = 0;
+            for (; i <= n - vectorSize; i += vectorSize)
+            {
+                maxVec = System.Numerics.Vector.Max(maxVec, new System.Numerics.Vector<float>(logits, i));
+            }
+            float maxVal = float.NegativeInfinity;
+            for (int j = 0; j < vectorSize; j++)
+                if (maxVec[j] > maxVal) maxVal = maxVec[j];
+            for (; i < n; i++)
+                if (logits[i] > maxVal) maxVal = logits[i];
+
+            // Scalar pass: find the first index that equals maxVal
+            for (int vi = 0; vi < n; vi++)
+                if (logits[vi] == maxVal) return vi;
+
+            return n - 1;
         }
 
         /// <summary>
